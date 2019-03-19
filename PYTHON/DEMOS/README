@@ -1,0 +1,8 @@
+
+Requirements:
+apt install python-scipy python-h5py python-json python-matplotlib 
+
+
+Also install "transitions" module
+
+

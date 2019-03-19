@@ -1,0 +1,13 @@
+
+### Sounder Framework
+
+This folder includes a library of code for running channel sounding
+experiments with an RENEW base station hardware. To run, follow steps below:
+
+```shell
+cmake ./
+make -j
+./sounder files/tddconfig.json
+```
+
+For more details, see [RENEW Documentation](https://docs.renew-wireless.org/dev-suite/design-flows)

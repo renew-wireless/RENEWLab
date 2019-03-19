@@ -1,0 +1,7 @@
+This repository contains all software designs flow for RENEW:
+
+├── MATLAB: Bindings and scripts to enable testing via MATLAB
+├── Python: Bindings and scripts to enable testing via Python
+├── CC:
+    ├── Sounder: Framework for collecting channel traces with massive-MIMO
+    ├── Beamfromer 

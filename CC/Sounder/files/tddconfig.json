@@ -1,0 +1,53 @@
+{
+	"BaseStations" : {
+		 "cells" : 1,
+		 "sdr_id" : ["files/iris_serials.txt"],
+		 "hub_id" : "files/hub_serials.txt",
+		 "frequency" : 3.6e9,
+		 "polarization" : "single",
+		 "rxgainA" : 20,
+		 "txgainA" : 40,
+		 "rxgainB" : 20,
+		 "txgainB" : 40,
+		 "rate" : 5e6,
+		 "frame_schedule" : [
+		     "BGPPGGGGGGGGGGGGGGGG"
+		 ],
+		 "subframe_size" : 400,
+		 "fft_size" : 64,
+		 "cp_size" : 16,
+		 "prefix" : 82,
+		 "postfix" : 68,
+		 "beacon_seq" : "gold_ifft",
+		 "beamsweep" : false,
+		 "beacon_antenna" : 0,
+		 "pilot_seq" : "lts"
+	},
+
+	"Clients" : {
+		 "sdr_id" : [
+		     "RF3E000029",
+		     "RF3E000040"
+		 ],
+		 "frequency" : 3.6e9,
+		 "polarization" : "single",
+		 "agc_en" : false,
+		 "rxgainA" : 20,
+		 "txgainA" : 40,
+		 "rxgainB" : 20,
+		 "txgainB" : 40,
+		 "rate" : 5e6,
+		 "frame_schedule" : [
+		     "GGPGGGGGGGGGGGGGGGGG",
+		     "GGGPGGGGGGGGGGGGGGGG"
+		 ],
+		 "subframe_size" : 400,
+		 "fft_size" : 64,
+		 "cp_size" : 16,
+		 "prefix" : 82,
+		 "postfix" : 68,
+		 "beacon_seq" : "gold_ifft",
+		 "pilot_seq" : "lts",
+		 "modulation" : "QPSK"
+	}
+}
