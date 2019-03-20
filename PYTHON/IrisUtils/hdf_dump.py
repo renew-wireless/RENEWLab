@@ -45,6 +45,8 @@ class hdfDump:
         self.filename = filename
         self.h5struct = []
         self.data = []
+        self.metadata = {}
+        self.samples = {}
 
     def get_hdf5(self):
         """
@@ -129,6 +131,64 @@ class hdfDump:
 
         return self.data
 
+    def get_attributes(self):
+        # Retrieve attributes, translate into python dictionary
+        data = self.data
+        self.metadata = {
+                    'FREQ': np.squeeze(data['Attributes']['FREQ']),
+                    'RATE': np.squeeze(data['Attributes']['RATE']),
+                    'SYM_LEN_NO_PAD': np.squeeze(data['Attributes']['SYMBOL_LEN_NO_PAD']),
+                    'PREFIX_LEN': np.squeeze(data['Attributes']['PREFIX_LEN']),
+                    'POSTFIX_LEN': np.squeeze(data['Attributes']['POSTFIX_LEN']),
+                    'SYM_LEN': np.squeeze(data['Attributes']['SYMBOL_LEN']),
+                    'FFT_SIZE': np.squeeze(data['Attributes']['FFT_SIZE']),
+                    'CP_LEN': np.squeeze(data['Attributes']['CP_LEN']),
+                    'BEACON_SEQ': np.squeeze(data['Attributes']['BEACON_SEQ_TYPE']),
+                    'PILOT_SEQ': np.squeeze(data['Attributes']['PILOT_SEQ_TYPE']),
+                    'BS_HUB_ID': np.squeeze(data['Attributes']['BS_HUB_ID']),
+                    'BS_SDR_NUM_PER_CELL': np.squeeze(data['Attributes']['BS_SDR_NUM_PER_CELL']),
+                    'BS_SDR_ID': np.squeeze(data['Attributes']['BS_SDR_ID']),
+                    'BS_NUM_CELLS': np.squeeze(data['Attributes']['BS_NUM_CELLS']),
+                    'BS_CH_PER_RADIO': np.squeeze(data['Attributes']['BS_CH_PER_RADIO']),
+                    'BS_FRAME_SCHED': np.squeeze(data['Attributes']['BS_FRAME_SCHED']),
+                    'BS_RX_GAIN_A': np.squeeze(data['Attributes']['BS_RX_GAIN_A']),
+                    'BS_TX_GAIN_A': np.squeeze(data['Attributes']['BS_TX_GAIN_A']),
+                    'BS_RX_GAIN_B': np.squeeze(data['Attributes']['BS_RX_GAIN_B']),
+                    'BS_TX_GAIN_B': np.squeeze(data['Attributes']['BS_TX_GAIN_B']),
+                    'BS_BEAMSWEEP': np.squeeze(data['Attributes']['BS_BEAMSWEEP']),
+                    'BS_BEACON_ANT': np.squeeze(data['Attributes']['BS_BEACON_ANT']),
+                    'BS_NUM_ANT': np.squeeze(data['Attributes']['BS_NUM_ANT']),
+                    'BS_FRAME_LEN': np.squeeze(data['Attributes']['BS_FRAME_LEN']),
+                    'NUM_CLIENTS': np.squeeze(data['Attributes']['CL_NUM']),
+                    'CL_CH_PER_RADIO': np.squeeze(data['Attributes']['CL_CH_PER_RADIO']),
+                    'CL_AGC_EN': np.squeeze(data['Attributes']['CL_AGC_EN']),
+                    'CL_RX_GAIN_A': np.squeeze(data['Attributes']['CL_RX_GAIN_A']),
+                    'CL_TX_GAIN_A': np.squeeze(data['Attributes']['CL_TX_GAIN_A']),
+                    'CL_RX_GAIN_B': np.squeeze(data['Attributes']['CL_RX_GAIN_B']),
+                    'CL_TX_GAIN_B': np.squeeze(data['Attributes']['CL_TX_GAIN_B']),
+                    'CL_FRAME_SCHED': np.squeeze(data['Attributes']['CL_FRAME_SCHED']),
+                    'CL_SDR_ID': np.squeeze(data['Attributes']['CL_SDR_ID']),
+                    'CL_MODULATION': np.squeeze(data['Attributes']['CL_MODULATION']),
+                    'UL_SYMS': np.squeeze(data['Attributes']['UL_SYMS']),
+                    }
+
+    def get_samples(self, data_types_avail):
+        # Retrieve samples, translate into python dictionary
+        samples_pilots = []
+        samples_ulData = []
+        for idx, ftype in enumerate(data_types_avail):
+            if ftype == "PILOTS":
+                samples = self.data['Pilot_Samples']['Samples']
+                samples_pilots = samples
+
+            elif ftype == "UL_DATA":
+                samples = self.data['UplinkData']['Samples']
+                samples_ulData = samples
+
+        self.samples = {'PILOT_SAMPS': samples_pilots,
+                        'UL_SAMPS': samples_ulData,
+                        }
+
     def verify_hdf5(self, default_frame=100):
         """
         Plot data in file to verify contents.
@@ -210,9 +270,34 @@ if __name__ == '__main__':
 
         filename = sys.argv[1]
 
+        # Instantiate
         hdf5 = hdfDump(filename)
         hdf5.get_hdf5()
         hdf5.parse_hdf5()
+
+        # Check which data we have available
+        data_types_avail = []
+        pilots_avail = bool(hdf5.data['Pilot_Samples'])
+        ul_data_avail = bool(hdf5.data['UplinkData'])
+
+        if pilots_avail:
+            data_types_avail.append("PILOTS")
+            print("PILOT Data Available")
+        if ul_data_avail:
+            data_types_avail.append("UL_DATA")
+            print("Uplink Data Available")
+
+        # Empty structure
+        if not data_types_avail:
+            raise Exception(' **** No pilots or uplink data found **** ')
+
+        hdf5.get_attributes()
+        hdf5.get_samples(data_types_avail)
+
+        raw_data = hdf5.data
+        metadata = hdf5.metadata
+        samples = hdf5.samples
+
         hdf5.verify_hdf5()
 
     else:
