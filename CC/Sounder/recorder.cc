@@ -155,7 +155,7 @@ herr_t Recorder::initHDF5(std::string hdf5)
 
 	// Hub IDs (vec of strings)
 	cStrArray.clear();
-	att_vector = {"HUB1", "HUB2", "HUB3", "HUB4"}; //cfg->hub_ids;
+	att_vector = cfg->hub_ids;
 	dimsVec[0] = att_vector.size();
 	attr_vec_ds = DataSpace (1, dimsVec);
 	att = mainGroup.createAttribute("BS_HUB_ID", strdatatype, attr_vec_ds);
@@ -168,7 +168,7 @@ herr_t Recorder::initHDF5(std::string hdf5)
 	cStrArray.clear();
         att_vector.clear();
 	std::vector<std::string> att_vectorTmp;
-	att_matrix = {{"BS_SDR1", "BS_SDR2"}, {"BS_SDR3", "BS_SDR4"}, {"BS_SDR5", "BS_SDR6"}}; //cfg->bs_sdr_ids; //test: {{"AAA", "BBB"}, {"CCC", "DDD"}, {"EEE", "FFF"}}
+	att_matrix = cfg->bs_sdr_ids; //test: {{"AAA", "BBB"}, {"CCC", "DDD"}, {"EEE", "FFF"}}
 	for(int index = 0; index < att_matrix.size(); ++index) { 
 	    std::string irisPerCell = std::to_string(att_matrix[index].size());
 	    att_vectorTmp.push_back(irisPerCell); 
