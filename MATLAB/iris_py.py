@@ -150,7 +150,9 @@ class Iris_py:
 		
 		self.agc_en = agc_en
 		self.both_channels = both_channels
-		self.n_zpad_samp = n_zpad_samp
+		self.n_zpad_samp = int(n_zpad_samp)
+		print("n_zpad_samp:\n")
+		print(self.n_zpad_samp)
 		### Setup channel rates, ports, gains, and filters ###
 		info = self.sdr.getHardwareInfo()
 		for chan in [0, 1]:
@@ -271,8 +273,8 @@ class Iris_py:
 				print("No coe was passed into config_sdr_tdd() \n")
 
 			# DEV: ueTrigTime = 153 (prefix_length=0), CBRS: ueTrigTime = 235 (prefix_length=82), tx_advance=prefix_length, corr delay is 17 cycles
-			ueTrigTime =  153 #17 + tx_advance +len_beacon_zpad	# NB: Is this 17 fixed no matter what the size of the corr. sequence?
-			sf_start = int(ueTrigTime//(self.n_samp))	# NB: Won't be needed when nsamp given by Matlab. Matlab will pad the signal.
+			ueTrigTime =  17 + tx_advance +len_beacon_zpad 
+			sf_start = int(ueTrigTime//(self.n_samp))	
 			sp_start = int(ueTrigTime%(self.n_samp))
 			print("config_sdr_tdd: UE starting symbol and sample count (%d, %d)" % (sf_start, sp_start))
 			self.sdr.setHardwareTime(SoapySDR.ticksToTimeNs((sf_start<<16) | sp_start, self.sample_rate),"TRIGGER") # make sure to set this after TDD mode is enabled "writeSetting("TDD_CONFIG", ..."
@@ -330,16 +332,16 @@ class Iris_py:
 		if data_i is not None: data = np.asarray(data_r, dtype=np.complex64) + 1.j*np.asarray(data_i, dtype=np.complex64)  #hack for matlab...
 
 		buf_a = cfloat2uint32(data)
-		buf_b = buf_a - buf_a
+		#buf_b = buf_a - buf_a
 
 		self.sdr.writeRegisters("TX_RAM_A", replay_addr, buf_a.tolist() )
-		self.sdr.writeRegisters("TX_RAM_B", replay_addr, buf_b.tolist() )
+		#self.sdr.writeRegisters("TX_RAM_B", replay_addr, buf_b.tolist() )
 
 	def recv_stream_tdd(self):
 		'''Read an incoming stream.'''
 		in_len  =  int(self.n_samp)
-		wave_rx_a = np.empty(in_len, dtype=np.uint32)
-		wave_rx_b = np.empty(in_len, dtype=np.uint32)
+		wave_rx_a = np.zeros((in_len), dtype=np.uint32)
+		wave_rx_b = np.zeros((in_len), dtype=np.uint32)
 
 		n_R = self.tdd_sched.count("R")         #How many Read frames in the tdd schedule
 		print("n_samp is: %d  \n"%self.n_samp)

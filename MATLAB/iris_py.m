@@ -12,7 +12,7 @@
 classdef iris_py < handle
     % This class serves as an interface between matlab and
     % iris python driver. Matlab calls the methods here and iris_class calls
-    % iris'.
+    % iris' python functions.
     
     properties
         sdr_params;
@@ -28,7 +28,7 @@ classdef iris_py < handle
 		rx_gain;
 		n_samp;
         tdd_sched;
-        n_zpad_samp;
+        n_zpad_samp;    %number of zero-padding samples
         
     end
     

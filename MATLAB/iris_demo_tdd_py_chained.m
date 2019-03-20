@@ -32,11 +32,10 @@ SC_IND_DATA             = [2:7 9:21 23:27 39:43 45:57 59:64];     % Data subcarr
 N_SC                    = 64;                                     % Number of subcarriers
 CP_LEN                  = 16;                                     % Cyclic prefix length
 N_DATA_SYMS             = N_OFDM_SYM * length(SC_IND_DATA);       % Number of data symbols (one per data-bearing subcarrier per OFDM symbol)
-INTERP_RATE             = 2;                                      % Interpolation rate (must be 2)
 N_LTS_SYM               = 2;                                      % Number of 
 N_STS_SYM               = 6;                                      % Number of STS Symbols (taken as N_SC + CP_LEN units)
 N_SYM_SAMP              = N_SC + CP_LEN;                          % Number of samples that will go over the air
-N_ZPAD_PRE              = 48;                                     % Zero-padding prefix for Iris
+N_ZPAD_PRE              = 88;                                     % Zero-padding prefix for Iris
 N_ZPAD_POST             = N_ZPAD_PRE - 14;                        % Zero-padding postfix for Iris
 N_PKT_SAMP              = N_SYM_SAMP * (N_OFDM_SYM + N_LTS_SYM + N_STS_SYM) +...
     N_ZPAD_PRE + N_ZPAD_POST;                                                       % Number of samples per packet
@@ -50,43 +49,7 @@ DO_APPLY_CFO_CORRECTION       = 0;           % Enable CFO estimation/correction
 DO_APPLY_SFO_CORRECTION       = 0;           % Enable SFO estimation/correction
 DO_APPLY_PHASE_ERR_CORRECTION = 0;           % Enable Residual CFO estimation/correction
 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Set up the Iris experiment
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
- % Create a two Iris node objects:
-    b_sched = 'GGPGGRGG';               % BS schedule
-    u_sched = 'GGRGGPGG';               % UE schedule
-    % Create a two node objects:
-    sdr_params = struct(...
-        'id', 'RF3C000007', ...
-        'txfreq', 2.6e9, ...
-        'rxfreq', 2.6e9, ...
-        'txgain', 30, ...
-        'rxgain', 30, ...
-        'sample_rate', 5e6, ...
-        'n_samp', N_PKT_SAMP, ...     % number of samples per frame time.
-        'tdd_sched', b_sched, ...
-        'n_zpad_samp', (N_ZPAD_PRE + N_ZPAD_POST) ... % number of zero-paddes samples
-        );
     
-    sdr_params(2) = sdr_params(1);
-    sdr_params(2).id =  'RF3C000028'; % '0128'; %
-    sdr_params(2).rxfreq = 2.6e9;
-    sdr_params(2).txfreq = 2.6e9;
-    sdr_params(2).tdd_sched = u_sched;
-    node_bs = iris_py(sdr_params(1));
-    node_ue = iris_py(sdr_params(2));
-
-
-    SAMP_FREQ = sdr_params(1).sample_rate;
-    
-    % We will read the transmitter's maximum I/Q buffer length
-    % and assign that value to a temporary variable.
-    %
-    % NOTE:  We assume that the buffers sizes are the same for all interfaces
-
 %% Define the preamble
 % Note: The STS symbols in the preamble meet the requirements needed by the
 % AGC core at the receiver. Details on the operation of the AGC are
@@ -173,13 +136,39 @@ tx_vec = [zeros(1,N_ZPAD_PRE) preamble tx_payload_vec zeros(1,N_ZPAD_POST)];
 % Leftover from zero padding:
 tx_vec_iris = tx_vec.';
 
+%% Init Iris nodes
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Set up the Iris experiment
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+ % Create a two Iris node objects:
+    b_sched = 'GGPGGRGG';               % BS schedule
+    u_sched = 'GGRGGPGG';               % UE schedule
+    % Create a two node objects:
+    sdr_params = struct(...
+        'id', 'RF3C000007', ...
+        'txfreq', 2.6e9, ...
+        'rxfreq', 2.6e9, ...
+        'txgain', 30, ...
+        'rxgain', 30, ...
+        'sample_rate', 5e6, ...
+        'n_samp', length(tx_vec_iris), ...     % number of samples per frame time.
+        'tdd_sched', b_sched, ...
+        'n_zpad_samp', (N_ZPAD_PRE + N_ZPAD_POST) ... % number of zero-paddes samples
+        );
+    
+    sdr_params(2) = sdr_params(1);
+    sdr_params(2).id =  'RF3C000028'; % '0128'; %
+    sdr_params(2).rxfreq = 2.6e9;
+    sdr_params(2).txfreq = 2.6e9;
+    sdr_params(2).tdd_sched = u_sched;
+    node_bs = iris_py(sdr_params(1));
+    node_ue = iris_py(sdr_params(2));
+
+    SAMP_FREQ = sdr_params(1).sample_rate;
+
 %% Iris Tx 
-% Need to be done once for burst! Just burn the data in the FPGAs RAM
-% Zero pad then filter (same as interp or upfirdn without signal processing toolbox)
-if( INTERP_RATE ~= 2)
-   fprintf('Error: INTERP_RATE must equal 2\n'); 
-   return;
-end
+% Need to be done once for burst! Just burn the data onto the FPGAs RAM
 
 % Scale the Tx vector to +/- 1
 tx_vec_iris = TX_SCALE .* tx_vec_iris ./ max(abs(tx_vec_iris));
@@ -215,11 +204,7 @@ node_ue.sdr_close();
 
 fprintf('Matlab script: Length of the received vector:\tBS:%d \tUE:%d\n', data0_len_bs, data0_len);
 
-%% Decimate
-if( INTERP_RATE ~= 2)
-   fprintf('Error: INTERP_RATE must equal 2\n'); 
-   return;
-end
+
 rx_vec_iris = rx_vec_iris.';
 raw_rx_dec = rx_vec_iris(:,1).';
 rx_vec_air = raw_rx_dec;
@@ -296,7 +281,12 @@ rx_H_est = lts_f .* (rx_lts1_f + rx_lts2_f)/2;
 %% Rx payload processing
 
 % Extract the payload samples (integral number of OFDM symbols following preamble)
-payload_vec = rx_dec_cfo_corr(payload_ind : end);
+if( (length(rx_dec_cfo_corr) - payload_ind ) > (N_SYM_SAMP * N_OFDM_SYM) )
+    payload_vec = rx_dec_cfo_corr(payload_ind : payload_ind + (N_SYM_SAMP * N_OFDM_SYM));
+else
+    payload_vec = rx_dec_cfo_corr(payload_ind : end);
+end
+
 missed_samps = (N_SC+CP_LEN) * N_OFDM_SYM - length(payload_vec); %sometimes it's bellow 0!
 
 if (missed_samps > 0) 
@@ -587,7 +577,7 @@ fprintf('Num Bytes:   %d\n', N_DATA_SYMS * log2(MOD_ORDER) / 8);
 fprintf('Sym Errors:  %d (of %d total symbols)\n', sym_errs, N_DATA_SYMS);
 fprintf('Bit Errors:  %d (of %d total bits)\n', bit_errs, N_DATA_SYMS * log2(MOD_ORDER));
 
-cfo_est_lts = rx_cfo_est_lts*(SAMP_FREQ/INTERP_RATE);
+cfo_est_lts = rx_cfo_est_lts*(SAMP_FREQ);
 cfo_est_phaseErr = mean(diff(unwrap(pilot_phase_err)))/(4e-6*2*pi);
 cfo_total_ppm = ((cfo_est_lts + cfo_est_phaseErr) /  ((3.6+(.005*(CHANNEL-1)))*1e9)) * 1e6;
 
@@ -602,27 +592,3 @@ if DO_APPLY_SFO_CORRECTION
     fprintf('SFO Est:     %3.2f Hz (%3.2f ppm)\n', sfo_est, sfo_est_ppm);
 
 end
-
-%Channel estimate based on the LTS signals
-H_hat = (rx_lts1_f(sc_data_idx) + rx_lts2_f(sc_data_idx))./(N_LTS_SYM.*lts_f(sc_data_idx));
-H_hat = H_hat.';
-raw_rx_lts_f = [rx_lts1_f(sc_data_idx)./lts_f(sc_data_idx); rx_lts2_f(sc_data_idx)./lts_f(sc_data_idx)];
-raw_rx_lts_f = raw_rx_lts_f.';
-diff_hat_sq = abs( repmat( H_hat,1,N_LTS_SYM) - raw_rx_lts_f).^2;
-nvar_H_hat = mean( mean( diff_hat_sq, 2) )
-
-% Checking the SNR: 
-% Cheating essentially because we use the knowledge of the TX-ed signal
-tx_raw_syms = ifft_in_mat(sc_data_idx,:);
-rx_raw_syms = syms_f_mat(sc_data_idx,:);
-H_tot_data = rx_raw_syms./tx_raw_syms;
-H_tot = [raw_rx_lts_f H_tot_data];
-diff_hat_sq_tot = abs(repmat(H_hat,1,N_OFDM_SYM + N_LTS_SYM) - H_tot).^2;
-nvar_tot = mean( mean( diff_hat_sq_tot, 2) )
-snr_approx = mean( mean( abs( H_hat).^2) ) ./ nvar_tot;
-snr_approx_db = 10*log10(snr_approx)
-
-H_hat_tot = mean(H_tot,2);
-some_diff = abs(repmat(H_hat_tot,1,N_OFDM_SYM + N_LTS_SYM) - H_tot).^2;
-even_better_nvar = mean( mean( some_diff, 2) ) %closer to removing the ch. estimation error
-
