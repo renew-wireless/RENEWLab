@@ -46,7 +46,7 @@ from generate_sequence import *
 #########################################
 sdr = None
 running = True
-
+txStream = None
 
 #########################################
 #              Functions                #
@@ -143,19 +143,32 @@ def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, numSamps, serial, sigT
     sdr.writeSetting("TX_REPLAY", str(numSamps)) # this starts transmission
 
     # Plot signal
-    fig = plt.figure(figsize=(20, 8), dpi=100)
-    ax1 = fig.add_subplot(2, 1, 1)
-    ax1.plot(np.real(txSignal), label='pilot i')
-    ax1.plot(np.imag(txSignal), label='pilot q')
-    ax2 = fig.add_subplot(2, 1, 2)
-    ax2.plot(np.abs(txSignal), label='abs(signal)')
-    plt.show(block=False)
+    debug = 0
+    if debug:
+        fig = plt.figure(figsize=(20, 8), dpi=100)
+        ax1 = fig.add_subplot(2, 1, 1)
+        ax1.plot(np.real(txSignal), label='pilot i')
+        ax1.plot(np.imag(txSignal), label='pilot q')
+        ax2 = fig.add_subplot(2, 1, 2)
+        ax2.plot(np.abs(txSignal), label='abs(signal)')
+        plt.show(block=False)
 
     # Stop/Close/Cleanup
+    signal.signal(signal.SIGINT, signal_handler)
     pth = threading.Thread(target=print_thread, args=(sdr, info))
     pth.start()
     print("ctrl-c to stop ...")
     signal.pause()
+
+
+def signal_handler(signal, frame):
+    global sdr, txStream, running
+    running = False
+    #cleanup txStream
+    print("Cleanup txStreams")
+    if txStream is not None:
+        sdr.deactivateStream(txStream)
+        sdr.closeStream(txStream)
 
 
 #########################################
@@ -168,7 +181,7 @@ def main():
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
     parser.add_option("--gain", type="float", dest="gain", help="Tx gain (dB)", default=-5.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=2.6e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=3.6e9)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=1024)
     parser.add_option("--serial", type="string", dest="serial", help="serial number of the device", default="")

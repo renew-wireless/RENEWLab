@@ -28,13 +28,15 @@ def find_lts(iq, thresh=0.8, us=1, cp=32):
 			cp: cyclic prefix
 
 		Returns:
-			best: highest LTS peak,
+			best_pk: highest LTS peak,
 			lts_pks: the list of all detected LTSs, and
 			lts_corr: the correlated signal, multiplied by itself delayed by 1/2 an LTS
 	"""
+	debug = False
 
 	lts, lts_f = generate_training_seq(preamble_type='lts', cp=cp, upsample=us)
-	lts_flip = np.flip(lts[-64:]) 	# lts contains 2.5 64-sample-LTS sequences, we need only one symbol
+	lts_tmp = lts[-64:]
+	lts_flip = lts_tmp[::-1]  # lts contains 2.5 64-sample-LTS sequences, we need only one symbol
 	lts_flip_conj = np.conjugate(lts_flip)
 	lts_corr = np.abs(np.convolve(lts_flip_conj, np.sign(iq)))
 	lts_pks = np.where(lts_corr > (thresh * np.max(lts_corr)))
@@ -44,11 +46,23 @@ def find_lts(iq, thresh=0.8, us=1, cp=32):
 
 	if not second_peak_idx.any():
 		print("NO LTS FOUND!")
-		best = []
+		best_pk = []
 	else:
-		best = lts_pks[second_peak_idx[0]]  # Grab only the first packet we have received
+		best_pk = lts_pks[second_peak_idx[0]]  # Grab only the first packet we have received
 
-	return best, lts_pks, lts_corr
+	if debug:
+		print("LTS: {}, BEST: {}".format(lts_pks, lts_pks[second_peak_idx]))
+		fig = plt.figure()
+		ax1 = fig.add_subplot(2, 1, 1)
+		ax1.grid(True)
+		ax1.plot(np.abs(iq))
+		ax2 = fig.add_subplot(2, 1, 2)
+		ax2.grid(True)
+		ax2.plot(np.abs(lts_corr))
+		ax2.scatter(lts_pks, 2 * np.ones(len(lts_pks)))
+		plt.show()
+
+	return best_pk, lts_pks, lts_corr
 
 
 if __name__ == '__main__':
