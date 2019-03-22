@@ -1,5 +1,5 @@
 #!/bin/bash
-sudo apt -y install python-scipy python3-scipy python-matplotlib python3-matplotlib python-h5py python3-h5py
+sudo apt -y install python-scipy python3-scipy python-matplotlib python3-matplotlib python-h5py python3-h5py python-setuptools
 
 mkdir -p deps
 cd deps/
