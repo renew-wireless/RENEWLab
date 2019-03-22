@@ -36,6 +36,7 @@
 import sys
 import numpy as np
 import h5py
+from optparse import OptionParser
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import animation
@@ -45,15 +46,6 @@ from hdf_dump import *
 from find_lts import *
 from generate_sequence import *
 from ofdmtxrx import *
-
-
-#########################################
-#           Global Parameters           #
-#########################################
-FFT_OFFSET = 4
-APPLY_CFO_CORR = 1
-APPLY_SFO_CORR = 1
-APPLY_PHASE_CORR = 1
 
 
 #########################################
@@ -161,18 +153,20 @@ def pilot_finder(samples, pilot_type):
     return pilot, tx_pilot
 
 
-def estimate_channel(this_pilot, tx_pilot, ofdm_obj):
+def estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params):
     """
     Estimate channel from received pilots
 
     Input:
-        this_pilot - received pilot (vector)
-        tx_pilot   - time (tx_pilot[0]) and frequency (tx_pilot[1]) domain transmitted pilot sequences
+        this_pilot  - received pilot (vector)
+        tx_pilot    - time (tx_pilot[0]) and frequency (tx_pilot[1]) domain transmitted pilot sequences (vectors)
+        user_params - set of parameters defined by user. See main function
 
     Output:
         chan_est - Vector containing channel estimates computed from this particular RX pilot (dim: fft_size x 1)
     """
-    global FFT_OFFSET, APPLY_CFO_CORR
+    fft_offset = user_params[5]
+    apply_cfo_corr = user_params[2]
 
     # Retrieve sent pilot (freq domain)
     pilot_freq = tx_pilot[1]
@@ -181,8 +175,8 @@ def estimate_channel(this_pilot, tx_pilot, ofdm_obj):
     lts_start = 0
     lts_syms_len = len(this_pilot)
 
-    if APPLY_CFO_CORR:
-        coarse_cfo_est = ofdm_obj.cfo_correction(this_pilot, lts_start, lts_syms_len, FFT_OFFSET)
+    if apply_cfo_corr:
+        coarse_cfo_est = ofdm_obj.cfo_correction(this_pilot, lts_start, lts_syms_len, fft_offset)
     else:
         coarse_cfo_est = 0
 
@@ -192,8 +186,8 @@ def estimate_channel(this_pilot, tx_pilot, ofdm_obj):
     # Channel estimation
     # Get LTS again (after CFO correction)
     lts = pilot_cfo[lts_start: lts_start + lts_syms_len]
-    lts_1 = lts[-64 + -FFT_OFFSET + np.array(range(97, 161))]
-    lts_2 = lts[-FFT_OFFSET + np.array(range(97, 161))]
+    lts_1 = lts[-64 + -fft_offset + np.array(range(97, 161))]
+    lts_2 = lts[-fft_offset + np.array(range(97, 161))]
 
     # Average 2 LTS symbols to compute channel estimate
     chan_est = np.fft.ifftshift(pilot_freq) * (np.fft.fft(lts_1) + np.fft.fft(lts_2)) / 2
@@ -201,31 +195,126 @@ def estimate_channel(this_pilot, tx_pilot, ofdm_obj):
     return chan_est
 
 
-def bf_weights_calc():
+def beamforming_weights(chan_est, user_params):
+    """
+    Compute beam steering weights
+
+    Input:
+        chan_est    - Channel estimate vector.
+                      Dimensions: chan_est[current cell, num clients, num antennas, current frame, fft_size]
+        user_params - set of parameters defined by user. See main function
+
+    Output
+        WW - BF weights matrix. Dimensions: WW[num BS antennas, num clients, num subcarriers]
+    """
+    # Collapse into dimensions [numCl, numBSant, fft_size]
+    H_tmp = np.squeeze(chan_est)
+    H_tmp_shape = H_tmp.shape
+    num_sc = H_tmp_shape[2]
+    num_ant = H_tmp_shape[1]
+    num_cl = H_tmp_shape[0]
+
+    bf_scheme = user_params[1]
+    power_norm = 0
+
+    if bf_scheme == "ZF":
+        # Zero Forcing
+        WW = np.empty((num_ant, num_cl, num_sc), dtype=complex)
+        for scIdx in range(num_sc):
+            H = H_tmp[:, :, scIdx]
+            HH = np.matrix.getH(H)
+            W = HH.dot(np.linalg.pinv(H.dot(HH)))
+
+            if power_norm:
+                # Normalize (equal power allocation across users)
+                P = 1
+                for k in range(num_cl):
+                    W[:, k] = np.sqrt(P / num_cl) * (W[:, k] / np.linalg.norm(V[:, k]))
+
+            WW[:, :, scIdx] = W
+    else:
+        raise Exception("Only Zero Forcing is currently implemented")
+
+    return WW
+
+
+def demultiplex(samples, bf_weights, user_params, metadata):
+    """
+    Separate data streams by applying beamforming weights previously computed.
+    Requires us to perform FFT prior to applying weights
+
+    Input:
+        samples     -
+                   Dimensions: samples[]
+        bf_weights  - Dimensions: bf_weights[num antennas, num clients, num subcarriers]
+        user_params - set of parameters defined by user. See main function
+
+    Output
+        streams - Dimensions: streams[]
     """
 
-    return:
-    """
-    x=1
-    return x
+    w_dim = bf_weights.shape
+    num_sc = w_dim[2]
+    data_cp_len = int(metadata['CP_LEN'])
+    fft_size = int(metadata['FFT_SIZE'])
+    num_samps = int(metadata['SYM_LEN_NO_PAD'])
+    prefix = int(metadata['PREFIX_LEN'])
+    postfix = int(metadata['POSTFIX_LEN'])
+    ofdm_size = fft_size + data_cp_len
+    n_ofdm_syms = num_samps//ofdm_size
+    fft_offset = user_params[5]
+
+    # Remove padding
+    payload = samples[prefix+1:prefix+1+num_samps]
+
+    # Reshape into matrix
+    payload_samples_mat_cp = np.reshape(payload, ((num_sc + data_cp_len), n_ofdm_syms), order="F")
+
+    # Remove cyclic prefix
+    payload_samples_mat = payload_samples_mat_cp[data_cp_len - fft_offset + 1 + np.array(range(0, num_sc)), :]
+
+    # FFT
+    rxSig_freq = np.fft.fft(payload_samples_mat, n=num_sc, axis=0)
+
+    # Equalizer
+    chan_est_tmp = chan_est.reshape(len(chan_est), 1, order="F")
+    rxSig_freq_eq = rxSig_freq / np.matlib.repmat(chan_est_tmp, 1, n_ofdm_syms)
 
 
-def demultiplexing():
-    """
-
-    return:
-    """
-    x=1
-    return x
+    streams = 1
+    return streams
 
 
 def demodulate_data():
     """
-
+    FIXME - TODO!!!
     return:
     """
-    x=1
-    return x
+    # Apply SFO Correction
+    if APPLY_SFO_CORR:
+        rxSig_freq_eq = ofdm_obj.sfo_correction(rxSig_freq_eq, pilot_sc, pilots_matrix, n_ofdm_syms)
+    else:
+        sfo_corr = np.zeros((num_sc, n_ofdm_syms))
+
+    # Apply phase correction
+    if APPLY_PHASE_CORR:
+        phase_error = ofdm_obj.phase_correction(rxSig_freq_eq, pilot_sc, pilots_matrix)
+    else:
+        phase_error = np.zeros((1, n_ofdm_syms))
+
+    phase_corr_tmp = np.matlib.repmat(phase_error, num_sc, 1)
+    phase_corr = np.exp(-1j * phase_corr_tmp)
+    rxSig_freq_eq_phase = rxSig_freq_eq * phase_corr
+    rxSymbols_mat = rxSig_freq_eq_phase[data_sc, :]
+
+    # Demodulation
+    rxSymbols_vec = np.reshape(rxSymbols_mat, n_data_syms, order="F")       # Reshape into vector
+    rx_data = ofdm_obj.demodulation(rxSymbols_vec, mod_order)
+
+    print(" === STATS ===")
+    symbol_err = np.sum(tx_data != rx_data)
+    print("Frame#: {} --- Symbol Errors: {} out of {} total symbols".format(pkt_count, symbol_err, n_data_syms))
+    return symbol_err
 
 
 def plotter():
@@ -262,7 +351,7 @@ def plotter():
     plt.show()
 
 
-def rx_app(rx_mode, filename):
+def rx_app(filename, user_params):
     """
     Main function
 
@@ -270,6 +359,7 @@ def rx_app(rx_mode, filename):
         a) rx_mode:  SIM or OTA
         b) filename: HDF5 file to read from 
     """
+    rx_mode = user_params[0]
 
     # Read Received Samples
     metadata, samples = read_rx_samples(rx_mode, filename)
@@ -297,7 +387,7 @@ def rx_app(rx_mode, filename):
     assert pilot_dim[4] == 2 * sym_len  # No complex values in HDF5, x2 to account for IQ
 
     # Prepare samples to iterate over all received frames
-    chan_est = np.empty([num_cells, num_bs_ant, num_cl, num_frames, fft_size], dtype=complex)
+    chan_est = np.empty([num_cells, num_cl, num_bs_ant, num_frames, fft_size], dtype=complex)
     if rx_mode == "SIM":
         for frameIdx in range(num_frames):
             for clIdx in range(num_cl):
@@ -314,21 +404,28 @@ def rx_app(rx_mode, filename):
                         continue
 
                     # Channel estimation from pilots
-                    chan_est[num_cells-1, antIdx, clIdx, frameIdx, :] = estimate_channel(this_pilot, tx_pilot, ofdm_obj)
+                    chan_est[num_cells-1, clIdx, antIdx, frameIdx, :] = estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params)
 
-                    # Get data samples
-                    # How many data symbols transmitted by each client?
-                    this_cl_sched = cl_frame_sched[clIdx]
-                    sym_found_idx = this_cl_sched.find('U')
-                    sym_found_idx2 = this_cl_sched.find('G')
-                    num_ul_syms = len(sym_found_idx)
+            # PER FRAME
+            # Steering weight computation after collecting pilots at all antennas from all clients
+            bf_weights = beamforming_weights(chan_est[num_cells-1, :, :, frameIdx, :], user_params)
 
-                    # Dims data: (frames, numCells, ulSymsPerFrame, numAntennasAtBS, numSamplesPerSymbol*2)
-                    for ulSymIdx in range(num_ul_syms):
-                        I = data_samples[frameIdx, num_cells-1, clIdx, antIdx, 0:sym_len*2-1:2]/2**16
-                        Q = data_samples[frameIdx, num_cells-1, clIdx, antIdx, 1:sym_len*2:2]/2**16
+            # Get data samples
+            # How many data symbols transmitted by each client?
+            this_cl_sched = cl_frame_sched[clIdx]
+            num_ul_syms = this_cl_sched.count('U')
 
+            # Dims data: (frames, numCells, ulSymsPerFrame, numAntennasAtBS, numSamplesPerSymbol*2)
+            for ulSymIdx in range(num_ul_syms):
+                I = data_samples[frameIdx, num_cells-1, ulSymIdx, antIdx, 0:sym_len*2-1:2]/2**16
+                Q = data_samples[frameIdx, num_cells-1, ulSymIdx, antIdx, 1:sym_len*2:2]/2**16
+                IQ = I + (Q * 1j)
 
+                # Demultiplexing - Separate streams
+                streams = demultiplex(IQ, bf_weights, user_params, metadata)
+                rx_data = demodulate_data()
+
+                plotter(IQ, chan_est, bf_weights, streams, rx_data, user_params)
         stop = 1
 
 
@@ -336,26 +433,28 @@ def rx_app(rx_mode, filename):
 #                 Main                  #
 #########################################
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        if sys.argv[1] == "-h":
-            print('format: ./mMIMO_receiver.py <mode (SIM/OTA)> <filename (if SIM, empty otherwise)>')
-            print('SIM: Simulation mode. Need to specify HDF5 file to read from')
-            print('OTA: Real-Time mode. Clients must be active. Test configuration specified in ???????????')  # FIXME!!
-            sys.exit(0)
-            
-        rx_mode = sys.argv[1]
-        if rx_mode == "SIM":
-            if len(sys.argv) < 2:
-                raise Exception("SIM mode requires HDF5-filename argument: ./mMIMO_receiver.py SIM <filename>")
-            filename = sys.argv[2]
-        elif rx_mode == "OTA":
-            filename = []
-        else:
-            raise Exception("Mode not recognized. Options: SIM/OTA")    
 
-        # Rx Application
-        rx_app(rx_mode, filename)
+    parser = OptionParser()
+    parser.add_option("--mode",             type="string",          dest="mode",        default="SIM", help="Options: SIM/OTA [default: %default]")
+    parser.add_option("--file",             type="string",          dest="file",        default="./data_in/Argos-2019-2-20-14-55-22_1x8x2.hdf5", help="HDF5 filename to be read in SIM mode [default: %default]")
+    parser.add_option("--bfScheme",         type="string",          dest="bf_scheme",   default="ZF", help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
+    parser.add_option("--cfoCorrection",    action="store_true",    dest="cfo_corr",    default=True, help="Apply CFO correction [default: %default]")
+    parser.add_option("--sfoCorrection",    action="store_true",    dest="sfo_corr",    default=True, help="Apply SFO correction [default: %default]")
+    parser.add_option("--phaseCorrection",  action="store_true",    dest="phase_corr",  default=True, help="Apply phase correction [default: %default]")
+    parser.add_option("--fftOfset",         type="int",             dest="fft_offset",  default=4,    help="FFT Offset:# CP samples for FFT [default: %default]")
+    (options, args) = parser.parse_args()
 
-    else:
-        raise Exception('Please specify mode. For more details: ./mMIMO_receiver.py -h')
+    user_params = [options.mode,
+                   options.bf_scheme,
+                   options.cfo_corr,
+                   options.sfo_corr,
+                   options.phase_corr,
+                   options.fft_offset
+                   ]
+
+    filename = options.file
+
+    # Rx Application
+    rx_app(filename, user_params)
+
 
