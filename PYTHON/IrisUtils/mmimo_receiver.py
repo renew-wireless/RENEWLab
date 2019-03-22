@@ -22,6 +22,7 @@
          iii) Constellation
 
 
+    Currently only supports one cell system
 
      TODO:
          2) Create Plotter Class ??
@@ -35,127 +36,63 @@
 import sys
 import numpy as np
 import h5py
+import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib import animation
+from matplotlib import gridspec
 from hdf_dump import *
-from radio_lib import *
+# from radio_lib import *
+from find_lts import *
+from generate_sequence import *
+from ofdmtxrx import *
+
+
+#########################################
+#           Global Parameters           #
+#########################################
+FFT_OFFSET = 4
+APPLY_CFO_CORR = 1
+APPLY_SFO_CORR = 1
+APPLY_PHASE_CORR = 1
 
 
 #########################################
 #             Create Plots              #
 #########################################
-matplotlib.rcParams.update({'font.size': 10})
-# fig = plt.figure(figsize=(20, 8), dpi=120)
-fig = plt.figure(figsize=(10, 20), dpi=120)
-fig.subplots_adjust(hspace=.4, top=.97, bottom=.03)
-gs = gridspec.GridSpec(ncols=4, nrows=5)
 
-ax1 = fig.add_subplot(gs[0, :])
-ax1.grid(True)
-ax1.set_title('TX Signal')
-title = ax1.text(0.5, 1, '|', ha="center")
-ax1.set_ylabel('Magnitude')
-ax1.set_xlabel('Sample index')
-line1, = ax1.plot([], [], label='RFA', animated=True)
-ax1.set_ylim(0, 1)
-ax1.set_xlim(0, FIG_LEN)
-ax1.legend(fontsize=10)
-
-ax2 = fig.add_subplot(gs[1, :])
-ax2.grid(True)
-ax2.set_title('RX Signal')
-ax2.set_xlabel('Sample index')
-ax2.set_ylabel('I/Q')
-line2, = ax2.plot([], [], label='I - RFA', animated=True)
-line3, = ax2.plot([], [], label='Q - RFA', animated=True)
-ax2.set_ylim(-1, 1)
-ax2.set_xlim(0, FIG_LEN)
-ax2.legend(fontsize=10)
-
-ax3 = fig.add_subplot(gs[2, :])
-ax3.grid(True)
-ax3.set_title('RX Signal')
-ax3.set_xlabel('Sample index')
-ax3.set_ylabel('Magnitude')
-line4, = ax3.plot([], [], label='RFA', animated=True)
-line8, = ax3.plot([], [], '--k', label='Payload Start', animated=True)  # markers
-line9, = ax3.plot([], [], '--r', label='Payload End', animated=True)  # markers
-line10, = ax3.plot([], [], '--g', label='LTS Start', animated=True)  # markers
-ax3.set_ylim(0, 1)
-ax3.set_xlim(0, FIG_LEN)
-ax3.legend(fontsize=10)
-
-ax4 = fig.add_subplot(gs[3, :])
-ax4.grid(True)
-ax4.set_title('Correlation Peaks')
-ax4.set_xlabel('Sample index')
-ax4.set_ylabel('')
-line5, = ax4.plot([], [], label='RFA', animated=True)
-line11, = ax4.plot([], [], '--r', label='Thresh', animated=True)  # markers
-ax4.set_ylim(0, 5)
-ax4.set_xlim(0, FIG_LEN)
-ax4.legend(fontsize=10)
-
-ax5 = fig.add_subplot(gs[4, 0:2])
-ax5.grid(True)
-ax5.set_title('TX/RX Constellation')
-ax5.set_xlabel('')
-ax5.set_ylabel('')
-line6, = ax5.plot([], [], 'ro', label='TXSym', animated=True)
-line7, = ax5.plot([], [], 'bx', label='RXSym', animated=True)
-ax5.set_ylim(-1.5, 1.5)
-ax5.set_xlim(-2.8, 2.8)
-ax5.legend(fontsize=10)
-
-ax6 = fig.add_subplot(gs[4, 2:4])
-ax6.grid(True)
-ax6.set_title('Magnitude Channel Estimates')
-ax6.set_xlabel('Baseband Freq.')
-ax6.set_ylabel('')
-line12, = ax6.step([], [])
-ax6.set_ylim(-0.1, 5)
-ax6.set_xlim(-10, 10)
-ax6.legend(fontsize=10)
 
 
 #########################################
 #              Functions                #
 #########################################
-def init():
-    """ Initialize plotting objects """
-    line1.set_data([], [])
-    line2.set_data([], [])
-    line3.set_data([], [])
-    line4.set_data([], [])
-    line5.set_data([], [])
-    line6.set_data([], [])
-    line7.set_data([], [])
-    line8.set_data([], [])
-    line9.set_data([], [])
-    line10.set_data([], [])
-    line11.set_data([], [])
-    line12.set_data([], [])
-    return line1, line2, line3, line4, line5, line6, line7, line8, line9, line10, line11, line12
- 
-    
 def read_rx_samples(rx_mode, filename):
     """
     Read IQ samples received at Base Station.
-    Two modes: simulation and real-time
-     a) Sim:             Read previously collected HDF5 file and run mMIMO
-                         receiver on the collected data
-     b) Real-Time (OTA): Call radio library to retrieve samples as they
-                         are received
+
+    Input:
+        rx_mode - Two modes: simulation and real-time
+                    a) Sim:             Read previously collected HDF5 file
+                                        and run mMIMO receiver on the collected
+                                        data
+                    b) Real-Time (OTA): Call radio library to retrieve samples
+                                        as they are received
+
+        filename - Name of file to process
+
+    Output:
+        metadata - Attributes from hdf5 file
+        samples  - Raw samples from pilots and data
     """
+
     if rx_mode == "SIM":
         hdf5 = hdfDump(filename)
         hdf5.get_hdf5()
         hdf5.parse_hdf5()
-        raw_data = hdf5.data
 
         # Check which data we have available
         data_types_avail = []
-        pilots_avail = bool(raw_data['Pilot_Samples'])
-        ul_data_avail = bool(raw_data['UplinkData'])
+        pilots_avail = bool(hdf5.data['Pilot_Samples'])
+        ul_data_avail = bool(hdf5.data['UplinkData'])
 
         if pilots_avail:
             data_types_avail.append("PILOTS")
@@ -184,26 +121,84 @@ def read_rx_samples(rx_mode, filename):
     return metadata, samples
 
 
-def pilot_finder(meta_pilots, samps_pilots):
+def pilot_finder(samples, pilot_type):
+    """
+    Find pilots from clients to each of the base station antennas
+
+    Input:
+        metadata - Attributes from hdf5 file
+        samples  - Raw samples from pilots and data.
+                   Dimensions: (frames, numCells, numClients, numAntennasAtBS, numSamplesPerSymbol*2)
     """
 
-    return:
-    """
-    pilot_type = meta_pilots['PILOT_TYPE']
-    pilot_cp = meta_pilots['PILOT_CP']
-    pilot_tx = generate_training_seq(preamble_type=pilot_type, seq_length=[], cp=32, upsample=1, reps=[])
-    pilot_rx = samps_pilots
-    
-    return x
+    if pilot_type == 'lts':
+        lts_thresh = 0.8
+        best_pk, lts_pks, lts_corr = find_lts(samples, thresh=lts_thresh)
+        lts, lts_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
+        lts_syms_len = len(lts)
+
+        # We'll need the transmitted version of the pilot (for channel estimation, for example)
+        tx_pilot = [lts, lts_f]
+
+        # Check if LTS found
+        if not best_pk:
+            print("SISO_OFDM: No LTS Found! Continue...")
+            pilot = np.array([])
+            return pilot, tx_pilot
+        # If beginning of frame was not captured in current buffer
+        if (best_pk - lts_syms_len) < 0:
+            print("TOO EARLY. Continue... ")
+            pilot = np.array([])
+            return pilot, tx_pilot
+
+        # Get pilot
+        lts_start = best_pk - lts_syms_len + 1  # where LTS-CP start
+        pilot = samples[lts_start:best_pk+1]
+
+    else:
+        raise Exception("Only LTS Pilots supported at the moment")
+
+    return pilot, tx_pilot
 
 
-def estimate_channel():
+def estimate_channel(this_pilot, tx_pilot, ofdm_obj):
     """
+    Estimate channel from received pilots
 
-    return:
+    Input:
+        this_pilot - received pilot (vector)
+        tx_pilot   - time (tx_pilot[0]) and frequency (tx_pilot[1]) domain transmitted pilot sequences
+
+    Output:
+        chan_est - Vector containing channel estimates computed from this particular RX pilot (dim: fft_size x 1)
     """
-    x=1
-    return x
+    global FFT_OFFSET, APPLY_CFO_CORR
+
+    # Retrieve sent pilot (freq domain)
+    pilot_freq = tx_pilot[1]
+
+    # Apply coarse CFO Correction
+    lts_start = 0
+    lts_syms_len = len(this_pilot)
+
+    if APPLY_CFO_CORR:
+        coarse_cfo_est = ofdm_obj.cfo_correction(this_pilot, lts_start, lts_syms_len, FFT_OFFSET)
+    else:
+        coarse_cfo_est = 0
+
+    correction_vec = np.exp(-1j * 2 * np.pi * coarse_cfo_est * np.array(range(0, len(this_pilot))))
+    pilot_cfo = this_pilot * correction_vec
+
+    # Channel estimation
+    # Get LTS again (after CFO correction)
+    lts = pilot_cfo[lts_start: lts_start + lts_syms_len]
+    lts_1 = lts[-64 + -FFT_OFFSET + np.array(range(97, 161))]
+    lts_2 = lts[-FFT_OFFSET + np.array(range(97, 161))]
+
+    # Average 2 LTS symbols to compute channel estimate
+    chan_est = np.fft.ifftshift(pilot_freq) * (np.fft.fft(lts_1) + np.fft.fft(lts_2)) / 2
+
+    return chan_est
 
 
 def bf_weights_calc():
@@ -266,6 +261,7 @@ def plotter():
     axes[4, idx].set_xlabel('Sample')
     plt.show()
 
+
 def rx_app(rx_mode, filename):
     """
     Main function
@@ -276,12 +272,66 @@ def rx_app(rx_mode, filename):
     """
 
     # Read Received Samples
-    meta_pilots, samps_pilots, meta_ulData, samps_ulData = read_rx_samples(rx_mode, filename)
+    metadata, samples = read_rx_samples(rx_mode, filename)
 
-    # Find potential pilots
-    pilot_finder(meta_pilots, samps_pilots)
+    # OFDM object
+    ofdm_obj = ofdmTxRx()
 
-    
+    # Get attributes we care about
+    pilot_type = metadata['PILOT_SEQ']
+    pilot_samples = samples['PILOT_SAMPS']
+    data_samples = samples['UL_SAMPS']
+    num_cells = metadata['BS_NUM_CELLS']
+    num_cl = metadata['NUM_CLIENTS']
+    num_bs_ant = metadata['BS_NUM_ANT']
+    sym_len = metadata['SYM_LEN']
+    fft_size = metadata['FFT_SIZE']
+    cl_frame_sched = metadata['CL_FRAME_SCHED']
+    pilot_dim = pilot_samples.shape
+    num_frames = pilot_dim[0]
+
+    # Verify dimensions
+    assert pilot_dim[1] == num_cells
+    assert pilot_dim[2] == num_cl
+    assert pilot_dim[3] == num_bs_ant
+    assert pilot_dim[4] == 2 * sym_len  # No complex values in HDF5, x2 to account for IQ
+
+    # Prepare samples to iterate over all received frames
+    chan_est = np.empty([num_cells, num_bs_ant, num_cl, num_frames, fft_size], dtype=complex)
+    if rx_mode == "SIM":
+        for frameIdx in range(num_frames):
+            for clIdx in range(num_cl):
+                for antIdx in range(num_bs_ant):
+                    # Put I/Q together
+                    # Dims pilots: (frames, numCells, numClients, numAntennasAtBS, numSamplesPerSymbol*2)
+                    I = pilot_samples[frameIdx, num_cells-1, clIdx, antIdx, 0:sym_len*2-1:2]/2**16
+                    Q = pilot_samples[frameIdx, num_cells-1, clIdx, antIdx, 1:sym_len*2:2]/2**16
+                    IQ = I + (Q * 1j)
+
+                    # Find potential pilots
+                    this_pilot, tx_pilot = pilot_finder(IQ, pilot_type)
+                    if this_pilot.size == 0:
+                        continue
+
+                    # Channel estimation from pilots
+                    chan_est[num_cells-1, antIdx, clIdx, frameIdx, :] = estimate_channel(this_pilot, tx_pilot, ofdm_obj)
+
+                    # Get data samples
+                    # How many data symbols transmitted by each client?
+                    this_cl_sched = cl_frame_sched[clIdx]
+                    sym_found_idx = this_cl_sched.find('U')
+                    sym_found_idx2 = this_cl_sched.find('G')
+                    num_ul_syms = len(sym_found_idx)
+
+                    # Dims data: (frames, numCells, ulSymsPerFrame, numAntennasAtBS, numSamplesPerSymbol*2)
+                    for ulSymIdx in range(num_ul_syms):
+                        I = data_samples[frameIdx, num_cells-1, clIdx, antIdx, 0:sym_len*2-1:2]/2**16
+                        Q = data_samples[frameIdx, num_cells-1, clIdx, antIdx, 1:sym_len*2:2]/2**16
+
+
+        stop = 1
+
+
 #########################################
 #                 Main                  #
 #########################################
