@@ -118,9 +118,13 @@ def pilot_finder(samples, pilot_type):
     Find pilots from clients to each of the base station antennas
 
     Input:
-        metadata - Attributes from hdf5 file
-        samples  - Raw samples from pilots and data.
-                   Dimensions: (frames, numCells, numClients, numAntennasAtBS, numSamplesPerSymbol*2)
+        samples    - Raw samples from pilots and data.
+                     Dimensions: (frames, numCells, numClients, numAntennasAtBS, numSamplesPerSymbol*2)
+        pilot_type - Type of TX pilot (e.g., 802.11 LTS)
+
+    Output:
+        pilot     - Received pilot (from multiple clients)
+        tx_pilot  - Transmitted pilot (same pilot sent by all clients)
     """
 
     if pilot_type == 'lts':
@@ -160,6 +164,7 @@ def estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params):
     Input:
         this_pilot  - received pilot (vector)
         tx_pilot    - time (tx_pilot[0]) and frequency (tx_pilot[1]) domain transmitted pilot sequences (vectors)
+        ofdm_obj    - OFDM object
         user_params - set of parameters defined by user. See main function
 
     Output:
@@ -202,7 +207,7 @@ def beamforming_weights(chan_est, user_params):
     Input:
         chan_est    - Channel estimate vector.
                       Dimensions: chan_est[current cell, num clients, num antennas, current frame, fft_size]
-        user_params - set of parameters defined by user. See main function
+        user_params - Set of parameters defined by user. See main function
 
     Output
         WW - BF weights matrix. Dimensions: WW[num BS antennas, num clients, num subcarriers]
@@ -244,77 +249,134 @@ def demultiplex(samples, bf_weights, user_params, metadata):
     Requires us to perform FFT prior to applying weights
 
     Input:
-        samples     -
-                   Dimensions: samples[]
-        bf_weights  - Dimensions: bf_weights[num antennas, num clients, num subcarriers]
+        samples     - IQ data. Dimensions: samples[num BS antennas, num samps including padding]
+        bf_weights  - Beamforming weights. Dimensions: bf_weights[num antennas, num clients, num subcarriers]
         user_params - set of parameters defined by user. See main function
+        metadata    - Attributes from hdf5 file
 
     Output
-        streams - Dimensions: streams[]
+        streams     - Per client data streams. Dimensions: streams[num clients, num subcarriers, num ofdm symbols]
     """
 
     w_dim = bf_weights.shape
     num_sc = w_dim[2]
+    num_cl = int(metadata['NUM_CLIENTS'])
+    num_ant = int(metadata['BS_NUM_ANT'])
     data_cp_len = int(metadata['CP_LEN'])
     fft_size = int(metadata['FFT_SIZE'])
     num_samps = int(metadata['SYM_LEN_NO_PAD'])
     prefix = int(metadata['PREFIX_LEN'])
-    postfix = int(metadata['POSTFIX_LEN'])
     ofdm_size = fft_size + data_cp_len
     n_ofdm_syms = num_samps//ofdm_size
     fft_offset = user_params[5]
 
     # Remove padding
-    payload = samples[prefix+1:prefix+1+num_samps]
+    payload = samples[:, prefix+1:prefix+1+num_samps]
 
-    # Reshape into matrix
-    payload_samples_mat_cp = np.reshape(payload, ((num_sc + data_cp_len), n_ofdm_syms), order="F")
+    # Reshape into matrix. Dim: [num clients, num_sc+cp, num_ofdm]
+    payload_samples_mat_cp = np.reshape(payload, (num_ant, (num_sc + data_cp_len), n_ofdm_syms), order="F")
 
     # Remove cyclic prefix
-    payload_samples_mat = payload_samples_mat_cp[data_cp_len - fft_offset + 1 + np.array(range(0, num_sc)), :]
+    payload_samples_mat = payload_samples_mat_cp[:, data_cp_len - fft_offset + 1 + np.array(range(0, num_sc)), :]
 
     # FFT
-    rxSig_freq = np.fft.fft(payload_samples_mat, n=num_sc, axis=0)
+    rxSig_freq = np.empty((num_ant, payload_samples_mat.shape[1], payload_samples_mat.shape[2]), dtype=complex)
+    for antIdx in range(num_ant):
+        rxSig_freq[antIdx, :, :] = np.fft.fft(payload_samples_mat[antIdx, :, :], n=num_sc, axis=0)
 
-    # Equalizer
-    chan_est_tmp = chan_est.reshape(len(chan_est), 1, order="F")
-    rxSig_freq_eq = rxSig_freq / np.matlib.repmat(chan_est_tmp, 1, n_ofdm_syms)
+    # Demultiplexing (iterate over clients and ofdm symbols)
+    x = np.empty((num_cl, rxSig_freq.shape[1], n_ofdm_syms), dtype=complex)
+    for symIdx in range(n_ofdm_syms):
+        for scIdx in range(rxSig_freq.shape[1]):
+            this_w = np.squeeze(bf_weights[:, :, scIdx])
+            y = np.squeeze(rxSig_freq[:, scIdx, symIdx])
+            x[:, scIdx, symIdx] = np.transpose(np.dot(np.transpose(this_w), y))
 
-
-    streams = 1
+    streams = x
     return streams
 
 
-def demodulate_data():
+def demodulate_data(streams, ofdm_obj, user_params, metadata):
     """
-    FIXME - TODO!!!
-    return:
+    Given complex data streams for all users, demodulate signals
+
+    Input:
+        streams     - Per client data streams. Dimensions: streams[num clients, num subcarriers, num ofdm symbols]
+        ofdm_obj    - OFDM object
+        user_params - Set of parameters defined by user. See main function
+        metadata    - Attributes from hdf5 file
+
+    Output
+        demod_syms  - Demodulated data symbols
+        symbol_err  - Data symbol error (needs TX data to determine this)
     """
-    # Apply SFO Correction
-    if APPLY_SFO_CORR:
-        rxSig_freq_eq = ofdm_obj.sfo_correction(rxSig_freq_eq, pilot_sc, pilots_matrix, n_ofdm_syms)
-    else:
-        sfo_corr = np.zeros((num_sc, n_ofdm_syms))
 
-    # Apply phase correction
-    if APPLY_PHASE_CORR:
-        phase_error = ofdm_obj.phase_correction(rxSig_freq_eq, pilot_sc, pilots_matrix)
-    else:
-        phase_error = np.zeros((1, n_ofdm_syms))
+    fft_size = int(metadata['FFT_SIZE'])
+    data_cp_len = int(metadata['CP_LEN'])
+    num_samps = int(metadata['SYM_LEN_NO_PAD'])
+    num_sc = int(metadata['FFT_SIZE'])
+    mod_order_str = metadata['CL_MODULATION']
+    ofdm_size = fft_size + data_cp_len
+    n_ofdm_syms = num_samps//ofdm_size
+    n_data_syms = n_ofdm_syms * len(data_sc)
 
-    phase_corr_tmp = np.matlib.repmat(phase_error, num_sc, 1)
-    phase_corr = np.exp(-1j * phase_corr_tmp)
-    rxSig_freq_eq_phase = rxSig_freq_eq * phase_corr
-    rxSymbols_mat = rxSig_freq_eq_phase[data_sc, :]
+    if mod_order_str == "BPSK":
+        mod_order = 2
+    elif mod_order_str == "QPSK":
+        mod_order = 4
+    elif mod_order_str == "16QAM":
+        mod_order = 16
+    elif mod_order_str == "64QAM":
+        mod_order = 64
 
-    # Demodulation
-    rxSymbols_vec = np.reshape(rxSymbols_mat, n_data_syms, order="F")       # Reshape into vector
-    rx_data = ofdm_obj.demodulation(rxSymbols_vec, mod_order)
+    # REMOVE ME !!!!! WE NEED TO OBTAIN THIS FROM HDF5 FILE INSTEAD
+    # pilot_sc = metadata['OFDM_PILOT_SC']
+    # pilots_matrix = metadata['OFDM_PILOT_MATRIX']
+    # tx_data = metadata['OFDM_TX_DATA']
+    # = metadata['OFDM_DATA_SC']
 
-    print(" === STATS ===")
-    symbol_err = np.sum(tx_data != rx_data)
-    print("Frame#: {} --- Symbol Errors: {} out of {} total symbols".format(pkt_count, symbol_err, n_data_syms))
-    return symbol_err
+    data_subcarriers = list(range(1, 7)) + list(range(8, 21)) + list(range(22, 27)) + \
+                       list(range(38, 43)) + list(range(44, 57)) + list(range(58, 64))
+    pilot_sc = [7, 21, 43, 57]
+    pilots = np.array([1, 1, -1, 1]).reshape(4, 1, order="F")
+    pilots_matrix = np.matlib.repmat(pilots, 1, n_ofdm_syms)
+    # REMOVE ME END !!!!! WE NEED TO OBTAIN THIS FROM HDF5 FILE INSTEAD
+
+
+    # Correction Flags
+    apply_sfo_corr = user_params[3]
+    apply_phase_corr = user_params[4]
+
+    for clIdx in range(streams.shape[0]):
+
+        rxSig_freq_eq = streams[clIdx, :, :]
+        # Apply SFO Correction
+        if apply_sfo_corr:
+            rxSig_freq_eq = ofdm_obj.sfo_correction(rxSig_freq_eq, pilot_sc, pilots_matrix, n_ofdm_syms)
+        else:
+            sfo_corr = np.zeros((num_sc, n_ofdm_syms))
+
+        # Apply phase correction
+        if apply_phase_corr:
+            phase_error = ofdm_obj.phase_correction(rxSig_freq_eq, pilot_sc, pilots_matrix)
+        else:
+            phase_error = np.zeros((1, n_ofdm_syms))
+
+        phase_corr_tmp = np.matlib.repmat(phase_error, num_sc, 1)
+        phase_corr = np.exp(-1j * phase_corr_tmp)
+        rxSig_freq_eq_phase = rxSig_freq_eq * phase_corr
+        rxSymbols_mat = rxSig_freq_eq_phase[data_sc, :]
+
+        # Demodulation
+        rxSymbols_vec = np.reshape(rxSymbols_mat, n_data_syms, order="F")       # Reshape into vector
+        rx_data = ofdm_obj.demodulation(rxSymbols_vec, mod_order)
+
+        # print(" === STATS ===")
+        symbol_err = np.sum(tx_data != rx_data)
+        # print("Frame#: {} --- Symbol Errors: {} out of {} total symbols".format(pkt_count, symbol_err, n_data_syms))
+
+
+    return demod_syms, symbol_err
 
 
 def plotter():
@@ -356,8 +418,11 @@ def rx_app(filename, user_params):
     Main function
 
     Input:
-        a) rx_mode:  SIM or OTA
-        b) filename: HDF5 file to read from 
+        a) filename    - HDF5 file to read from
+        b) user_params - set of parameters defined by user. See main function
+
+    Output:
+        None
     """
     rx_mode = user_params[0]
 
@@ -417,13 +482,13 @@ def rx_app(filename, user_params):
 
             # Dims data: (frames, numCells, ulSymsPerFrame, numAntennasAtBS, numSamplesPerSymbol*2)
             for ulSymIdx in range(num_ul_syms):
-                I = data_samples[frameIdx, num_cells-1, ulSymIdx, antIdx, 0:sym_len*2-1:2]/2**16
-                Q = data_samples[frameIdx, num_cells-1, ulSymIdx, antIdx, 1:sym_len*2:2]/2**16
+                I = data_samples[frameIdx, num_cells-1, ulSymIdx, :, 0:sym_len*2-1:2]/2**16
+                Q = data_samples[frameIdx, num_cells-1, ulSymIdx, :, 1:sym_len*2:2]/2**16
                 IQ = I + (Q * 1j)
 
                 # Demultiplexing - Separate streams
                 streams = demultiplex(IQ, bf_weights, user_params, metadata)
-                rx_data = demodulate_data()
+                rx_data = demodulate_data(streams, ofdm_obj, user_params, metadata)
 
                 plotter(IQ, chan_est, bf_weights, streams, rx_data, user_params)
         stop = 1
@@ -439,8 +504,8 @@ if __name__ == '__main__':
     parser.add_option("--file",             type="string",          dest="file",        default="./data_in/Argos-2019-2-20-14-55-22_1x8x2.hdf5", help="HDF5 filename to be read in SIM mode [default: %default]")
     parser.add_option("--bfScheme",         type="string",          dest="bf_scheme",   default="ZF", help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
     parser.add_option("--cfoCorrection",    action="store_true",    dest="cfo_corr",    default=True, help="Apply CFO correction [default: %default]")
-    parser.add_option("--sfoCorrection",    action="store_true",    dest="sfo_corr",    default=True, help="Apply SFO correction [default: %default]")
-    parser.add_option("--phaseCorrection",  action="store_true",    dest="phase_corr",  default=True, help="Apply phase correction [default: %default]")
+    parser.add_option("--sfoCorrection",    action="store_true",    dest="sfo_corr",    default=False, help="Apply SFO correction [default: %default]")
+    parser.add_option("--phaseCorrection",  action="store_true",    dest="phase_corr",  default=False, help="Apply phase correction [default: %default]")
     parser.add_option("--fftOfset",         type="int",             dest="fft_offset",  default=4,    help="FFT Offset:# CP samples for FFT [default: %default]")
     (options, args) = parser.parse_args()
 

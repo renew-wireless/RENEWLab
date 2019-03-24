@@ -280,7 +280,7 @@ class ofdmTxRx:
         Apply Sample Frequency Offset
 
         Input:
-            rxSig_freq_eq - Equalized, time domain received signal
+            rxSig_freq_eq - Equalized, frequency domain received signal
             pilot_sc      - Pilot subcarriers (indexes)
             pilots_matrix - Pilots in matrix form
             n_ofdm_syms   - Number of OFDM symbols
