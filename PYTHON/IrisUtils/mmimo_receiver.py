@@ -307,8 +307,9 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
         metadata    - Attributes from hdf5 file
 
     Output
-        demod_syms  - Demodulated data symbols
-        symbol_err  - Data symbol error (needs TX data to determine this)
+        rx_data_all   - TX Data. Dims: rx_data_all[num clients, num data syms]
+        rxSymbols_all - Demodulated data symbols. Dims: rx_data_all[num clients, num data syms]
+        symbol_err    - Data symbol error. Nneeds TX data to determine this. Dims:symbol_err[num clients, num data syms]
     """
 
     fft_size = int(metadata['FFT_SIZE'])
@@ -318,7 +319,7 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
     mod_order_str = metadata['CL_MODULATION']
     ofdm_size = fft_size + data_cp_len
     n_ofdm_syms = num_samps//ofdm_size
-    n_data_syms = n_ofdm_syms * len(data_sc)
+
 
     if mod_order_str == "BPSK":
         mod_order = 2
@@ -335,18 +336,21 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
     # tx_data = metadata['OFDM_TX_DATA']
     # = metadata['OFDM_DATA_SC']
 
-    data_subcarriers = list(range(1, 7)) + list(range(8, 21)) + list(range(22, 27)) + \
+    data_sc = list(range(1, 7)) + list(range(8, 21)) + list(range(22, 27)) + \
                        list(range(38, 43)) + list(range(44, 57)) + list(range(58, 64))
     pilot_sc = [7, 21, 43, 57]
     pilots = np.array([1, 1, -1, 1]).reshape(4, 1, order="F")
     pilots_matrix = np.matlib.repmat(pilots, 1, n_ofdm_syms)
     # REMOVE ME END !!!!! WE NEED TO OBTAIN THIS FROM HDF5 FILE INSTEAD
 
+    n_data_syms = n_ofdm_syms * len(data_sc)
 
     # Correction Flags
     apply_sfo_corr = user_params[3]
     apply_phase_corr = user_params[4]
 
+    rx_data_all = np.emtpy((streams.shape[0], n_data_syms), dtype=int)
+    rxSymbols_all = np.emtpy((streams.shape[0], n_data_syms), dtype=complex)
     for clIdx in range(streams.shape[0]):
 
         rxSig_freq_eq = streams[clIdx, :, :]
@@ -371,46 +375,13 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
         rxSymbols_vec = np.reshape(rxSymbols_mat, n_data_syms, order="F")       # Reshape into vector
         rx_data = ofdm_obj.demodulation(rxSymbols_vec, mod_order)
 
+        rxSymbols_all[clIdx, :] = rxSymbols_vec
+        rx_data_all[clIdx, :] = rx_data
         # print(" === STATS ===")
-        symbol_err = np.sum(tx_data != rx_data)
+        symbol_err = []  # np.sum(tx_data != rx_data)
         # print("Frame#: {} --- Symbol Errors: {} out of {} total symbols".format(pkt_count, symbol_err, n_data_syms))
 
-
-    return demod_syms, symbol_err
-
-
-def plotter():
-    """
-
-    return:
-    """
-    # Compute CSI from IQ samples
-    # csi, samps = samps2csi(samples, num_ue_tmp, symbol_length, symbol_length, offset=0, bound=0)
-
-    # Verify default_frame does not exceed max number of collected frames
-    frame_to_plot = min(default_frame, samps.shape[0])
-
-    # Plotter
-    # Samps Dimensions: (Frame, Cell, User, Pilot Rep, Antenna, Sample)
-    fig, axes = plt.subplots(nrows=5, ncols=len(data_types_avail))
-    axes[0, idx].set_title('PILOTS - Cell 0')
-    axes[0, idx].set_ylabel('Frame %d ant 0 (Re)' % frame_to_plot)
-    axes[0, idx].plot(np.real(samps[frame_to_plot, 0, 0, 0, 1, :]))
-
-    axes[1, idx].set_ylabel('Frame %d ant 1 (Re)' % frame_to_plot)
-    axes[1, idx].plot(np.real(samps[frame_to_plot, 0, 0, 0, 1, :]))
-
-    axes[2, idx].set_ylabel('All Frames ant 0 (Re)')
-    axes[2, idx].plot(np.real(samps[:, 0, 0, 0, 0, :]).flatten())
-
-    axes[3, idx].set_ylabel('All Frames ant 1 (Re)')
-    axes[3, idx].plot(np.real(samps[:, 0, 0, 0, 1, :]).flatten())
-
-    axes[4, idx].set_ylabel('Amplitude')
-    for i in range(samps.shape[4]):
-        axes[4, idx].plot(np.mean(np.abs(samps[:, 0, 0, 0, i, :]), axis=1).flatten())
-    axes[4, idx].set_xlabel('Sample')
-    plt.show()
+    return rx_data_all, rxSymbols_all, symbol_err
 
 
 def rx_app(filename, user_params):
@@ -488,10 +459,9 @@ def rx_app(filename, user_params):
 
                 # Demultiplexing - Separate streams
                 streams = demultiplex(IQ, bf_weights, user_params, metadata)
-                rx_data = demodulate_data(streams, ofdm_obj, user_params, metadata)
+                rx_data, rxSymbols, symbol_err = demodulate_data(streams, ofdm_obj, user_params, metadata)
 
-                plotter(IQ, chan_est, bf_weights, streams, rx_data, user_params)
-        stop = 1
+                plotter(IQ, chan_est, bf_weights, streams, rx_data, rxSymbols, user_params, symbol_err)
 
 
 #########################################
@@ -504,8 +474,8 @@ if __name__ == '__main__':
     parser.add_option("--file",             type="string",          dest="file",        default="./data_in/Argos-2019-2-20-14-55-22_1x8x2.hdf5", help="HDF5 filename to be read in SIM mode [default: %default]")
     parser.add_option("--bfScheme",         type="string",          dest="bf_scheme",   default="ZF", help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
     parser.add_option("--cfoCorrection",    action="store_true",    dest="cfo_corr",    default=True, help="Apply CFO correction [default: %default]")
-    parser.add_option("--sfoCorrection",    action="store_true",    dest="sfo_corr",    default=False, help="Apply SFO correction [default: %default]")
-    parser.add_option("--phaseCorrection",  action="store_true",    dest="phase_corr",  default=False, help="Apply phase correction [default: %default]")
+    parser.add_option("--sfoCorrection",    action="store_true",    dest="sfo_corr",    default=True, help="Apply SFO correction [default: %default]")
+    parser.add_option("--phaseCorrection",  action="store_true",    dest="phase_corr",  default=True, help="Apply phase correction [default: %default]")
     parser.add_option("--fftOfset",         type="int",             dest="fft_offset",  default=4,    help="FFT Offset:# CP samples for FFT [default: %default]")
     (options, args) = parser.parse_args()
 
