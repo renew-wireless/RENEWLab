@@ -278,7 +278,7 @@ if __name__ == '__main__':
 	sequence_sts = generate_training_seq('sts', reps=10)
 	sequence_lts, lts_f = generate_training_seq('lts', cp=32, upsample=1)
 	sequence_zadoff = generate_training_seq('lte_zadoffchu_seq', seq_length=63, root=25)
-	sequence_goldIfft = generate_training_seq('gold_ifft', seq_length=128, cp=32, upsample=1)
+	sequence_goldIfft = generate_training_seq('gold_ifft', seq_length=128, cp=0, upsample=1)
 
 	print("SIZE GOLD SEQ.: {},{}".format(len(sequence_goldIfft), len(sequence_goldIfft[0])))
 
