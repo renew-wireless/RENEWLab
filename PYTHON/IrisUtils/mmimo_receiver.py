@@ -36,6 +36,8 @@
 import sys
 import numpy as np
 import h5py
+import threading
+import signal
 from optparse import OptionParser
 import matplotlib
 import matplotlib.pyplot as plt
@@ -46,6 +48,13 @@ from hdf_dump import *
 from find_lts import *
 from generate_sequence import *
 from ofdmtxrx import *
+from plotter import *
+
+
+#########################################
+#              Global Vars              #
+#########################################
+running = True
 
 
 #########################################
@@ -133,6 +142,8 @@ def pilot_finder(samples, pilot_type):
         lts, lts_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
         lts_syms_len = len(lts)
 
+        pilot_thresh = lts_thresh * np.max(lts_corr)
+
         # We'll need the transmitted version of the pilot (for channel estimation, for example)
         tx_pilot = [lts, lts_f]
 
@@ -140,12 +151,12 @@ def pilot_finder(samples, pilot_type):
         if not best_pk:
             print("SISO_OFDM: No LTS Found! Continue...")
             pilot = np.array([])
-            return pilot, tx_pilot
+            return pilot, tx_pilot, lts_corr, pilot_thresh
         # If beginning of frame was not captured in current buffer
         if (best_pk - lts_syms_len) < 0:
             print("TOO EARLY. Continue... ")
             pilot = np.array([])
-            return pilot, tx_pilot
+            return pilot, tx_pilot, lts_corr, pilot_thresh
 
         # Get pilot
         lts_start = best_pk - lts_syms_len + 1  # where LTS-CP start
@@ -154,7 +165,7 @@ def pilot_finder(samples, pilot_type):
     else:
         raise Exception("Only LTS Pilots supported at the moment")
 
-    return pilot, tx_pilot
+    return pilot, tx_pilot, lts_corr, pilot_thresh
 
 
 def estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params):
@@ -320,7 +331,6 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
     ofdm_size = fft_size + data_cp_len
     n_ofdm_syms = num_samps//ofdm_size
 
-
     if mod_order_str == "BPSK":
         mod_order = 2
     elif mod_order_str == "QPSK":
@@ -335,7 +345,6 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
     # pilots_matrix = metadata['OFDM_PILOT_MATRIX']
     # tx_data = metadata['OFDM_TX_DATA']
     # = metadata['OFDM_DATA_SC']
-
     data_sc = list(range(1, 7)) + list(range(8, 21)) + list(range(22, 27)) + \
                        list(range(38, 43)) + list(range(44, 57)) + list(range(58, 64))
     pilot_sc = [7, 21, 43, 57]
@@ -349,8 +358,8 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
     apply_sfo_corr = user_params[3]
     apply_phase_corr = user_params[4]
 
-    rx_data_all = np.emtpy((streams.shape[0], n_data_syms), dtype=int)
-    rxSymbols_all = np.emtpy((streams.shape[0], n_data_syms), dtype=complex)
+    rx_data_all = np.empty((streams.shape[0], n_data_syms), dtype=int)
+    rxSymbols_all = np.empty((streams.shape[0], n_data_syms), dtype=complex)
     for clIdx in range(streams.shape[0]):
 
         rxSig_freq_eq = streams[clIdx, :, :]
@@ -381,20 +390,54 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
         symbol_err = []  # np.sum(tx_data != rx_data)
         # print("Frame#: {} --- Symbol Errors: {} out of {} total symbols".format(pkt_count, symbol_err, n_data_syms))
 
-    return rx_data_all, rxSymbols_all, symbol_err
+    return rx_data_all, rxSymbols_all, symbol_err, rxSymbols_mat, pilot_sc, data_sc
 
 
-def rx_app(filename, user_params):
+def compute_correlation(chan_est):
+    """
+    Debug plot that is useful for checking sync.
+
+    Input:
+        chan_est - Channel estimates. Dims: chan_est[num_cells, num clients, num BS ant, num frames, num subcarriers]
+
+    Output:
+        corr_total - Correlation. Dims: [num frames, num clients]
+    """
+    """Input samps dims: Frame, Cell, Antenna, User, Sample"""
+    """Returns iq with Frame, Cell, User, Pilot Rep, Antenna, Sample"""
+    """Returns csi with Frame, Cell, User, Pilot Rep, Antenna, Subcarrier"""
+
+    this_cell = 0
+    ref_frame = 0
+    chan_est_ref = np.squeeze(chan_est[this_cell, :, :, ref_frame, :])
+    corr_vec = np.transpose(np.conj(chan_est_ref), (1, 0, 2))   # Convert to [#bs ant, #clients, #subcarriers]
+
+    userCSI = np.transpose(np.squeeze(chan_est[this_cell, :, :, :, :]), (2, 0, 1, 3))  # from [#clients, #ant, #frames, #sc]
+    sig_intf = np.empty((userCSI.shape[0], userCSI.shape[1], userCSI.shape[1], userCSI.shape[3]), dtype='float32')
+    for sc in range(userCSI.shape[3]):
+        sig_intf[:, :, :, sc] = np.abs(np.dot(userCSI[:, :, :, sc], corr_vec[:, :, sc])) / np.dot(
+            np.abs(userCSI[:, :, :, sc]), np.abs(corr_vec[:, :, sc]))
+
+    # gets correlation of subcarriers for each user across bs antennas
+    sig_sc = np.diagonal(sig_intf, axis1=1, axis2=2)
+    sig_sc = np.swapaxes(sig_sc, 1, 2)
+    corr_total = np.mean(sig_sc, axis=2)  # averaging corr across users
+    return corr_total
+
+
+def rx_app(filename, user_params, this_plotter):
     """
     Main function
 
     Input:
-        a) filename    - HDF5 file to read from
-        b) user_params - set of parameters defined by user. See main function
+        filename    - HDF5 file to read from
+        user_params - set of parameters defined by user. See main function
+        plot_vec    - vector of flags to determine what will be plotted
 
     Output:
         None
     """
+    global running
     rx_mode = user_params[0]
 
     # Read Received Samples
@@ -404,6 +447,7 @@ def rx_app(filename, user_params):
     ofdm_obj = ofdmTxRx()
 
     # Get attributes we care about
+    prefix_len = metadata['PREFIX_LEN']
     pilot_type = metadata['PILOT_SEQ']
     pilot_samples = samples['PILOT_SAMPS']
     data_samples = samples['UL_SAMPS']
@@ -422,63 +466,129 @@ def rx_app(filename, user_params):
     assert pilot_dim[3] == num_bs_ant
     assert pilot_dim[4] == 2 * sym_len  # No complex values in HDF5, x2 to account for IQ
 
-    # Prepare samples to iterate over all received frames
-    chan_est = np.empty([num_cells, num_cl, num_bs_ant, num_frames, fft_size], dtype=complex)
-    if rx_mode == "SIM":
-        for frameIdx in range(num_frames):
-            for clIdx in range(num_cl):
-                for antIdx in range(num_bs_ant):
-                    # Put I/Q together
-                    # Dims pilots: (frames, numCells, numClients, numAntennasAtBS, numSamplesPerSymbol*2)
-                    I = pilot_samples[frameIdx, num_cells-1, clIdx, antIdx, 0:sym_len*2-1:2]/2**16
-                    Q = pilot_samples[frameIdx, num_cells-1, clIdx, antIdx, 1:sym_len*2:2]/2**16
+    while running:
+        # Prepare samples to iterate over all received frames
+        chan_est = np.empty([num_cells, num_cl, num_bs_ant, num_frames, fft_size], dtype=complex)
+        lts_corr = np.empty([num_cl, num_bs_ant, sym_len+fft_size-1])
+        IQ_pilots = np.empty([num_cells, num_cl, num_bs_ant, sym_len], dtype=complex)
+        pilot_thresh = np.empty([num_cl, num_bs_ant])
+        corr_total = np.empty([num_frames, num_cl])
+        if rx_mode == "SIM":
+            for frameIdx in range(num_frames):
+                for clIdx in range(num_cl):
+                    for antIdx in range(num_bs_ant):
+                        # Put I/Q together
+                        # Dims pilots: (frames, numCells, numClients, numAntennasAtBS, numSamplesPerSymbol*2)
+                        I = pilot_samples[frameIdx, num_cells-1, clIdx, antIdx, 0:sym_len*2-1:2]/2**16
+                        Q = pilot_samples[frameIdx, num_cells-1, clIdx, antIdx, 1:sym_len*2:2]/2**16
+                        IQ = I + (Q * 1j)
+                        IQ_pilots[num_cells-1, clIdx, antIdx, :] = IQ   # For 'plotter' use
+
+                        # Find potential pilots. tx_pilot is a "struct" with dims:  [lts_time seq, lts_freq seq]
+                        this_pilot, tx_pilot, lts_corr_tmp, pilot_thresh[clIdx, antIdx] = pilot_finder(IQ, pilot_type)
+                        lts_corr[clIdx, antIdx, :] = lts_corr_tmp
+                        if this_pilot.size == 0:
+                            continue
+
+                        # Channel estimation from pilots
+                        chan_est[num_cells-1, clIdx, antIdx, frameIdx, :] = estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params)
+
+                # PER FRAME
+                # Steering weight computation after collecting pilots at all antennas from all clients
+                bf_weights = beamforming_weights(chan_est[num_cells-1, :, :, frameIdx, :], user_params)
+
+                # Get data samples
+                # How many data symbols transmitted by each client?
+                this_cl_sched = cl_frame_sched[clIdx]
+                num_ul_syms = this_cl_sched.count('U')
+
+                # Dims data: (frames, numCells, ulSymsPerFrame, numAntennasAtBS, numSamplesPerSymbol*2)
+                for ulSymIdx in range(num_ul_syms):
+                    I = data_samples[frameIdx, num_cells-1, ulSymIdx, :, 0:sym_len*2-1:2]/2**16
+                    Q = data_samples[frameIdx, num_cells-1, ulSymIdx, :, 1:sym_len*2:2]/2**16
                     IQ = I + (Q * 1j)
 
-                    # Find potential pilots
-                    this_pilot, tx_pilot = pilot_finder(IQ, pilot_type)
-                    if this_pilot.size == 0:
-                        continue
+                    # Demultiplexing - Separate streams
+                    streams = demultiplex(IQ, bf_weights, user_params, metadata)
+                    rx_data, rxSymbols, symbol_err, rxSymbols_mat, pilot_sc, data_sc = demodulate_data(streams, ofdm_obj, user_params, metadata)
 
-                    # Channel estimation from pilots
-                    chan_est[num_cells-1, clIdx, antIdx, frameIdx, :] = estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params)
+                    # Plotter
+                    # Correlation across frames
+                    sc_of_interest = np.sort(pilot_sc + data_sc)
+                    corr_total[frameIdx, :] = compute_correlation(chan_est[:, :, :, sc_of_interest])
 
-            # PER FRAME
-            # Steering weight computation after collecting pilots at all antennas from all clients
-            bf_weights = beamforming_weights(chan_est[num_cells-1, :, :, frameIdx, :], user_params)
+                    cl_plot = 0
+                    ant_plot = 0
+                    cell_plot = 0
+                    # Grab RX frame at one antenna. Need to put together pilots from all users and data IQ
+                    rx_data = []
+                    for clIdx in range(num_cl):
+                        rx_data.extend(IQ_pilots[cell_plot, clIdx, ant_plot, :])
+                    rx_data.extend(IQ[ant_plot, :])
 
-            # Get data samples
-            # How many data symbols transmitted by each client?
-            this_cl_sched = cl_frame_sched[clIdx]
-            num_ul_syms = this_cl_sched.count('U')
+                    this_plotter.set_data(np.squeeze(tx_pilot[0]),                               # tx domain LTS
+                                          np.squeeze(rx_data),                                   # [numBsAnt, symLen]
+                                          chan_est[num_cells-1, cl_plot, ant_plot, frameIdx, :], # [numCells, numCl, numBsAnt, numFrame, numSC]
+                                          lts_corr[cl_plot, ant_plot, :],                        # [numCl, numBsAnt, sym_len+fft_size-1]
+                                          pilot_thresh[cl_plot, ant_plot],                       # [numCl, numBsAnt]
+                                          #bf_weights[ant_plot, cl_plot, :],                     # [numBsAnt, numCl, numSC]
+                                          #rx_data[cl_plot, :],                                  # [numCl, numDataSyms (numOfdmSyms*numDataSC)]
+                                          rxSymbols_mat,
+                                          np.squeeze(corr_total[:, cl_plot, :]),                 # [numDataPilotSC, numCl, numFrames]
+                                          #rxSymbols[cl_plot, :],                                # [numCl, numDataSyms (numOfdmSyms*numDataSC)]
+                                          #symbol_err,                                           # scalar
+                                          user_params,
+                                          metadata, pilot_sc, data_sc)                            # add pilot sc and data sc to metadata
+    print("Exiting RX Thread")
 
-            # Dims data: (frames, numCells, ulSymsPerFrame, numAntennasAtBS, numSamplesPerSymbol*2)
-            for ulSymIdx in range(num_ul_syms):
-                I = data_samples[frameIdx, num_cells-1, ulSymIdx, :, 0:sym_len*2-1:2]/2**16
-                Q = data_samples[frameIdx, num_cells-1, ulSymIdx, :, 1:sym_len*2:2]/2**16
-                IQ = I + (Q * 1j)
 
-                # Demultiplexing - Separate streams
-                streams = demultiplex(IQ, bf_weights, user_params, metadata)
-                rx_data, rxSymbols, symbol_err = demodulate_data(streams, ofdm_obj, user_params, metadata)
+def signal_handler(sig, frame):
+    """
+    SIGINT signal handler
 
-                plotter(IQ, chan_est, bf_weights, streams, rx_data, rxSymbols, user_params, symbol_err)
+    Input:
+        None
 
+    Output:
+        None
+    """
+    print("SIG HANDLER!!!")
+    global running
+    print('Caught signal %d' % sig)
+    # stop tx/rx threads
+    running = False
+    signal.pause()
 
 #########################################
 #                 Main                  #
 #########################################
 if __name__ == '__main__':
 
+    # Start main program
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+    print('To terminate, press Ctrl+C')
+
     parser = OptionParser()
-    parser.add_option("--mode",             type="string",          dest="mode",        default="SIM", help="Options: SIM/OTA [default: %default]")
-    parser.add_option("--file",             type="string",          dest="file",        default="./data_in/Argos-2019-2-20-14-55-22_1x8x2.hdf5", help="HDF5 filename to be read in SIM mode [default: %default]")
-    parser.add_option("--bfScheme",         type="string",          dest="bf_scheme",   default="ZF", help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
-    parser.add_option("--cfoCorrection",    action="store_true",    dest="cfo_corr",    default=True, help="Apply CFO correction [default: %default]")
-    parser.add_option("--sfoCorrection",    action="store_true",    dest="sfo_corr",    default=True, help="Apply SFO correction [default: %default]")
-    parser.add_option("--phaseCorrection",  action="store_true",    dest="phase_corr",  default=True, help="Apply phase correction [default: %default]")
-    parser.add_option("--fftOfset",         type="int",             dest="fft_offset",  default=4,    help="FFT Offset:# CP samples for FFT [default: %default]")
+    # Params
+    parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-2-20-14-55-22_1x8x2.hdf5", help="HDF5 filename to be read in SIM mode [default: %default]")
+    parser.add_option("--mode",       type="string",       dest="mode",       default="SIM", help="Options: SIM/OTA [default: %default]")
+    parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
+    parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=True,  help="Apply CFO correction [default: %default]")
+    parser.add_option("--sfoCorr",    action="store_true", dest="sfo_corr",   default=True,  help="Apply SFO correction [default: %default]")
+    parser.add_option("--phaseCorr",  action="store_true", dest="phase_corr", default=True,  help="Apply phase correction [default: %default]")
+    parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=4,     help="FFT Offset:# CP samples for FFT [default: %default]")
+    # Plotter
+    parser.add_option("--pConst",     action="store_true", dest="plot_const", default=True,  help="Plot data symbol constellation [default: %default]")
+    parser.add_option("--pTxIQ",      action="store_true", dest="plot_tx_iq", default=True,  help="Plot TX IQ samples [default: %default]")
+    parser.add_option("--pRxIQ",      action="store_true", dest="plot_rx_iq", default=True,  help="Plot RX IQ samples [default: %default]")
+    parser.add_option("--pCorr",      action="store_true", dest="plot_corr",  default=True,  help="Plot Sample Correlation [default: %default]")
+    parser.add_option("--pCSI",       action="store_true", dest="plot_csi",   default=True,  help="Plot Channel Estimates (IQ and Magnitude) [default: %default]")
+    parser.add_option("--pPhase",     action="store_true", dest="plot_phase", default=True,  help="Plot Phase Error Estimates [default: %default]")
+    parser.add_option("--pPilotCorr", action="store_true", dest="plot_pilot", default=True,  help="Plot Pilot Correlation and Threshold  [default: %default]")
     (options, args) = parser.parse_args()
 
+    # Params
     user_params = [options.mode,
                    options.bf_scheme,
                    options.cfo_corr,
@@ -486,10 +596,35 @@ if __name__ == '__main__':
                    options.phase_corr,
                    options.fft_offset
                    ]
+    # Plotter
+    plot_vec = []
+    if options.plot_const:
+        plot_vec.append("CONSTELLATION")
+    if options.plot_tx_iq:
+        plot_vec.append("TX_IQ")
+    if options.plot_rx_iq:
+        plot_vec.append("RX_IQ")
+    if options.plot_corr:
+        plot_vec.append("CORRELATION")
+    if options.plot_csi:
+        plot_vec.append("CSI")
+    if options.plot_phase:
+        plot_vec.append("PHASE")
+    if options.plot_pilot:
+        plot_vec.append("PILOT_CORR")
 
+    # File
     filename = options.file
 
-    # Rx Application
-    rx_app(filename, user_params)
+    # Rx Application. Matplotlib GUI needs to run on main thread.
+    num_cl_plot = 2     # number of clients to plot
+    this_plotter = Plotter(plot_vec, num_cl_plot)
+
+    # RX app thread
+    rxth = threading.Thread(target=rx_app, args=(filename, user_params, this_plotter))
+    rxth.start()
+
+    # Start animation
+    this_plotter.animate()
 
 
