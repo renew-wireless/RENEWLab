@@ -17,11 +17,8 @@ Config::Config(std::string jsonfile)
 {
     std::string conf;
     Utils::loadTDDConfig(jsonfile, conf);
-
     const auto jConf = json::parse(conf);
-
     std::stringstream ss;
-
     json tddConf;
     ss << jConf.value("BaseStations", tddConf);
     tddConf = json::parse(ss);
@@ -98,6 +95,19 @@ Config::Config(std::string jsonfile)
             beacon_seq = tddConfCl.value("beacon_seq", "gold_ifft");
             pilot_seq = tddConfCl.value("pilot_seq", "lts");
         }
+
+	// ****** OBCH *******
+	if (fftSize != 64) fftSize = 64;
+	data_ind = CommsLib::getDataSc(fftSize);
+        pilot_sc = CommsLib::getPilotSc(fftSize);
+	if (pilot_seq.compare("lts") == 0) {
+	    pilot_double = CommsLib::getSequence(160, CommsLib::LTS_SEQ);
+	} else {
+	    throw std::invalid_argument( "Only LTS pilots currently supported" );
+	}
+	std::vector<std::vector<std::complex<float>>> txdata_freq_dom_conf = txdata_freq_dom;
+	// ****** END OBCH *******
+
     }
 
     if (!clPresent) nClSdrs = std::count(frames.at(0).begin(), frames.at(0).end(), 'P');

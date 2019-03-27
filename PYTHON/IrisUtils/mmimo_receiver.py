@@ -393,12 +393,13 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
     return rx_data_all, rxSymbols_all, symbol_err, rxSymbols_mat, pilot_sc, data_sc
 
 
-def compute_correlation(chan_est):
+def compute_correlation(chan_est, frameIdx):
     """
     Debug plot that is useful for checking sync.
 
     Input:
         chan_est - Channel estimates. Dims: chan_est[num_cells, num clients, num BS ant, num frames, num subcarriers]
+        frameIdx - Index of frame being currently processed
 
     Output:
         corr_total - Correlation. Dims: [num frames, num clients]
@@ -409,19 +410,30 @@ def compute_correlation(chan_est):
 
     this_cell = 0
     ref_frame = 0
-    chan_est_ref = np.squeeze(chan_est[this_cell, :, :, ref_frame, :])
-    corr_vec = np.transpose(np.conj(chan_est_ref), (1, 0, 2))   # Convert to [#bs ant, #clients, #subcarriers]
+    chan_est_ref = np.squeeze(chan_est[this_cell, :, :, ref_frame, :])  # [#clients, #BS ant, #frames, #subcarriers]
+    corr_vec = np.transpose(np.conj(chan_est_ref), (1, 0, 2))           # Convert to [#bs ant, #clients, #subcarriers]
 
-    userCSI = np.transpose(np.squeeze(chan_est[this_cell, :, :, :, :]), (2, 0, 1, 3))  # from [#clients, #ant, #frames, #sc]
-    sig_intf = np.empty((userCSI.shape[0], userCSI.shape[1], userCSI.shape[1], userCSI.shape[3]), dtype='float32')
-    for sc in range(userCSI.shape[3]):
-        sig_intf[:, :, :, sc] = np.abs(np.dot(userCSI[:, :, :, sc], corr_vec[:, :, sc])) / np.dot(
-            np.abs(userCSI[:, :, :, sc]), np.abs(corr_vec[:, :, sc]))
+    userCSI = np.squeeze(chan_est[this_cell, :, :, :, :])               # [#clients, #BS ant, #frames, #subcarriers]
+    userCSI = np.transpose(userCSI, (2, 0, 1, 3))                       # to [#frames, #clients, #ant, #sc]
+    userCSI = userCSI[frameIdx, :, :, :]                                # [#clients, #ant, #sc]
+
+    # sig_intf dim: [#frame, #clients, #clients again, #subcarriers]
+    #OLD sig_intf = np.empty((userCSI.shape[0], userCSI.shape[1], userCSI.shape[1], userCSI.shape[3]), dtype='float32')
+    #for sc in range(userCSI.shape[3]):
+       # sig_intf[:, :, :, sc] = np.abs(np.dot(userCSI[:, :, :, sc], corr_vec[:, :, sc])) / np.dot(np.abs(userCSI[:, :, :, sc]), np.abs(corr_vec[:, :, sc]))
+
+    sig_intf = np.empty((userCSI.shape[0], userCSI.shape[0], userCSI.shape[2]), dtype='float32')
+    for sc in range(userCSI.shape[2]):
+        num = np.abs(np.dot(userCSI[:, :, sc], corr_vec[:, :, sc]))
+        den = np.dot(np.abs(userCSI[:, :, sc]), np.abs(corr_vec[:, :, sc]))
+        sig_intf[:, :, sc] = num / den
 
     # gets correlation of subcarriers for each user across bs antennas
-    sig_sc = np.diagonal(sig_intf, axis1=1, axis2=2)
-    sig_sc = np.swapaxes(sig_sc, 1, 2)
-    corr_total = np.mean(sig_sc, axis=2)  # averaging corr across users
+    # OLD sig_sc = np.diagonal(sig_intf, axis1=1, axis2=2)
+    # OLD sig_sc = np.swapaxes(sig_sc, 1, 2)
+    sig_sc = np.diagonal(sig_intf, axis1=0, axis2=1)
+    sig_sc = np.swapaxes(sig_sc, 0, 1)
+    corr_total = np.mean(sig_sc, axis=1)  # averaging corr across users?/subcarriers?
     return corr_total
 
 
@@ -473,6 +485,7 @@ def rx_app(filename, user_params, this_plotter):
         IQ_pilots = np.empty([num_cells, num_cl, num_bs_ant, sym_len], dtype=complex)
         pilot_thresh = np.empty([num_cl, num_bs_ant])
         corr_total = np.empty([num_frames, num_cl])
+        corr_total[:] = np.nan
         if rx_mode == "SIM":
             for frameIdx in range(num_frames):
                 for clIdx in range(num_cl):
@@ -513,32 +526,42 @@ def rx_app(filename, user_params, this_plotter):
                     rx_data, rxSymbols, symbol_err, rxSymbols_mat, pilot_sc, data_sc = demodulate_data(streams, ofdm_obj, user_params, metadata)
 
                     # Plotter
-                    # Correlation across frames
-                    sc_of_interest = np.sort(pilot_sc + data_sc)
-                    corr_total[frameIdx, :] = compute_correlation(chan_est[:, :, :, sc_of_interest])
-
                     cl_plot = 0
                     ant_plot = 0
                     cell_plot = 0
+                    # Correlation across frames.
+                    sc_of_interest = np.sort(pilot_sc + data_sc)
+                    H = chan_est[:, :, :, :, sc_of_interest]
+                    corr_total[frameIdx, :] = compute_correlation(H, frameIdx)
+                    #corr_total = np.ones(100)
+
+                    # Dim: chan_est[numCells, numCl, numBsAnt, numFrame, numSC]
+                    chan_est_vec = chan_est[num_cells - 1, cl_plot, ant_plot, frameIdx, :]
+                    rx_H_est_plot = np.squeeze(np.matlib.repmat(complex('nan'), 1, len(chan_est_vec)))
+                    rx_H_est_plot[data_sc] = np.squeeze(chan_est_vec[data_sc])
+                    rx_H_est_plot[pilot_sc] = np.squeeze(chan_est_vec[pilot_sc])
+                    rx_H_est_plot = np.fft.fftshift(abs(rx_H_est_plot))
+
                     # Grab RX frame at one antenna. Need to put together pilots from all users and data IQ
                     rx_data = []
                     for clIdx in range(num_cl):
                         rx_data.extend(IQ_pilots[cell_plot, clIdx, ant_plot, :])
                     rx_data.extend(IQ[ant_plot, :])
 
-                    this_plotter.set_data(np.squeeze(tx_pilot[0]),                               # tx domain LTS
-                                          np.squeeze(rx_data),                                   # [numBsAnt, symLen]
-                                          chan_est[num_cells-1, cl_plot, ant_plot, frameIdx, :], # [numCells, numCl, numBsAnt, numFrame, numSC]
-                                          lts_corr[cl_plot, ant_plot, :],                        # [numCl, numBsAnt, sym_len+fft_size-1]
-                                          pilot_thresh[cl_plot, ant_plot],                       # [numCl, numBsAnt]
-                                          #bf_weights[ant_plot, cl_plot, :],                     # [numBsAnt, numCl, numSC]
-                                          #rx_data[cl_plot, :],                                  # [numCl, numDataSyms (numOfdmSyms*numDataSC)]
+                    this_plotter.set_data(np.squeeze(tx_pilot[0]),                # tx domain LTS
+                                          np.squeeze(rx_data),                    # [numBsAnt, symLen]
+                                          chan_est_vec,
+                                          rx_H_est_plot,                          # chan est after fftshift
+                                          lts_corr[cl_plot, ant_plot, :],         # [numCl, numBsAnt, sym_len+fft_size-1]
+                                          pilot_thresh[cl_plot, ant_plot],        # [numCl, numBsAnt]
+                                          #bf_weights[ant_plot, cl_plot, :],      # [numBsAnt, numCl, numSC]
+                                          #rx_data[cl_plot, :],                   # [numCl, numDataSyms (numOfdmSyms*numDataSC)]
                                           rxSymbols_mat,
-                                          np.squeeze(corr_total[:, cl_plot, :]),                 # [numDataPilotSC, numCl, numFrames]
-                                          #rxSymbols[cl_plot, :],                                # [numCl, numDataSyms (numOfdmSyms*numDataSC)]
-                                          #symbol_err,                                           # scalar
+                                          np.squeeze(corr_total[:, cl_plot]),     # [numDataPilotSC, numCl, numFrames]
+                                          #rxSymbols[cl_plot, :],                 # [numCl, numDataSyms (numOfdmSyms*numDataSC)]
+                                          #symbol_err,                            # scalar
                                           user_params,
-                                          metadata, pilot_sc, data_sc)                            # add pilot sc and data sc to metadata
+                                          metadata)
     print("Exiting RX Thread")
 
 

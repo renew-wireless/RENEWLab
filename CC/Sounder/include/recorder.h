@@ -20,6 +20,9 @@
 #include <math.h>
 #include <ctime>
 #include <algorithm>
+#include <string>
+#include <sstream>
+#include <complex>
 #include "hdf5.h"
 #include "H5Cpp.h"
 #include "receiver.h"

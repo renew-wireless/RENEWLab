@@ -67,6 +67,9 @@ herr_t Recorder::initHDF5(std::string hdf5)
     hsize_t cdims_data[5] = {1, 1, 1, 1, 2 * cfg->sampsPerSymbol}; // data chunk size, TODO: optimize size
     hsize_t max_dims_data[5] = {H5S_UNLIMITED, cfg->nCells, cfg->ulSymsPerFrame, cfg->getNumAntennas(), 2 * cfg->sampsPerSymbol};
 
+    // Used to create variable strings
+    std::ostringstream oss;
+
     try
     {
 	Exception::dontPrint();
@@ -99,6 +102,10 @@ herr_t Recorder::initHDF5(std::string hdf5)
 	Attribute att;
 	std::vector<std::vector<std::string>> att_matrix;
 	std::vector<const char *> cStrArray;
+	std::vector<int> attr_data_ind;
+	std::vector<std::vector<int>> attr_pilot_sc;
+	std::vector<std::vector<std::complex<float>>> attr_txdata_freq_dom;
+	std::vector<std::vector<double>> attr_pilot_double;
 
 	// ******* COMMON ******** //
 	// TX/RX Frequency
@@ -189,7 +196,6 @@ herr_t Recorder::initHDF5(std::string hdf5)
 	for(int index = 0; index < att_vector.size(); ++index) { cStrArray.push_back(att_vector[index].c_str()); }
 	if(!att_vector.empty()) { att.write(strdatatype, (void*)&cStrArray[0]); }
 
-
 	// Number of Base Station Cells
         attr_data = cfg->nCells; 
         att = mainGroup.createAttribute("BS_NUM_CELLS", PredType::STD_I32BE, attr_ds);
@@ -251,6 +257,64 @@ herr_t Recorder::initHDF5(std::string hdf5)
         att.write(PredType::NATIVE_INT, &attr_data); 
 
 	// ******* Clients ******** //
+	// Data subcarriers
+	attr_data_ind = cfg->data_ind;
+	dimsVec[0] = attr_data_ind.size();
+        attr_vec_ds = DataSpace (1, dimsVec);
+        att = mainGroup.createAttribute("OFDM_DATA_SC", PredType::STD_I32BE, attr_vec_ds);
+	att.write(PredType::NATIVE_INT, &attr_data_ind[0]);
+
+	// Pilot subcarriers (indexes)
+	attr_pilot_sc = cfg->pilot_sc;
+	dimsVec[0] = attr_pilot_sc[0].size();
+        attr_vec_ds = DataSpace (1, dimsVec);
+        att = mainGroup.createAttribute("OFDM_PILOT_SC", PredType::STD_I32BE, attr_vec_ds);
+	att.write(PredType::NATIVE_INT, &attr_pilot_sc[0][0]);
+	// Pilot subcarriers (values)
+	dimsVec[0] = attr_pilot_sc[1].size();
+        attr_vec_ds = DataSpace (1, dimsVec);
+        att = mainGroup.createAttribute("OFDM_PILOT_SC_VALS", PredType::STD_I32BE, attr_vec_ds);
+	att.write(PredType::NATIVE_INT, &attr_pilot_sc[1][0]);
+
+	// Freq. Domain Data Symbols
+	//std::vector<std::vector<std::complex<float>>> txdata_freq_dom;
+	attr_txdata_freq_dom = cfg->txdata_freq_dom;
+	for (int i = 0; i < attr_txdata_freq_dom.size(); i++){
+	    oss.str("");
+	    oss.clear();
+	    oss << " OFDM_DATA_CL" << i;
+	    std::string var = oss.str();
+
+	    dimsVec[0] = attr_txdata_freq_dom[i].size() * 2;  // real and imaginary parts
+
+	    for (int j = 0; j < cfg->txdata_freq_dom[i].size(); j++){
+
+	    }
+            attr_vec_ds = DataSpace (1, dimsVec);
+            //att = mainGroup.createAttribute(var, PredType::STD_I32BE, attr_vec_ds);
+	    //att.write(PredType::NATIVE_INT, &attr_txdata_freq_dom[0][0]);
+	}
+
+	for (int i = 0; i < cfg->txdata_freq_dom.size(); i++)
+	{
+            for (int j = 0; j < cfg->txdata_freq_dom[i].size(); j++){
+                std::cout << "FREQ DOMAIN Values["<< i <<"][" << j << "]: \t " << std::real(cfg->txdata_freq_dom[i][j]) << std::endl;
+            }
+        }
+
+
+	// Freq. Domain Pilot symbols (real and imaginary parts)
+	attr_pilot_double = cfg->pilot_double;
+	dimsVec[0] = attr_pilot_double[0].size();
+        attr_vec_ds = DataSpace (1, dimsVec);
+        att = mainGroup.createAttribute("OFDM_PILOT_RE", PredType::NATIVE_DOUBLE, attr_vec_ds);
+	att.write(PredType::NATIVE_DOUBLE, &attr_pilot_double[0][0]);
+	// Pilot subcarriers (values)
+	dimsVec[0] = attr_pilot_double[1].size();
+        attr_vec_ds = DataSpace (1, dimsVec);
+        att = mainGroup.createAttribute("OFDM_PILOT_IM", PredType::NATIVE_DOUBLE, attr_vec_ds);
+	att.write(PredType::NATIVE_DOUBLE, &attr_pilot_double[1][0]);
+
 	// Number of Clients
         attr_data = cfg->nClSdrs;
         att = mainGroup.createAttribute("CL_NUM", PredType::STD_I32BE, attr_ds);

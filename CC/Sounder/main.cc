@@ -193,10 +193,13 @@ int main(int argc, char const *argv[])
         int frac = nSamps % 160;
         std::vector<std::complex<int16_t>> pilot_ci16;
         pilot_ci16.insert(pilot_ci16.begin(), pre.begin(), pre.end());
+
         for (int i = 0 ; i < rep; i++)
             pilot_ci16.insert(pilot_ci16.end(), lts_ci16.begin(), lts_ci16.end());
+
         pilot_ci16.insert(pilot_ci16.end(), lts_ci16.begin(), lts_ci16.begin()+frac);
         pilot_ci16.insert(pilot_ci16.end(), post.begin(), post.end());
+
         std::vector<uint32_t> pilot = Utils::cint16_to_uint32(pilot_ci16, false, "IQ");
 #if DEBUG_PRINT
         for (int j = 0; j < pilot.size(); j++)
@@ -227,7 +230,9 @@ int main(int argc, char const *argv[])
             for (int i = 0; i < nClSdrs; i++)
             {
                 std::vector<std::complex<float>> data_cf;
+		std::vector<std::complex<float>> data_freq_dom; 			// OBCH - ADD
                 data_cf.insert(data_cf.begin(), pre1.begin(), pre1.end()); 
+		data_freq_dom.insert(data_freq_dom.begin(), pre1.begin(), pre1.end());  // OBCH - ADD
                 std::vector<std::vector<int>> dataBits;
                 dataBits.resize(syms);
                 for (int s = 0; s < syms; s++)
@@ -253,15 +258,23 @@ int main(int argc, char const *argv[])
                     txSym.insert(txSym.begin(), txSym.end()-cpSize, txSym.end()); // add CP
                     std::cout << "IFFT output: " << txSym[0] << " " << txSym[64] << std::endl;
                     data_cf.insert(data_cf.end(), txSym.begin(), txSym.end()); 
+		    data_freq_dom.insert(data_freq_dom.end(), ofdmSym.begin(), ofdmSym.end());  	// OBCH - ADD
                 }
                 data_cf.insert(data_cf.end(), post1.begin(), post1.end());
                 txdata.push_back(data_cf); 
+		config->txdata_freq_dom.push_back(data_freq_dom); 					// OBCH - ADD
             } 
 #if DEBUG_PRINT
             for (int i = 0; i < txdata.size(); i++)
             {
                 for (int j = 0; j < txdata[i].size(); j++){
             	    std::cout << "Values["<< i <<"][" << j << "]: \t " << txdata[i][j] << std::endl;
+                }
+            }
+            for (int i = 0; i < config->txdata_freq_dom.size(); i++)
+            {
+                for (int j = 0; j < config->txdata_freq_dom[i].size(); j++){
+                    std::cout << "FREQ DOMAIN Values["<< i <<"][" << j << "]: \t " << config->txdata_freq_dom[i][j] << std::endl;
                 }
             }
 #endif

@@ -12,6 +12,7 @@
 #define CONFIG_HEADER
 
 #include <algorithm>
+#include <stdexcept>
 #include <vector>
 #include <iostream>
 #include <complex.h>
@@ -77,13 +78,18 @@ public:
     int clSdrCh;
     bool clAgcEn;
     std::string clDataMod;
+    std::vector<int> data_ind;  				   //OBCH - ADD
+    std::vector<std::vector<int>> pilot_sc; 			   //OBCH - ADD
+    std::vector<std::vector<double>> pilot_double;		   //OBCH - ADD
+    std::vector<std::vector<std::complex<float>>> txdata_freq_dom; //OBCH - ADD
+
     std::vector<std::string> clFrames;
     // TODO clients gain can be set for each separately
     double clTxgainA;
     double clRxgainA;
     double clTxgainB;
     double clRxgainB;
-
+    
 
     const int maxFrame = 1 << 31;
     const int data_offset = sizeof(int) * 4;
