@@ -300,15 +300,15 @@ herr_t Recorder::initHDF5(std::string hdf5)
 
 	// Freq. Domain Pilot symbols (real and imaginary parts)
 	attr_pilot_double = cfg->pilot_double;
-	dimsVec[0] = attr_pilot_double[0].size();
-        attr_vec_ds = DataSpace (1, dimsVec);
-        att = mainGroup.createAttribute("OFDM_PILOT_RE", PredType::NATIVE_DOUBLE, attr_vec_ds);
-	att.write(PredType::NATIVE_DOUBLE, &attr_pilot_double[0][0]);
-	// Pilot subcarriers (values)
-	dimsVec[0] = attr_pilot_double[1].size();
-        attr_vec_ds = DataSpace (1, dimsVec);
-        att = mainGroup.createAttribute("OFDM_PILOT_IM", PredType::NATIVE_DOUBLE, attr_vec_ds);
-	att.write(PredType::NATIVE_DOUBLE, &attr_pilot_double[1][0]);
+	std::vector<double> re_im_split_vec_pilot;  // re-write complex vector. type not supported by hdf5
+	for (int j = 0; j < attr_pilot_double[0].size(); j++){
+	    re_im_split_vec_pilot.push_back(attr_pilot_double[0][j]);
+	    re_im_split_vec_pilot.push_back(attr_pilot_double[1][j]);
+	}
+	dimsVec[0] = re_im_split_vec_pilot.size();
+	attr_vec_ds = DataSpace (1, dimsVec);
+        att = mainGroup.createAttribute("OFDM_PILOT", PredType::NATIVE_DOUBLE, attr_vec_ds);
+	att.write(PredType::NATIVE_DOUBLE, &re_im_split_vec_pilot[0]);      
 
 	// Number of Clients
         attr_data = cfg->nClSdrs;

@@ -136,9 +136,8 @@ class hdfDump:
         data = self.data
 
         # Data cleanup
-        # While in OFDM_DATA_CLx we have stored both real and imaginary in same vector (i.e., RE1,IM1,RE2,IM2...REm,IM,)
-        # for OFDM_PILOT data we have two separate vectors we need to put together. To be consistent, we need to modify
-        # recorder.cc in Sounder/
+        # In OFDM_DATA_CLx and OFDM_PILOT, we have stored both real and imaginary in same vector
+        # (i.e., RE1,IM1,RE2,IM2...REm,IM,)
         # OFDM data
         num_cl = np.squeeze(data['Attributes']['CL_NUM'])
         ofdm_data = []
@@ -151,9 +150,11 @@ class hdfDump:
             ofdm_data.append(I + Q * 1j)
 
         # Pilots
-        pilot_re_vec = np.squeeze(data['Attributes']['OFDM_PILOT_RE'])
-        pilot_im_vec = np.squeeze(data['Attributes']['OFDM_PILOT_IM'])
-        pilot_complex = pilot_re_vec + pilot_im_vec * 1j
+        pilot_vec = np.squeeze(data['Attributes']['OFDM_PILOT'])
+        # some_list[start:stop:step]
+        I = pilot_vec[0::2]
+        Q = pilot_vec[1::2]
+        pilot_complex = I + Q * 1j
 
         # Populate dictionary
         self.metadata = {
