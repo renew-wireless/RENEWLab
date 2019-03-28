@@ -134,6 +134,28 @@ class hdfDump:
     def get_attributes(self):
         # Retrieve attributes, translate into python dictionary
         data = self.data
+
+        # Data cleanup
+        # While in OFDM_DATA_CLx we have stored both real and imaginary in same vector (i.e., RE1,IM1,RE2,IM2...REm,IM,)
+        # for OFDM_PILOT data we have two separate vectors we need to put together. To be consistent, we need to modify
+        # recorder.cc in Sounder/
+        # OFDM data
+        num_cl = np.squeeze(data['Attributes']['CL_NUM'])
+        ofdm_data = []
+        for clIdx in range(num_cl):
+            this_str = 'OFDM_DATA_CL' + str(clIdx)
+            data_per_cl = np.squeeze(data['Attributes'][this_str])
+            # some_list[start:stop:step]
+            I = data_per_cl[0::2]
+            Q = data_per_cl[1::2]
+            ofdm_data.append(I + Q * 1j)
+
+        # Pilots
+        pilot_re_vec = np.squeeze(data['Attributes']['OFDM_PILOT_RE'])
+        pilot_im_vec = np.squeeze(data['Attributes']['OFDM_PILOT_IM'])
+        pilot_complex = pilot_re_vec + pilot_im_vec * 1j
+
+        # Populate dictionary
         self.metadata = {
                     'FREQ': np.squeeze(data['Attributes']['FREQ']),
                     'RATE': np.squeeze(data['Attributes']['RATE']),
@@ -170,6 +192,11 @@ class hdfDump:
                     'CL_SDR_ID': np.squeeze(data['Attributes']['CL_SDR_ID']).astype(str),
                     'CL_MODULATION': np.squeeze(data['Attributes']['CL_MODULATION']).astype(str),
                     'UL_SYMS': np.squeeze(data['Attributes']['UL_SYMS']),
+                    'OFDM_DATA_SC': np.squeeze(data['Attributes']['OFDM_DATA_SC']),
+                    'OFDM_PILOT_SC': np.squeeze(data['Attributes']['OFDM_PILOT_SC']),
+                    'OFDM_PILOT_SC_VALS': np.squeeze(data['Attributes']['OFDM_PILOT_SC_VALS']),
+                    'OFDM_PILOT_TIME': pilot_complex,
+                    'OFDM_DATA': ofdm_data,
                     }
 
     def get_samples(self, data_types_avail):
