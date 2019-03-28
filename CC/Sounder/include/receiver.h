@@ -45,6 +45,11 @@ struct SocketBuffer
     std::vector<int> buffer_status;
 };
 
+//std::atomic_int thread_count(0);
+//std::mutex d_mutex;
+//std::condition_variable cond;
+
+
 class Receiver
 {
 public:
@@ -56,6 +61,23 @@ public:
         int tid;
     };
 
+    struct dev_profile
+    {
+        int tid;
+        int nsamps;
+        int txSyms;
+        int rxSyms;
+        int txStartSym;
+        unsigned txFrameDelta;
+        double rate;
+        SoapySDR::Device * device;
+        SoapySDR::Stream * rxs;
+        SoapySDR::Stream * txs;
+        std::string data_file;
+        int core;
+        Receiver *ptr;
+    };
+
 public:
     Receiver(int N_THREAD, Config *cfg);
     Receiver(int N_THREAD, Config *cfg, moodycamel::ConcurrentQueue<Event_data> * in_queue);
@@ -63,7 +85,7 @@ public:
     
     std::vector<pthread_t> startRecv(void** in_buffer, int** in_buffer_status, int in_buffer_frame_num, int in_buffer_length, int in_core_id=0);
     static void* loopRecv(void *context);
- 
+    static void* clientTxRx(void *context);
 private:
     Config *config_;
     struct sockaddr_in servaddr_;    /* server address */

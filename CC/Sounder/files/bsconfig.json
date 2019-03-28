@@ -1,5 +1,8 @@
 {
 	"BaseStations" : {
+		 "cells" : 1,
+		 "sdr_id" : ["files/iris_serials.txt"],
+		 "hub_id" : "files/hub_serials.txt",
 		 "frequency" : 3.6e9,
 		 "polarization" : "single",
 		 "rxgainA" : 20,
@@ -7,21 +10,18 @@
 		 "rxgainB" : 20,
 		 "txgainB" : 40,
 		 "rate" : 5e6,
-		 "fft_size" : 64,
+		 "frame_schedule" : [
+		     "BGPPGGGGGGGGGGGGGGGG"
+		 ],
 		 "subframe_size" : 400,
+		 "fft_size" : 64,
 		 "cp_size" : 16,
 		 "prefix" : 82,
 		 "postfix" : 68,
-		 "frame_schedule" : [
-		     "BGPPUGGGGGGGGGGGGGGG"
-		 ],
-		 "pilot_seq" : "lts",
 		 "beacon_seq" : "gold_ifft",
 		 "beamsweep" : false,
 		 "beacon_antenna" : 0,
-		 "cells" : 1,
-		 "sdr_id" : ["conf/iris_serials.txt"],
-		 "hub_id" : "conf/hub_serials.txt"
+		 "pilot_seq" : "lts"
 	}
 
 }

@@ -79,11 +79,21 @@ public:
     bool clAgcEn;
     std::string clDataMod;
     std::vector<int> data_ind;
+    std::vector<uint32_t> coeffs;
+    std::vector<std::complex<int16_t>> coeffs_ci16;
+    std::vector<uint32_t> beacon;
+    std::vector<std::complex<int16_t>> beacon_ci16;
+    std::vector<std::complex<int16_t>> pilot_ci16;
+    std::vector<uint32_t> pilot;
     std::vector<std::vector<int>> pilot_sc;
     std::vector<std::vector<double>> pilot_double;
+    std::vector<std::vector<std::complex<float>>> txdata;
     std::vector<std::vector<std::complex<float>>> txdata_freq_dom;
 
     std::vector<std::string> clFrames;
+    std::vector<std::vector<size_t>> clPilotSymbols;
+    std::vector<std::vector<size_t>> clULSymbols;
+    std::vector<std::vector<size_t>> clDLSymbols;
     // TODO clients gain can be set for each separately
     double clTxgainA;
     double clRxgainA;

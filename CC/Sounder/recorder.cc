@@ -15,7 +15,8 @@ Recorder::Recorder(Config *cfg)
     this->cfg = cfg;
     unsigned nCores = std::thread::hardware_concurrency();
     printf("number of CPU cores %d\n", nCores);
-    rx_thread_num = nCores >= 2*SOCKET_THREAD_NUM and cfg->nBsSdrs[0] >= SOCKET_THREAD_NUM ? SOCKET_THREAD_NUM : 1; // TODO: read number of cores and assign accordingly 
+    if (cfg->bsPresent) rx_thread_num = nCores >= 2*SOCKET_THREAD_NUM and cfg->nBsSdrs[0] >= SOCKET_THREAD_NUM ? SOCKET_THREAD_NUM : 1; // TODO: read number of cores and assign accordingly
+    else rx_thread_num = 0; 
     printf("allocating %d cores to receive threads ... \n", rx_thread_num);
     task_queue_ = moodycamel::ConcurrentQueue<Event_data>(SOCKET_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas() * 36);
     message_queue_ = moodycamel::ConcurrentQueue<Event_data>(SOCKET_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas() * 36);

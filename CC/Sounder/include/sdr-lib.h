@@ -27,6 +27,9 @@ public:
     void reciprocityCalProcedure(std::vector<void *> &tx, std::vector<void *> &rx);
     void sampleDelayCalibrate();
     ~RadioConfig();
+    std::vector<SoapySDR::Device *> devs;
+    std::vector<SoapySDR::Stream *> rxss;
+    std::vector<SoapySDR::Stream *> txss;
 private:
     Config *_cfg;
     std::vector<SoapySDR::Device *> hubs;
@@ -41,6 +44,8 @@ private:
     std::vector<std::complex<int16_t>> buff;
     std::vector<int> nBsSdrs;
     std::vector<int> nBsAntennas;
+
     int nClSdrs;
     int nClAntennas;
+
 };

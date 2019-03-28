@@ -11,6 +11,7 @@
 
 #include "include/receiver.h"
 
+static sig_atomic_t loopDone = false;
 Receiver::Receiver(int N_THREAD, Config *cfg)
 {
 
@@ -20,7 +21,7 @@ Receiver::Receiver(int N_THREAD, Config *cfg)
     thread_num_ = N_THREAD;
     /* initialize random seed: */
     srand (time(NULL));
-    context = new ReceiverContext[thread_num_];
+    if (thread_num_ > 0) context = new ReceiverContext[thread_num_];
 
 }
 
@@ -51,24 +52,60 @@ std::vector<pthread_t> Receiver::startRecv(void** in_buffer, int** in_buffer_sta
     core_id_ = in_core_id;
     radioconfig_->radioStart();
 
+    std::vector<pthread_t> client_threads;
+    if (config_->clPresent)
+    {
+        double frameTime = config_->sampsPerSymbol*config_->clFrames[0].size()*1e3/config_->rate; // miliseconds
+        unsigned frameTimeDelta = (unsigned)(std::ceil(TIME_DELTA/frameTime)); 
+        std::cout << "Frame time delta " << frameTimeDelta << std::endl;
+
+        for(int i = 0; i < config_->nClSdrs; i++)
+        {
+            pthread_t cl_thread_;
+            // record the thread id 
+            dev_profile *profile = (dev_profile *)malloc(sizeof(dev_profile));
+            profile->tid = i;
+            profile->rate = config_->rate;
+            profile->nsamps = config_->sampsPerSymbol;
+            profile->txSyms = config_->clULSymbols[i].size();
+            profile->rxSyms = config_->clDLSymbols[i].size();
+            profile->txStartSym = config_->clULSymbols[i].size() > 0 ? config_->clULSymbols[i][0] : 0;
+            profile->txFrameDelta = frameTimeDelta;
+            profile->device = radioconfig_->devs[i];
+            profile->rxs = radioconfig_->rxss[i];
+            profile->txs = radioconfig_->txss[i];
+            profile->core = 1+i+1+SOCKET_THREAD_NUM+TASK_THREAD_NUM;
+            profile->ptr = this;
+            // start socket thread
+            if(pthread_create( &cl_thread_, NULL, Receiver::clientTxRx, (void *)(profile) ) != 0)
+            {
+                perror("socket client thread create failed");
+                exit(0);
+            }
+            client_threads.push_back(cl_thread_);
+        }
+    } 
 
     printf("start Recv thread\n");
     // new thread
      
     std::vector<pthread_t> created_threads;
-    for(int i = 0; i < thread_num_; i++)
+    if (config_->bsPresent)
     {
-        pthread_t recv_thread_;
-        // record the thread id 
-        context[i].ptr = this;
-        context[i].tid = i;
-        // start socket thread
-        if(pthread_create( &recv_thread_, NULL, Receiver::loopRecv, (void *)(&context[i])) != 0)
+        for(int i = 0; i < thread_num_; i++)
         {
-            perror("socket recv thread create failed");
-            exit(0);
+            pthread_t recv_thread_;
+            // record the thread id 
+            context[i].ptr = this;
+            context[i].tid = i;
+            // start socket thread
+            if(pthread_create( &recv_thread_, NULL, Receiver::loopRecv, (void *)(&context[i])) != 0)
+            {
+                perror("socket recv thread create failed");
+                exit(0);
+            }
+            created_threads.push_back(recv_thread_);
         }
-        created_threads.push_back(recv_thread_);
     }
     
     return created_threads;
@@ -226,4 +263,102 @@ void* Receiver::loopRecv(void *in_context)
         }
     }
 }
+
+void* Receiver::clientTxRx(void * context)
+{
+    dev_profile *profile = (dev_profile *)context;
+    SoapySDR::Device * device = profile->device;
+    SoapySDR::Stream * rxStream = profile->rxs;
+    SoapySDR::Stream * txStream = profile->txs;
+    int tid = profile->tid;
+    int txSyms = profile->txSyms; 
+    int rxSyms = profile->rxSyms; 
+    int txStartSym = profile->txStartSym;
+    double rate = profile->rate;
+    unsigned txFrameDelta = profile->txFrameDelta; 
+    int NUM_SAMPS = profile->nsamps;
+    Receiver* obj_ptr = profile->ptr;
+    Config *cfg = obj_ptr->config_;
+
+#ifdef ENABLE_CPU_ATTACH
+    printf("pinning client thread %d to core %d\n", tid, profile->core);
+    if(pin_to_core(profile->core) != 0)
+    {
+        printf("pin client thread %d to core %d failed\n", tid, profile->core);
+        exit(0);
+    }
+#endif
+
+    //while(!d_mutex.try_lock()){}
+    //thread_count++;
+    //std::cout << "Thread " << tid << ", txSyms " << txSyms << ", rxSyms " << rxSyms << ", txStartSym " << txStartSym << ", rate " << rate << ", txFrameDelta " << txFrameDelta << ", nsamps " << NUM_SAMPS << std::endl;
+    //d_mutex.unlock();
+ 
+    std::vector<std::complex<float>> buffs(NUM_SAMPS, 0);
+    std::vector<void *> rxbuff(2);
+    rxbuff[0] = buffs.data();
+    rxbuff[1] = buffs.data();
+
+    std::vector<void *> txbuff(2);
+    if (txSyms > 0)
+    {
+        txbuff[0] = cfg->txdata[tid].data();
+        txbuff[1] = cfg->txdata[tid].data();
+    }
+
+    bool exitLoop = false;
+    while (true)//(not exitLoop)
+    {
+        exitLoop = loopDone;
+
+        // receiver loop
+        long long rxTime(0);
+        long long txTime(0);
+        long long firstRxTime (0);
+        bool receiveErrors = false;
+        for (int i = 0; i < rxSyms; i++)
+        {
+            int flags(0);
+            int r = device->readStream(rxStream, rxbuff.data(), NUM_SAMPS, flags, rxTime, 1000000);
+            if (r == NUM_SAMPS)
+            {
+                if (i == 0) firstRxTime = rxTime;
+            }
+            else
+            {
+                std::cerr << "waiting for receive frames... " << std::endl;
+                receiveErrors = true;
+                break; 
+            }
+        }
+        if (receiveErrors) continue; // just go to the next frame
+
+        // transmit loop
+        int flags = SOAPY_SDR_HAS_TIME;
+        txTime = firstRxTime & 0xFFFFFFFF00000000;
+        txTime += ((long long)txFrameDelta << 32); 
+        txTime += ((long long)txStartSym << 16);
+        //printf("rxTime %llx, txTime %llx \n", firstRxTime, txTime);
+        if (exitLoop) flags |= SOAPY_SDR_END_BURST; //end burst on last iter
+        bool transmitErrors = false;
+        for (int i = 0; i < txSyms; i++)
+        {
+            if (i == txSyms - 1)  flags |= SOAPY_SDR_END_BURST;
+            int r = device->writeStream(txStream, txbuff.data(), NUM_SAMPS, flags, txTime, 1000000);
+            if (r == NUM_SAMPS)
+            {
+                txTime += 0x10000;
+            }
+            else
+            {
+                std::cerr << "unexpected writeStream error " << SoapySDR::errToStr(r) << std::endl;
+                transmitErrors = true;
+                //goto cleanup;
+            }
+        }
+
+    }
+
+}
+
 
