@@ -230,9 +230,9 @@ int main(int argc, char const *argv[])
             for (int i = 0; i < nClSdrs; i++)
             {
                 std::vector<std::complex<float>> data_cf;
-		std::vector<std::complex<float>> data_freq_dom; 			// OBCH - ADD
+		std::vector<std::complex<float>> data_freq_dom;
                 data_cf.insert(data_cf.begin(), pre1.begin(), pre1.end()); 
-		data_freq_dom.insert(data_freq_dom.begin(), pre1.begin(), pre1.end());  // OBCH - ADD
+		data_freq_dom.insert(data_freq_dom.begin(), pre1.begin(), pre1.end());
                 std::vector<std::vector<int>> dataBits;
                 dataBits.resize(syms);
                 for (int s = 0; s < syms; s++)
@@ -254,15 +254,15 @@ int main(int argc, char const *argv[])
                         ofdmSym[sc] = pilot_sc[1][c];
                     }
                     std::cout << "Pilot symbol: " << ofdmSym[pilot_sc[0][0]] << " " << ofdmSym[pilot_sc[0][1]] << std::endl;
-                    std::vector<std::complex<float>> txSym = CommsLib::IFFT(ofdmSym, fftSize); 
+                    std::vector<std::complex<float>> txSym = CommsLib::IFFT(ofdmSym, fftSize);
                     txSym.insert(txSym.begin(), txSym.end()-cpSize, txSym.end()); // add CP
                     std::cout << "IFFT output: " << txSym[0] << " " << txSym[64] << std::endl;
-                    data_cf.insert(data_cf.end(), txSym.begin(), txSym.end()); 
-		    data_freq_dom.insert(data_freq_dom.end(), ofdmSym.begin(), ofdmSym.end());  	// OBCH - ADD
+                    data_cf.insert(data_cf.end(), txSym.begin(), txSym.end());
+		    data_freq_dom.insert(data_freq_dom.end(), ofdmSym.begin(), ofdmSym.end());
                 }
                 data_cf.insert(data_cf.end(), post1.begin(), post1.end());
-                txdata.push_back(data_cf); 
-		config->txdata_freq_dom.push_back(data_freq_dom); 					// OBCH - ADD
+                txdata.push_back(data_cf);
+		config->txdata_freq_dom.push_back(data_freq_dom);
             } 
 #if DEBUG_PRINT
             for (int i = 0; i < txdata.size(); i++)

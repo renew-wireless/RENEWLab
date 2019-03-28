@@ -78,10 +78,10 @@ public:
     int clSdrCh;
     bool clAgcEn;
     std::string clDataMod;
-    std::vector<int> data_ind;  				   //OBCH - ADD
-    std::vector<std::vector<int>> pilot_sc; 			   //OBCH - ADD
-    std::vector<std::vector<double>> pilot_double;		   //OBCH - ADD
-    std::vector<std::vector<std::complex<float>>> txdata_freq_dom; //OBCH - ADD
+    std::vector<int> data_ind;
+    std::vector<std::vector<int>> pilot_sc;
+    std::vector<std::vector<double>> pilot_double;
+    std::vector<std::vector<std::complex<float>>> txdata_freq_dom;
 
     std::vector<std::string> clFrames;
     // TODO clients gain can be set for each separately

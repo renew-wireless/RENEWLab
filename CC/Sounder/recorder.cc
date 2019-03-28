@@ -281,7 +281,7 @@ herr_t Recorder::initHDF5(std::string hdf5)
 	for (int i = 0; i < attr_txdata_freq_dom.size(); i++){
 	    oss.str("");
 	    oss.clear();
-	    oss << " OFDM_DATA_CL" << i;
+	    oss << "OFDM_DATA_CL" << i;
 	    std::string var = oss.str();
 
 	    std::vector<double> re_im_split_vec;  // re-write complex vector. type not supported by hdf5
@@ -294,7 +294,7 @@ herr_t Recorder::initHDF5(std::string hdf5)
 	    dimsVec[0] = re_im_split_vec.size();  // real and imaginary parts
         attr_vec_ds = DataSpace (1, dimsVec);
         att = mainGroup.createAttribute(var, PredType::NATIVE_DOUBLE, attr_vec_ds);
-	    att.write(PredType::NATIVE_DOUBLE, &re_im_split_vec[i][0]);
+	    att.write(PredType::NATIVE_DOUBLE, &re_im_split_vec[i]);
 	    re_im_split_vec.clear();
 	}
 
