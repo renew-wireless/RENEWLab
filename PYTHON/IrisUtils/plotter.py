@@ -36,9 +36,11 @@ class Plotter:
         self.num_plots = len(plot_vec)
         self.FIG_LEN = 1520              # captures 2 pilots + data from both users
         self.pilot_len = 550
+        self.num_sc = 64
         self.tx_data = np.zeros(100)
         self.rx_data = np.zeros(100)
         self.chan_est = []
+        self.rx_H_est_plot = self.num_sc
         self.lts_corr = 0 * np.ones(100)
         self.pilot_thresh = 0
         self.rx_syms_mat = []
@@ -46,8 +48,15 @@ class Plotter:
         self.data_syms = []
         self.user_params = []
         self.metadata = []
-        self.num_sc = 64
-        self.rx_H_est_plot = self.num_sc
+
+        self.tx_data2 = np.zeros(100)
+        self.chan_est2 = []
+        self.rx_H_est_plot2 = self.num_sc
+        self.lts_corr2 = 0 * np.ones(100)
+        self.pilot_thresh2 = 0
+        self.rx_syms_mat2 = []
+        self.corr2 = []
+        self.data_syms2 = []
 
         matplotlib.rcParams.update({'font.size': 10})
         self.fig = plt.figure(figsize=(10, 20), dpi=120)
@@ -102,28 +111,35 @@ class Plotter:
 
         self.line_chan_est_mag2.set_data([], [])
 
-    def set_data(self, tx, rx, chan_est, rx_H_est_plot, lts_corr, pilot_thresh,
-                 rx_syms_mat, corr, data_syms, user_params, metadata):
+    def set_data(self, tx, rx, chan_est, rx_H_est_plot, lts_corr, pilot_thresh, rx_syms_mat, corr, data_syms, user_params, metadata,
+                 tx2, chan_est2, rx_H_est_plot2, lts_corr2, pilot_thresh2, corr2, data_syms2):
         self.tx_data = tx
         self.rx_data = rx
         self.chan_est = chan_est
         self.rx_H_est_plot = rx_H_est_plot
         self.lts_corr = lts_corr
         self.pilot_thresh = pilot_thresh
-        self.rx_syms_mat = rx_syms_mat
+        self.rx_syms_mat = rx_syms_mat[0]
         self.corr = corr
         self.data_syms = data_syms
         self.user_params = user_params
         self.metadata = metadata
         self.num_sc = metadata['FFT_SIZE']
 
+        self.tx_data2 = tx2
+        self.chan_est2 = chan_est2
+        self.rx_H_est_plot2 = rx_H_est_plot2
+        self.lts_corr2 = lts_corr2
+        self.pilot_thresh2 = pilot_thresh2
+        self.rx_syms_mat2 = rx_syms_mat[1]
+        self.corr2 = corr2
+        self.data_syms2 = data_syms2
+
     def ani_update(self, i):
         # TX
-        x_tx = range(len(self.tx_data))
-        y_tx = np.real(self.tx_data)
-        self.line_tx_sig.set_data(x_tx, y_tx)
+        self.line_tx_sig.set_data(range(len(self.tx_data)), np.real(self.tx_data))
         # TX2
-        self.line_tx_sig2.set_data(x_tx, y_tx)
+        self.line_tx_sig2.set_data(range(len(self.tx_data2)), np.real(self.tx_data2))
 
 
         # RX
@@ -142,29 +158,29 @@ class Plotter:
         self.line_corr_pk.set_data(range(len(self.lts_corr)), self.lts_corr)
         self.line_corr_th.set_data(np.linspace(0.0, len(self.lts_corr), num=100), self.pilot_thresh * np.ones(100))
         # Pilot correlation plot 2
-        self.line_corr_pk2.set_data(range(len(self.lts_corr)), self.lts_corr)
-        self.line_corr_th2.set_data(np.linspace(0.0, len(self.lts_corr), num=100), self.pilot_thresh * np.ones(100))
+        self.line_corr_pk2.set_data(range(len(self.lts_corr2)), self.lts_corr2)
+        self.line_corr_th2.set_data(np.linspace(0.0, len(self.lts_corr2), num=100), self.pilot_thresh2 * np.ones(100))
 
 
         # Frame-to-Frame correlation plot 1
         self.line_frame_corr.set_data(range(len(self.corr)), self.corr)
         # Frame-to-Frame correlation plot 2
-        self.line_frame_corr2.set_data(range(len(self.corr)), self.corr)
+        self.line_frame_corr2.set_data(range(len(self.corr2)), self.corr2)
 
 
         # Constellation plot 1
         self.line_tx_syms.set_data(np.real(self.data_syms), np.imag(self.data_syms))
         self.line_rx_syms.set_data(np.real(self.rx_syms_mat), np.imag(self.rx_syms_mat))
         # Constellation plot 2
-        self.line_tx_syms2.set_data(np.real(self.data_syms), np.imag(self.data_syms))
-        self.line_rx_syms2.set_data(np.real(self.rx_syms_mat), np.imag(self.rx_syms_mat))
+        self.line_tx_syms2.set_data(np.real(self.data_syms), np.imag(self.data_syms))           # FIXME - something wrong on TX side for second client, there's some misalignment on subcarriers
+        self.line_rx_syms2.set_data(np.real(self.rx_syms_mat2), np.imag(self.rx_syms_mat2))
 
 
         # Channel estimate plot 1
         x_ax = (20 / self.num_sc) * np.array(range(-(self.num_sc // 2), (self.num_sc // 2)))
         self.line_chan_est_mag.set_data(x_ax, self.rx_H_est_plot)
         # Channel estimate plot 2
-        self.line_chan_est_mag2.set_data(x_ax, self.rx_H_est_plot)
+        self.line_chan_est_mag2.set_data(x_ax, self.rx_H_est_plot2)
 
     def animate(self):
         self.anim = animation.FuncAnimation(self.fig, self.ani_update, init_func=self.ani_init, interval=20, blit=False, repeat=False)
@@ -294,7 +310,7 @@ class Plotter:
             ax.set_xlabel('Baseband Freq.')
             ax.set_ylabel('')
             self.line_chan_est_mag, = ax.step([], [], color='r')
-            ax.set_ylim(0, 1.5)
+            ax.set_ylim(0, 3)
             ax.set_xlim(-10, 10)
             ax.legend(fontsize=10)
 
@@ -304,7 +320,7 @@ class Plotter:
             ax.set_xlabel('Baseband Freq.')
             ax.set_ylabel('')
             self.line_chan_est_mag2, = ax.step([], [], color='b')
-            ax.set_ylim(0, 1.5)
+            ax.set_ylim(0, 3)
             ax.set_xlim(-10, 10)
             ax.legend(fontsize=10)
 

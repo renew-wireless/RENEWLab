@@ -364,6 +364,7 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
 
     rx_data_all = np.empty((streams.shape[0], n_data_syms), dtype=int)
     rxSymbols_all = np.empty((streams.shape[0], n_data_syms), dtype=complex)
+    rxSymbols_mat_allCl = []
     for clIdx in range(streams.shape[0]):
 
         rxSig_freq_eq = streams[clIdx, :, :]
@@ -383,6 +384,7 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
         phase_corr = np.exp(-1j * phase_corr_tmp)
         rxSig_freq_eq_phase = rxSig_freq_eq * phase_corr
         rxSymbols_mat = rxSig_freq_eq_phase[data_sc, :]
+        rxSymbols_mat_allCl.append(rxSymbols_mat)
 
         # Demodulation
         rxSymbols_vec = np.reshape(rxSymbols_mat, n_data_syms, order="F")       # Reshape into vector
@@ -394,7 +396,7 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
         symbol_err = []  # np.sum(tx_data != rx_data)
         # print("Frame#: {} --- Symbol Errors: {} out of {} total symbols".format(pkt_count, symbol_err, n_data_syms))
 
-    return rx_data_all, rxSymbols_all, symbol_err, rxSymbols_mat, pilot_sc, data_sc
+    return rx_data_all, rxSymbols_all, symbol_err, rxSymbols_mat_allCl, pilot_sc, data_sc
 
 
 def compute_correlation(chan_est, frameIdx):
@@ -510,15 +512,10 @@ def rx_app(filename, user_params, this_plotter):
         tx_sig[clIdx, (clIdx*len(full_pilot)):(clIdx+1)*len(full_pilot)] = full_pilot
         tx_sig[clIdx, num_cl*len(full_pilot)::] = np.concatenate((np.zeros(prefix_len), np.squeeze(ofdm_data_vec_time)))
 
-        # for symIdx in range(n_ofdm_syms):
-        #    ofdm_data_vec = np.reshape(ofdm_data_mat[:, symIdx], (1, fft_size))
-        #    ofdm_data_vec = np.fft.ifft(ofdm_data_vec)
-
-
     # Remove pilots
     ofdm_tx_syms = np.empty((num_cl, len(ofdm_data_sc[0])*n_ofdm_syms)).astype(complex)
     for clIdx in range(num_cl):
-        tmp = np.reshape(ofdm_data[clIdx, :], (ofdm_size, n_ofdm_syms), order='F')
+        tmp = np.reshape(ofdm_data[clIdx], (ofdm_size, n_ofdm_syms), order='F')
         tmp = tmp[ofdm_data_sc[0], :]
         ofdm_tx_syms[clIdx, :] = np.reshape(tmp, (1, len(ofdm_data_sc[0])*n_ofdm_syms), order='F')
 
@@ -577,14 +574,23 @@ def rx_app(filename, user_params, this_plotter):
                     # Correlation across frames.
                     sc_of_interest = np.sort(pilot_sc + data_sc)
                     H = chan_est[:, :, :, :, sc_of_interest]
+                    # corr_total: one column per client
                     corr_total[frameIdx, :] = compute_correlation(H, frameIdx)
 
                     # Dim: chan_est[numCells, numCl, numBsAnt, numFrame, numSC]
+                    cl_plot = 0
                     chan_est_vec = chan_est[num_cells - 1, cl_plot, ant_plot, frameIdx, :]
                     rx_H_est_plot = np.squeeze(np.matlib.repmat(complex('nan'), 1, len(chan_est_vec)))
                     rx_H_est_plot[data_sc] = np.squeeze(chan_est_vec[data_sc])
                     rx_H_est_plot[pilot_sc] = np.squeeze(chan_est_vec[pilot_sc])
                     rx_H_est_plot = np.fft.fftshift(abs(rx_H_est_plot))
+
+                    cl_plot = 1
+                    chan_est_vec2 = chan_est[num_cells - 1, cl_plot, ant_plot, frameIdx, :]
+                    rx_H_est_plot2 = np.squeeze(np.matlib.repmat(complex('nan'), 1, len(chan_est_vec2)))
+                    rx_H_est_plot2[data_sc] = np.squeeze(chan_est_vec2[data_sc])
+                    rx_H_est_plot2[pilot_sc] = np.squeeze(chan_est_vec2[pilot_sc])
+                    rx_H_est_plot2 = np.fft.fftshift(abs(rx_H_est_plot2))
 
                     # Grab RX frame at one antenna. Need to put together pilots from all users and data IQ
                     rx_data = []
@@ -593,21 +599,25 @@ def rx_app(filename, user_params, this_plotter):
                     rx_data.extend(IQ[ant_plot, :])
 
                     # Update plotter data
-                    this_plotter.set_data(np.squeeze(tx_sig[cl_plot]),        # tx domain LTS
+                    this_plotter.set_data(np.squeeze(tx_sig[0]),        # tx domain LTS
                                           np.squeeze(rx_data),                    # [numBsAnt, symLen]
                                           chan_est_vec,
                                           rx_H_est_plot,                          # chan est after fftshift
-                                          lts_corr[cl_plot, ant_plot, :],         # [numCl, numBsAnt, sym_len+fft_size-1]
-                                          pilot_thresh[cl_plot, ant_plot],        # [numCl, numBsAnt]
-                                          #bf_weights[ant_plot, cl_plot, :],      # [numBsAnt, numCl, numSC]
-                                          #rx_data[cl_plot, :],                   # [numCl, numDataSyms (numOfdmSyms*numDataSC)]
+                                          lts_corr[0, ant_plot, :],         # [numCl, numBsAnt, sym_len+fft_size-1]
+                                          pilot_thresh[0, ant_plot],        # [numCl, numBsAnt]
                                           rxSymbols_mat,
-                                          np.squeeze(corr_total[:, cl_plot]),     # [numDataPilotSC, numCl, numFrames]
-                                          np.squeeze(ofdm_tx_syms[cl_plot]),         # tx symbols [numClients, data length]
-                                          #rxSymbols[cl_plot, :],                 # [numCl, numDataSyms (numOfdmSyms*numDataSC)]
-                                          #symbol_err,                            # scalar
+                                          np.squeeze(corr_total[:, 0]),     # [numDataPilotSC, numCl, numFrames]
+                                          np.squeeze(ofdm_tx_syms[0]),         # tx symbols [numClients, data length]
                                           user_params,
-                                          metadata)
+                                          metadata,
+                                          np.squeeze(tx_sig[1]),  # tx domain LTS
+                                          chan_est_vec2,
+                                          rx_H_est_plot2,
+                                          lts_corr[1, ant_plot, :],  # [numCl, numBsAnt, sym_len+fft_size-1]
+                                          pilot_thresh[1, ant_plot],  # [numCl, numBsAnt]
+                                          np.squeeze(corr_total[:, 1]),  # [numDataPilotSC, numCl, numFrames]
+                                          np.squeeze(ofdm_tx_syms[1]),  # tx symbols [numClients, data length]
+                                          )
 
     print("Exiting RX Thread")
 
@@ -641,7 +651,7 @@ if __name__ == '__main__':
 
     parser = OptionParser()
     # Params
-    parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-2-28-13-54-59_1x8x2.hdf5", help="HDF5 filename to be read in SIM mode [default: %default]")
+    parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-2-28-14-3-21_1x8x2.hdf5", help="HDF5 filename to be read in SIM mode [default: %default]")
     parser.add_option("--mode",       type="string",       dest="mode",       default="SIM", help="Options: SIM/OTA [default: %default]")
     parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
     parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=True,  help="Apply CFO correction [default: %default]")
