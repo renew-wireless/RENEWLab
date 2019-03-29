@@ -192,7 +192,11 @@ def estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params):
     lts_syms_len = len(this_pilot)
 
     if apply_cfo_corr:
-        coarse_cfo_est = ofdm_obj.cfo_correction(this_pilot, lts_start, lts_syms_len, fft_offset)
+        try:
+            coarse_cfo_est = ofdm_obj.cfo_correction(this_pilot, lts_start, lts_syms_len, fft_offset)
+        except:
+            chan_est = np.zeros(len(pilot_freq))
+            return chan_est
     else:
         coarse_cfo_est = 0
 
@@ -458,8 +462,9 @@ def rx_app(filename, user_params, this_plotter):
     # OFDM object
     ofdm_obj = ofdmTxRx()
 
-    # Get attributes we care about
+    # Get attributes
     prefix_len = metadata['PREFIX_LEN']
+    postfix_len = metadata['POSTFIX_LEN']
     pilot_type = metadata['PILOT_SEQ']
     pilot_samples = samples['PILOT_SAMPS']
     data_samples = samples['UL_SAMPS']
@@ -467,16 +472,55 @@ def rx_app(filename, user_params, this_plotter):
     num_cl = metadata['NUM_CLIENTS']
     num_bs_ant = metadata['BS_NUM_ANT']
     sym_len = metadata['SYM_LEN']
+    sym_len_no_pad = metadata['SYM_LEN_NO_PAD']
     fft_size = metadata['FFT_SIZE']
     cl_frame_sched = metadata['CL_FRAME_SCHED']
     pilot_dim = pilot_samples.shape
     num_frames = pilot_dim[0]
+    ofdm_data_sc = metadata['OFDM_DATA_SC'],
+    ofdm_pilot_sc = metadata['OFDM_PILOT_SC'],
+    ofdm_pilot_sc_vals = metadata['OFDM_PILOT_SC_VALS'],
+    ofdm_pilot = metadata['OFDM_PILOT_TIME'],
+    ofdm_data = metadata['OFDM_DATA']   # does not contain cyclic prefix or prefix/postfix
+
+    # Number of OFDM syms
+    data_cp_len = int(metadata['CP_LEN'])
+    num_samps = sym_len_no_pad - data_cp_len*5   # dirty hack, fix me!!! (it does not contain cyclic prefix)
+    ofdm_size = fft_size  #  + data_cp_len        # ofdm_data does not contain cyclic prefix
+    n_ofdm_syms = num_samps//ofdm_size
 
     # Verify dimensions
     assert pilot_dim[1] == num_cells
     assert pilot_dim[2] == num_cl
     assert pilot_dim[3] == num_bs_ant
     assert pilot_dim[4] == 2 * sym_len  # No complex values in HDF5, x2 to account for IQ
+
+    # Build TX signals
+    rep = sym_len_no_pad//len(ofdm_pilot[0])
+    frac = sym_len_no_pad % len(ofdm_pilot[0])
+    full_pilot = np.concatenate((np.zeros(prefix_len), np.squeeze(np.matlib.repmat(ofdm_pilot, 1, rep)),
+                                 ofdm_pilot[0][0:frac], np.zeros(postfix_len)))
+    tx_sig = np.zeros((num_cl, (num_cl*sym_len + num_samps + prefix_len)), dtype=complex)      # One pilot per client + data + add a prefix so that TX and RX plots are the same
+
+    for clIdx in range(num_cl):
+        data_freq = ofdm_data[clIdx]
+        ofdm_data_mat = np.reshape(np.squeeze(data_freq), (ofdm_size, n_ofdm_syms), order='F')
+        ofdm_data_mat_time = np.fft.ifft(ofdm_data_mat, axis=0)
+        ofdm_data_vec_time = np.reshape(ofdm_data_mat_time, (1, ofdm_data_mat_time.shape[0]*ofdm_data_mat_time.shape[1]), order='F')
+        tx_sig[clIdx, (clIdx*len(full_pilot)):(clIdx+1)*len(full_pilot)] = full_pilot
+        tx_sig[clIdx, num_cl*len(full_pilot)::] = np.concatenate((np.zeros(prefix_len), np.squeeze(ofdm_data_vec_time)))
+
+        # for symIdx in range(n_ofdm_syms):
+        #    ofdm_data_vec = np.reshape(ofdm_data_mat[:, symIdx], (1, fft_size))
+        #    ofdm_data_vec = np.fft.ifft(ofdm_data_vec)
+
+
+    # Remove pilots
+    ofdm_tx_syms = np.empty((num_cl, len(ofdm_data_sc[0])*n_ofdm_syms)).astype(complex)
+    for clIdx in range(num_cl):
+        tmp = np.reshape(ofdm_data[clIdx, :], (ofdm_size, n_ofdm_syms), order='F')
+        tmp = tmp[ofdm_data_sc[0], :]
+        ofdm_tx_syms[clIdx, :] = np.reshape(tmp, (1, len(ofdm_data_sc[0])*n_ofdm_syms), order='F')
 
     while running:
         # Prepare samples to iterate over all received frames
@@ -526,14 +570,14 @@ def rx_app(filename, user_params, this_plotter):
                     rx_data, rxSymbols, symbol_err, rxSymbols_mat, pilot_sc, data_sc = demodulate_data(streams, ofdm_obj, user_params, metadata)
 
                     # Plotter
-                    cl_plot = 0
+                    # for clIdx in range(num_cl):
+                    cl_plot = 0 # clIdx
                     ant_plot = 0
                     cell_plot = 0
                     # Correlation across frames.
                     sc_of_interest = np.sort(pilot_sc + data_sc)
                     H = chan_est[:, :, :, :, sc_of_interest]
                     corr_total[frameIdx, :] = compute_correlation(H, frameIdx)
-                    #corr_total = np.ones(100)
 
                     # Dim: chan_est[numCells, numCl, numBsAnt, numFrame, numSC]
                     chan_est_vec = chan_est[num_cells - 1, cl_plot, ant_plot, frameIdx, :]
@@ -548,7 +592,8 @@ def rx_app(filename, user_params, this_plotter):
                         rx_data.extend(IQ_pilots[cell_plot, clIdx, ant_plot, :])
                     rx_data.extend(IQ[ant_plot, :])
 
-                    this_plotter.set_data(np.squeeze(tx_pilot[0]),                # tx domain LTS
+                    # Update plotter data
+                    this_plotter.set_data(np.squeeze(tx_sig[cl_plot]),        # tx domain LTS
                                           np.squeeze(rx_data),                    # [numBsAnt, symLen]
                                           chan_est_vec,
                                           rx_H_est_plot,                          # chan est after fftshift
@@ -558,10 +603,12 @@ def rx_app(filename, user_params, this_plotter):
                                           #rx_data[cl_plot, :],                   # [numCl, numDataSyms (numOfdmSyms*numDataSC)]
                                           rxSymbols_mat,
                                           np.squeeze(corr_total[:, cl_plot]),     # [numDataPilotSC, numCl, numFrames]
+                                          np.squeeze(ofdm_tx_syms[cl_plot]),         # tx symbols [numClients, data length]
                                           #rxSymbols[cl_plot, :],                 # [numCl, numDataSyms (numOfdmSyms*numDataSC)]
                                           #symbol_err,                            # scalar
                                           user_params,
                                           metadata)
+
     print("Exiting RX Thread")
 
 
@@ -594,7 +641,7 @@ if __name__ == '__main__':
 
     parser = OptionParser()
     # Params
-    parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-2-20-14-55-22_1x8x2.hdf5", help="HDF5 filename to be read in SIM mode [default: %default]")
+    parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-2-28-13-54-59_1x8x2.hdf5", help="HDF5 filename to be read in SIM mode [default: %default]")
     parser.add_option("--mode",       type="string",       dest="mode",       default="SIM", help="Options: SIM/OTA [default: %default]")
     parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
     parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=True,  help="Apply CFO correction [default: %default]")
@@ -643,11 +690,19 @@ if __name__ == '__main__':
     num_cl_plot = 2     # number of clients to plot
     this_plotter = Plotter(plot_vec, num_cl_plot)
 
+    #rx_app(filename, user_params, this_plotter)
+    #this_plotter = []
+    #for clIdx in range(num_cl_plot):
+    #    this_plotter.append(Plotter(plot_vec, num_cl_plot))
+
     # RX app thread
     rxth = threading.Thread(target=rx_app, args=(filename, user_params, this_plotter))
     rxth.start()
 
     # Start animation
     this_plotter.animate()
+    #for clIdx in range(num_cl_plot):
+    #    this_plotter[clIdx].animate()
+
 
 
