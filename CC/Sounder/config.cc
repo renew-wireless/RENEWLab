@@ -235,7 +235,6 @@ Config::Config(std::string jsonfile)
                 std::vector<std::complex<float>> data_cf;
 		std::vector<std::complex<float>> data_freq_dom;
                 data_cf.insert(data_cf.begin(), pre1.begin(), pre1.end()); 
-		data_freq_dom.insert(data_freq_dom.begin(), pre1.begin(), pre1.end());
                 std::vector<std::vector<int>> dataBits;
                 dataBits.resize(syms);
                 for (int s = 0; s < syms; s++)
