@@ -277,27 +277,34 @@ herr_t Recorder::initHDF5(std::string hdf5)
         att = mainGroup.createAttribute("OFDM_PILOT_SC_VALS", PredType::STD_I32BE, attr_vec_ds);
 	att.write(PredType::NATIVE_INT, &attr_pilot_sc[1][0]);
 
-	// Freq. Domain Data Symbols
+	// Freq. Domain Data Symbols - OBCH
 	attr_txdata_freq_dom = cfg->txdata_freq_dom;
+        std::vector<double> re_im_split_vec;  // re-write complex vector. type not supported by hdf5
 	for (int i = 0; i < attr_txdata_freq_dom.size(); i++){
 	    oss.str("");
 	    oss.clear();
 	    oss << "OFDM_DATA_CL" << i;
 	    std::string var = oss.str();
 
-	    std::vector<double> re_im_split_vec;  // re-write complex vector. type not supported by hdf5
+            re_im_split_vec.clear();
 	    for (int j = 0; j < attr_txdata_freq_dom[i].size(); j++){
 	        double re_val = std::real(attr_txdata_freq_dom[i][j]);
 	        double im_val = std::imag(attr_txdata_freq_dom[i][j]);
-            re_im_split_vec.push_back(re_val);
-            re_im_split_vec.push_back(im_val);
+                re_im_split_vec.push_back(re_val);
+                re_im_split_vec.push_back(im_val);
 	    }
 	    dimsVec[0] = re_im_split_vec.size();  // real and imaginary parts
-        attr_vec_ds = DataSpace (1, dimsVec);
-        att = mainGroup.createAttribute(var, PredType::NATIVE_DOUBLE, attr_vec_ds);
-	    att.write(PredType::NATIVE_DOUBLE, &re_im_split_vec[i]);
-	    re_im_split_vec.clear();
+            attr_vec_ds = DataSpace (1, dimsVec);
+            att = mainGroup.createAttribute(var, PredType::NATIVE_DOUBLE, attr_vec_ds);
+	    att.write(PredType::NATIVE_DOUBLE, &re_im_split_vec[0]);
 	}
+ 
+       // for (int i = 0; i < attr_txdata_freq_dom.size(); i++)
+       // {
+       //     for (int j = 0; j < attr_txdata_freq_dom[i].size(); j++){
+       //         std::cout << "OBCH["<< i <<"][" << j << "]: \t " << attr_txdata_freq_dom[i][j] << std::endl;
+       //     }
+       // }
 
 	// Freq. Domain Pilot symbols (real and imaginary parts)
 	attr_pilot_double = cfg->pilot_double;
