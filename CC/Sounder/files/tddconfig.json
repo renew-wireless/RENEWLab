@@ -5,13 +5,13 @@
 		 "hub_id" : "files/hub_serials.txt",
 		 "frequency" : 3.6e9,
 		 "polarization" : "single",
-		 "rxgainA" : 20,
+		 "rxgainA" : 30,
 		 "txgainA" : 40,
-		 "rxgainB" : 20,
+		 "rxgainB" : 30,
 		 "txgainB" : 40,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "BGPPGGGGGGGGGGGGGGGG"
+		     "BGPPGUGGGGGGGGGGGGGG"
 		 ],
 		 "subframe_size" : 400,
 		 "fft_size" : 64,
@@ -38,8 +38,8 @@
 		 "txgainB" : 40,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "GGPGGGGGGGGGGGGGGGGG",
-		     "GGGPGGGGGGGGGGGGGGGG"
+		     "GGPGGUGGGGGGGGGGGGGG",
+		     "GGGPGUGGGGGGGGGGGGGG"
 		 ],
 		 "subframe_size" : 400,
 		 "fft_size" : 64,

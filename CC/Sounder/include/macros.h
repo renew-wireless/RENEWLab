@@ -2,7 +2,7 @@
 #define CONSTANTS 
 
 #define ENABLE_CPU_ATTACH
-#define DEBUG_PRINT 0 
+#define DEBUG_PRINT 0
 #define DEBUG_RADIO 0
 
 #define EVENT_RX_SYMBOL 0

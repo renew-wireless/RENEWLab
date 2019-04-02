@@ -272,6 +272,7 @@ Config::Config(std::string jsonfile)
                 }
                 data_cf.insert(data_cf.end(), post1.begin(), post1.end());
                 txdata.push_back(data_cf);
+		txdata_time_dom.push_back(data_cf);
 		txdata_freq_dom.push_back(data_freq_dom);
             } 
 #if DEBUG_PRINT

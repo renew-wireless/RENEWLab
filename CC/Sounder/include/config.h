@@ -89,6 +89,7 @@ public:
     std::vector<std::vector<double>> pilot_double;
     std::vector<std::vector<std::complex<float>>> txdata;
     std::vector<std::vector<std::complex<float>>> txdata_freq_dom;
+    std::vector<std::vector<std::complex<float>>> txdata_time_dom;
 
     std::vector<std::string> clFrames;
     std::vector<std::vector<size_t>> clPilotSymbols;
