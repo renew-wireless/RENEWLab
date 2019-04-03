@@ -140,8 +140,7 @@ class hdfDump:
         # (i.e., RE1,IM1,RE2,IM2...REm,IM,)
         # OFDM data
         num_cl = np.squeeze(data['Attributes']['CL_NUM'])
-        prefix_len = np.squeeze(data['Attributes']['PREFIX_LEN'])
-        ofdm_data = np.zeros((num_cl, 320)).astype(complex)      # FIXME !!!! REMOVE HARDCODED VALUE
+        ofdm_data = []  # np.zeros((num_cl, 320)).astype(complex)
         for clIdx in range(num_cl):
             this_str = 'OFDM_DATA_CL' + str(clIdx)
             data_per_cl = np.squeeze(data['Attributes'][this_str])
@@ -149,8 +148,17 @@ class hdfDump:
             I = np.double(data_per_cl[0::2])
             Q = np.double(data_per_cl[1::2])
             IQ = I + Q * 1j
-            ofdm_data[clIdx, :] = IQ[prefix_len::]
-            #ofdm_data.append(IQ[prefix_len::])   # FIXME - need to remove prefix on main.cc
+            ofdm_data.append(IQ)
+
+        ofdm_data_time = []  # np.zeros((num_cl, 320)).astype(complex)
+        for clIdx in range(num_cl):
+            this_str = 'OFDM_DATA_TIME_CL' + str(clIdx)
+            data_per_cl = np.squeeze(data['Attributes'][this_str])
+            # some_list[start:stop:step]
+            I = np.double(data_per_cl[0::2])
+            Q = np.double(data_per_cl[1::2])
+            IQ = I + Q * 1j
+            ofdm_data_time.append(IQ)
 
         # Pilots
         pilot_vec = np.squeeze(data['Attributes']['OFDM_PILOT'])
@@ -201,6 +209,7 @@ class hdfDump:
                     'OFDM_PILOT_SC_VALS': np.squeeze(data['Attributes']['OFDM_PILOT_SC_VALS']),
                     'OFDM_PILOT_TIME': pilot_complex,
                     'OFDM_DATA': ofdm_data,
+                    'OFDM_DATA_TIME': ofdm_data_time,
                     }
 
     def get_samples(self, data_types_avail):
