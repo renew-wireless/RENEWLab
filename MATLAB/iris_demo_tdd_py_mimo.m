@@ -4,6 +4,8 @@
 %		Rahman Doost-Mohamamdy: doost@rice.edu
 %
 %---------------------------------------------------------------------
+% Original code copyright Mango Communications, Inc.
+% Distributed under the WARP License http://warpproject.org/license
 % Copyright (c) 2018-2019, Rice University
 % RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
 % ---------------------------------------------------------------------
