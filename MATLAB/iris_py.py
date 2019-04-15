@@ -151,8 +151,7 @@ class Iris_py:
 		self.agc_en = agc_en
 		self.both_channels = both_channels
 		self.n_zpad_samp = int(n_zpad_samp)
-		print("n_zpad_samp:\n")
-		print(self.n_zpad_samp)
+
 		### Setup channel rates, ports, gains, and filters ###
 		info = self.sdr.getHardwareInfo()
 		for chan in [0, 1]:

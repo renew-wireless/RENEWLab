@@ -6,6 +6,8 @@
 %---------------------------------------------------------------------
 % Copyright (c) 2018-2019, Rice University
 % RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+% Original code copyright Mango Communications, Inc.
+% Distributed under the WARP License http://warpproject.org/license
 % ---------------------------------------------------------------------
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 clear
@@ -21,12 +23,12 @@ end
 
 % Waveform params
 N_OFDM_SYM              = 0;         % Number of OFDM symbols for burst, it needs to be less than 47
-TX_SCALE                = 1.0;         % Scale for Tx waveform ([0:1])
+TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
 
 CP_LEN                  = 16;                                     % Cyclic prefix length
-N_LTS_SYM               = 10;                                      % Number of 
+N_LTS_SYM               = 20;                                      % Number of 
 N_STS_SYM               = 0;                                      % Number of STS Symbols (taken as N_SC + CP_LEN units)
-N_ZPAD_PRE              = 50;                                     % Zero-padding prefix for Iris
+N_ZPAD_PRE              = 70;                                     % Zero-padding prefix for Iris
 N_ZPAD_POST             = N_ZPAD_PRE -14;                         % Zero-padding postfix for Iris
 
 %% Define the pilot
@@ -38,34 +40,7 @@ lts_t = ifft(lts_f, 64); %time domain
 
 preamble =repmat(lts_t,1,10);
 
-%% Init Iris nodes
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Set up the Iris nodes
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
- % Create a two Iris node objects:
-    b_sched = 'PGGGGGRG';               % BS schedule
-    u_sched = 'GGGGGGPG';               % UE schedule
-    % Create a vector of node objects
-    sdr_params = struct(...
-        'id', 'RF3C000007', ...
-        'txfreq', 2.6e9, ...
-        'rxfreq', 2.6e9, ...
-        'txgain', 37, ...
-        'rxgain', 30, ...
-        'sample_rate', 5e6, ...
-        'n_samp', length(preamble) + (N_ZPAD_PRE + N_ZPAD_POST), ...     % number of samples per frame time.
-        'tdd_sched', b_sched, ...     % number of zero-paddes samples
-        'n_zpad_samp', (N_ZPAD_PRE + N_ZPAD_POST) ...
-        );
-    
-    sdr_params(2) = sdr_params(1);
-    sdr_params(2).id =  'RF3C000028';
-    sdr_params(2).rxfreq = 2.6e9;
-    sdr_params(2).txfreq = 2.6e9;
-    sdr_params(2).tdd_sched = u_sched;
-    node_bs = iris_py(sdr_params(1));
-    node_ue = iris_py(sdr_params(2));
 
 
 %% Iris Tx 
@@ -76,6 +51,39 @@ preamble =repmat(lts_t,1,10);
 tx_vec = [zeros(1,N_ZPAD_PRE) preamble zeros(1,N_ZPAD_POST)];
 tx_vec_iris = tx_vec.';
 tx_vec_iris = TX_SCALE .* tx_vec_iris ./ max(abs(tx_vec_iris));
+
+%% Init Iris nodes
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Set up the Iris nodes
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+ % Create a two Iris node objects:
+    b_sched = "PGGGGGRG";               % BS schedule
+    u_sched = "GGGGGGPG";               % UE schedule
+    n_samp = length(tx_vec_iris);
+    % Create a vector of node objects
+    sdr_params = struct(...
+        'id', "RF3C000007", ...
+        'n_chain',1, ...
+        'txfreq', 2.6e9, ...
+        'rxfreq', 2.6e9, ...
+        'txgain', 42, ...
+        'rxgain', 30, ...
+        'sample_rate', 5e6, ...
+        'n_samp', n_samp, ...     % number of samples per frame time.
+        'tdd_sched', b_sched, ...     % number of zero-paddes samples
+        'n_zpad_samp', (N_ZPAD_PRE + N_ZPAD_POST) ...
+        );
+    
+    sdr_params(2) = sdr_params(1);
+    sdr_params(2).id =  "RF3C000053";
+    sdr_params(2).rxfreq = 2.6e9;
+    sdr_params(2).txfreq = 2.6e9;
+    sdr_params(2).tdd_sched = u_sched;
+    node_bs = iris_py(sdr_params(1));
+    node_ue = iris_py(sdr_params(2));
+
+
 
 trig = 1;
 
@@ -100,7 +108,7 @@ node_bs.sdrtrigger(trig);
 %% Iris Rx
 % Only UL data:
 
-[rx_vec_iris, data0_len] = node_bs.sdrrx();
+[rx_vec_iris, data0_len] = node_bs.sdrrx(n_samp);
 
 node_bs.sdr_close();
 node_ue.sdr_close();
