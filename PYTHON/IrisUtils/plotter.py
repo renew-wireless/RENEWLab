@@ -42,6 +42,7 @@ class Plotter:
         self.metadata = []
 
         self.tx_data2 = np.zeros(100)
+        self.rx_data2 = np.zeros(100)
         self.chan_est2 = []
         self.rx_H_est_plot2 = self.num_sc
         self.lts_corr2 = 0 * np.ones(100)
@@ -100,6 +101,7 @@ class Plotter:
         self.line_chan_est_mag2.set_data([], [])
 
     def set_data(self, frameIdx, tx, rx, chan_est, rx_H_est_plot, lts_corr, pilot_thresh, rx_syms_mat, corr, data_syms, user_params, metadata):
+        self.metadata = metadata
         self.frameIdx = frameIdx
         self.tx_data = tx[0]                       # tx[num clients][num samples]
         self.rx_data = rx                          # [numBsAnt, symLen]
@@ -111,17 +113,18 @@ class Plotter:
         self.corr = corr[:, 0]                     # [num frames, numCl]
         self.data_syms = data_syms[0, :]           # tx symbols [numClients, data length]
         self.user_params = user_params
-        self.metadata = metadata
         self.num_sc = metadata['FFT_SIZE']
 
-        self.tx_data2 = tx[1]  # tx[1]
-        self.chan_est2 = chan_est[1]  # chan_est[1]
-        self.rx_H_est_plot2 = rx_H_est_plot[1]  # rx_H_est_plot[1]
-        self.lts_corr2 = lts_corr[1, :]  # lts_corr[1, :]
-        self.pilot_thresh2 = pilot_thresh[1]  # pilot_thresh[1]
-        self.rx_syms_mat2 = rx_syms_mat[1]  # rx_syms_mat[1]
-        self.corr2 = corr[:, 1]  # corr[:, 1]
-        self.data_syms2 = data_syms[1, :]  # data_syms[1, :]
+        if self.num_cl > 1:
+            self.tx_data2 = tx[1]
+            self.rx_data2 = rx                          # plot same signal
+            self.chan_est2 = chan_est[1]
+            self.rx_H_est_plot2 = rx_H_est_plot[1]
+            self.lts_corr2 = lts_corr[1, :]
+            self.pilot_thresh2 = pilot_thresh[1]
+            self.rx_syms_mat2 = rx_syms_mat[1]
+            self.corr2 = corr[:, 1]
+            self.data_syms2 = data_syms[1, :]
 
     def ani_update(self, i):
         # TX
@@ -135,7 +138,7 @@ class Plotter:
         self.line_pilot2_start.set_data(68+550 * np.ones(100), np.linspace(-0.5, 0.5, num=100))
         self.line_payload_start.set_data(68+550+550 * np.ones(100), np.linspace(-0.5, 0.5, num=100))
         # RX2
-        self.line_rx_sig2.set_data(range(len(self.rx_data)), np.real(self.rx_data))
+        self.line_rx_sig2.set_data(range(len(self.rx_data2)), np.real(self.rx_data2))
         self.line_pilot1_start2.set_data(68 * np.ones(100), np.linspace(-0.5, 0.5, num=100))
         self.line_pilot2_start2.set_data(68+550 * np.ones(100), np.linspace(-0.5, 0.5, num=100))
         self.line_payload_start2.set_data(68+550+550 * np.ones(100), np.linspace(-0.5, 0.5, num=100))
@@ -273,7 +276,7 @@ class Plotter:
         self.line_tx_syms, = ax.plot([], [], 'bo', label='TXSym')
         self.line_rx_syms, = ax.plot([], [], 'rx', label='RXSym')
         ax.set_ylim(-1.5, 1.5)
-        ax.set_xlim(-2.8, 2.8)
+        ax.set_xlim(-1.5, 1.5)
         ax.legend(fontsize=10)
 
         ax = self.fig.add_subplot(self.gs[3, 4:6])
@@ -284,7 +287,7 @@ class Plotter:
         self.line_tx_syms2, = ax.plot([], [], 'ro', label='TXSym')
         self.line_rx_syms2, = ax.plot([], [], 'bx', label='RXSym')
         ax.set_ylim(-1.5, 1.5)
-        ax.set_xlim(-2.8, 2.8)
+        ax.set_xlim(-1.5, 1.5)
         ax.legend(fontsize=10)
 
     def init_channel_est(self):
