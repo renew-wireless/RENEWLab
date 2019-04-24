@@ -10,7 +10,7 @@
                          supports 2 clients and a variable number of BS antennas.
      a) Replay (REPLAY): Read HDF5 file and run mMIMO receiver on the
                          collected data
-     b) Real-Time (OTA): Continuously read RX buffer as UEs are transmitting
+     b) Real-Time (OTA): NOT SUPPORTED YET. Continuously read RX buffer as UEs are transmitting
 
  - Procedure:
      a) Read IQ
@@ -25,7 +25,9 @@
          iii) Constellation
 
 
-    Currently only supports one-cell system (one Base Station)
+    Currently only supports one-cell system (one Base Station).
+    NOTE: Currently, script only runs when both the Base Station and Client
+          are run together. E.g., using tddconfig.json
 
 
 ---------------------------------------------------------------------
@@ -34,6 +36,9 @@
 ---------------------------------------------------------------------
 """
 
+#########################################
+#                Include                #
+#########################################
 import sys
 import numpy as np
 import h5py
@@ -57,12 +62,6 @@ from plotter import *
 #              Global Vars              #
 #########################################
 running = True
-
-
-#########################################
-#             Create Plots              #
-#########################################
-
 
 
 #########################################
@@ -567,6 +566,10 @@ def rx_app(filename, user_params, this_plotter):
     ###########################
     #        Attributes       #
     ###########################
+    cl_present = metadata['CLIENT_PRESENT']
+    if not cl_present:
+        print('ERROR: Script needs client metadata. Sounder must be run in joint mode (BS and client together)')
+        sys.exit()
     prefix_len = metadata['PREFIX_LEN']
     postfix_len = metadata['POSTFIX_LEN']
     pilot_type = metadata['PILOT_SEQ']
@@ -578,13 +581,13 @@ def rx_app(filename, user_params, this_plotter):
     sym_len = metadata['SYM_LEN']
     sym_len_no_pad = metadata['SYM_LEN_NO_PAD']
     fft_size = metadata['FFT_SIZE']
+    ofdm_data_sc = metadata['OFDM_DATA_SC']
+    ofdm_pilot = metadata['OFDM_PILOT_TIME']
     cl_frame_sched = metadata['CL_FRAME_SCHED']
-    pilot_dim = pilot_samples.shape
-    num_frames = pilot_dim[0]
-    ofdm_data_sc = metadata['OFDM_DATA_SC'],
-    ofdm_pilot = metadata['OFDM_PILOT_TIME'],
     ofdm_data = metadata['OFDM_DATA']   # Freq domain TX data (Does not contain cyclic prefix or prefix/postfix)
     ofdm_data_time = metadata['OFDM_DATA_TIME']
+    pilot_dim = pilot_samples.shape
+    num_frames = pilot_dim[0]
 
     # Verify dimensions
     assert pilot_dim[1] == num_cells
@@ -602,10 +605,10 @@ def rx_app(filename, user_params, this_plotter):
     n_ofdm_syms = num_samps_freq_dom//ofdm_size
 
     # Pilots
-    rep = sym_len_no_pad//len(ofdm_pilot[0])
-    frac = sym_len_no_pad % len(ofdm_pilot[0])
+    rep = sym_len_no_pad//len(ofdm_pilot)
+    frac = sym_len_no_pad % len(ofdm_pilot)
     full_pilot = np.concatenate((np.zeros(prefix_len), np.squeeze(np.matlib.repmat(ofdm_pilot, 1, rep)),
-                                 ofdm_pilot[0][0:frac], np.zeros(postfix_len)))
+                                 ofdm_pilot[0:frac], np.zeros(postfix_len)))
     # Note:
     # One pilot per client + overlapping data + add a prefix so that TX and RX plots are the same (for showing purposes)
     tx_sig = np.zeros((num_cl, (num_cl*sym_len + num_samps_freq_dom + prefix_len)), dtype=complex)
@@ -619,15 +622,23 @@ def rx_app(filename, user_params, this_plotter):
         tx_sig[clIdx, num_cl*len(full_pilot)::] = np.concatenate((np.zeros(prefix_len), np.squeeze(ofdm_data_vec_time)))
 
     # Remove pilots
-    ofdm_tx_syms = np.empty((num_cl, len(ofdm_data_sc[0])*n_ofdm_syms)).astype(complex)
+    ofdm_tx_syms = np.empty((num_cl, len(ofdm_data_sc)*n_ofdm_syms)).astype(complex)
     for clIdx in range(num_cl):
         tmp = np.reshape(ofdm_data[clIdx], (ofdm_size, n_ofdm_syms), order='F')
-        tmp = tmp[ofdm_data_sc[0], :]
-        ofdm_tx_syms[clIdx, :] = np.reshape(tmp, (1, len(ofdm_data_sc[0])*n_ofdm_syms), order='F')
+        tmp = tmp[ofdm_data_sc, :]
+        ofdm_tx_syms[clIdx, :] = np.reshape(tmp, (1, len(ofdm_data_sc)*n_ofdm_syms), order='F')
+
+    # Number of uplink data symbols. Assume all clients are transmitting the same number of data symbols
+    if num_cl > 1:
+        this_cl_sched = cl_frame_sched[0]  # Client index 0
+    else:
+        this_cl_sched = str(cl_frame_sched)
+    num_ul_syms = this_cl_sched.count('U')
 
     ###########################
     #    Process RX Signals   #
     ###########################
+    # Running flag. For demo purposes
     while running:
         # Prepare samples to iterate over all received frames
         chan_est = np.zeros([num_cells, num_cl, num_bs_ant, num_frames, fft_size], dtype=complex)
@@ -771,13 +782,6 @@ def rx_app(filename, user_params, this_plotter):
                 bf_weights = beamforming_weights(chan_est[num_cells-1, :, :, frameIdx, :], user_params)
 
                 # Get data samples
-                # How many data symbols transmitted by each client?
-                if num_cl > 1:
-                    this_cl_sched = cl_frame_sched[clIdx]
-                else:
-                    this_cl_sched = str(cl_frame_sched)
-                num_ul_syms = this_cl_sched.count('U')
-
                 # Dims data: (frames, numCells, ulSymsPerFrame, numAntennasAtBS, numSamplesPerSymbol*2)
                 for ulSymIdx in range(num_ul_syms):
                     I = data_samples[frameIdx, num_cells-1, ulSymIdx, :, 0:sym_len*2:2] / 2 ** 16   # 32768
@@ -846,19 +850,14 @@ def rx_app(filename, user_params, this_plotter):
 def signal_handler(sig, frame):
     """
     SIGINT signal handler
-
-    Input:
-        None
-
-    Output:
-        None
     """
-    print("SIG HANDLER!!!")
+    print("SIG HANDLER!")
     global running
     print('Caught signal %d' % sig)
     # stop tx/rx threads
     running = False
     signal.pause()
+    sys.exit()
 
 
 #########################################
@@ -872,10 +871,8 @@ if __name__ == '__main__':
 
     parser = OptionParser()
     # Params
-    parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-3-16-15-12-43_1x8x1.hdf5", help="ONE CLIENT - HDF5 filename to be read in SIM mode [default: %default]")
-    #parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-3-17-16-20-31_1x8x1.hdf5", help="ONE CLIENT, PILOTS IN DATA FIELD - HDF5 filename to be read in SIM mode [default: %default]")
-    #parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-3-18-9-53-7_1x8x1.hdf5", help="ONE CLIENT, PILOTS + DATA IN DATA FIELD - HDF5 filename to be read in SIM mode [default: %default]")
-    #parser.add_option("--file", type="string", dest="file", default="./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5", help="TWO CLIENTS - HDF5 filename to be read in SIM mode [default: %default]")
+    #parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-3-24-12-50-55_1x8x1.hdf5", help="ONE CLIENT - HDF5 filename to be read in SIM mode [default: %default]")
+    parser.add_option("--file", type="string", dest="file", default="./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5", help="TWO CLIENTS - HDF5 filename to be read in SIM mode [default: %default]")
     parser.add_option("--mode",       type="string",       dest="mode",       default="REPLAY", help="Options: REPLAY/AWGN/OTA [default: %default]")
     parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
     parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=True,  help="Apply CFO correction [default: %default]")
@@ -900,7 +897,7 @@ if __name__ == '__main__':
     num_cl_plot = 1     # number of clients to plot
     this_plotter = Plotter(num_cl_plot)
 
-    #rx_app(filename, user_params, this_plotter)
+    # rx_app(filename, user_params, this_plotter)
     # RX app thread
     rxth = threading.Thread(target=rx_app, args=(filename, user_params, this_plotter))
     rxth.start()

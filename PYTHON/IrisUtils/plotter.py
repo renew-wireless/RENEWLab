@@ -11,6 +11,8 @@
 ---------------------------------------------------------------------
 """
 
+import sys
+import signal
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
@@ -24,6 +26,9 @@ plt.style.use('ggplot')
 class Plotter:
 
     def __init__(self, num_cl):
+        signal.signal(signal.SIGTERM, self.signal_handler)
+        signal.signal(signal.SIGINT, self.signal_handler)
+
         self.anim = []
         self.num_cl = num_cl
         self.FIG_LEN = 1520              # captures 2 pilots + data from both users
@@ -170,7 +175,10 @@ class Plotter:
 
     def animate(self):
         self.anim = animation.FuncAnimation(self.fig, self.ani_update, init_func=self.ani_init)
-        plt.show()
+        try:
+            plt.show()
+        except AttributeError:
+            sys.exit()
 
     def init_tx_signal(self):
         ax = self.fig.add_subplot(self.gs[0, 0:4])
@@ -310,6 +318,23 @@ class Plotter:
         ax.set_ylim(0, 10)
         ax.set_xlim(-10, 10)
         ax.legend(fontsize=10)
+
+    def signal_handler(sig, frame):
+        """
+        SIGINT signal handler
+
+        Input:
+            None
+
+        Output:
+            None
+        """
+        print("SIG HANDLER!")
+        global running
+        print('Caught signal %d' % sig)
+        # stop tx/rx threads
+        running = False
+        signal.pause()
 
 
 if __name__ == '__main__':

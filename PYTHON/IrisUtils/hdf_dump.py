@@ -136,89 +136,134 @@ class hdfDump:
         data = self.data
 
         # Check if attributes are there
-        client_id = np.squeeze(data['Attributes']['CL_SDR_ID'])
-        if not client_id:
-            raise Exception('Client information not present')
-        bs_id = np.squeeze(data['Attributes']['BS_SDR_ID'])
-        if not bs_id:
+        client_id = data['Attributes']['CL_SDR_ID'].astype(str)
+        if client_id.size == 0:
+            cl_present = False
+            print('Client information not present. It is likely the client was run separately')
+        else:
+            cl_present = True
+
+        bs_id = data['Attributes']['BS_SDR_ID'].astype(str)
+        if bs_id.size == 0:
             raise Exception('Base Station information not present')
 
         # Data cleanup
         # In OFDM_DATA_CLx and OFDM_PILOT, we have stored both real and imaginary in same vector
         # (i.e., RE1,IM1,RE2,IM2...REm,IM,)
-        # OFDM data
-        num_cl = np.squeeze(data['Attributes']['CL_NUM'])
-        ofdm_data = []  # np.zeros((num_cl, 320)).astype(complex)
-        for clIdx in range(num_cl):
-            this_str = 'OFDM_DATA_CL' + str(clIdx)
-            data_per_cl = np.squeeze(data['Attributes'][this_str])
-            # some_list[start:stop:step]
-            I = np.double(data_per_cl[0::2])
-            Q = np.double(data_per_cl[1::2])
-            IQ = I + Q * 1j
-            ofdm_data.append(IQ)
-
-        ofdm_data_time = []  # np.zeros((num_cl, 320)).astype(complex)
-        for clIdx in range(num_cl):
-            this_str = 'OFDM_DATA_TIME_CL' + str(clIdx)
-            data_per_cl = np.squeeze(data['Attributes'][this_str])
-            # some_list[start:stop:step]
-            I = np.double(data_per_cl[0::2])
-            Q = np.double(data_per_cl[1::2])
-            IQ = I + Q * 1j
-            ofdm_data_time.append(IQ)
-
         # Pilots
-        pilot_vec = np.squeeze(data['Attributes']['OFDM_PILOT'])
+        pilot_vec = data['Attributes']['OFDM_PILOT']
         # some_list[start:stop:step]
         I = pilot_vec[0::2]
         Q = pilot_vec[1::2]
         pilot_complex = I + Q * 1j
 
-        # Populate dictionary
-        self.metadata = {
-                    'FREQ': np.squeeze(data['Attributes']['FREQ']),
-                    'RATE': np.squeeze(data['Attributes']['RATE']),
-                    'SYM_LEN_NO_PAD': np.squeeze(data['Attributes']['SYMBOL_LEN_NO_PAD']),
-                    'PREFIX_LEN': np.squeeze(data['Attributes']['PREFIX_LEN']),
-                    'POSTFIX_LEN': np.squeeze(data['Attributes']['POSTFIX_LEN']),
-                    'SYM_LEN': np.squeeze(data['Attributes']['SYMBOL_LEN']),
-                    'FFT_SIZE': np.squeeze(data['Attributes']['FFT_SIZE']),
-                    'CP_LEN': np.squeeze(data['Attributes']['CP_LEN']),
-                    'BEACON_SEQ': np.squeeze(data['Attributes']['BEACON_SEQ_TYPE']).astype(str),
-                    'PILOT_SEQ': np.squeeze(data['Attributes']['PILOT_SEQ_TYPE']).astype(str),
-                    'BS_HUB_ID': np.squeeze(data['Attributes']['BS_HUB_ID']).astype(str),
-                    'BS_SDR_NUM_PER_CELL': np.squeeze(data['Attributes']['BS_SDR_NUM_PER_CELL']).astype(int),
-                    'BS_SDR_ID': np.squeeze(data['Attributes']['BS_SDR_ID']).astype(str),
-                    'BS_NUM_CELLS': np.squeeze(data['Attributes']['BS_NUM_CELLS']),
-                    'BS_CH_PER_RADIO': np.squeeze(data['Attributes']['BS_CH_PER_RADIO']),
-                    'BS_FRAME_SCHED': np.squeeze(data['Attributes']['BS_FRAME_SCHED']).astype(str),
-                    'BS_RX_GAIN_A': np.squeeze(data['Attributes']['BS_RX_GAIN_A']),
-                    'BS_TX_GAIN_A': np.squeeze(data['Attributes']['BS_TX_GAIN_A']),
-                    'BS_RX_GAIN_B': np.squeeze(data['Attributes']['BS_RX_GAIN_B']),
-                    'BS_TX_GAIN_B': np.squeeze(data['Attributes']['BS_TX_GAIN_B']),
-                    'BS_BEAMSWEEP': np.squeeze(data['Attributes']['BS_BEAMSWEEP']),
-                    'BS_BEACON_ANT': np.squeeze(data['Attributes']['BS_BEACON_ANT']),
-                    'BS_NUM_ANT': np.squeeze(data['Attributes']['BS_NUM_ANT']),
-                    'BS_FRAME_LEN': np.squeeze(data['Attributes']['BS_FRAME_LEN']),
-                    'NUM_CLIENTS': np.squeeze(data['Attributes']['CL_NUM']),
-                    'CL_CH_PER_RADIO': np.squeeze(data['Attributes']['CL_CH_PER_RADIO']),
-                    'CL_AGC_EN': np.squeeze(data['Attributes']['CL_AGC_EN']),
-                    'CL_RX_GAIN_A': np.squeeze(data['Attributes']['CL_RX_GAIN_A']),
-                    'CL_TX_GAIN_A': np.squeeze(data['Attributes']['CL_TX_GAIN_A']),
-                    'CL_RX_GAIN_B': np.squeeze(data['Attributes']['CL_RX_GAIN_B']),
-                    'CL_TX_GAIN_B': np.squeeze(data['Attributes']['CL_TX_GAIN_B']),
-                    'CL_FRAME_SCHED': np.squeeze(data['Attributes']['CL_FRAME_SCHED']).astype(str),
-                    'CL_SDR_ID': np.squeeze(data['Attributes']['CL_SDR_ID']).astype(str),
-                    'CL_MODULATION': np.squeeze(data['Attributes']['CL_MODULATION']).astype(str),
-                    'UL_SYMS': np.squeeze(data['Attributes']['UL_SYMS']),
-                    'OFDM_DATA_SC': np.squeeze(data['Attributes']['OFDM_DATA_SC']),
-                    'OFDM_PILOT_SC': np.squeeze(data['Attributes']['OFDM_PILOT_SC']),
-                    'OFDM_PILOT_SC_VALS': np.squeeze(data['Attributes']['OFDM_PILOT_SC_VALS']),
-                    'OFDM_PILOT_TIME': pilot_complex,
-                    'OFDM_DATA': ofdm_data,
-                    'OFDM_DATA_TIME': ofdm_data_time,
-                    }
+        if cl_present:
+            # Time-domain OFDM data
+            num_cl = np.squeeze(data['Attributes']['CL_NUM'])
+            ofdm_data_time = []  # np.zeros((num_cl, 320)).astype(complex)
+            for clIdx in range(num_cl):
+                this_str = 'OFDM_DATA_TIME_CL' + str(clIdx)
+                data_per_cl = np.squeeze(data['Attributes'][this_str])
+                # some_list[start:stop:step]
+                I = np.double(data_per_cl[0::2])
+                Q = np.double(data_per_cl[1::2])
+                IQ = I + Q * 1j
+                ofdm_data_time.append(IQ)
+
+            # Frequency-domain OFDM data
+            ofdm_data = []  # np.zeros((num_cl, 320)).astype(complex)
+            for clIdx in range(num_cl):
+                this_str = 'OFDM_DATA_CL' + str(clIdx)
+                data_per_cl = np.squeeze(data['Attributes'][this_str])
+                # some_list[start:stop:step]
+                I = np.double(data_per_cl[0::2])
+                Q = np.double(data_per_cl[1::2])
+                IQ = I + Q * 1j
+                ofdm_data.append(IQ)
+
+            # Populate dictionary
+            self.metadata = {
+                'CLIENT_PRESENT': cl_present,
+                'FREQ': np.squeeze(data['Attributes']['FREQ']),
+                'RATE': np.squeeze(data['Attributes']['RATE']),
+                'SYM_LEN_NO_PAD': np.squeeze(data['Attributes']['SYMBOL_LEN_NO_PAD']),
+                'PREFIX_LEN': np.squeeze(data['Attributes']['PREFIX_LEN']),
+                'POSTFIX_LEN': np.squeeze(data['Attributes']['POSTFIX_LEN']),
+                'SYM_LEN': np.squeeze(data['Attributes']['SYMBOL_LEN']),
+                'FFT_SIZE': np.squeeze(data['Attributes']['FFT_SIZE']),
+                'CP_LEN': np.squeeze(data['Attributes']['CP_LEN']),
+                'BEACON_SEQ': np.squeeze(data['Attributes']['BEACON_SEQ_TYPE']).astype(str),
+                'PILOT_SEQ': np.squeeze(data['Attributes']['PILOT_SEQ_TYPE']).astype(str),
+                'BS_HUB_ID': np.squeeze(data['Attributes']['BS_HUB_ID']).astype(str),
+                'BS_SDR_NUM_PER_CELL': np.squeeze(data['Attributes']['BS_SDR_NUM_PER_CELL']).astype(int),
+                'BS_SDR_ID': np.squeeze(data['Attributes']['BS_SDR_ID']).astype(str),
+                'BS_NUM_CELLS': np.squeeze(data['Attributes']['BS_NUM_CELLS']),
+                'BS_CH_PER_RADIO': np.squeeze(data['Attributes']['BS_CH_PER_RADIO']),
+                'BS_FRAME_SCHED': np.squeeze(data['Attributes']['BS_FRAME_SCHED']).astype(str),
+                'BS_RX_GAIN_A': np.squeeze(data['Attributes']['BS_RX_GAIN_A']),
+                'BS_TX_GAIN_A': np.squeeze(data['Attributes']['BS_TX_GAIN_A']),
+                'BS_RX_GAIN_B': np.squeeze(data['Attributes']['BS_RX_GAIN_B']),
+                'BS_TX_GAIN_B': np.squeeze(data['Attributes']['BS_TX_GAIN_B']),
+                'BS_BEAMSWEEP': np.squeeze(data['Attributes']['BS_BEAMSWEEP']),
+                'BS_BEACON_ANT': np.squeeze(data['Attributes']['BS_BEACON_ANT']),
+                'BS_NUM_ANT': np.squeeze(data['Attributes']['BS_NUM_ANT']),
+                'BS_FRAME_LEN': np.squeeze(data['Attributes']['BS_FRAME_LEN']),
+                'NUM_CLIENTS': np.squeeze(data['Attributes']['CL_NUM']),
+                'CL_CH_PER_RADIO': np.squeeze(data['Attributes']['CL_CH_PER_RADIO']),
+                'CL_AGC_EN': np.squeeze(data['Attributes']['CL_AGC_EN']),
+                'CL_RX_GAIN_A': np.squeeze(data['Attributes']['CL_RX_GAIN_A']),
+                'CL_TX_GAIN_A': np.squeeze(data['Attributes']['CL_TX_GAIN_A']),
+                'CL_RX_GAIN_B': np.squeeze(data['Attributes']['CL_RX_GAIN_B']),
+                'CL_TX_GAIN_B': np.squeeze(data['Attributes']['CL_TX_GAIN_B']),
+                'CL_FRAME_SCHED': np.squeeze(data['Attributes']['CL_FRAME_SCHED']).astype(str),
+                'CL_SDR_ID': np.squeeze(data['Attributes']['CL_SDR_ID']).astype(str),
+                'CL_MODULATION': np.squeeze(data['Attributes']['CL_MODULATION']).astype(str),
+                'UL_SYMS': np.squeeze(data['Attributes']['UL_SYMS']),
+                'OFDM_DATA_SC': np.squeeze(data['Attributes']['OFDM_DATA_SC']),
+                'OFDM_PILOT_SC': np.squeeze(data['Attributes']['OFDM_PILOT_SC']),
+                'OFDM_PILOT_SC_VALS': np.squeeze(data['Attributes']['OFDM_PILOT_SC_VALS']),
+                'OFDM_PILOT_TIME': pilot_complex,
+                'OFDM_DATA': ofdm_data,
+                'OFDM_DATA_TIME': ofdm_data_time,
+            }
+
+        else:
+            # Client not present
+            # Populate dictionary
+            self.metadata = {
+                'CLIENT_PRESENT': cl_present,
+                'FREQ': np.squeeze(data['Attributes']['FREQ']),
+                'RATE': np.squeeze(data['Attributes']['RATE']),
+                'SYM_LEN_NO_PAD': np.squeeze(data['Attributes']['SYMBOL_LEN_NO_PAD']),
+                'PREFIX_LEN': np.squeeze(data['Attributes']['PREFIX_LEN']),
+                'POSTFIX_LEN': np.squeeze(data['Attributes']['POSTFIX_LEN']),
+                'SYM_LEN': np.squeeze(data['Attributes']['SYMBOL_LEN']),
+                'FFT_SIZE': np.squeeze(data['Attributes']['FFT_SIZE']),
+                'CP_LEN': np.squeeze(data['Attributes']['CP_LEN']),
+                'BEACON_SEQ': np.squeeze(data['Attributes']['BEACON_SEQ_TYPE']).astype(str),
+                'PILOT_SEQ': np.squeeze(data['Attributes']['PILOT_SEQ_TYPE']).astype(str),
+                'BS_HUB_ID': np.squeeze(data['Attributes']['BS_HUB_ID']).astype(str),
+                'BS_SDR_NUM_PER_CELL': np.squeeze(data['Attributes']['BS_SDR_NUM_PER_CELL']).astype(int),
+                'BS_SDR_ID': np.squeeze(data['Attributes']['BS_SDR_ID']).astype(str),
+                'BS_NUM_CELLS': np.squeeze(data['Attributes']['BS_NUM_CELLS']),
+                'BS_CH_PER_RADIO': np.squeeze(data['Attributes']['BS_CH_PER_RADIO']),
+                'BS_FRAME_SCHED': np.squeeze(data['Attributes']['BS_FRAME_SCHED']).astype(str),
+                'BS_RX_GAIN_A': np.squeeze(data['Attributes']['BS_RX_GAIN_A']),
+                'BS_TX_GAIN_A': np.squeeze(data['Attributes']['BS_TX_GAIN_A']),
+                'BS_RX_GAIN_B': np.squeeze(data['Attributes']['BS_RX_GAIN_B']),
+                'BS_TX_GAIN_B': np.squeeze(data['Attributes']['BS_TX_GAIN_B']),
+                'BS_BEAMSWEEP': np.squeeze(data['Attributes']['BS_BEAMSWEEP']),
+                'BS_BEACON_ANT': np.squeeze(data['Attributes']['BS_BEACON_ANT']),
+                'BS_NUM_ANT': np.squeeze(data['Attributes']['BS_NUM_ANT']),
+                'BS_FRAME_LEN': np.squeeze(data['Attributes']['BS_FRAME_LEN']),
+                'NUM_CLIENTS': np.squeeze(data['Attributes']['CL_NUM']),
+                'CL_MODULATION': np.squeeze(data['Attributes']['CL_MODULATION']).astype(str),
+                'UL_SYMS': np.squeeze(data['Attributes']['UL_SYMS']),
+                'OFDM_DATA_SC': np.squeeze(data['Attributes']['OFDM_DATA_SC']),
+                'OFDM_PILOT_SC': np.squeeze(data['Attributes']['OFDM_PILOT_SC']),
+                'OFDM_PILOT_SC_VALS': np.squeeze(data['Attributes']['OFDM_PILOT_SC_VALS']),
+                'OFDM_PILOT_TIME': pilot_complex,
+            }
 
     def get_samples(self, data_types_avail):
         # Retrieve samples, translate into python dictionary
