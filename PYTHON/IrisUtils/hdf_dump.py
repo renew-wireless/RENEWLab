@@ -135,6 +135,14 @@ class hdfDump:
         # Retrieve attributes, translate into python dictionary
         data = self.data
 
+        # Check if attributes are there
+        client_id = np.squeeze(data['Attributes']['CL_SDR_ID'])
+        if not client_id:
+            raise Exception('Client information not present')
+        bs_id = np.squeeze(data['Attributes']['BS_SDR_ID'])
+        if not bs_id:
+            raise Exception('Base Station information not present')
+
         # Data cleanup
         # In OFDM_DATA_CLx and OFDM_PILOT, we have stored both real and imaginary in same vector
         # (i.e., RE1,IM1,RE2,IM2...REm,IM,)
