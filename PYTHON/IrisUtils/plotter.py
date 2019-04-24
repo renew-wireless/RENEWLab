@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
  plotter.py
 
@@ -335,9 +334,3 @@ class Plotter:
         # stop tx/rx threads
         running = False
         signal.pause()
-
-
-if __name__ == '__main__':
-    # TODO
-    x = 1
-
