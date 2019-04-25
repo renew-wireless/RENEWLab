@@ -2,7 +2,7 @@
 """
  mMIMO_receiver.py
 
- Simple massive MIMO receiver.
+ Simple massive MIMO receiver. Tested only for two clients but code can be easily expanded to more clients.
  
  -Three modes: simulation and real-time
      a) Sim (AWGN):      Simulation mode/Debug mode. Take time domain TX samples from specified
@@ -16,19 +16,19 @@
      a) Read IQ
      b) Find Pilots
      c) Channel Estimator (Get CSI)
-     d) ZF/MMSE Weight Computation
+     d) ZF Weight Computation
      e) Separate Streams (Demultiplexing)
-     f) Demodulate data if available
-     g) Plotter (Optional: Animated)
-         i)   Rx Signal Full (IQ)
-         ii)  Pilots
-         iii) Constellation
+     f) Demodulate data
+     g) Plotter
 
 
     Currently only supports one-cell system (one Base Station).
     NOTE: Currently, script only runs when both the Base Station and Client
           are run together. E.g., using tddconfig.json
 
+    Usage example: Run sounder script ("./CC/Sounder/sounder ./CC/Sounder/files/tddconfig.json")
+    This will run both the Base station and clients from same machine and will generate a log
+    file inside "/CC/Sounder/logs". Use file as input to this script: "python3 mmimo_receiver.py <path/filename>"
 
 ---------------------------------------------------------------------
  Copyright © 2018-2019. Rice University.
@@ -254,7 +254,7 @@ def beamforming_weights(chan_est, user_params):
     num_cl = H_tmp_shape[1]
 
     bf_scheme = user_params[1]
-    power_norm = 1
+    power_norm = 0
 
     WW = np.zeros((num_cl, num_ant, num_sc), dtype=complex)
     if bf_scheme == "ZF":
@@ -363,7 +363,7 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est):
     for symIdx in range(n_ofdm_syms):
         for scIdx in range(num_sc):
             this_w = np.squeeze(bf_weights[:, :, scIdx])
-            y = np.squeeze(rxSig_freq[:, scIdx, symIdx]) * 4
+            y = np.squeeze(rxSig_freq[:, scIdx, symIdx])
             x[:, scIdx, symIdx] = np.dot(this_w, y)  # np.transpose(np.matmul(this_w, y))
 
 
@@ -871,14 +871,14 @@ if __name__ == '__main__':
 
     parser = OptionParser()
     # Params
-    #parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-3-24-12-50-55_1x8x1.hdf5", help="ONE CLIENT - HDF5 filename to be read in SIM mode [default: %default]")
-    parser.add_option("--file", type="string", dest="file", default="./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5", help="TWO CLIENTS - HDF5 filename to be read in SIM mode [default: %default]")
-    parser.add_option("--mode",       type="string",       dest="mode",       default="REPLAY", help="Options: REPLAY/AWGN/OTA [default: %default]")
+    parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
+    parser.add_option("--mode",       type="string",       dest="mode",       default="AWGN", help="Options: REPLAY/AWGN/OTA [default: %default]")
     parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
     parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=True,  help="Apply CFO correction [default: %default]")
     parser.add_option("--sfoCorr",    action="store_true", dest="sfo_corr",   default=True,  help="Apply SFO correction [default: %default]")
     parser.add_option("--phaseCorr",  action="store_true", dest="phase_corr", default=True,  help="Apply phase correction [default: %default]")
     parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=1,     help="FFT Offset:# CP samples for FFT [default: %default]")
+    parser.add_option("--numClPlot",  type="int",          dest="num_cl_plot",default=2,     help="Number of clients to plot. Max of 2 [default: %default]")
     (options, args) = parser.parse_args()
 
     # Params
@@ -894,7 +894,7 @@ if __name__ == '__main__':
     filename = options.file
 
     # Rx Application. Matplotlib GUI needs to run on main thread.
-    num_cl_plot = 1     # number of clients to plot
+    num_cl_plot = options.num_cl_plot     # number of clients to plot
     this_plotter = Plotter(num_cl_plot)
 
     # rx_app(filename, user_params, this_plotter)
