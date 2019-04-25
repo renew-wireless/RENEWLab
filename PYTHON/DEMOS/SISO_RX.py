@@ -263,26 +263,29 @@ def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en):
     print(info)
 
     # Reset
-    sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 0x1)
-    sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29))
-    sdr.writeRegister("IRIS30", RF_RST_REG, 0)
+    #sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 0x1) # FIXME - THIS?
+    #sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29))       # FIXME - THIS?
+    #sdr.writeRegister("IRIS30", RF_RST_REG, 0)               # FIXME - THIS?
 
     # Set params on both channels (both RF chains)
     for ch in [0, 1]:
         sdr.setFrequency(SOAPY_SDR_RX, ch, freq)
         sdr.setSampleRate(SOAPY_SDR_RX, ch, Rate)
+        sdr.setFrequency(SOAPY_SDR_TX, ch, freq)   # FIXME - THIS?
+        sdr.setSampleRate(SOAPY_SDR_TX, ch, Rate)  # FIXME - THIS?
         if "CBRS" in info["frontend"]:
             sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', gain[5])  # [0,17]
-            #sdr.setGain(SOAPY_SDR_RX, ch, 'LNA1', gain[4])  # [0,33]
+            sdr.setGain(SOAPY_SDR_RX, ch, 'LNA1', gain[4])  # [0,33] # FIXME - THIS?
             sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', gain[3])  # [-18,0]
         sdr.setGain(SOAPY_SDR_RX, ch, 'LNA', gain[2])       # [0,30]
         sdr.setGain(SOAPY_SDR_RX, ch, 'TIA', gain[1])       # [0,12]
         sdr.setGain(SOAPY_SDR_RX, ch, 'PGA', gain[0])       # [-12,19]
-        sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
+        # sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")  # FIXME - THIS?
         sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
 
     print("Number of Samples %d " % num_samps)
     print("Frequency has been set to %f" % sdr.getFrequency(SOAPY_SDR_RX, 0))
+    sdr.writeRegister("RFCORE", 120, 0)  # FIXME - THIS?
 
     # Setup RX stream
     rxStream = sdr.setupStream(SOAPY_SDR_RX, SOAPY_SDR_CF32, [0, 1])
