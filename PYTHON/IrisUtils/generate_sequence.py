@@ -282,6 +282,20 @@ if __name__ == '__main__':
 
 	print("SIZE GOLD SEQ.: {},{}".format(len(sequence_goldIfft), len(sequence_goldIfft[0])))
 
+	l_re = list(np.real(sequence_goldIfft[0][0:128]))
+	l_im = list(np.imag(sequence_goldIfft[0][0:128]))
+
+	with open('./test_re.txt', 'w') as f:
+		for idx, item in enumerate(l_re):
+			f.write("%s, " % item)
+			if ((idx+1) % 5) == 0:
+				f.write("\n")
+	with open('./test_im.txt', 'w') as f:
+		for idx, item in enumerate(l_im):
+			f.write("%s, " % item)
+			if ((idx+1) % 5) == 0:
+				f.write("\n")
+
 	plt.figure()
 	plt.subplot(4, 1, 1)
 	plt.plot(np.abs(sequence_sts))
