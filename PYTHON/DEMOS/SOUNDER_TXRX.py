@@ -418,9 +418,9 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
         msdr.writeRegisters("TX_RAM_B", replay_addr+2048, cfloat2uint32(wb_pilot2, order='IQ').tolist())
 
     if not use_trig:    
-        msdr.writeRegister("IRIS30", CORR_CONF, int("00004011", 16)) # enable the correlator, with inputs from adc
+        msdr.writeRegister("IRIS30", CORR_CONF, int("00004011", 16))  # enable the correlator, with inputs from adc
 
-    signal.signal(signal.SIGINT, partial(signal_handler, rate, numSyms))
+    signal.signal(signal.SIGINT, partial(signal_handler, rate, numSyms, txSymNum))
     bsdr.writeSetting("TRIGGER_GEN", "")
     txth = threading.Thread(target=tx_thread, args=(msdr, rate, txStreamM, rxStreamM, nb_data, symSamp, numSyms, txSymNum, numSyms-txSymNum-1))
     txth.start()
@@ -430,9 +430,9 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
     signal.pause()
 
 
-def signal_handler(rate, numSyms, signal, frame):
-    global bsdr, msdr, running, txStreamM, rxStreamB
-    msdr.writeRegister("IRIS30", CORR_CONF, 0) # stop mobile correlator first, to prevent from the tdd manager going
+def signal_handler(rate, numSyms, txSymNum, signal, frame):
+    global bsdr, msdr, running, txStreamM, rxStreamB, exit_plot
+    msdr.writeRegister("IRIS30", CORR_CONF, 0)  # stop mobile correlator first, to prevent from the tdd manager going
     msdr.writeRegister("IRIS30", TX_GAIN_CTRL, 0)  
     # stop tx/rx threads
     running = False
@@ -479,15 +479,21 @@ def signal_handler(rate, numSyms, signal, frame):
     msdr = None
 
     if exit_plot:
+        fig_len = 256
+        pilot = np.zeros(fig_len)
+        rxdata = np.zeros(fig_len)
         fig = plt.figure(figsize=(20, 8), dpi=100)
         ax1 = fig.add_subplot(2, 1, 1)
         ax2 = fig.add_subplot(2, 1, 2)
-        pilot = uint32tocfloat(read_from_file("data_out/rxpilot_sounder", leng=256, offset=0))
-        rxdata = uint32tocfloat(read_from_file("data_out/rxdata_sounder", leng=256, offset=0))
+        pilot = uint32tocfloat(read_from_file("data_out/rxpilot_sounder", leng=fig_len, offset=0))
         ax1.plot(np.real(pilot), label='pilot i')
         ax1.plot(np.imag(pilot), label='pilot q')
+
+        if txSymNum > 0:
+            rxdata = uint32tocfloat(read_from_file("data_out/rxdata_sounder", leng=fig_len, offset=0))
         ax2.plot(np.real(rxdata), label='rx data i')
         ax2.plot(np.imag(rxdata), label='rx data q')
+
         plt.show()
     sys.exit(0)
 
@@ -507,7 +513,7 @@ def main():
     parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)     # to comprensate for front-end group delay
     parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)  # to comprensate for rf path delay
     parser.add_option("--numSyms", type="int", dest="numSyms", help="Number of symbols in one sub-frame", default=20)
-    parser.add_option("--txSymNum", type="int", dest="txSymNum", help="Number of tx sub-frames in one frame", default=1)
+    parser.add_option("--txSymNum", type="int", dest="txSymNum", help="Number of tx sub-frames in one frame", default=0)
     parser.add_option("--corr-threshold", type="int", dest="threshold", help="Correlator Threshold Value", default=128)
     parser.add_option("--ue-tx-advance", type="int", dest="tx_advance", help="sample advance for tx vs rx", default=68)
     parser.add_option("--both-channels", action="store_true", dest="both_channels", help="transmit from both channels", default=False)
