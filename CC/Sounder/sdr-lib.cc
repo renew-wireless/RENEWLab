@@ -267,7 +267,7 @@ RadioConfig::RadioConfig(Config *cfg):
                     device->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //[0,17]
                 }
 
-                device->setGain(SOAPY_SDR_RX, ch, "LNA", ch ? _cfg->clRxgainB : _cfg->clRxgainA);  //[0,30]
+		device->setGain(SOAPY_SDR_RX, ch, "LNA", ch ? _cfg->clRxgainB_vec[i] : _cfg->clRxgainA_vec[i]);  //[0,30]
                 device->setGain(SOAPY_SDR_RX, ch, "TIA", 0);  //[0,12]
                 device->setGain(SOAPY_SDR_RX, ch, "PGA", 0);  //[-12,19]
 
@@ -278,7 +278,7 @@ RadioConfig::RadioConfig(Config *cfg):
                     device->setGain(SOAPY_SDR_TX, ch, "PA3", 30);       //[0|30]
                 }
                 device->setGain(SOAPY_SDR_TX, ch, "IAMP", 12);          //[0,12] 
-                device->setGain(SOAPY_SDR_TX, ch, "PAD", ch ? _cfg->clTxgainB : _cfg->clTxgainA);       //[0,52] 
+		device->setGain(SOAPY_SDR_TX, ch, "PAD", ch ? _cfg->clTxgainB_vec[i] : _cfg->clTxgainA_vec[i]);       //[0,52]
             }
 
             for (auto ch : channels)

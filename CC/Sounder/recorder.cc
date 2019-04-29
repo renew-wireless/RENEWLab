@@ -104,6 +104,7 @@ herr_t Recorder::initHDF5(std::string hdf5)
 	std::vector<std::vector<std::string>> att_matrix;
 	std::vector<const char *> cStrArray;
 	std::vector<int> attr_data_ind;
+	std::vector<double> attr_gain_vec;
 	std::vector<std::vector<int>> attr_pilot_sc;
 	std::vector<std::vector<std::complex<float>>> attr_txdata_freq_dom;
 	std::vector<std::vector<std::complex<float>>> attr_txdata_time_dom;
@@ -322,13 +323,6 @@ herr_t Recorder::initHDF5(std::string hdf5)
             att.write(PredType::NATIVE_DOUBLE, &re_im_split_vec[0]);
         }
 
-       // for (int i = 0; i < attr_txdata_freq_dom.size(); i++)
-       // {
-       //     for (int j = 0; j < attr_txdata_freq_dom[i].size(); j++){
-       //         std::cout << "OBCH["<< i <<"][" << j << "]: \t " << attr_txdata_freq_dom[i][j] << std::endl;
-       //     }
-       // }
-
 	// Freq. Domain Pilot symbols (real and imaginary parts)
 	attr_pilot_double = cfg->pilot_double;
 	std::vector<double> re_im_split_vec_pilot;  // re-write complex vector. type not supported by hdf5
@@ -357,24 +351,32 @@ herr_t Recorder::initHDF5(std::string hdf5)
         att.write(PredType::NATIVE_INT, &attr_data); 
 
 	// RX Gain RF channel A
-        attr_data_double = cfg->clRxgainA;
-        att = mainGroup.createAttribute("CL_RX_GAIN_A", PredType::NATIVE_DOUBLE, attr_ds);
-        att.write(PredType::NATIVE_DOUBLE, &attr_data_double);
+	attr_gain_vec = cfg->clRxgainA_vec;
+	dimsVec[0] = attr_gain_vec.size();
+        attr_vec_ds = DataSpace (1, dimsVec);
+        att = mainGroup.createAttribute("CL_RX_GAIN_A", PredType::NATIVE_DOUBLE, attr_vec_ds);
+        if(!(cfg->clRxgainA_vec).empty()) { att.write(PredType::NATIVE_DOUBLE, &attr_gain_vec[0]); }
 
 	// TX Gain RF channel A
-        attr_data_double = cfg->clTxgainA;
-        att = mainGroup.createAttribute("CL_TX_GAIN_A", PredType::NATIVE_DOUBLE, attr_ds);
-        att.write(PredType::NATIVE_DOUBLE, &attr_data_double);
+	attr_gain_vec = cfg->clTxgainA_vec;
+	dimsVec[0] = attr_gain_vec.size();
+        attr_vec_ds = DataSpace (1, dimsVec);
+        att = mainGroup.createAttribute("CL_TX_GAIN_A", PredType::NATIVE_DOUBLE, attr_vec_ds);
+        if(!(cfg->clTxgainA_vec).empty()) { att.write(PredType::NATIVE_DOUBLE, &attr_gain_vec[0]); }
 
 	// RX Gain RF channel B
-        attr_data_double = cfg->clRxgainB;
-        att = mainGroup.createAttribute("CL_RX_GAIN_B", PredType::NATIVE_DOUBLE, attr_ds);
-        att.write(PredType::NATIVE_DOUBLE, &attr_data_double);
+	attr_gain_vec = cfg->clRxgainB_vec;
+	dimsVec[0] = attr_gain_vec.size();
+        attr_vec_ds = DataSpace (1, dimsVec);
+        att = mainGroup.createAttribute("CL_RX_GAIN_B", PredType::NATIVE_DOUBLE, attr_vec_ds);
+        if(!(cfg->clRxgainB_vec).empty()) { att.write(PredType::NATIVE_DOUBLE, &attr_gain_vec[0]); }
 
 	// TX Gain RF channel B
-        attr_data_double = cfg->clTxgainB;
-        att = mainGroup.createAttribute("CL_TX_GAIN_B", PredType::NATIVE_DOUBLE, attr_ds);
-        att.write(PredType::NATIVE_DOUBLE, &attr_data_double);
+	attr_gain_vec = cfg->clTxgainB_vec;
+	dimsVec[0] = attr_gain_vec.size();
+        attr_vec_ds = DataSpace (1, dimsVec);
+        att = mainGroup.createAttribute("CL_TX_GAIN_B", PredType::NATIVE_DOUBLE, attr_vec_ds);
+        if(!(cfg->clTxgainB_vec).empty()) { att.write(PredType::NATIVE_DOUBLE, &attr_gain_vec[0]); }
 
 	// Client frame schedule (vec of strings)
 	cStrArray.clear();

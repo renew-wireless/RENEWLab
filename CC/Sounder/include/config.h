@@ -95,12 +95,11 @@ public:
     std::vector<std::vector<size_t>> clPilotSymbols;
     std::vector<std::vector<size_t>> clULSymbols;
     std::vector<std::vector<size_t>> clDLSymbols;
-    // TODO clients gain can be set for each separately
-    double clTxgainA;
-    double clRxgainA;
-    double clTxgainB;
-    double clRxgainB;
-    
+
+    std::vector<double> clTxgainA_vec;
+    std::vector<double> clRxgainA_vec;
+    std::vector<double> clTxgainB_vec;
+    std::vector<double> clRxgainB_vec;
 
     const int maxFrame = 1 << 31;
     const int data_offset = sizeof(int) * 4;

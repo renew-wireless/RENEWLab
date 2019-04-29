@@ -128,10 +128,18 @@ Config::Config(std::string jsonfile)
 	clSdrCh = tddConfCl.value("polarization", "single") == "single"? 1 : 2;
 	clAgcEn = tddConfCl.value("agc_en", false);
 	clDataMod = tddConfCl.value("modulation", "QPSK");
-        clTxgainA = tddConfCl.value("txgainA", 20);
-        clRxgainA = tddConfCl.value("rxgainA", 20);
-        clTxgainB = tddConfCl.value("txgainB", 20);
-        clRxgainB = tddConfCl.value("rxgainB", 20);
+
+	auto jClTxgainA_vec = tddConfCl.value("txgainA", json::array());
+	auto jClRxgainA_vec = tddConfCl.value("rxgainA", json::array());
+	auto jClTxgainB_vec = tddConfCl.value("txgainB", json::array());
+	auto jClRxgainB_vec = tddConfCl.value("rxgainB", json::array());
+        for(int f = 0; f < nClSdrs; f++) {
+	    clTxgainA_vec.push_back(jClTxgainA_vec.at(f).get<double>());
+	    clRxgainA_vec.push_back(jClRxgainA_vec.at(f).get<double>());
+	    clTxgainB_vec.push_back(jClTxgainB_vec.at(f).get<double>());
+	    clRxgainB_vec.push_back(jClRxgainB_vec.at(f).get<double>());
+	}
+
         auto jClFrames = tddConfCl.value("frame_schedule", json::array());
         assert(nClSdrs == jClFrame.size());
         for(int f = 0; f < nClSdrs; f++) clFrames.push_back(jClFrames.at(f).get<std::string>());
