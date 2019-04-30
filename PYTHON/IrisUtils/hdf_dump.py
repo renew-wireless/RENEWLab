@@ -5,16 +5,14 @@
  Plotting from HDF5 file
  Script to analyze recorded hdf5 file from channel sounding (see Sounder/).
  Usage format is:
-    ./hdfDump.py <hdf5_file_name>
+    ./hdfDump.py <hdf5_file_name> <frame_to_plot (optional, default=100)>
 
  Example:
-    ./hdfDump.py ../Sounder/logs/test-hdf5.py
+    ./hdfDump.py ../Sounder/logs/test-hdf5.py 150
 
 
- Author(s): Clay Shepard: cws@rice.edu
+ Author(s): Oscar Bejarano: obejarano@rice.edu
             Rahman Doost-Mohamamdy: doost@rice.edu
-            Jian Ding: jd38@rice.edu
-            Oscar Bejarano: obejarano@rice.edu
 
 ---------------------------------------------------------------------
  Copyright © 2018-2019. Rice University.
@@ -55,7 +53,11 @@ class hdfDump:
         if (not self.h5file) or (self.filename != self.h5file.filename):
             # if it's closed, e.g. for the C version, open it
             print('Opening %s...' % self.filename)
-            self.h5file = h5py.File(self.filename, 'r')
+            try:
+                self.h5file = h5py.File(self.filename, 'r')
+            except OSError:
+                print("File not found. Terminating program now")
+                sys.exit(0)
         # return self.h5file
 
     def parse_hdf5(self):
@@ -165,10 +167,12 @@ class hdfDump:
                 this_str = 'OFDM_DATA_TIME_CL' + str(clIdx)
                 data_per_cl = np.squeeze(data['Attributes'][this_str])
                 # some_list[start:stop:step]
-                I = np.double(data_per_cl[0::2])
-                Q = np.double(data_per_cl[1::2])
-                IQ = I + Q * 1j
-                ofdm_data_time.append(IQ)
+                if np.any(data_per_cl):
+                    # If data present
+                    I = np.double(data_per_cl[0::2])
+                    Q = np.double(data_per_cl[1::2])
+                    IQ = I + Q * 1j
+                    ofdm_data_time.append(IQ)
 
             # Frequency-domain OFDM data
             ofdm_data = []  # np.zeros((num_cl, 320)).astype(complex)
@@ -176,10 +180,12 @@ class hdfDump:
                 this_str = 'OFDM_DATA_CL' + str(clIdx)
                 data_per_cl = np.squeeze(data['Attributes'][this_str])
                 # some_list[start:stop:step]
-                I = np.double(data_per_cl[0::2])
-                Q = np.double(data_per_cl[1::2])
-                IQ = I + Q * 1j
-                ofdm_data.append(IQ)
+                if np.any(data_per_cl):
+                    # If data present
+                    I = np.double(data_per_cl[0::2])
+                    Q = np.double(data_per_cl[1::2])
+                    IQ = I + Q * 1j
+                    ofdm_data.append(IQ)
 
             # Populate dictionary
             self.metadata = {
@@ -297,6 +303,7 @@ class hdfDump:
         data_types_avail = []
         pilots_avail = bool(data['Pilot_Samples'])
         ul_data_avail = bool(data['UplinkData'])
+        offset = int(np.squeeze(data['Attributes']['PREFIX_LEN']))
 
         if pilots_avail:
             data_types_avail.append("PILOTS")
@@ -315,8 +322,9 @@ class hdfDump:
         symbol_length = np.squeeze(data['Attributes']['SYMBOL_LEN'])
         num_cl = np.squeeze(data['Attributes']['CL_NUM'])
 
-        # Plot pilots or data or boh
-        fig, axes = plt.subplots(nrows=5, ncols=len(data_types_avail), squeeze=False)
+        # PLOTTER
+        # Plot pilots or data or both
+        fig, axes = plt.subplots(nrows=6, ncols=len(data_types_avail), squeeze=False)
         for idx, ftype in enumerate(data_types_avail):
             if ftype == "PILOTS":
                 axes[0, idx].set_title('PILOTS - Cell 0')
@@ -329,7 +337,35 @@ class hdfDump:
                 num_cl_tmp = 1  # number of UEs to plot data for
 
             # Compute CSI from IQ samples
-            csi, samps = samps2csi(samples, num_cl_tmp, symbol_length, symbol_length, offset=0, bound=0)
+            # Samps: #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Samples
+            # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
+            # For correlation use a fft size of 64
+            csi, samps = samps2csi(samples, num_cl_tmp, symbol_length, fft_size=64, offset=offset, bound=0, cp=0)
+
+            # Correlation (Debug plot useful for checking sync)
+            amps = np.mean(np.abs(samps[:, 0, 0, 0, 0, :]), axis=1)
+            pilot_frames = [i for i in range(len(amps)) if amps[i] > 0.01]
+            ref_frame = pilot_frames[len(pilot_frames) // 2]
+            cellCSI = csi[:, 0, :, :, :, :]     # First cell
+            userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
+            corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2)))
+            best_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.99]
+            good_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.95]
+            bad_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.9 and corr_total[i, 0] <= 0.94]
+            worst_frames = [i for i in pilot_frames if corr_total[i, 0] < 0.9]
+            print("Good frames len: %d" % len(pilot_frames))
+            print("Amplitude of reference frame %d is %f" % (ref_frame, amps[ref_frame]))
+            print("num of best frames %d" % len(best_frames))
+            print("num of good frames %d" % len(good_frames))
+            print("num of bad frames   %d" % len(bad_frames))
+            print("num of worst frames   %d" % len(worst_frames))
+
+            # Compute CSI from IQ samples
+            # Samps: #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Samples
+            # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
+            # For looking at the whole picture, use a fft size of whole symbol_length as fft window (for visualization),
+            # and no offset
+            csi, samps = samps2csi(samples, num_cl_tmp, symbol_length, fft_size=symbol_length, offset=0, bound=0, cp=0)
 
             # Verify default_frame does not exceed max number of collected frames
             frame_to_plot = min(default_frame, samps.shape[0])
@@ -352,16 +388,33 @@ class hdfDump:
             for i in range(samps.shape[4]):
                 axes[4, idx].plot(np.mean(np.abs(samps[:, 0, 0, 0, i, :]), axis=1).flatten())
             axes[4, idx].set_xlabel('Sample')
+
+            axes[5, idx].set_ylabel('Correlation with Frame %d' % ref_frame)
+            axes[5, idx].set_ylim([0, 1.1])
+            axes[5, idx].set_title('Cell %d offset %d' % (0, offset))
+            for u in range(num_cl_tmp):
+                axes[5, idx].plot(corr_total[pilot_frames, u])
+            axes[5, idx].set_xlabel('Frame')
+
         plt.show()
 
 
 if __name__ == '__main__':
+    # Tested with inputs: ./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5 300  (for two users)
+    #                     ./data_in/Argos-2019-3-30-12-20-50_1x8x1.hdf5 300  (for one user)
     if len(sys.argv) > 1:
         if sys.argv[1] == "-h":
-            print('format: ./hdfPlot.py <filename>')
+            print('format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)>')
+            sys.exit(0)
+
+        if len(sys.argv) > 3:
+            print('Too many arguments! format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)>')
             sys.exit(0)
 
         filename = sys.argv[1]
+        frame_to_plot = []
+        if len(sys.argv) == 3:
+            frame_to_plot = int(sys.argv[2])
 
         # Instantiate
         hdf5 = hdfDump(filename)
@@ -391,7 +444,10 @@ if __name__ == '__main__':
         metadata = hdf5.metadata
         samples = hdf5.samples
 
-        hdf5.verify_hdf5()
+        if frame_to_plot:
+            hdf5.verify_hdf5(frame_to_plot)
+        else:
+            hdf5.verify_hdf5()
 
     else:
         raise Exception("format: ./hdfPlot.py <filename>")

@@ -5,6 +5,7 @@
 
  Author(s): Clay Shepard: cws@rice.edu
             Rahman Doost-Mohamamdy: doost@rice.edu
+            Oscar Bejarano: obejarano@rice.edu
 
 ---------------------------------------------------------------------
  Copyright © 2018-2019. Rice University.
@@ -50,16 +51,17 @@ def calCorr(userCSI, corr_vec):
     """
     Calculate the instantaneous correlation with a given correlation vector
     """
-    sig_intf = np.empty((userCSI.shape[0],userCSI.shape[1],userCSI.shape[1],userCSI.shape[3]),dtype='float32')
+    sig_intf = np.empty((userCSI.shape[0], userCSI.shape[1], userCSI.shape[1], userCSI.shape[3]), dtype='float32')
 
     for sc in range(userCSI.shape[3]):
-        # TODO: can we get rid of the for loop?
-            sig_intf[:,:,:,sc] = np.abs(np.dot(userCSI[:,:,:,sc],corr_vec[:,:,sc])) / np.dot( np.abs(userCSI[:,:,:,sc]), np.abs(corr_vec[:,:,sc]) )
+        sig_intf[:, :, :, sc] = np.abs(np.dot(userCSI[:, :, :, sc], corr_vec[:, :, sc])) / np.dot(
+                                       np.abs(userCSI[:, :, :, sc]), np.abs(corr_vec[:, :, sc]))
 
     # gets correlation of subcarriers for each user across bs antennas
-    sig_sc = np.diagonal(sig_intf,axis1=1,axis2=2)
-    sig_sc = np.swapaxes(sig_sc,1,2)
-    corr_total = np.mean(sig_sc,axis=2)  # averaging corr across users
+    sig_sc = np.diagonal(sig_intf, axis1=1, axis2=2)
+    sig_sc = np.swapaxes(sig_sc, 1, 2)
+    corr_total = np.mean(sig_sc, axis=2)  # averaging corr across users
+
     return corr_total, sig_sc
 
 
