@@ -54,7 +54,7 @@ RadioConfig::RadioConfig(Config *cfg):
             for (int i = 0; i < radioNum; i++)
             {
                 args["serial"] = _cfg->bs_sdr_ids[c][i];
-                args["timeout"] = 100000;
+                args["timeout"] = "1000000";
                 bsSdrs[c].push_back(SoapySDR::Device::make(args));
             }
 
@@ -243,7 +243,7 @@ RadioConfig::RadioConfig(Config *cfg):
         nClSdrs = _cfg->nClSdrs;
         for(size_t i = 0; i < nClSdrs; i++)
         {
-            auto device = SoapySDR::Device::make("serial="+_cfg->cl_sdr_ids.at(i));
+            auto device = SoapySDR::Device::make("serial="+_cfg->cl_sdr_ids.at(i)+",timeout=10000000");
             if (device == nullptr)
             {
                 std::cerr << "No device!" << std::endl;
@@ -278,9 +278,10 @@ RadioConfig::RadioConfig(Config *cfg):
                 {
                     device->setGain(SOAPY_SDR_TX, ch, "ATTN", 0);       //[-18,0] by 3
                     device->setGain(SOAPY_SDR_TX, ch, "PA1", 15);       //[0|15]
-#ifdef NEWCORR
-                    device->setGain(SOAPY_SDR_TX, ch, "PA2", 17);       //[0|15]
-#endif
+                    if (info["frontend"].find("CBRSc") != std::string::npos) // on revC front-end, it is safe to turn on PA2
+                        device->setGain(SOAPY_SDR_TX, ch, "PA2", 17);       //[0|17]
+                    else
+                        device->setGain(SOAPY_SDR_TX, ch, "PA2", 0);       //[0|17]
                     device->setGain(SOAPY_SDR_TX, ch, "PA3", 30);       //[0|30]
                 }
                 device->setGain(SOAPY_SDR_TX, ch, "IAMP", 12);          //[0,12] 
@@ -442,13 +443,13 @@ void RadioConfig::radioStart()
                 device->writeRegister("ARGCOE", k*4, 0);
             usleep(100000);
 #ifdef NEWCORR
-            device->writeRegister("ARGCOR", CORR_THRESHOLD, 128);
-            device->writeRegister("ARGCOR", CORR_RST, 1);
-            device->writeRegister("ARGCOR", CORR_RST, 0);
-#else
             device->writeRegister("IRIS30", 64, 1); // reset faros_corr
             device->writeRegister("IRIS30", 64, 0); // unreset faros_corr
             device->writeRegister("IRIS30", 92, 1); // threshold is left-shifted by this many bits
+#else
+            device->writeRegister("ARGCOR", CORR_THRESHOLD, 128);
+            device->writeRegister("ARGCOR", CORR_RST, 1);
+            device->writeRegister("ARGCOR", CORR_RST, 0);
 #endif
             for (int k = 0; k < 128; k++)
                 device->writeRegister("ARGCOE", k*4, _cfg->coeffs[k]);
