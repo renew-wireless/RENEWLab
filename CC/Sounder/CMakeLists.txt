@@ -25,6 +25,7 @@ set(directory "logs")
 file(MAKE_DIRECTORY ${directory})
 
 add_definitions(-DJSON)
+add_definitions(-DNEWCORR)
 
 message(STATUS "SoapySDR_INCLUDE_DIRS: ${SoapySDR_INCLUDE_DIRS}")
 message(STATUS "SoapySDR_LIBRARIES: ${SoapySDR_LIBRARIES}")

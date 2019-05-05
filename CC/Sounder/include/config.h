@@ -62,8 +62,11 @@ public:
     std::vector<int> nBsSdrs;
     std::vector<int> nBsAntennas;
     int bsSdrCh;
+    std::string bsChannel;
     int framePeriod;
     std::vector<std::string> frames;
+    std::string frame_mode;
+    int max_frame;
     std::vector<std::vector<size_t>> pilotSymbols;
     std::vector<std::vector<size_t>> ULSymbols;
     std::vector<std::vector<size_t>> DLSymbols;
@@ -76,6 +79,7 @@ public:
     int nClSdrs;
     std::vector<std::string> cl_sdr_ids;
     int clSdrCh;
+    std::string clChannel;
     bool clAgcEn;
     std::string clDataMod;
     std::vector<int> data_ind;
@@ -101,7 +105,6 @@ public:
     std::vector<double> clTxgainB_vec;
     std::vector<double> clRxgainB_vec;
 
-    const int maxFrame = 1 << 31;
     const int data_offset = sizeof(int) * 4;
     // header 4 int for: frame_id, subframe_id, cell_id, ant_id
     // ushort for: I/Q samples

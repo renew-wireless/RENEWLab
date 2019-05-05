@@ -23,9 +23,6 @@ public:
     void radioRx(void ** buffs);
     void radioTx(int, void ** buffs, int flags, long long & frameTime);
     int radioRx(int, void ** buffs, long long & frameTime);
-    void radioSched(std::vector<std::string> sched);
-    void reciprocityCalProcedure(std::vector<void *> &tx, std::vector<void *> &rx);
-    void sampleDelayCalibrate();
     ~RadioConfig();
     std::vector<SoapySDR::Device *> devs;
     std::vector<SoapySDR::Stream *> rxss;

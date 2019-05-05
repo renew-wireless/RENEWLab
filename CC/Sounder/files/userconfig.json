@@ -1,10 +1,12 @@
 {
 	"Clients" : {
 		 "frequency" : 3.6e9,
-		 "polarization" : "single",
+		 "channel" : "A",
 		 "agc_en" : false,
-		 "rxgain" : 20,
-		 "txgain" : 40,
+		 "rxgainA" : [20,20],
+		 "txgainA" : [40,40],
+		 "rxgainA" : [20,20],
+		 "txgainA" : [40,40],
 		 "rate" : 5e6,
 		 "fft_size" : 64,
 		 "subframe_size" : 400,
@@ -12,9 +14,10 @@
 		 "prefix" : 82,
 		 "postfix" : 68,
 		 "frame_schedule" : [
-		     "GDPGUGGGGGGGGGGGGGGG",
-		     "GDGPUGGGGGGGGGGGGGGG"
+		     "GGPGGGGGGGGGGGGGGGGG",
+		     "GGGPGGGGGGGGGGGGGGGG"
 		 ],
+		 "frame_mode" : "hybrid",
 		 "beacon_type" : "gold_ifft",
 		 "modulation" : "QPSK",
 		 "pilot_seq" : "lts",

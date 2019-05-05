@@ -4,14 +4,14 @@
 		 "sdr_id" : ["files/iris_serials.txt"],
 		 "hub_id" : "files/hub_serials.txt",
 		 "frequency" : 3.6e9,
-		 "polarization" : "single",
+		 "channel" : "AB",
 		 "rxgainA" : 30,
 		 "txgainA" : 40,
 		 "rxgainB" : 30,
 		 "txgainB" : 40,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "BGPPGUGGGGGGGGGGGGGG"
+		     "BGPPGGGGGGGGGGGGGGGG"
 		 ],
 		 "subframe_size" : 400,
 		 "fft_size" : 64,
@@ -19,7 +19,7 @@
 		 "prefix" : 82,
 		 "postfix" : 68,
 		 "beacon_seq" : "gold_ifft",
-		 "beamsweep" : false,
+		 "beamsweep" : true,
 		 "beacon_antenna" : 0,
 		 "pilot_seq" : "lts"
 	},
@@ -30,7 +30,7 @@
 		     "RF3E000040"
 		 ],
 		 "frequency" : 3.6e9,
-		 "polarization" : "single",
+		 "channel" : "A",
 		 "agc_en" : false,
 		 "rxgainA" : [20, 20],
 		 "txgainA" : [40, 40],
@@ -38,9 +38,10 @@
 		 "txgainB" : [40, 40],
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "GGPGGUGGGGGGGGGGGGGG",
-		     "GGGPGUGGGGGGGGGGGGGG"
+		     "GGPGGGGGGGGGGGGGGGGG",
+		     "GGGPGGGGGGGGGGGGGGGG"
 		 ],
+		 "frame_mode" : "hybrid",
 		 "subframe_size" : 400,
 		 "fft_size" : 64,
 		 "cp_size" : 16,

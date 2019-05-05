@@ -51,7 +51,10 @@ Config::Config(std::string jsonfile)
         json sdr_id_files = tddConf.value("sdr_id", json::array());
         nCells = sdr_id_files.size();
         for (int i = 0; i < nCells; i++) bs_sdr_file.push_back(sdr_id_files.at(i).get<std::string>());
-        bsSdrCh = tddConf.value("polarization", "single") == "single"? 1 : 2;
+        bsChannel = tddConf.value("channel", "A");
+	if (bsChannel != "A" && bsChannel != "B" && bsChannel != "AB")
+	    throw std::invalid_argument( "error channel config: not any of A/B/AB!\n");
+        bsSdrCh = (bsChannel == "AB") ? 2 : 1;
         auto jBsFrames = tddConf.value("frame_schedule", json::array());
         framePeriod = jBsFrames.size();
         for(int f = 0; f < framePeriod; f++) frames.push_back(jBsFrames.at(f).get<std::string>());
@@ -61,6 +64,8 @@ Config::Config(std::string jsonfile)
         rxgainB = tddConf.value("rxgainB", 20);
         beamsweep = tddConf.value("beamsweep", false);
         beacon_ant = tddConf.value("beacon_antenna", 0);
+        frame_mode = tddConf.value("frame_mode", "free_running");
+        max_frame = tddConf.value("max_frame", 0);
     
         bs_sdr_ids.resize(nCells);
         nBsSdrs.resize(nCells);
@@ -125,7 +130,10 @@ Config::Config(std::string jsonfile)
         auto jClSdrs = tddConfCl.value("sdr_id", json::array());
         nClSdrs = jClSdrs.size();
         for (int i = 0; i < nClSdrs; i++) cl_sdr_ids.push_back(jClSdrs.at(i).get<std::string>());
-	clSdrCh = tddConfCl.value("polarization", "single") == "single"? 1 : 2;
+        clChannel = tddConf.value("channel", "A");
+	if (clChannel != "A" && clChannel != "B" && clChannel != "AB")
+	    throw std::invalid_argument( "error channel config: not any of A/B/AB!\n");
+        clSdrCh = (clChannel == "AB") ? 2 : 1;
 	clAgcEn = tddConfCl.value("agc_en", false);
 	clDataMod = tddConfCl.value("modulation", "QPSK");
 
@@ -141,7 +149,7 @@ Config::Config(std::string jsonfile)
 	}
 
         auto jClFrames = tddConfCl.value("frame_schedule", json::array());
-        assert(nClSdrs == jClFrame.size());
+        assert(nClSdrs == jClFrames.size());
         for(int f = 0; f < nClSdrs; f++) clFrames.push_back(jClFrames.at(f).get<std::string>());
         clPilotSymbols = Utils::loadSymbols(clFrames, 'P');
         clULSymbols = Utils::loadSymbols(clFrames, 'U');
