@@ -23,6 +23,7 @@ end
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_MOD                 = 1;
+DEBUG                   = 1;
 sim_N0                  = 0.01;     
 sim_H_var               = 4;
 %Iris params:
@@ -61,7 +62,7 @@ DO_APPLY_PHASE_ERR_CORRECTION = 1;           % Enable Residual CFO estimation/co
 %% Define the preamble
 % LTS for fine CFO and channel estimation
 lts_f = [0 1 -1 -1 1 1 -1 1 -1 1 -1 -1 -1 -1 -1 1 1 -1 -1 1 -1 1 -1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 ...
-    1 1 -1 -1 1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1]';
+    1 1 -1 -1 1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1].';
 lts_t = ifft(lts_f, N_SC); %time domain
 
 preamble_common = [lts_t(33:64); lts_t; lts_t];
@@ -239,15 +240,29 @@ l_rx_dec=length(raw_rx_dec);
 
 %% Correlate for LTS
 %NB: start here!
-return;
+
 % Complex cross correlation of Rx waveform with time-domain LTS
 lts_corr = double.empty();
 for ibs=1:N_BS_NODE
-    lts_corr(:,ibs) = abs(conv( conj(fliplr(lts_t)), sign(raw_rx_dec(ibs,:))));
+    lts_corr(:,ibs) = abs(conv( conj(flipud(lts_t)), sign(raw_rx_dec(ibs,:))));
 end
-lts_corr = sum(lts_corr,2);
+
 % Skip early and late samples - avoids occasional false positives from pre-AGC samples
-lts_corr = lts_corr(32:end-32);
+lts_corr = lts_corr(32:end-32,:);
+
+if DEBUG
+    figure,
+    for sp = 1:N_BS_NODE
+        subplot(8,1,sp);
+        plot(lts_corr(:,sp)) 
+        xlabel('Samples');
+        y_label = sprintf('Anetnna %d',sp);
+        ylabel(y_label);
+    end
+    sgtitle('LTS correlations accross antennas')
+end
+return;
+
 % Find all correlation peaks
 lts_peaks = find(lts_corr(1:800) > LTS_CORR_THRESH*max(lts_corr));
 
