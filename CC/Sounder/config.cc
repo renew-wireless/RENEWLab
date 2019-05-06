@@ -270,7 +270,7 @@ Config::Config(std::string jsonfile)
 #if DEBUG_PRINT
                     std::cout << "Data symbol: " << ofdmSym[sc-2] << " " << ofdmSym[sc-1] << std::endl;
 #endif
-                    for (int c = 0; c < pilot_sc[0].size(); c++)
+                    for (size_t c = 0; c < pilot_sc[0].size(); c++)
                     {
                         sc = pilot_sc[0][c];
                         ofdmSym[sc] = pilot_sc[1][c];

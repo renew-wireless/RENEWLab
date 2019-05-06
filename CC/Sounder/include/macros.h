@@ -1,5 +1,5 @@
-#ifndef CONSTANTS 
-#define CONSTANTS 
+#ifndef MACROS_H 
+#define MACROS_H 
 
 #define ENABLE_CPU_ATTACH
 #define DEBUG_PRINT 0
@@ -19,7 +19,6 @@
 #define TASK_THREAD_NUM 1
 #define SOCKET_THREAD_NUM 4
 
-#define JSON
 #define CORR_THRESHOLD    0x4
 #define CORR_RST          0x0
 #define CORR_SCNT         0x8
@@ -32,4 +31,5 @@
 
 #define MAX_FRAME_INC 2000
 #define TIME_DELTA 20 //ms 
+
 #endif

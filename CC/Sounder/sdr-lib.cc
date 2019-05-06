@@ -137,10 +137,10 @@ RadioConfig::RadioConfig(Config *cfg):
                         std::vector<unsigned> txActive, rxActive;
                         unsigned ch = bsSdrs[c][i]->readRegister("LMS7IC", 0x0020);
                         bsSdrs[c][i]->writeRegister("LMS7IC", 0x0020, (ch & 0xFFFC) | 1);
-                        unsigned regRfeA = bsSdrs[c][i]->readRegister("LMS7IC", 0x010C);
-                        unsigned regRfeALo = bsSdrs[c][i]->readRegister("LMS7IC", 0x010D);
+                        //unsigned regRfeA = bsSdrs[c][i]->readRegister("LMS7IC", 0x010C);
+                        //unsigned regRfeALo = bsSdrs[c][i]->readRegister("LMS7IC", 0x010D);
                         unsigned regRbbA = bsSdrs[c][i]->readRegister("LMS7IC", 0x0115);
-                        unsigned regTrfA = bsSdrs[c][i]->readRegister("LMS7IC", 0x0100);
+                        //unsigned regTrfA = bsSdrs[c][i]->readRegister("LMS7IC", 0x0100);
                         unsigned regTbbA = bsSdrs[c][i]->readRegister("LMS7IC", 0x0105);
 
                         // disable TX
@@ -175,18 +175,18 @@ RadioConfig::RadioConfig(Config *cfg):
                         std::vector<unsigned> txActive, rxActive;
                         unsigned ch = bsSdrs[c][i]->readRegister("LMS7IC", 0x0020);
                         bsSdrs[c][i]->writeRegister("LMS7IC", 0x0020, (ch & 0xFFFC) | 1);
-                        unsigned regRfeA = bsSdrs[c][i]->readRegister("LMS7IC", 0x010C);
-                        unsigned regRfeALo = bsSdrs[c][i]->readRegister("LMS7IC", 0x010D);
+                        //unsigned regRfeA = bsSdrs[c][i]->readRegister("LMS7IC", 0x010C);
+                        //unsigned regRfeALo = bsSdrs[c][i]->readRegister("LMS7IC", 0x010D);
                         unsigned regRbbA = bsSdrs[c][i]->readRegister("LMS7IC", 0x0115);
-                        unsigned regTrfA = bsSdrs[c][i]->readRegister("LMS7IC", 0x0100);
+                        //unsigned regTrfA = bsSdrs[c][i]->readRegister("LMS7IC", 0x0100);
                         unsigned regTbbA = bsSdrs[c][i]->readRegister("LMS7IC", 0x0105);
 
                         ch = bsSdrs[c][i]->readRegister("LMS7IC", 0x0020);
                         bsSdrs[c][i]->writeRegister("LMS7IC", 0x0020, (ch & 0xFFFC) | 2);
-                        unsigned regRfeB = bsSdrs[c][i]->readRegister("LMS7IC", 0x010C);
-                        unsigned regRbbB = bsSdrs[c][i]->readRegister("LMS7IC", 0x0115);
-                        unsigned regTrfB = bsSdrs[c][i]->readRegister("LMS7IC", 0x0100);
-                        unsigned regTbbB = bsSdrs[c][i]->readRegister("LMS7IC", 0x0105);
+                        //unsigned regRfeB = bsSdrs[c][i]->readRegister("LMS7IC", 0x010C);
+                        //unsigned regRbbB = bsSdrs[c][i]->readRegister("LMS7IC", 0x0115);
+                        //unsigned regTrfB = bsSdrs[c][i]->readRegister("LMS7IC", 0x0100);
+                        //unsigned regTbbB = bsSdrs[c][i]->readRegister("LMS7IC", 0x0105);
 
                         txActive = {
                             //0xe10C0000 | 0xfe, //RFE in power down
@@ -241,7 +241,7 @@ RadioConfig::RadioConfig(Config *cfg):
             channels = {0, 1};
         }
         nClSdrs = _cfg->nClSdrs;
-        for(size_t i = 0; i < nClSdrs; i++)
+        for(int i = 0; i < nClSdrs; i++)
         {
             auto device = SoapySDR::Device::make("serial="+_cfg->cl_sdr_ids.at(i)+",timeout=10000000");
             if (device == nullptr)
@@ -316,9 +316,7 @@ RadioConfig::RadioConfig(Config *cfg):
 
 void RadioConfig::radioStart()
 {
-    long long frameTime(0);
     int flags = 0;
-
     if (_cfg->bsPresent)
     {
 
@@ -327,7 +325,7 @@ void RadioConfig::radioStart()
         for (int f = 0; f < _cfg->framePeriod; f++)
         {
             _tddSched[f] = _cfg->frames[f];
-            for (int s =0; s < _cfg->frames[f].size(); s++)
+            for (size_t s =0; s < _cfg->frames[f].size(); s++)
             {
                 char c = _cfg->frames[f].at(s);
                 if (c == 'B')
@@ -420,7 +418,7 @@ void RadioConfig::radioStart()
         for (int i = 0; i < nClSdrs; i++)
         {
             tddSched[i] = _cfg->clFrames[i];
-            for (int s = 0; s < _cfg->clFrames[i].size(); s++)
+            for (size_t s = 0; s < _cfg->clFrames[i].size(); s++)
             {
                 char c = _cfg->clFrames[i].at(s);
                 if (c == 'B')
@@ -435,7 +433,7 @@ void RadioConfig::radioStart()
             std::cout << "Client " << i << " schedule: " << tddSched[i] << std::endl;
         }
  
-        for(size_t i = 0; i < nClSdrs; i++)
+        for(int i = 0; i < nClSdrs; i++)
         {
             auto device = devs[i];
             device->writeRegister("IRIS30", CORR_CONF, 0x1);
@@ -485,8 +483,10 @@ void RadioConfig::radioStart()
             device->activateStream(rxss[i]);
             device->activateStream(txss[i]);
 
-            device->writeRegister("IRIS30", CORR_CONF, 0x11);
-            
+            if (_cfg->bsChannel != "B") // A or AB   
+                device->writeRegister("IRIS30", CORR_CONF, 0x11);
+            else 
+                device->writeRegister("IRIS30", CORR_CONF, 0x31);
         }
     }
 
@@ -566,7 +566,7 @@ void RadioConfig::radioStop()
     }
     if (_cfg->clPresent)
     {
-        for(size_t i = 0; i < nClSdrs; i++)
+        for(int i = 0; i < nClSdrs; i++)
         {
             auto device = devs[i];
             device->writeRegister("IRIS30", CORR_CONF, 0);
@@ -595,7 +595,7 @@ void RadioConfig::radioTx(void ** buffs)
     }
 }
 
-void RadioConfig::radioTx(int r /*radio id*/, void ** buffs, int flags, long long & frameTime)
+int RadioConfig::radioTx(int r /*radio id*/, void ** buffs, int flags, long long & frameTime)
 {
     if (flags == 1) flags = SOAPY_SDR_HAS_TIME;
     else if (flags == 2) flags = SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST;
@@ -607,6 +607,7 @@ void RadioConfig::radioTx(int r /*radio id*/, void ** buffs, int flags, long lon
     int s = bsSdrs[0][r]->readStreamStatus(this->bsTxStreams[0][r], chanMask, flags, frameTime, timeoutUs);
     std::cout << "radio " << r << " tx returned " << w << " and status " << s << std::endl;
 #endif
+    return w;
 }
 
 void RadioConfig::radioRx(void ** buffs)
@@ -659,7 +660,7 @@ RadioConfig::~RadioConfig()
     }
     if (_cfg->clPresent)
     {
-        for(size_t i = 0; i < nClSdrs; i++)
+        for(int i = 0; i < nClSdrs; i++)
         {
             auto device = devs[i];
             device->deactivateStream(rxss[i]);

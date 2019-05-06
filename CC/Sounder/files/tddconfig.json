@@ -1,17 +1,17 @@
 {
 	"BaseStations" : {
 		 "cells" : 1,
-		 "sdr_id" : ["files/iris_serials.txt"],
+		 "sdr_id" : ["files/iris_serials1.txt"],
 		 "hub_id" : "files/hub_serials.txt",
 		 "frequency" : 3.6e9,
-		 "channel" : "AB",
+		 "channel" : "A",
 		 "rxgainA" : 30,
 		 "txgainA" : 40,
 		 "rxgainB" : 30,
 		 "txgainB" : 40,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "BGPPGGGGGGGGGGGGGGGG"
+		     "BGPGGGGGGGGGGGGGGGGG"
 		 ],
 		 "subframe_size" : 400,
 		 "fft_size" : 64,
@@ -26,20 +26,18 @@
 
 	"Clients" : {
 		 "sdr_id" : [
-		     "RF3E000029",
-		     "RF3E000040"
+		     "RF3C000045"
 		 ],
 		 "frequency" : 3.6e9,
 		 "channel" : "A",
 		 "agc_en" : false,
-		 "rxgainA" : [20, 20],
-		 "txgainA" : [40, 40],
-		 "rxgainB" : [20, 20],
-		 "txgainB" : [40, 40],
+		 "rxgainA" : [20],
+		 "txgainA" : [40],
+		 "rxgainB" : [20],
+		 "txgainB" : [40],
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "GGPGGGGGGGGGGGGGGGGG",
-		     "GGGPGGGGGGGGGGGGGGGG"
+		     "GGPGGGGGGGGGGGGGGGGG"
 		 ],
 		 "frame_mode" : "hybrid",
 		 "subframe_size" : 400,

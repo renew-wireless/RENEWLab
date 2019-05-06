@@ -21,7 +21,7 @@ public:
     void readSensors();
     void radioTx(void ** buffs);
     void radioRx(void ** buffs);
-    void radioTx(int, void ** buffs, int flags, long long & frameTime);
+    int radioTx(int, void ** buffs, int flags, long long & frameTime);
     int radioRx(int, void ** buffs, long long & frameTime);
     ~RadioConfig();
     std::vector<SoapySDR::Device *> devs;

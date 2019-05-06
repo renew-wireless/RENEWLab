@@ -35,7 +35,7 @@ std::vector<std::complex<int16_t>> Utils::double_to_int16(std::vector<std::vecto
 std::vector<uint32_t> Utils::cint16_to_uint32(std::vector<std::complex<int16_t>> in, bool conj, std::string order)
 {
     std::vector<uint32_t> out (in.size(), 0);
-    for (int i = 0; i < in.size(); i++)
+    for (size_t i = 0; i < in.size(); i++)
     {
        uint16_t re = (uint16_t)in[i].real(); 
        uint16_t im = (uint16_t)(conj ? -in[i].imag() : in[i].imag());
@@ -55,7 +55,7 @@ std::vector<std::vector<size_t>> Utils::loadSymbols(std::vector<std::string> fra
     for(int f = 0; f < frameSize; f++)
     {
         std::string fr = frames[f]; 
-        for (int g = 0; g < fr.size(); g++)
+        for (size_t g = 0; g < fr.size(); g++)
         {
             if (fr[g] == sym){
                 symId[f].push_back(g);
@@ -141,7 +141,7 @@ std::vector<std::string> Utils::split(const std::string& s, char delimiter)
 
 void Utils::printVector(std::vector<std::complex<int16_t>> &data)
 {
-    for(int i = 0; i < data.size(); i++)
+    for(size_t i = 0; i < data.size(); i++)
     {
         std::cout << real(data.at(i)) << " " << imag(data.at(i)) << std::endl;
     }

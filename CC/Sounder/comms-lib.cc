@@ -109,7 +109,7 @@ std::vector<std::complex<float>> CommsLib::modulate(std::vector<int> in, int typ
             qpsk_table[0][i] = mod_qpsk[i / 2];
             qpsk_table[1][i] = mod_qpsk[i % 2];
         }
-        for (int i = 0; i < in.size(); i++)
+        for (size_t i = 0; i < in.size(); i++)
         {
             if (in[i] >= 0 and in[i] < 4) out[i] = std::complex<float>(qpsk_table[0][in[i]], qpsk_table[1][in[i]]);
             else 
@@ -128,7 +128,7 @@ std::vector<std::complex<float>> CommsLib::modulate(std::vector<int> in, int typ
             qam16_table[0][i] = mod_16qam[i / 4];
             qam16_table[1][i] = mod_16qam[i % 4];
         }
-        for (int i = 0; i < in.size(); i++)
+        for (size_t i = 0; i < in.size(); i++)
         {
             if (in[i] >= 0 and in[i] < 16) out[i] = std::complex<float>(qam16_table[0][in[i]], qam16_table[1][in[i]]);
             else 
@@ -147,7 +147,7 @@ std::vector<std::complex<float>> CommsLib::modulate(std::vector<int> in, int typ
             qam64_table[0][i] = mod_64qam[i / 8];
             qam64_table[1][i] = mod_64qam[i % 8];
         }
-        for (int i = 0; i < in.size(); i++) 
+        for (size_t i = 0; i < in.size(); i++) 
         {
             if (in[i] >= 0 and in[i] < 64) out[i] = std::complex<float>(qam64_table[0][in[i]], qam64_table[1][in[i]]);
             else 

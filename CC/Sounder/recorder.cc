@@ -170,7 +170,7 @@ herr_t Recorder::initHDF5(std::string hdf5)
 	attr_vec_ds = DataSpace (1, dimsVec);
 	att = mainGroup.createAttribute("BS_HUB_ID", strdatatype, attr_vec_ds);
 	//Convert the vector into a C string array - Because the input function ::write requires that.
-	for(int index = 0; index < att_vector.size(); ++index) { cStrArray.push_back(att_vector[index].c_str()); }
+	for(size_t index = 0; index < att_vector.size(); ++index) { cStrArray.push_back(att_vector[index].c_str()); }
 	if(!(cfg->hub_ids).empty()) { att.write(strdatatype, (void*)&cStrArray[0]); }
 
 	// BS SDR IDs 
@@ -179,7 +179,7 @@ herr_t Recorder::initHDF5(std::string hdf5)
         att_vector.clear();
 	std::vector<std::string> att_vectorTmp;
 	att_matrix = cfg->bs_sdr_ids; //test: {{"AAA", "BBB"}, {"CCC", "DDD"}, {"EEE", "FFF"}}
-	for(int index = 0; index < att_matrix.size(); ++index) { 
+	for(size_t index = 0; index < att_matrix.size(); ++index) { 
 	    std::string irisPerCell = std::to_string(att_matrix[index].size());
 	    att_vectorTmp.push_back(irisPerCell); 
 	}
@@ -187,7 +187,7 @@ herr_t Recorder::initHDF5(std::string hdf5)
 	attr_vec_ds = DataSpace (1, dimsVec);
 	att = mainGroup.createAttribute("BS_SDR_NUM_PER_CELL", strdatatype, attr_vec_ds);
 	//Convert the vector into a C string array - Because the input function ::write requires that.
-	for(int index = 0; index < att_vectorTmp.size(); ++index) { cStrArray.push_back(att_vectorTmp[index].c_str()); }
+	for(size_t index = 0; index < att_vectorTmp.size(); ++index) { cStrArray.push_back(att_vectorTmp[index].c_str()); }
 	if(!att_vectorTmp.empty()) { att.write(strdatatype, (void*)&cStrArray[0]); }
 	// *** second, reshape matrix into vector ***
 	for(auto && v : att_matrix){ att_vector.insert(att_vector.end(), v.begin(), v.end()); }
@@ -196,7 +196,7 @@ herr_t Recorder::initHDF5(std::string hdf5)
 	attr_vec_ds = DataSpace (1, dimsVec);
 	att = mainGroup.createAttribute("BS_SDR_ID", strdatatype, attr_vec_ds);
 	//Convert the vector into a C string array - Because the input function ::write requires that.
-	for(int index = 0; index < att_vector.size(); ++index) { cStrArray.push_back(att_vector[index].c_str()); }
+	for(size_t index = 0; index < att_vector.size(); ++index) { cStrArray.push_back(att_vector[index].c_str()); }
 	if(!att_vector.empty()) { att.write(strdatatype, (void*)&cStrArray[0]); }
 
 	// Number of Base Station Cells
@@ -216,7 +216,7 @@ herr_t Recorder::initHDF5(std::string hdf5)
         attr_vec_ds = DataSpace (1, dimsVec);
         att = mainGroup.createAttribute("BS_FRAME_SCHED", strdatatype, attr_vec_ds);
 	//Convert the vector into a C string array - Because the input function ::write requires that.
-	for(int index = 0; index < att_vector.size(); ++index) { cStrArray.push_back(att_vector[index].c_str()); }
+	for(size_t index = 0; index < att_vector.size(); ++index) { cStrArray.push_back(att_vector[index].c_str()); }
         if(!(cfg->frames).empty()) { att.write(strdatatype, (void*)&cStrArray[0]); }
 
 	// RX Gain RF channel A
@@ -282,14 +282,14 @@ herr_t Recorder::initHDF5(std::string hdf5)
 	// Freq. Domain Data Symbols - OBCH
 	attr_txdata_freq_dom = cfg->txdata_freq_dom;
         std::vector<double> re_im_split_vec;  // re-write complex vector. type not supported by hdf5
-	for (int i = 0; i < attr_txdata_freq_dom.size(); i++){
+	for (size_t i = 0; i < attr_txdata_freq_dom.size(); i++){
 	    oss.str("");
 	    oss.clear();
 	    oss << "OFDM_DATA_CL" << i;
 	    std::string var = oss.str();
 
             re_im_split_vec.clear();
-	    for (int j = 0; j < attr_txdata_freq_dom[i].size(); j++){
+	    for (size_t j = 0; j < attr_txdata_freq_dom[i].size(); j++){
 	        double re_val = std::real(attr_txdata_freq_dom[i][j]);
 	        double im_val = std::imag(attr_txdata_freq_dom[i][j]);
                 re_im_split_vec.push_back(re_val);
@@ -304,14 +304,14 @@ herr_t Recorder::initHDF5(std::string hdf5)
         // Time Domain Data Symbols
         attr_txdata_time_dom = cfg->txdata_time_dom;
         //std::vector<double> re_im_split_vec;  // Declared above... re-write complex vector. type not supported by hdf5
-        for (int i = 0; i < attr_txdata_time_dom.size(); i++){
+        for (size_t i = 0; i < attr_txdata_time_dom.size(); i++){
             oss.str("");
             oss.clear();
             oss << "OFDM_DATA_TIME_CL" << i;
             std::string var = oss.str();
 
             re_im_split_vec.clear();
-            for (int j = 0; j < attr_txdata_time_dom[i].size(); j++){
+            for (size_t j = 0; j < attr_txdata_time_dom[i].size(); j++){
                 double re_val = std::real(attr_txdata_time_dom[i][j]);
                 double im_val = std::imag(attr_txdata_time_dom[i][j]);
                 re_im_split_vec.push_back(re_val);
@@ -326,7 +326,7 @@ herr_t Recorder::initHDF5(std::string hdf5)
 	// Freq. Domain Pilot symbols (real and imaginary parts)
 	attr_pilot_double = cfg->pilot_double;
 	std::vector<double> re_im_split_vec_pilot;  // re-write complex vector. type not supported by hdf5
-	for (int j = 0; j < attr_pilot_double[0].size(); j++){
+	for (size_t j = 0; j < attr_pilot_double[0].size(); j++){
 	    re_im_split_vec_pilot.push_back(attr_pilot_double[0][j]);
 	    re_im_split_vec_pilot.push_back(attr_pilot_double[1][j]);
 	}
@@ -385,7 +385,7 @@ herr_t Recorder::initHDF5(std::string hdf5)
         attr_vec_ds = DataSpace (1, dimsVec);
         att = mainGroup.createAttribute("CL_FRAME_SCHED", strdatatype, attr_vec_ds);
 	//Convert the vector into a C string array - Because the input function ::write requires that.
-	for(int index = 0; index < att_vector.size(); ++index) { cStrArray.push_back(att_vector[index].c_str()); }
+	for(size_t index = 0; index < att_vector.size(); ++index) { cStrArray.push_back(att_vector[index].c_str()); }
         if(!(cfg->clFrames).empty()) { att.write(strdatatype, (void*)&cStrArray[0]); }
 
 	// Set of client SDR IDs (vec of strings)
@@ -395,7 +395,7 @@ herr_t Recorder::initHDF5(std::string hdf5)
         attr_vec_ds = DataSpace (1, dimsVec);
         att = mainGroup.createAttribute("CL_SDR_ID", strdatatype, attr_vec_ds);
 	//Convert the vector into a C string array - Because the input function ::write requires that.
-	for(int index = 0; index < att_vector.size(); ++index) { cStrArray.push_back(att_vector[index].c_str()); }
+	for(size_t index = 0; index < att_vector.size(); ++index) { cStrArray.push_back(att_vector[index].c_str()); }
         if(!(cfg->cl_sdr_ids).empty()) { att.write(strdatatype, (void*)&cStrArray[0]); }
 
 	// Data modulation
@@ -476,7 +476,7 @@ void Recorder::openHDF5()
     ndims = pilot_filespace->getSimpleExtentNdims();
     herr_t status_n = pilot_filespace->getSimpleExtentDims(dims_pilot);
 
-    int cndims_pilot;
+    int cndims_pilot = 0;
     if (H5D_CHUNKED == pilot_prop.getLayout())
         cndims_pilot = pilot_prop.getChunk(ndims, cdims_pilot);
     cout << "dim pilot chunk = " << cndims_pilot << endl;
@@ -492,7 +492,7 @@ void Recorder::openHDF5()
         ndims = data_filespace->getSimpleExtentNdims();
         status_n = data_filespace->getSimpleExtentDims(dims_data);
 
-        int cndims_data;
+        int cndims_data = 0;
         if (H5D_CHUNKED == data_prop.getLayout())
             cndims_data = data_prop.getChunk(ndims, cdims_data);
         cout << "dim data chunk = " << cndims_data << endl;;
@@ -665,12 +665,12 @@ herr_t Recorder::record(int tid, int offset)
     offset = offset - buffer_id * buffer_frame_num;
     // read info
     char* cur_ptr_buffer = socket_buffer_[buffer_id].buffer.data() + offset * cfg->getPackageLength();
-    int ant_id, frame_id, symbol_id, cell_id;
+    int ant_id, frame_id, symbol_id;
     frame_id = *((int *)cur_ptr_buffer);
     symbol_id = *((int *)cur_ptr_buffer + 1);
-    cell_id = *((int *)cur_ptr_buffer + 2);
     ant_id = *((int *)cur_ptr_buffer + 3);
 #if DEBUG_PRINT
+    int cell_id = *((int *)cur_ptr_buffer + 2);
     printf("record thread %d process frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n", tid, frame_id, symbol_id, cell_id, ant_id);
             printf("record samples: %d %d %d %d %d %d %d %d ....\n",*((short *)cur_ptr_buffer+9), 
 							   *((short *)cur_ptr_buffer+10),
@@ -714,7 +714,7 @@ herr_t Recorder::record(int tid, int offset)
         {   
             assert(pilot_dataset >= 0);
             // Are we going to extend the dataset?
-            if(frame_id >= dims_pilot[0])
+            if((size_t)frame_id >= dims_pilot[0])
             {
                 dims_pilot[0] = dims_pilot[0] + config_pilot_extent_step; // 400 is a threshold.
                 pilot_dataset->extend(dims_pilot);
@@ -735,11 +735,11 @@ herr_t Recorder::record(int tid, int offset)
             
             assert(data_dataset >= 0);
             // Are we going to extend the dataset?
-            if(frame_id >= dims_data[0])
+            if((size_t)frame_id >= dims_data[0])
             {
                 dims_data[0] = dims_data[0] + config_data_extent_step;
                 data_dataset->extend(dims_data);
-                printf("(Data) Extent to %d Frames\n",dims_data[0]);
+                printf("(Data) Extent to %llu Frames\n", dims_data[0]);
             }
 
             hdfoffset[2] = cfg->getUlSFIndex(frame_id, symbol_id);

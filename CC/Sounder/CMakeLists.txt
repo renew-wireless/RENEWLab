@@ -1,8 +1,8 @@
 cmake_minimum_required (VERSION 2.8)
 project (Sounder)
 
-set(CMAKE_C_FLAGS "-std=c99 -w ")
-set(CMAKE_CXX_FLAGS "-std=c++11 -w -O3 -mavx2 -mavx")
+set(CMAKE_C_FLAGS "-std=c99 -Wall -Wno-uninitialized -Wno-unused -Wno-unused-result -Wno-narrowing -Wno-pointer-arith -Wno-maybe-uninitialized")
+set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wno-uninitialized -Wno-unused -Wno-unused-result -Wno-narrowing -Wno-pointer-arith -Wno-maybe-uninitialized -O3 -mavx2 -mavx")
 
 find_package(nlohmann_json 3.2.0 REQUIRED)
 
