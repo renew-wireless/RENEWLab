@@ -136,7 +136,6 @@ tx_payload_vec = reshape(tx_payload_mat, 1, numel(tx_payload_mat));
 tx_vec = [zeros(1,N_ZPAD_PRE) preamble tx_payload_vec zeros(1,N_ZPAD_POST)];
 %tx_vec = [preamble tx_payload_vec];
 
-
 % Leftover from zero padding:
 tx_vec_iris = tx_vec.';
 % Scale the Tx vector to +/- 1
