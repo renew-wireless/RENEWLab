@@ -345,7 +345,8 @@ class hdfDump:
             # Correlation (Debug plot useful for checking sync)
             amps = np.mean(np.abs(samps[:, 0, 0, 0, 0, :]), axis=1)
             pilot_frames = [i for i in range(len(amps)) if amps[i] > 0.01]
-            ref_frame = pilot_frames[len(pilot_frames) // 2]
+            if len(pilot_frames) > 0: ref_frame = pilot_frames[len(pilot_frames) // 2]
+            else: return 
             cellCSI = csi[:, 0, :, :, :, :]     # First cell
             userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
             corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2)))

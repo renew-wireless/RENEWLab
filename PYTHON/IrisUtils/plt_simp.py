@@ -27,8 +27,8 @@ import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from generate_sequence import *
-from uint32tocfloat import *
-from read_from_file import *
+from type_conv import *
+from file_rdwr import *
 from find_lts import *
 
 

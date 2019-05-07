@@ -89,9 +89,9 @@ from generate_sequence import *
 #                Registers              #
 #########################################
 # CORR THRESHOLDING REGS
-CORR_THRESHOLD = 0x4
-CORR_RST = 0x0
-CORR_SCNT = 0x8
+CORR_THRESHOLD = 92
+CORR_RST = 64
+#CORR_SCNT = 0x8
 CORR_CONF = 60
 
 """ Registers """
@@ -314,8 +314,6 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
     if use_trig:
         bsdr.writeSetting("SYNC_DELAYS", "")
         # bsdr.writeSetting("FPGA_DIQ_MODE", "PATTERN")
-    else:
-        msdr.writeRegister("ARGCOR", CORR_RST, 0x1)  # reset corr
 
     # Packet size
     symSamp = numSamps + prefix_length + postfix_length
@@ -368,8 +366,10 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
         msched = "GGPP"+''.join("G"*(numSyms-txSymNum-5))+''.join("T"*txSymNum)+"G"
     print("Node 1 schedule %s " % bsched) 
     print("Node 2 schedule %s " % msched)
-    bconf = {"tdd_enabled": True, "trigger_out": False, "symbol_size": symSamp, "frames": [bsched]}
-    mconf = {"tdd_enabled": True, "trigger_out": not use_trig, "wait_trigger": wait_trigger, "dual_pilot": both_channels, "symbol_size" : symSamp, "frames": [msched]}
+    #bconf = {"tdd_enabled": True, "trigger_out": False, "symbol_size": symSamp, "frames": [bsched]}
+    bconf = {"tdd_enabled": True, "frame_mode": "free_running", "symbol_size": symSamp, "frames": [bsched]}
+    #mconf = {"tdd_enabled": True, "trigger_out": not use_trig, "wait_trigger": wait_trigger, "dual_pilot": both_channels, "symbol_size" : symSamp, "frames": [msched]}
+    mconf = {"tdd_enabled": True, "frame_mode": "free_running" if use_trig else "triggered" if wait_trigger else "hybrid", "dual_pilot": both_channels, "symbol_size" : symSamp, "frames": [msched]}
     # mconf = {"tdd_enabled": True, "trigger_out": not use_trig, "wait_trigger": True, "symbol_size" : symSamp, "frames": [msched]}
     bsdr.writeSetting("TDD_CONFIG", json.dumps(bconf))
     msdr.writeSetting("TDD_CONFIG", json.dumps(mconf))
@@ -382,9 +382,12 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
         for i in range(128):
             msdr.writeRegister("ARGCOE", i*4, 0)
         time.sleep(0.1)
-        msdr.writeRegister("ARGCOR", CORR_THRESHOLD, int(threshold))
-        msdr.writeRegister("ARGCOR", CORR_RST, 0x1)  # reset corr
-        msdr.writeRegister("ARGCOR", CORR_RST, 0x0)  # unrst corr
+        #msdr.writeRegister("ARGCOR", CORR_THRESHOLD, int(threshold))
+        #msdr.writeRegister("ARGCOR", CORR_RST, 0x1)  # reset corr
+        #msdr.writeRegister("ARGCOR", CORR_RST, 0x0)  # unrst corr
+        msdr.writeRegister("IRIS30", CORR_RST, 0x1)  # reset corr
+        msdr.writeRegister("IRIS30", CORR_RST, 0x0)  # unrst corr
+        msdr.writeRegister("IRIS30", CORR_THRESHOLD, int(np.log2(threshold)))
         for i in range(128):
             msdr.writeRegister("ARGCOE", i*4, int(coe[i]))
         if auto_tx_gain:
@@ -514,7 +517,7 @@ def main():
     parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)  # to comprensate for rf path delay
     parser.add_option("--numSyms", type="int", dest="numSyms", help="Number of symbols in one sub-frame", default=20)
     parser.add_option("--txSymNum", type="int", dest="txSymNum", help="Number of tx sub-frames in one frame", default=0)
-    parser.add_option("--corr-threshold", type="int", dest="threshold", help="Correlator Threshold Value", default=128)
+    parser.add_option("--corr-threshold", type="int", dest="threshold", help="Correlator Threshold Value", default=2)
     parser.add_option("--ue-tx-advance", type="int", dest="tx_advance", help="sample advance for tx vs rx", default=68)
     parser.add_option("--both-channels", action="store_true", dest="both_channels", help="transmit from both channels", default=False)
     parser.add_option("--calibrate", action="store_true", dest="calibrate", help="transmit from both channels", default=False)
