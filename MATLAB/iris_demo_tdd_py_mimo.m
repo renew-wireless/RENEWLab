@@ -68,6 +68,7 @@ lts_t = ifft(lts_f, N_SC); %time domain
 preamble_common = [lts_t(33:64); lts_t; lts_t];
 pre_z = zeros(size(preamble_common));
 preamble = [ preamble_common pre_z;pre_z preamble_common];
+cor_rng  = length(preamble) +  N_ZPAD_PRE + 100;
 %% Generate a payload of random integers
 tx_data = randi(MOD_ORDER, N_DATA_SYMS, N_UE) - 1;
 
@@ -261,26 +262,26 @@ if DEBUG
     end
     sgtitle('LTS correlations accross antennas')
 end
-return;
 
 % Find all correlation peaks
-lts_peaks = find(lts_corr(1:800) > LTS_CORR_THRESH*max(lts_corr));
+pream_ind = double.empty();
+for ibs=1:N_BS_NODE
+    lts_peaks = find(lts_corr(1:cor_rng) > LTS_CORR_THRESH*max(lts_corr(:,ibs)));
 
-% Select best candidate correlation peak as LTS-payload boundary
-[LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
-[lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
-
-% Stop if no valid correlation peak was found
-if(isempty(lts_second_peak_index))
-    fprintf('No LTS Correlation Peaks Found!\n');
-    return;
+    % Select best candidate correlation peak as LTS-payload boundary
+    [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
+    [lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
+    % Stop if no valid correlation peak was found
+    if(isempty(lts_second_peak_index))
+        fprintf('No LTS Correlation Peaks Found!\n');
+        return;
+    end    
+    % Set the sample indices of the payload symbols and preamble
+    payload_ind = lts_peaks(max(lts_second_peak_index)) + (2*CP_LEN);
+    pream_ind(ibs) = payload_ind-length(preamble);
 end
 
-% Set the sample indices of the payload symbols and preamble
-% The "+32" corresponds to the 32-sample cyclic prefix on the preamble LTS
-% The "-160" corresponds to the length of the preamble LTS (2.5 copies of 64-sample LTS)
-payload_ind = lts_peaks(max(lts_second_peak_index)) + 32;
-lts_ind = payload_ind-160;
+return;
 
 
 % NB: Do it for ALL BS antennas!!
