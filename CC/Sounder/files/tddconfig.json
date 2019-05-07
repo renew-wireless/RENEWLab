@@ -1,7 +1,7 @@
 {
 	"BaseStations" : {
 		 "cells" : 1,
-		 "sdr_id" : ["files/iris_serials1.txt"],
+		 "sdr_id" : ["files/iris_serials.txt"],
 		 "hub_id" : "files/hub_serials.txt",
 		 "frequency" : 3.6e9,
 		 "channel" : "A",
@@ -39,7 +39,7 @@
 		 "frame_schedule" : [
 		     "GGPGGGGGGGGGGGGGGGGG"
 		 ],
-		 "frame_mode" : "hybrid",
+		 "frame_mode" : "continuous_resync",
 		 "subframe_size" : 400,
 		 "fft_size" : 64,
 		 "cp_size" : 16,

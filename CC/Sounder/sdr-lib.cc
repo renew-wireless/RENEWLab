@@ -388,7 +388,6 @@ void RadioConfig::radioStart()
                     if (_cfg->bsChannel != "A")
                         bsSdrs[0][i]->writeRegisters("TX_RAM_B", 0, _cfg->beacon);
                     int residue = int(pow(2,ceil(log2(nBsAntennas[0]))))-nBsAntennas[0];
-                    printf("residue %d\n", residue);
                     for (int j = 0; j < nBsAntennas[0]; j++) beacon_weights[j] = (unsigned)hadamard_weights[i*_cfg->bsSdrCh][j];
                     if (_cfg->bsChannel != "B")
                         bsSdrs[0][i]->writeRegisters("TX_RAM_WGT_A", 0, beacon_weights);
@@ -455,8 +454,13 @@ void RadioConfig::radioStart()
 #ifdef JSON
             json conf;
             conf["tdd_enabled"] = true;
+#ifdef NEWCORR
             conf["frame_mode"] = _cfg->frame_mode;
             conf["max_frame"] = 2 / (_cfg->sampsPerSymbol * _cfg->symbolsPerFrame) / _cfg->rate;
+#else
+            conf["trigger_out"] = true; 
+            conf["wait_trigger"] = true; 
+#endif
             conf["frames"] = json::array();
             conf["frames"].push_back(tddSched[i]);
             conf["symbol_size"] = _cfg->sampsPerSymbol; 
@@ -629,9 +633,9 @@ int RadioConfig::radioRx(int r /*radio id*/, void ** buffs, long long & frameTim
         long long frameTimeNs = 0;
         int ret = bsSdrs[0][r]->readStream(this->bsRxStreams[0][r], buffs, _cfg->sampsPerSymbol, flags, frameTimeNs, 1000000);
         frameTime = frameTimeNs; //SoapySDR::timeNsToTicks(frameTimeNs, _rate);
+#if DEBUG_RADIO
         if (ret != _cfg->sampsPerSymbol)
             std::cout << "readStream returned " << ret << " from radio " << r << ", Expected " << _cfg->sampsPerSymbol <<std::endl;
-#if DEBUG_RADIO
         else
             std::cout << "radio " << r << "received " << ret << std::endl;
 #endif

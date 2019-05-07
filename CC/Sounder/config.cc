@@ -64,7 +64,6 @@ Config::Config(std::string jsonfile)
         rxgainB = tddConf.value("rxgainB", 20);
         beamsweep = tddConf.value("beamsweep", false);
         beacon_ant = tddConf.value("beacon_antenna", 0);
-        frame_mode = tddConf.value("frame_mode", "free_running");
         max_frame = tddConf.value("max_frame", 0);
     
         bs_sdr_ids.resize(nCells);
@@ -136,6 +135,7 @@ Config::Config(std::string jsonfile)
         clSdrCh = (clChannel == "AB") ? 2 : 1;
 	clAgcEn = tddConfCl.value("agc_en", false);
 	clDataMod = tddConfCl.value("modulation", "QPSK");
+        frame_mode = tddConfCl.value("frame_mode", "continuous_resync");
 
 	auto jClTxgainA_vec = tddConfCl.value("txgainA", json::array());
 	auto jClRxgainA_vec = tddConfCl.value("rxgainA", json::array());
@@ -149,7 +149,7 @@ Config::Config(std::string jsonfile)
 	}
 
         auto jClFrames = tddConfCl.value("frame_schedule", json::array());
-        assert(nClSdrs == jClFrames.size());
+        assert((size_t)nClSdrs == jClFrames.size());
         for(int f = 0; f < nClSdrs; f++) clFrames.push_back(jClFrames.at(f).get<std::string>());
         clPilotSymbols = Utils::loadSymbols(clFrames, 'P');
         clULSymbols = Utils::loadSymbols(clFrames, 'U');
