@@ -22,7 +22,7 @@ end
 % Params:
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
-SIM_MOD                 = 0;
+SIM_MOD                 = 1;
 sim_N0                  = 0.01;     
 sim_H_var               = 4;
 %Iris params:
@@ -276,7 +276,7 @@ end
 payload_ind = lts_peaks(max(lts_second_peak_index)) + 32;
 lts_ind = payload_ind-160;
 
-
+return;
 % NB: Do it for ALL BS antennas!!
 rx_cfo_est_sts = zeros(1,N_BS_NODE);
 rx_cfo_est_lts = zeros(1,N_BS_NODE,1);
