@@ -281,34 +281,15 @@ for ibs=1:N_BS_NODE
     pream_ind(ibs) = payload_ind-length(preamble);
 end
 
+rx_cfo_est_lts = zeros(1,N_BS_NODE,1);
+rx_dec_cfo_corr = raw_rx_dec;
+
+% Extract LTS for channel estimate
+rx_lts_mat = rx_dec_cfo_corr(:, pream_ind : pream_ind + length(preamble));
+
+
 return;
 
-
-% NB: Do it for ALL BS antennas!!
-rx_cfo_est_sts = zeros(1,N_BS_NODE);
-rx_cfo_est_lts = zeros(1,N_BS_NODE,1);
-
-if(DO_APPLY_CFO_CORRECTION)
-    %Extract LTS (not yet CFO corrected)
-    for ibs=1:N_BS_NODE
-        rx_lts = raw_rx_dec(lts_ind : lts_ind+159,ibs);
-        rx_lts1 = rx_lts(-64+-FFT_OFFSET + (97:160) );
-        rx_lts2 = rx_lts(-FFT_OFFSET + (97:160) );
-
-        %Calculate coarse CFO est
-        rx_cfo_est_lts(ibs) = mean(unwrap(angle(rx_lts2 .* conj(rx_lts1))));
-        rx_cfo_est_lts(ibs) = rx_cfo_est_lts(ibs)/(2*pi*64);
-    end
-end
-
-
-% Apply CFO correction to raw Rx waveform
-rx_cfo_corr_t = exp(-1i*2*pi* repmat(rx_cfo_est_lts, length(raw_rx_dec), 1).*...
-    repmat((0:l_rx_dec-1)',1,N_BS_NODE) );
-rx_dec_cfo_corr = raw_rx_dec .* rx_cfo_corr_t;
-
-% Re-extract LTS for channel estimate
-rx_lts = rx_dec_cfo_corr(lts_ind : lts_ind+159,:);
 rx_lts_idx1 = -64+-FFT_OFFSET + (97:160);
 rx_lts_idx2 = -FFT_OFFSET + (97:160);
 rx_lts_b1 = [rx_lts(rx_lts_idx1,1)  rx_lts(rx_lts_idx2,1)];
@@ -813,21 +794,6 @@ fprintf('Num Bytes:   %d\n', N_DATA_SYMS * log2(MOD_ORDER) / 8);
 fprintf('Sym Errors:  %d (of %d total symbols)\n', sym_errs, N_DATA_SYMS);
 fprintf('Bit Errors:  %d (of %d total bits)\n', bit_errs, N_DATA_SYMS * log2(MOD_ORDER));
 
-cfo_est_lts = rx_cfo_est_lts*(SAMP_FREQ);
-cfo_est_phaseErr = mean(diff(unwrap(pilot_phase_err_mrc)))/(4e-6*2*pi);
-cfo_total_ppm = ((cfo_est_lts + cfo_est_phaseErr) /  ((3.6+(.005*(CHANNEL-1)))*1e9)) * 1e6;
-
-fprintf('CFO Est:     %3.2f kHz (%3.2f ppm)\n', (cfo_est_lts + cfo_est_phaseErr)*1e-3, cfo_total_ppm);
-fprintf('     LTS CFO Est:                  %3.2f kHz\n', cfo_est_lts*1e-3);
-fprintf('     Phase Error Residual CFO Est: %3.2f kHz\n', cfo_est_phaseErr*1e-3);
-
-if DO_APPLY_SFO_CORRECTION
-    drift_sec = pilot_slope_mat_mrc / (2*pi*312500);
-    sfo_est_ppm =  1e6*mean((diff(drift_sec) / 4e-6));
-    sfo_est = sfo_est_ppm*20;
-    fprintf('SFO Est:     %3.2f Hz (%3.2f ppm)\n', sfo_est, sfo_est_ppm);
-
-end
 sc_data_idx = [(2:27)'; (39:64)' ];
 % SNR estimation based on the LTS signals
 n_var_1 = sum( sum( abs(H0_b1(sc_data_idx,:) - repmat(H_b1(sc_data_idx), 1,2) ).^2,2 ))/(52*2);
