@@ -4,15 +4,16 @@
 		 "sdr_id" : ["files/iris_serials.txt"],
 		 "hub_id" : "files/hub_serials.txt",
 		 "frequency" : 3.6e9,
-		 "channel" : "AB",
+		 "channel" : "A",
 		 "rxgainA" : 20,
 		 "txgainA" : 40,
 		 "rxgainB" : 20,
 		 "txgainB" : 40,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "BGPPGGGGGGGGGGGGGGGG"
+		     "BGPGGGGGGGGGGGGGGGGG"
 		 ],
+		 "max_frame" : 0,
 		 "subframe_size" : 400,
 		 "fft_size" : 64,
 		 "cp_size" : 16,

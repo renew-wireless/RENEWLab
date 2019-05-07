@@ -456,7 +456,9 @@ void RadioConfig::radioStart()
             conf["tdd_enabled"] = true;
 #ifdef NEWCORR
             conf["frame_mode"] = _cfg->frame_mode;
-            conf["max_frame"] = 2 / (_cfg->sampsPerSymbol * _cfg->symbolsPerFrame) / _cfg->rate;
+            int max_frame_ = (int)(2.0 / ((_cfg->sampsPerSymbol * _cfg->symbolsPerFrame) / _cfg->rate));
+            conf["max_frame"] = max_frame_; 
+            std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;
 #else
             conf["trigger_out"] = true; 
             conf["wait_trigger"] = true; 

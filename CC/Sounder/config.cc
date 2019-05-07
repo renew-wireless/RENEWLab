@@ -129,7 +129,7 @@ Config::Config(std::string jsonfile)
         auto jClSdrs = tddConfCl.value("sdr_id", json::array());
         nClSdrs = jClSdrs.size();
         for (int i = 0; i < nClSdrs; i++) cl_sdr_ids.push_back(jClSdrs.at(i).get<std::string>());
-        clChannel = tddConf.value("channel", "A");
+        clChannel = tddConfCl.value("channel", "A");
 	if (clChannel != "A" && clChannel != "B" && clChannel != "AB")
 	    throw std::invalid_argument( "error channel config: not any of A/B/AB!\n");
         clSdrCh = (clChannel == "AB") ? 2 : 1;

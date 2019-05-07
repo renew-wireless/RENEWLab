@@ -306,11 +306,22 @@ void* Receiver::clientTxRx(void * context)
         txbuff[1] = cfg->txdata[tid].data();
     }
 
-    bool exitLoop = false;
-    while (cfg->running)//(not exitLoop)
-    {
-        exitLoop = loopDone;
+    int all_trigs = 0;
+    int new_trigs = 0;
+    struct timespec tv, tv2;
+    clock_gettime(CLOCK_MONOTONIC, &tv);
 
+    while (cfg->running)
+    {
+        clock_gettime(CLOCK_MONOTONIC, &tv2);
+        double diff = (tv2.tv_sec * 1e9 + tv2.tv_nsec - tv.tv_sec * 1e9 - tv.tv_nsec)/1e9;
+        if (diff > 2)
+        {
+            int total_trigs = device->readRegister("IRIS30", 92);
+            std::cout << "new triggers: " << total_trigs - all_trigs << ", total: " << total_trigs << std::endl;
+            all_trigs = total_trigs;
+            tv = tv2;
+        }
         // receiver loop
         long long rxTime(0);
         long long txTime(0);
@@ -339,7 +350,7 @@ void* Receiver::clientTxRx(void * context)
         txTime += ((long long)txFrameDelta << 32); 
         txTime += ((long long)txStartSym << 16);
         //printf("rxTime %llx, txTime %llx \n", firstRxTime, txTime);
-        if (exitLoop) flags |= SOAPY_SDR_END_BURST; //end burst on last iter
+        if (!cfg->running) flags |= SOAPY_SDR_END_BURST; //end burst on last iter
         bool transmitErrors = false;
         for (int i = 0; i < txSyms; i++)
         {
