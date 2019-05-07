@@ -168,7 +168,7 @@ void* Receiver::loopRecv(void *in_context)
 
     int maxQueueLength = 0;
     int ret = 0;
-    while(true)
+    while(cfg->running)
     {
         // if buffer is full, exit
         if(cur_ptr_buffer_status[0] == 1)
@@ -184,7 +184,7 @@ void* Receiver::loopRecv(void *in_context)
             void * samp1 = cur_ptr_buffer + 4*sizeof(int);
             void * samp2 = cur_ptr_buffer2 + 4*sizeof(int);
             void *samp[2] = {samp1, samp2};
-            radio->radioRx(rid, samp, frameTime);
+            if (radio->radioRx(rid, samp, frameTime) < 0) cfg->running = false;;
 
             frame_id = (int)(frameTime>>32);
             symbol_id = (int)((frameTime>>16)&0xFFFF);
@@ -307,7 +307,7 @@ void* Receiver::clientTxRx(void * context)
     }
 
     bool exitLoop = false;
-    while (true)//(not exitLoop)
+    while (cfg->running)//(not exitLoop)
     {
         exitLoop = loopDone;
 

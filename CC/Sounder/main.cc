@@ -37,11 +37,10 @@ int main(int argc, char const *argv[])
         int ue_num = config->nClSdrs;
         filename = "logs/Argos-"+std::to_string(1900 + ltm->tm_year)+"-"+std::to_string(ltm->tm_mon)+"-"+std::to_string(ltm->tm_mday)+"-"+std::to_string(ltm->tm_hour)+"-"+std::to_string(ltm->tm_min)+"-"+std::to_string(ltm->tm_sec)+"_"+std::to_string(cell_num)+"x"+std::to_string(ant_num)+"x"+std::to_string(ue_num)+".hdf5";
     }
-    Recorder dr(config);
-    if (dr.initHDF5(filename) < 0) return -1;
-    dr.openHDF5();
-    dr.start();
-
+    Recorder *dr = new Recorder(config);
+    if (dr->initHDF5(filename) < 0) return -1;
+    dr->openHDF5();
+    dr->start();
     return 0;
 }
 

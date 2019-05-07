@@ -116,6 +116,7 @@ public:
     bool isPilot(int, int);
     bool isData(int, int);
 
+    std::atomic<bool> running;
 
     Config(std::string);
     ~Config();

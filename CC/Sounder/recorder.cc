@@ -27,7 +27,7 @@ Recorder::Recorder(Config *cfg)
         socket_buffer_[i].buffer.resize(cfg->getPackageLength() * cfg->getNumAntennas() * cfg->symbolsPerFrame * SOCKET_BUFFER_FRAME_NUM);
         socket_buffer_[i].buffer_status.resize(cfg->symbolsPerFrame * SOCKET_BUFFER_FRAME_NUM * cfg->getNumAntennas());
     }
-
+    cfg->running = true;
     receiver_.reset(new Receiver(rx_thread_num, cfg, &message_queue_));
 
     // create task thread
@@ -525,7 +525,7 @@ void Recorder::closeHDF5()
 
     file->close();
 
-    cout << "Closing HDF5, " << frameNumber + 1 << " frames saved." << endl;
+    cout << "Closing HDF5, " << frameNumber << " frames saved." << endl;
 }
 
 Recorder::~Recorder()
@@ -562,7 +562,7 @@ void Recorder::start()
 
     Event_data events_list[dequeue_bulk_size];
     int ret = 0;
-    while(true)
+    while(cfg->running)
     {
         // get a bulk of events
         ret = message_queue_.try_dequeue_bulk(ctok, events_list, dequeue_bulk_size);
@@ -607,6 +607,7 @@ void* Recorder::taskThread(void* context)
 {
     
     Recorder* obj_ptr = ((EventHandlerContext *)context)->obj_ptr;
+    Config *cfg = obj_ptr->cfg;
     moodycamel::ConcurrentQueue<Event_data>* task_queue_ = &(obj_ptr->task_queue_);
     int tid = ((EventHandlerContext *)context)->id;
     printf("task thread %d starts\n", tid);
@@ -630,7 +631,7 @@ void* Recorder::taskThread(void* context)
     int miss_count = 0;
     Event_data event;
     bool ret = false;
-    while(true)
+    while(cfg->running)
     {
         ret = task_queue_->try_dequeue(event);
         if(tid == 0)
@@ -685,7 +686,13 @@ herr_t Recorder::record(int tid, int offset)
     try
     {
 	Exception::dontPrint();
-
+        if (cfg->max_frame != 0 && frame_id > cfg->max_frame)
+        {
+            closeHDF5();
+            printf("reached max frame %d\n", cfg->max_frame);
+            socket_buffer_[buffer_id].buffer_status[offset] = 0; // now empty
+            return 0;
+        }
         // Update the max frame number.
         // Note that the 'frameid' might be out of order.
         if(frame_id > maxFrameNumber)
@@ -712,11 +719,13 @@ herr_t Recorder::record(int tid, int offset)
 
         if(cfg->isPilot(frame_id, symbol_id))
         {   
-            assert(pilot_dataset >= 0);
+            //assert(pilot_dataset >= 0);
             // Are we going to extend the dataset?
             if((size_t)frame_id >= dims_pilot[0])
             {
-                dims_pilot[0] = dims_pilot[0] + config_pilot_extent_step; // 400 is a threshold.
+                dims_pilot[0] = cfg->max_frame != 0
+                                  ? std::min(dims_pilot[0] + config_pilot_extent_step, (long long unsigned int)cfg->max_frame+1) // 400 is a threshold.
+                                  : dims_pilot[0] + config_pilot_extent_step; 
                 pilot_dataset->extend(dims_pilot);
                 std::cout << "FrameId " << frame_id << ", (Pilot) Extent to " << dims_pilot[0] << " Frames" << std::endl;
             }
@@ -733,7 +742,7 @@ herr_t Recorder::record(int tid, int offset)
         else if(cfg->isData(frame_id, symbol_id)) 
         {
             
-            assert(data_dataset >= 0);
+            //assert(data_dataset >= 0);
             // Are we going to extend the dataset?
             if((size_t)frame_id >= dims_data[0])
             {
