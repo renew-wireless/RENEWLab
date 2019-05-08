@@ -60,9 +60,8 @@ def print_thread(sdr, info):
         print('-'*80)
         print_sensor([sdr], 'LMS7_TEMP')
         print_sensor([sdr], 'ZYNQ_TEMP')
-        print_sensor([sdr], 'FE_TEMP')
-        print_sensor([sdr], SOAPY_SDR_TX, 0, 'TEMP')
-        print_sensor([sdr], SOAPY_SDR_TX, 1, 'TEMP')
+        print_sensor([sdr], 'FE_RX_TEMP')
+        print_sensor([sdr], 'FE_TX_TEMP')
         time.sleep(2)
 
 
@@ -95,7 +94,6 @@ def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, numSamps, serial, sigT
         if "CBRS" in info["frontend"]:
             print("set CBRS front-end gains")
             sdr.setGain(SOAPY_SDR_TX, c, 'ATTN', 0)  # [-18,0] by 3
-            sdr.setGain(SOAPY_SDR_TX, c, 'PA2', 0)   # [0|17]
         sdr.setGain(SOAPY_SDR_TX, c, 'IAMP', 0)      # [0,12]
         sdr.setGain(SOAPY_SDR_TX, c, "PAD", gain)
 

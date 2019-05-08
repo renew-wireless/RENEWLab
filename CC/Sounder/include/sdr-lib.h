@@ -16,7 +16,7 @@ class RadioConfig
 {
 public:
     RadioConfig(Config *cfg);
-    static void *initRadios(void * context);
+    static void *initBSRadio(void * context);
     void radioStart();
     void radioStop();
     void readSensors();
@@ -33,6 +33,7 @@ public:
     {
         RadioConfig *ptr;
         int tid;
+        int cell;
     };
 
 private:
