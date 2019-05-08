@@ -16,6 +16,7 @@ class RadioConfig
 {
 public:
     RadioConfig(Config *cfg);
+    static void *initRadios(void * context);
     void radioStart();
     void radioStop();
     void readSensors();
@@ -27,6 +28,13 @@ public:
     std::vector<SoapySDR::Device *> devs;
     std::vector<SoapySDR::Stream *> rxss;
     std::vector<SoapySDR::Stream *> txss;
+    // use for create pthread 
+    struct RadioConfigContext
+    {
+        RadioConfig *ptr;
+        int tid;
+    };
+
 private:
     Config *_cfg;
     std::vector<SoapySDR::Device *> hubs;
@@ -44,5 +52,6 @@ private:
 
     int nClSdrs;
     int nClAntennas;
-
+    std::atomic<int> remainingJobs;
+    RadioConfigContext *context;
 };

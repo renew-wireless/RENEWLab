@@ -51,12 +51,25 @@ RadioConfig::RadioConfig(Config *cfg):
             }
 
             int radioNum = this->nBsSdrs[c];
+            bsSdrs[c].resize(radioNum);
+            context = new RadioConfigContext[radioNum];
+            remainingJobs = radioNum;
             for (int i = 0; i < radioNum; i++)
             {
-                args["serial"] = _cfg->bs_sdr_ids[c][i];
-                args["timeout"] = "1000000";
-                bsSdrs[c].push_back(SoapySDR::Device::make(args));
+                //args["serial"] = _cfg->bs_sdr_ids[c][i];
+                //args["timeout"] = "1000000";
+                //bsSdrs[c].push_back(SoapySDR::Device::make(args));
+                context[i].ptr = this;
+                context[i].tid = i;
+                pthread_t init_thread_;
+                if(pthread_create( &init_thread_, NULL, RadioConfig::initRadios, (void *)(&context[i])) != 0)
+                {
+                    perror("init thread create failed");
+                    exit(0);
+                }
             }
+
+            while(remainingJobs>0);
 
             if (calib && c == 0)
             {
@@ -65,12 +78,12 @@ RadioConfig::RadioConfig(Config *cfg):
                 bsSdrs[0].push_back(ref);
             }
 
+            std::cout << "setting samples rates to " << cfg->rate/1e6 << " Msps..." << std::endl;
             for (int i = 0; i < radioNum; i++)
             { 
                 //use the TRX antenna port for both tx and rx
                 for (auto ch : channels) bsSdrs[c][i]->setAntenna(SOAPY_SDR_RX, ch, "TRX");
 
-                std::cout << "setting samples rates to " << cfg->rate/1e6 << " Msps..." << std::endl;
                 SoapySDR::Kwargs info = bsSdrs[c][i]->getHardwareInfo();
                 for (auto ch : channels)
                 {
@@ -284,7 +297,7 @@ RadioConfig::RadioConfig(Config *cfg):
                         device->setGain(SOAPY_SDR_TX, ch, "PA2", 0);       //[0|17]
                     device->setGain(SOAPY_SDR_TX, ch, "PA3", 30);       //[0|30]
                 }
-                device->setGain(SOAPY_SDR_TX, ch, "IAMP", 12);          //[0,12] 
+                device->setGain(SOAPY_SDR_TX, ch, "IAMP", 0);          //[0,12] 
 		device->setGain(SOAPY_SDR_TX, ch, "PAD", ch ? _cfg->clTxgainB_vec[i] : _cfg->clTxgainA_vec[i]);       //[0,52]
             }
 
@@ -312,6 +325,19 @@ RadioConfig::RadioConfig(Config *cfg):
         }
     }
     std::cout << "radio init done!" << std::endl;
+}
+
+void *RadioConfig::initRadios(void *in_context)
+{
+    RadioConfig* obj_ptr = ((RadioConfigContext *)in_context)->ptr;
+    Config *cfg = obj_ptr->_cfg;
+    int tid = ((RadioConfigContext *)in_context)->tid;
+    SoapySDR::Kwargs args;
+    args["serial"] = cfg->bs_sdr_ids[0][tid];
+    args["timeout"] = "1000000";
+    obj_ptr->bsSdrs[0][tid] = (SoapySDR::Device::make(args));
+    obj_ptr->remainingJobs--;
+    
 }
 
 void RadioConfig::radioStart()
