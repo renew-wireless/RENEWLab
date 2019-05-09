@@ -285,8 +285,8 @@ rx_cfo_est_lts = zeros(1,N_BS_NODE,1);
 rx_dec_cfo_corr = raw_rx_dec;
 
 % Extract LTS for channel estimate
-rx_lts_mat = rx_dec_cfo_corr(:, pream_ind : pream_ind + length(preamble));
-
+rx_lts_mat = rx_dec_cfo_corr(:, pream_ind : pream_ind + length(preamble) -1);
+ul_pilots_mat = reshape(rx_lts_mat, N_BS_NODE,ceil(length(rx_lts_mat)/N_UE),N_UE);
 
 return;
 

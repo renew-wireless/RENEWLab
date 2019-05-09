@@ -276,7 +276,7 @@ end
 payload_ind = lts_peaks(max(lts_second_peak_index)) + 32;
 lts_ind = payload_ind-160;
 
-return;
+
 % NB: Do it for ALL BS antennas!!
 rx_cfo_est_sts = zeros(1,N_BS_NODE);
 rx_cfo_est_lts = zeros(1,N_BS_NODE,1);
@@ -306,7 +306,7 @@ rx_lts_idx1 = -64+-FFT_OFFSET + (97:160);
 rx_lts_idx2 = -FFT_OFFSET + (97:160);
 rx_lts_b1 = [rx_lts(rx_lts_idx1,1)  rx_lts(rx_lts_idx2,1)];
 rx_lts_b2 = [rx_lts(rx_lts_idx1,2)  rx_lts(rx_lts_idx2,2)];
-
+return;
 % Received LTSs for each branch.  
 rx_lts_b1_f = fft(rx_lts_b1);
 rx_lts_b2_f = fft(rx_lts_b2);
