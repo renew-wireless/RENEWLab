@@ -14,7 +14,7 @@ CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_snr_db              = 30;          % simulation data SC SNR
 
 % Waveform params
-N_OFDM_SYMS             = 320;         % Number of OFDM symbols
+N_OFDM_SYMS             = 3200;         % Number of OFDM symbols
 MOD_ORDER               = 16;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
 TX_SCALE                = 1.0;          % Scale for Tx waveform ([0:1])
 
@@ -117,8 +117,7 @@ tx_vec = tx_payload_vec;
 
 %Calculate the noise variance 
 SIM_snr =10^(0.1* SIM_snr_db);
-data_sc_ratio = length(SC_IND_DATA) / N_SC;      %ratio of SCs carrying data vs all SCs
-tx_vec_pow_avg = mean( abs(TX_SCALE .* tx_vec ./ max(abs(tx_vec))).^2) /data_sc_ratio;    % Average power on each SC
+tx_vec_pow_avg = mean( abs(TX_SCALE .* tx_vec ./ max(abs(tx_vec))).^2);    % Average power on each SC
 sim_N0 = tx_vec_pow_avg / SIM_snr;
 
 % Pad with zeros for transmission
