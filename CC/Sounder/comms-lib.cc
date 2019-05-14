@@ -90,6 +90,10 @@ double CommsLib::findLTS(std::vector<std::complex<double>> iq)
 
 void CommsLib::meshgrid(std::vector<double> x_in, std::vector<double> y_in, std::vector<std::vector<double>> &x, std::vector<std::vector<double>> &y)
 {
+    /*
+     * Simplified version of numpy's meshgrid function. Input vectors must be of same length.
+     * Returns coordinate matrices from coordinate vectors.
+     */
     int nx = x_in.size();
     int ny = y_in.size();
 
