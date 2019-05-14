@@ -37,6 +37,7 @@ double CommsLib::findLTS(std::vector<std::complex<double>> iq)
     float lts_thresh = 0.8;
     std::vector<std::vector<double> > lts_seq;
     int dummy = 0;
+    double best_peak;
 
     // Original LTS sequence
     lts_seq = CommsLib::getSequence(dummy, LTS_SEQ);
@@ -44,37 +45,37 @@ double CommsLib::findLTS(std::vector<std::complex<double>> iq)
     // Re-arrange into complex vector, flip, and compute conjugate
     std::vector<std::complex<double>> lts_sym;
     std::vector<std::complex<double>> lts_sym_conj;
-    for(int i=0; i<=64; i++){
+    for(int i=0; i<64; i++){
 	// lts_seq is a 2x160 matrix (real/imag by 160 elements)
 	// grab one symbol and flip around
-        lts_sym[i] = std::complex<double>(lts_seq[0][160-1-i], lts_seq[1][160-1-i]);
+        lts_sym.push_back(std::complex<double>(lts_seq[0][160-1-i], lts_seq[1][160-1-i]));
 	// conjugate
-        lts_sym_conj[i] = std::conj(lts_sym[i]);
+        lts_sym_conj.push_back(std::conj(lts_sym[i]));
     }
 
     // Equivalent to numpy's sign function
     std::vector<std::complex<double>> iq_sign = CommsLib::csign(iq);
 
     // Convolution
-    std::vector<double> lts_corr = CommsLib::convolve(lts_sym_conj, iq_sign);
+    std::vector<double> lts_corr = CommsLib::convolve(iq_sign, lts_sym_conj);
 
     // Find all peaks
     std::vector<double> peaks;
-    std::vector<std::vector<double>> x_vec;
-    std::vector<std::vector<double>> y_vec;
-    for(int i=0; i<=lts_corr.size(); i++){
+    for(int i=0; i<lts_corr.size(); i++){
         if(lts_corr[i] > (lts_thresh * *std::max_element(lts_corr.begin(), lts_corr.end()))){
             // Index of valid peaks
             peaks.push_back(i);
         }
     }
+
+    std::vector<std::vector<double>> x_vec(peaks.size());
+    std::vector<std::vector<double>> y_vec(peaks.size());
     CommsLib::meshgrid(peaks, peaks, x_vec, y_vec);
 
     // Find peaks that are 64 samples apart
     std::vector<double> valid_peaks;
-    double best_peak;
-    for(int i=0; i<=x_vec.size(); i++){
-        for(int j=0; j<=x_vec[0].size(); j++){
+    for(int i=0; i<x_vec.size(); i++){
+        for(int j=0; j<x_vec[0].size(); j++){
             int idx_diff = y_vec[i][j] - x_vec[i][j];
             if(idx_diff == lts_sym.size()){
                 valid_peaks.push_back(peaks[i]);
@@ -83,6 +84,7 @@ double CommsLib::findLTS(std::vector<std::complex<double>> iq)
     }
     // Use first LTS found
     best_peak = valid_peaks[0];
+    //best_peak = -1;
     return best_peak;
 }
 
@@ -94,10 +96,12 @@ void CommsLib::meshgrid(std::vector<double> x_in, std::vector<double> y_in, std:
     if(nx != ny){
         throw std::invalid_argument( " Input vectors to meshgrid function must have same length. " );
     }
-    for(int i=0; i<=nx; i++){
-        for(int j=0; j<=ny; j++){
+    for(int i=0; i<nx; i++){
+        for(int j=0; j<ny; j++){
             x[i].push_back(x_in[j]);
             y[i].push_back(y_in[i]);
+	    //std::cout << "XXXX x[" << i << "][" << j << "]: " << x[i][j] << std::endl;
+	    //std::cout << "YYYY y[" << i << "][" << j << "]: " << y[i][j] << std::endl;
         }
     }
 }
@@ -118,9 +122,9 @@ std::vector<std::complex<double>> CommsLib::csign(std::vector<std::complex<doubl
         // sign(x.real) + 0j if x.real != 0 else sign(x.imag) + 0j
         std::complex<double> x = iq[i];
         if(x.real() != 0){
-            iq_sign[i] = (x.real() > 0) ? 1 : (x.real() < 0) ? -1 : 0;
+            iq_sign.push_back((x.real() > 0) ? 1 : (x.real() < 0) ? -1 : 0);
         } else {
-            iq_sign[i] = (x.imag() > 0) ? 1 : (x.imag() < 0) ? -1 : 0;
+            iq_sign.push_back((x.imag() > 0) ? 1 : (x.imag() < 0) ? -1 : 0);
         }
     }
     return iq_sign;
@@ -135,12 +139,14 @@ std::vector<double> CommsLib::convolve(std::vector<std::complex<double>> const &
     int const ng = g.size();
     int const n  = nf + ng - 1;
     std::vector<double> out(n, 0);
+    std::vector<std::complex<double>> outc(n, 0);
     for(auto i(0); i < n; ++i) {
         int const jmn = (i >= ng - 1)? i - (ng - 1) : 0;
         int const jmx = (i <  nf - 1)? i            : nf - 1;
         for(auto j(jmn); j <= jmx; ++j) {
-            out[i] += abs(f[j] * g[i - j]);
+	    outc[i] += f[j] * g[i - j];
         }
+        out[i] += abs(outc[i]);
     }
     return out;
 }
@@ -725,9 +731,17 @@ std::vector<std::vector<double> > CommsLib::getSequence(int N, int type)
 int main(int argc, char *argv[])
 {
     std::vector<std::vector<double> > sequence;
-    int type = atoi(argv[1]);
-    int N = atoi(argv[2]); 	// If Hadamard, possible N: {2, 4, 8, 16, 32, 64}
-    sequence = SequenceGen::getSequence(N, type);
+    int type = CommsLib::LTS_SEQ; //atoi(argv[1]);
+    int N = 0; 			  //atoi(argv[2]); 	// If Hadamard, possible N: {2, 4, 8, 16, 32, 64}
+    sequence = CommsLib::getSequence(N, type);
+
+    std::vector<std::complex<double>> sequence_c;
+    for(int i=0; i<sequence[0].size(); i++){
+        sequence_c.push_back(std::complex<double>(sequence[0][i], sequence[1][i]));
+    }
+    double peak = CommsLib::findLTS(sequence_c);
+    std::cout << "LTS PEAK: " << peak << std::endl;
+
     return 0;
 }
 */
