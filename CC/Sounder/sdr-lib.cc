@@ -687,6 +687,276 @@ int RadioConfig::radioRx(int r /*radio id*/, void ** buffs, long long & frameTim
     return 0;
 }
 
+void RadioConfig::radioSched(std::vector<std::string> sched)
+{
+    // make sure we can pause the framer before we rewrite schedules to avoid
+    // any race conditions, for now I set tdd mode to 0
+#ifdef JSON
+    json conf;
+    conf["tdd_enabled"] = true;
+    conf["trigger_out"] = false;
+    conf["frames"] = sched;
+    conf["symbol_size"] = _cfg->sampsPerSymbol;
+    std::string confString = conf.dump(); 
+#else
+    std::string confString ="{\"tdd_enabled\":true,\"trigger_out\":false,";
+    confString +="\"symbol_size\":"+std::to_string(_cfg->sampsPerSymbol);
+    confString +=",\"frames\":[";
+    for (int f = 0; f < sched.size(); f++)
+        confString += (f == sched.size() - 1) ? "\""+sched[f]+"\"" : "\""+sched[f]+"\",";
+    confString +="]}";
+    std::cout << confString << std::endl;
+#endif
+    for (int i = 0; i < nBsSdrs[0]; i++)
+    {
+        bsSdrs[0][i]->writeSetting("TDD_CONFIG", confString);
+    }
+}
+
+void RadioConfig::sampleOffsetCal(std::vector<void *> &refTx, std::vector<void *> &refRx)
+{
+    /*
+     * Calibrate sample offset observed between boards in Base Station
+     * Procedure: Transmit pilot from a reference board
+     * OBCH!!!
+     *
+     *
+     */
+
+    /************
+     *   Init   *
+     ************/
+    // Only one cell considered at the moment
+    int cellIdx = 0;
+
+
+    /***********************
+     *   Generate pilots   *
+     ***********************/
+    std::vector<std::vector<double>> pilot;
+    std::vector<std::complex<int16_t>> pilot_cint16;
+    // Pilot consists of 802.11-based LTF sequences (or LTS)
+    int type = CommsLib::LTS_SEQ;
+    int N = 0; // dummy variable
+    pilot = CommsLib::getSequence(N, type);
+    // double array to complex 16-bit int vector
+    for(int i=0; i<pilot[0].size(); i++){
+        pilot_cint16[i] = std::complex<int16_t>((int16_t)(pilot[0][i]*32768),(int16_t)(pilot[1][i]*32768));
+    }
+
+    // Prepend/Append vectors with prefix/postfix number of null samples
+    std::vector<std::complex<int16_t>> prefix_vec(_cfg->prefix, 0);
+    std::vector<std::complex<int16_t>> postfix_vec(_cfg->postfix, 0);
+    pilot_cint16.insert(pilot_ci16.begin(), prefix_vec.begin(), prefix_vec.end());
+    pilot_cint16.insert(pilot_ci16.end(), postfix_vec.begin(), postfix_vec.end());
+    // Transmitting from only one chain, create a null vector for chainB
+    std::vector<std::complex<int16_t>> pilot_dummy(pilot_cint16.size(), 0);
+
+    int symSamp = pilot_cint16.size();
+    std::cout << "Number of TX pilot samples: " << pilot.size() << std::endl;
+    std::cout << "Number of TX total samples: " << symSamp << std::endl;
+
+
+    /***********************************************
+     *   Write pilots to RAM and activate stream   *
+     ***********************************************/
+    int flags = 0;
+    for (int i = 0; i < nBsSdrs[cellIdx]; i++)
+    {
+        bsSdrs[cellIdx][i]->writeRegisters("TX_RAM_A", 0, pilot_cint16);
+        if (_cfg->bsSdrCh == 2) {
+            // Doesn't matter: for cal, chainB not used
+            bsSdrs[cellIdx][i]->writeRegisters("TX_RAM_B", 2048, pilot_dummy);
+        }
+        bsSdrs[cellIdx][i]->activateStream(this->bsRxStreams[cellIdx][i], flags, 0);
+    }
+
+
+    /***********************
+     *   Create schedule   *
+     ***********************/
+    // For now, we assume reference board is part of the BS and is triggered from hub
+    int refBoardId = 0;
+    ref = bsSdrs[cellIdx][refBoardId];
+    // write config for reference radio node
+    std::string sched = "PG";
+    std::cout << "Ref node schedule: " << sched << std::endl;
+#ifdef JSON
+    json conf;
+    conf["tdd_enabled"] = true;
+    conf["trigger_out"] = false;
+    conf["frames"] = sched;
+    conf["symbol_size"] = symSamp;
+    std::string confString = conf.dump();
+#else
+    std::string confString ="{\"tdd_enabled\":true,\"trigger_out\":false,";
+    confString +="\"symbol_size\":"+std::to_string(symSamp);
+    confString +=",\"frames\":[\"";
+    confString += sched;
+    confString +="\"]}";
+    std::cout << confString << std::endl;
+#endif
+    ref->writeSetting("TDD_CONFIG", confString);
+    ref->writeSetting("TDD_MODE", "true");
+    ref->writeSetting("TX_SW_DELAY", "30");
+
+    // write config for array radios (all boards in Base Station except Board0==refBoard)
+    for (int i = 0; i < nBsSdrs[cellIdx] - 1; i++)
+    {
+        sched = "RG";
+        std::cout << "node " << i << " schedule: " << sched << std::endl;
+#ifdef JSON
+        conf["tdd_enabled"] = true;
+        conf["trigger_out"] = false;
+        conf["frames"] = sched;
+        conf["symbol_size"] = symSamp;
+        confString = conf.dump();
+#else
+        confString ="{\"tdd_enabled\":true,\"trigger_out\":false,";
+        confString +="\"symbol_size\":"+std::to_string(symSamp);
+        confString +=",\"frames\":[\"";
+        confString += sched;
+        confString +="\"]}";
+        std::cout << confString << std::endl;
+#endif
+        bsSdrs[cellIdx][i+1]->writeSetting("TDD_CONFIG", confString);
+        bsSdrs[cellIdx][i+1]->writeSetting("TDD_MODE", "true");
+        bsSdrs[cellIdx][i+1]->writeSetting("TX_SW_DELAY", "30");
+    }
+
+
+    /*********************************
+     *   Begin Calibration Process   *
+     *********************************/
+    // Multiple iterations
+    int numCalTx = 100;
+    int numVerTx = 100;
+    // Cal-Passing Threshold
+    double pass_thresh = 0.8 * numCalTx;
+    // Aggregate over iterations (for calibration and for verification)
+    std::vector<std::vector<int>> calCorrIdx(numCalTx, std::vector<int>(nBsSdrs[cellIdx]));
+    std::vector<std::vector<int>> verCorrIdx(numCalTx, std::vector<int>(nBsSdrs[cellIdx]));
+
+    for(int i = 0; i < numCalTx + numVerTx; i++)
+    {
+        // Generate trigger
+        hubs[cellIdx]->writeSetting("TRIGGER_GEN", ""); // assume a single cell and single hub
+
+        // Read streams
+        long long frameTime = 0;
+        for (int j = 0; j < nBsAntennas[cellIdx]; j+=_cfg->bsSdrCh)
+        {
+            void *rxbuff[2];
+            rxbuff[0] = refTx[j];
+            if (_cfg->bsSdrCh == 2) rxbuff[1] = refTx[j+1];
+            bsSdrs[0][j/_cfg->bsSdrCh]->readStream(this->bsRxStreams[0][j/_cfg->bsSdrCh], rxbuff, symSamp, flags, frameTime, 1000000);
+        }
+        for (int i = 0; i < nBsAntennas[cellIdx]; i+=_cfg->bsSdrCh)
+        {
+            void *rxbuff[2];
+            rxbuff[0] = refRx[i];
+            if (_cfg->bsSdrCh == 2) rxbuff[1] = refRx[i+1];
+            ref->readStream(this->refRxStream, rxbuff, symSamp, flags, frameTime, 1000000);
+        }
+
+        // Convert to float
+
+        // Find correlation index at each board
+
+        //
+
+    }
+
+
+}
+
+void RadioConfig::reciprocityCalProcedure(std::vector<void *> &refTx, std::vector<void *> &refRx)
+{
+    int frameLen = nBsSdrs[0] + 3;
+    assert(refRx.size() == nBsAntennas[0] and refTx.size() == nBsAntennas[0]);
+
+    // for now we assume reference radio node is synched with the rest of the array and triggered from hub
+
+    // write config for reference radio node
+    std::string sched = "GPG"+ std::string(frameLen-3, 'R');
+    std::cout << "ref node schedule: " << sched << std::endl;
+#ifdef JSON
+    json conf;
+    conf["tdd_enabled"] = true;
+    conf["trigger_out"] = true;
+    conf["frames"] = sched;
+    conf["symbol_size"] = _cfg->sampsPerSymbol;
+    std::string confString = conf.dump(); 
+#else
+    std::string confString ="{\"tdd_enabled\":true,\"trigger_out\":true,";
+    confString +="\"symbol_size\":"+std::to_string(_cfg->sampsPerSymbol);
+    confString +=",\"frames\":[\"";
+    confString += sched;
+    confString +="\"]}";
+    std::cout << confString << std::endl;
+#endif
+    ref->writeSetting("TDD_CONFIG", confString);
+    ref->writeSetting("TDD_MODE", "true");
+    ref->writeSetting("TX_SW_DELAY", "30");
+
+    // write config for array radios
+    for (int i = 0; i < nBsSdrs[0]; i++)
+    {
+        sched = "GRG"+ std::string(i, 'G')+ "P" + std::string(frameLen-i-4, 'G');
+        std::cout << "node " << i << " schedule: " << sched << std::endl;
+#ifdef JSON
+        conf["tdd_enabled"] = true;
+        conf["trigger_out"] = true;
+        conf["frames"] = sched;
+        conf["symbol_size"] = _cfg->sampsPerSymbol;
+        confString = conf.dump(); 
+#else
+        confString ="{\"tdd_enabled\":true,\"trigger_out\":true,";
+        confString +="\"symbol_size\":"+std::to_string(_cfg->sampsPerSymbol);
+        confString +=",\"frames\":[\"";
+        confString += sched;
+        confString +="\"]}";
+        std::cout << confString << std::endl;
+#endif
+        bsSdrs[0][i]->writeSetting("TDD_CONFIG", confString);
+        bsSdrs[0][i]->writeSetting("TDD_MODE", "true");
+        bsSdrs[0][i]->writeSetting("TX_SW_DELAY", "30");
+    }
+
+    std::vector<unsigned> pilot(_cfg->sampsPerSymbol, 0); // FIXME: read a valid signal from CommsLib
+ 
+    int flags = 0;
+    for (int i = 0; i < nBsSdrs[0]; i++)
+    {
+        bsSdrs[0][i]->writeRegisters("TX_RAM_A", 0, pilot);
+        if (_cfg->bsSdrCh == 2) bsSdrs[0][i]->writeRegisters("TX_RAM_B", 2048, pilot);
+        bsSdrs[0][i]->activateStream(this->bsRxStreams[0][i], flags, 0);
+    }
+    
+    ref->writeRegisters("TX_RAM_A", 0, pilot);
+    if (_cfg->bsSdrCh == 2) ref->writeRegisters("TX_RAM_B", 2048, pilot);
+    ref->activateStream(this->refRxStream, flags, 0);
+
+    hubs[0]->writeSetting("TRIGGER_GEN", ""); // assume a single cell and single hub
+    long long frameTime = 0;
+    for (int i = 0; i < nBsAntennas[0]; i+=_cfg->bsSdrCh)
+    {
+        void *rxbuff[2];
+        rxbuff[0] = refTx[i];
+        if (_cfg->bsSdrCh == 2) rxbuff[1] = refTx[i+1];
+        bsSdrs[0][i/_cfg->bsSdrCh]->readStream(this->bsRxStreams[0][i/_cfg->bsSdrCh], rxbuff, _cfg->sampsPerSymbol, flags, frameTime, 1000000);
+    }
+    for (int i = 0; i < nBsAntennas[0]; i+=_cfg->bsSdrCh)
+    {
+        void *rxbuff[2];
+        rxbuff[0] = refRx[i];
+        if (_cfg->bsSdrCh == 2) rxbuff[1] = refRx[i+1];
+        ref->readStream(this->refRxStream, rxbuff, _cfg->sampsPerSymbol, flags, frameTime, 1000000);
+    }
+    //rx = refRx.data();
+    //tx = refTx.data();
+}
+
 RadioConfig::~RadioConfig()
 {
     if (_cfg->bsPresent)
