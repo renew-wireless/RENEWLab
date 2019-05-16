@@ -687,32 +687,6 @@ int RadioConfig::radioRx(int r /*radio id*/, void ** buffs, long long & frameTim
     return 0;
 }
 
-void RadioConfig::radioSched(std::vector<std::string> sched)
-{
-    // make sure we can pause the framer before we rewrite schedules to avoid
-    // any race conditions, for now I set tdd mode to 0
-#ifdef JSON
-    json conf;
-    conf["tdd_enabled"] = true;
-    conf["trigger_out"] = false;
-    conf["frames"] = sched;
-    conf["symbol_size"] = _cfg->sampsPerSymbol;
-    std::string confString = conf.dump(); 
-#else
-    std::string confString ="{\"tdd_enabled\":true,\"trigger_out\":false,";
-    confString +="\"symbol_size\":"+std::to_string(_cfg->sampsPerSymbol);
-    confString +=",\"frames\":[";
-    for (int f = 0; f < sched.size(); f++)
-        confString += (f == sched.size() - 1) ? "\""+sched[f]+"\"" : "\""+sched[f]+"\",";
-    confString +="]}";
-    std::cout << confString << std::endl;
-#endif
-    for (int i = 0; i < nBsSdrs[0]; i++)
-    {
-        bsSdrs[0][i]->writeSetting("TDD_CONFIG", confString);
-    }
-}
-
 void RadioConfig::sampleOffsetCal(std::vector<void *> &refTx, std::vector<void *> &refRx)
 {
     /*
@@ -868,93 +842,6 @@ void RadioConfig::sampleOffsetCal(std::vector<void *> &refTx, std::vector<void *
     }
 
 
-}
-
-void RadioConfig::reciprocityCalProcedure(std::vector<void *> &refTx, std::vector<void *> &refRx)
-{
-    int frameLen = nBsSdrs[0] + 3;
-    assert(refRx.size() == nBsAntennas[0] and refTx.size() == nBsAntennas[0]);
-
-    // for now we assume reference radio node is synched with the rest of the array and triggered from hub
-
-    // write config for reference radio node
-    std::string sched = "GPG"+ std::string(frameLen-3, 'R');
-    std::cout << "ref node schedule: " << sched << std::endl;
-#ifdef JSON
-    json conf;
-    conf["tdd_enabled"] = true;
-    conf["trigger_out"] = true;
-    conf["frames"] = sched;
-    conf["symbol_size"] = _cfg->sampsPerSymbol;
-    std::string confString = conf.dump(); 
-#else
-    std::string confString ="{\"tdd_enabled\":true,\"trigger_out\":true,";
-    confString +="\"symbol_size\":"+std::to_string(_cfg->sampsPerSymbol);
-    confString +=",\"frames\":[\"";
-    confString += sched;
-    confString +="\"]}";
-    std::cout << confString << std::endl;
-#endif
-    ref->writeSetting("TDD_CONFIG", confString);
-    ref->writeSetting("TDD_MODE", "true");
-    ref->writeSetting("TX_SW_DELAY", "30");
-
-    // write config for array radios
-    for (int i = 0; i < nBsSdrs[0]; i++)
-    {
-        sched = "GRG"+ std::string(i, 'G')+ "P" + std::string(frameLen-i-4, 'G');
-        std::cout << "node " << i << " schedule: " << sched << std::endl;
-#ifdef JSON
-        conf["tdd_enabled"] = true;
-        conf["trigger_out"] = true;
-        conf["frames"] = sched;
-        conf["symbol_size"] = _cfg->sampsPerSymbol;
-        confString = conf.dump(); 
-#else
-        confString ="{\"tdd_enabled\":true,\"trigger_out\":true,";
-        confString +="\"symbol_size\":"+std::to_string(_cfg->sampsPerSymbol);
-        confString +=",\"frames\":[\"";
-        confString += sched;
-        confString +="\"]}";
-        std::cout << confString << std::endl;
-#endif
-        bsSdrs[0][i]->writeSetting("TDD_CONFIG", confString);
-        bsSdrs[0][i]->writeSetting("TDD_MODE", "true");
-        bsSdrs[0][i]->writeSetting("TX_SW_DELAY", "30");
-    }
-
-    std::vector<unsigned> pilot(_cfg->sampsPerSymbol, 0); // FIXME: read a valid signal from CommsLib
- 
-    int flags = 0;
-    for (int i = 0; i < nBsSdrs[0]; i++)
-    {
-        bsSdrs[0][i]->writeRegisters("TX_RAM_A", 0, pilot);
-        if (_cfg->bsSdrCh == 2) bsSdrs[0][i]->writeRegisters("TX_RAM_B", 2048, pilot);
-        bsSdrs[0][i]->activateStream(this->bsRxStreams[0][i], flags, 0);
-    }
-    
-    ref->writeRegisters("TX_RAM_A", 0, pilot);
-    if (_cfg->bsSdrCh == 2) ref->writeRegisters("TX_RAM_B", 2048, pilot);
-    ref->activateStream(this->refRxStream, flags, 0);
-
-    hubs[0]->writeSetting("TRIGGER_GEN", ""); // assume a single cell and single hub
-    long long frameTime = 0;
-    for (int i = 0; i < nBsAntennas[0]; i+=_cfg->bsSdrCh)
-    {
-        void *rxbuff[2];
-        rxbuff[0] = refTx[i];
-        if (_cfg->bsSdrCh == 2) rxbuff[1] = refTx[i+1];
-        bsSdrs[0][i/_cfg->bsSdrCh]->readStream(this->bsRxStreams[0][i/_cfg->bsSdrCh], rxbuff, _cfg->sampsPerSymbol, flags, frameTime, 1000000);
-    }
-    for (int i = 0; i < nBsAntennas[0]; i+=_cfg->bsSdrCh)
-    {
-        void *rxbuff[2];
-        rxbuff[0] = refRx[i];
-        if (_cfg->bsSdrCh == 2) rxbuff[1] = refRx[i+1];
-        ref->readStream(this->refRxStream, rxbuff, _cfg->sampsPerSymbol, flags, frameTime, 1000000);
-    }
-    //rx = refRx.data();
-    //tx = refTx.data();
 }
 
 RadioConfig::~RadioConfig()
