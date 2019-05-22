@@ -63,12 +63,16 @@ RadioConfig::RadioConfig(Config *cfg):
                 context[i].ptr = this;
                 context[i].tid = i;
                 context[i].cell = c;
+#ifdef THREADED_INIT
                 pthread_t init_thread_;
                 if(pthread_create( &init_thread_, NULL, RadioConfig::initBSRadio, (void *)(&context[i])) != 0)
                 {
                     perror("init thread create failed");
                     exit(0);
                 }
+#else
+                RadioConfig::initBSRadio((void *)&context[i]);
+#endif
             }
 
             while(remainingJobs>0);
@@ -598,6 +602,7 @@ void RadioConfig::radioStop()
             	bsSdrs[0][i]->writeRegister("RFCORE", 140, 0);
                 }
             }
+            //SoapySDR::Device::unmake(bsSdrs[0][i]);
         }
     }
     if (_cfg->clPresent)

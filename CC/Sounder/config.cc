@@ -204,7 +204,7 @@ Config::Config(std::string jsonfile)
         std::vector<std::complex<int16_t>> pre(prefix, 0);
         std::vector<std::complex<int16_t>> post(postfix, 0);
 
-        coeffs_ci16 = Utils::double_to_int16(gold_ifft, "IQ"); 
+        coeffs_ci16 = Utils::double_to_int16(gold_ifft); 
 #ifdef NEWCORR
         coeffs = Utils::cint16_to_uint32(coeffs_ci16, true, "IQ");
 #else
@@ -212,7 +212,7 @@ Config::Config(std::string jsonfile)
 #endif
         // compose pilot subframe
         std::vector<std::vector<double>> lts = CommsLib::getSequence(160, CommsLib::LTS_SEQ);
-        std::vector<std::complex<int16_t>> lts_ci16 = Utils::double_to_int16(lts, "IQ"); 
+        std::vector<std::complex<int16_t>> lts_ci16 = Utils::double_to_int16(lts); 
         int nSamps = sampsPerSymbol - prefix - postfix;
         int rep = nSamps / 160;
         int frac = nSamps % 160;
@@ -316,7 +316,7 @@ Config::Config(std::string jsonfile)
     std::cout << "Configuration file was successfully parsed!" << std::endl;
 }
 
-int Config::getNumAntennas() 
+size_t Config::getNumAntennas() 
 {
     if (!bsPresent) 
         return 1;

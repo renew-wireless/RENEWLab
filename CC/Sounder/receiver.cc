@@ -11,7 +11,6 @@
 
 #include "include/receiver.h"
 
-static sig_atomic_t loopDone = false;
 Receiver::Receiver(int N_THREAD, Config *cfg)
 {
 
@@ -35,6 +34,7 @@ Receiver::~Receiver()
 {
     delete[] socket_;
     delete[] context;
+    delete message_queue_;
     radioconfig_->radioStop();
     delete radioconfig_;
     delete config_;
