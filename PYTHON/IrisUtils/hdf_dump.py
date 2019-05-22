@@ -288,7 +288,7 @@ class hdfDump:
                         'UL_SAMPS': samples_ulData,
                         }
 
-    def verify_hdf5(self, default_frame=100):
+    def verify_hdf5(self, default_frame=100, default_ant=0):
         """
         Plot data in file to verify contents.
 
@@ -321,6 +321,7 @@ class hdfDump:
         rate = np.squeeze(data['Attributes']['RATE'])
         symbol_length = np.squeeze(data['Attributes']['SYMBOL_LEN'])
         num_cl = np.squeeze(data['Attributes']['CL_NUM'])
+        num_pilots = np.squeeze(data['Attributes']['PILOT_NUM'])
 
         # PLOTTER
         # Plot pilots or data or both
@@ -329,7 +330,7 @@ class hdfDump:
             if ftype == "PILOTS":
                 axes[0, idx].set_title('PILOTS - Cell 0')
                 samples = data['Pilot_Samples']['Samples']
-                num_cl_tmp = num_cl  # number of UEs to plot data for
+                num_cl_tmp = num_pilots  # number of UEs to plot data for
 
             elif ftype == "UL_DATA":
                 axes[0, idx].set_title('UPLINK DATA - Cell 0')
@@ -344,7 +345,7 @@ class hdfDump:
 
             # Correlation (Debug plot useful for checking sync)
             amps = np.mean(np.abs(samps[:, 0, 0, 0, 0, :]), axis=1)
-            pilot_frames = [i for i in range(len(amps)) if amps[i] > 0.01]
+            pilot_frames = [i for i in range(len(amps)) if amps[i] > 0.001]
             if len(pilot_frames) > 0: ref_frame = pilot_frames[len(pilot_frames) // 2]
             else: return 
             cellCSI = csi[:, 0, :, :, :, :]     # First cell
@@ -374,20 +375,21 @@ class hdfDump:
             # Plotter
             # Samps Dimensions: (Frame, Cell, User, Pilot Rep, Antenna, Sample)
             axes[0, idx].set_ylabel('Frame %d ant 0 (Re)' % frame_to_plot)
-            axes[0, idx].plot(np.real(samps[frame_to_plot, 0, 0, 0, 1, :]))
+            axes[0, idx].plot(np.real(samps[frame_to_plot, 0, 0, 0, default_ant, :]))
 
             axes[1, idx].set_ylabel('Frame %d ant 1 (Re)' % frame_to_plot)
-            axes[1, idx].plot(np.real(samps[frame_to_plot, 0, 0, 0, 1, :]))
+            axes[1, idx].plot(np.real(samps[frame_to_plot, 0, 0, 0, default_ant+1, :]))
 
             axes[2, idx].set_ylabel('All Frames ant 0 (Re)')
-            axes[2, idx].plot(np.real(samps[:, 0, 0, 0, 0, :]).flatten())
+            axes[2, idx].plot(np.real(samps[:, 0, 0, 0, default_ant, :]).flatten())
 
             axes[3, idx].set_ylabel('All Frames ant 1 (Re)')
-            axes[3, idx].plot(np.real(samps[:, 0, 0, 0, 1, :]).flatten())
+            axes[3, idx].plot(np.real(samps[:, 0, 0, 0, default_ant+1, :]).flatten())
 
             axes[4, idx].set_ylabel('Amplitude')
             for i in range(samps.shape[4]):
-                axes[4, idx].plot(np.mean(np.abs(samps[:, 0, 0, 0, i, :]), axis=1).flatten())
+                axes[4, idx].plot(np.mean(np.abs(samps[:, 0, 0, 0, i, :]), axis=1).flatten(), label="ant %d"%i)
+            #axes[4, idx].legend()
             axes[4, idx].set_xlabel('Sample')
 
             axes[5, idx].set_ylabel('Correlation with Frame %d' % ref_frame)
@@ -405,17 +407,19 @@ if __name__ == '__main__':
     #                     ./data_in/Argos-2019-3-30-12-20-50_1x8x1.hdf5 300  (for one user)
     if len(sys.argv) > 1:
         if sys.argv[1] == "-h":
-            print('format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)>')
+            print('format: ./hdf_dump.py <filename> <frame_to_plot (optional, default=100)> <antenna_to_plot (optional, default=0)>')
             sys.exit(0)
 
-        if len(sys.argv) > 3:
-            print('Too many arguments! format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)>')
+        if len(sys.argv) > 4:
+            print('Too many arguments! format: ./hdf_dump.py <filename> <frame_to_plot (optional, default=100)> <antenna_to_plot (optional, default=0)>')
             sys.exit(0)
 
         filename = sys.argv[1]
         frame_to_plot = []
-        if len(sys.argv) == 3:
+        ant_to_plot = []
+        if len(sys.argv) == 4:
             frame_to_plot = int(sys.argv[2])
+            ant_to_plot = int(sys.argv[3])
 
         # Instantiate
         hdf5 = hdfDump(filename)
@@ -445,7 +449,9 @@ if __name__ == '__main__':
         metadata = hdf5.metadata
         samples = hdf5.samples
 
-        if frame_to_plot:
+        if frame_to_plot and ant_to_plot:
+            hdf5.verify_hdf5(frame_to_plot, ant_to_plot)
+        elif frame_to_plot:
             hdf5.verify_hdf5(frame_to_plot)
         else:
             hdf5.verify_hdf5()

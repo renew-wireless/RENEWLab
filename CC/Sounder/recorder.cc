@@ -54,11 +54,11 @@ herr_t Recorder::initHDF5(std::string hdf5)
     // dataset dimension    
     dims_pilot[0] = MAX_FRAME_INC; //cfg->maxFrame; 
     dims_pilot[1] = cfg->nCells; 
-    dims_pilot[2] = cfg->nClSdrs;
+    dims_pilot[2] = cfg->nPilotSyms; //cfg->nClSdrs;
     dims_pilot[3] = cfg->getNumAntennas();
     dims_pilot[4] = 2 * cfg->sampsPerSymbol; // IQ
     hsize_t cdims[5] = {1, 1, 1, 1, 2 * cfg->sampsPerSymbol}; // pilot chunk size, TODO: optimize size
-    hsize_t max_dims_pilot[5] = {H5S_UNLIMITED, cfg->nCells, cfg->nClSdrs, cfg->getNumAntennas(), 2 * cfg->sampsPerSymbol};
+    hsize_t max_dims_pilot[5] = {H5S_UNLIMITED, cfg->nCells, cfg->nPilotSyms, cfg->getNumAntennas(), 2 * cfg->sampsPerSymbol};
 
     dims_data[0] = MAX_FRAME_INC; //cfg->maxFrame; 
     dims_data[1] = cfg->nCells; 
@@ -334,6 +334,11 @@ herr_t Recorder::initHDF5(std::string hdf5)
 	attr_vec_ds = DataSpace (1, dimsVec);
         att = mainGroup.createAttribute("OFDM_PILOT", PredType::NATIVE_DOUBLE, attr_vec_ds);
 	att.write(PredType::NATIVE_DOUBLE, &re_im_split_vec_pilot[0]);      
+
+	// Number of Clients
+        attr_data = cfg->nPilotSyms;
+        att = mainGroup.createAttribute("PILOT_NUM", PredType::STD_I32BE, attr_ds);
+        att.write(PredType::NATIVE_INT, &attr_data); 
 
 	// Number of Clients
         attr_data = cfg->nClSdrs;
@@ -656,6 +661,7 @@ void* Recorder::taskThread(void* context)
             obj_ptr->record(tid, event.data);
         }
     }
+    return 0;
 }
 
 // do Crop

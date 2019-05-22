@@ -92,6 +92,7 @@ Config::Config(std::string jsonfile)
                     pilotSymbols[f].push_back(g);
             }
         }
+        nPilotSyms = pilotSymbols[0].size();
         ULSymbols.resize(framePeriod);
         for(int f = 0; f < framePeriod; f++)
         {

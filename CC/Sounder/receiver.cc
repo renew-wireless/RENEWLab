@@ -262,6 +262,7 @@ void* Receiver::loopRecv(void *in_context)
             //radio->readSensors();
         }
     }
+    return 0;
 }
 
 void* Receiver::clientTxRx(void * context)
@@ -369,7 +370,7 @@ void* Receiver::clientTxRx(void * context)
         }
 
     }
-
+    return 0;
 }
 
 

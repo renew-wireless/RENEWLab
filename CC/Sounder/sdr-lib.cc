@@ -353,7 +353,7 @@ void *RadioConfig::initBSRadio(void *in_context)
     rc->bsRxStreams[c][i] = rc->bsSdrs[c][i]->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CS16, channels, sargs);
     rc->bsTxStreams[c][i] = rc->bsSdrs[c][i]->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CS16, channels, sargs);
     rc->remainingJobs--;
-    
+    return 0;    
 }
 
 void RadioConfig::radioStart()
