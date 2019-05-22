@@ -24,7 +24,7 @@
 #include <itpp/itbase.h>
 
 
-double CommsLib::findLTS(std::vector<std::complex<double>> iq)
+int CommsLib::findLTS(std::vector<std::complex<double>> iq)
 {
     /*
      * Find 802.11-based LTS (Long Training Sequence)
@@ -37,7 +37,7 @@ double CommsLib::findLTS(std::vector<std::complex<double>> iq)
     float lts_thresh = 0.8;
     std::vector<std::vector<double> > lts_seq;
     int dummy = 0;
-    double best_peak;
+    int best_peak;
 
     // Original LTS sequence
     lts_seq = CommsLib::getSequence(dummy, LTS_SEQ);
@@ -60,35 +60,39 @@ double CommsLib::findLTS(std::vector<std::complex<double>> iq)
     std::vector<double> lts_corr = CommsLib::convolve(iq_sign, lts_sym_conj);
 
     // Find all peaks
-    std::vector<double> peaks;
-    for(int i=0; i<lts_corr.size(); i++){
+    std::vector<int> peaks;
+    for(size_t i=0; i<lts_corr.size(); i++){
         if(lts_corr[i] > (lts_thresh * *std::max_element(lts_corr.begin(), lts_corr.end()))){
             // Index of valid peaks
             peaks.push_back(i);
         }
     }
 
-    std::vector<std::vector<double>> x_vec(peaks.size());
-    std::vector<std::vector<double>> y_vec(peaks.size());
+    std::vector<std::vector<int>> x_vec(peaks.size());
+    std::vector<std::vector<int>> y_vec(peaks.size());
     CommsLib::meshgrid(peaks, peaks, x_vec, y_vec);
 
     // Find peaks that are 64 samples apart
-    std::vector<double> valid_peaks;
-    for(int i=0; i<x_vec.size(); i++){
-        for(int j=0; j<x_vec[0].size(); j++){
+    std::vector<int> valid_peaks;
+    for(size_t i=0; i<x_vec.size(); i++){
+        for(size_t j=0; j<x_vec[0].size(); j++){
             int idx_diff = y_vec[i][j] - x_vec[i][j];
-            if(idx_diff == lts_sym.size()){
+            if(idx_diff == static_cast<int>(lts_sym.size())){
                 valid_peaks.push_back(peaks[i]);
             }
         }
     }
     // Use first LTS found
-    best_peak = valid_peaks[0];
-    //best_peak = -1;
+    if(valid_peaks.empty()){
+        best_peak = -1;
+    } else {
+        best_peak = valid_peaks[0];
+    }
+
     return best_peak;
 }
 
-void CommsLib::meshgrid(std::vector<double> x_in, std::vector<double> y_in, std::vector<std::vector<double>> &x, std::vector<std::vector<double>> &y)
+void CommsLib::meshgrid(std::vector<int> x_in, std::vector<int> y_in, std::vector<std::vector<int>> &x, std::vector<std::vector<int>> &y)
 {
     /*
      * Simplified version of numpy's meshgrid function. Input vectors must be of same length.
@@ -122,7 +126,7 @@ std::vector<std::complex<double>> CommsLib::csign(std::vector<std::complex<doubl
      *     -1 if x < 0, 0 if x==0, 1 if x > 0
      */
     std::vector<std::complex<double>> iq_sign;
-    for(int i=0; i<iq.size(); i++){
+    for(int i=0; i<static_cast<int>(iq.size()); i++){
         // sign(x.real) + 0j if x.real != 0 else sign(x.imag) + 0j
         std::complex<double> x = iq[i];
         if(x.real() != 0){
