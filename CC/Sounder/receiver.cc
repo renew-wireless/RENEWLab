@@ -46,6 +46,7 @@ std::vector<pthread_t> Receiver::startRecv(void** in_buffer, int** in_buffer_sta
     buffer_status_ = in_buffer_status; // for save status
 
     core_id_ = in_core_id;
+    radioconfig_->sampleOffsetCal();
     radioconfig_->radioStart();
 
     std::vector<pthread_t> client_threads;

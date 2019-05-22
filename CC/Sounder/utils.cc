@@ -32,6 +32,29 @@ std::vector<std::complex<int16_t>> Utils::double_to_int16(std::vector<std::vecto
     return out;
 }
 
+std::vector<std::complex<double>> Utils::uint32tocdouble(std::vector<uint32_t> in, std::string order)
+{
+    int len = in.size();
+    std::vector<std::complex<double>> out(len, 0);
+    for (size_t i = 0; i < in.size(); i++)
+    {
+        int16_t arr_hi_int = (int16_t)(in[i] >> 16);
+        int16_t arr_lo_int = (int16_t)(in[i] & 0x0FFFF);
+
+        double arr_hi = (double)arr_hi_int / 32768.0;
+        double arr_lo = (double)arr_lo_int / 32768.0;
+
+        if (order == "IQ") {
+            std::complex<double> csamp(arr_hi, arr_lo);
+            out[i] = csamp;
+        } else if (order == "QI") {
+            std::complex<double> csamp(arr_lo, arr_hi);
+            out[i] = csamp;
+            }
+    }
+    return out;
+}
+
 std::vector<uint32_t> Utils::cint16_to_uint32(std::vector<std::complex<int16_t>> in, bool conj, std::string order)
 {
     std::vector<uint32_t> out (in.size(), 0);

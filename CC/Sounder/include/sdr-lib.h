@@ -12,6 +12,7 @@
 #include <csignal>
 #include "config.h"
 
+
 class RadioConfig
 {
 public:
@@ -24,7 +25,7 @@ public:
     void radioRx(void ** buffs);
     int radioTx(int, void ** buffs, int flags, long long & frameTime);
     int radioRx(int, void ** buffs, long long & frameTime);
-    void sampleOffsetCal();
+    int sampleOffsetCal();
 
     ~RadioConfig();
     std::vector<SoapySDR::Device *> devs;
@@ -52,6 +53,8 @@ private:
     std::vector<std::complex<int16_t>> buff;
     std::vector<int> nBsSdrs;
     std::vector<int> nBsAntennas;
+    std::vector<uint32_t> pilot_uint32;
+    std::vector<uint32_t> dummy_uint32;
 
     int nClSdrs;
     int nClAntennas;
