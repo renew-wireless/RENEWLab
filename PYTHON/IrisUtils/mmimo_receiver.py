@@ -336,7 +336,7 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est):
     if rx_mode == "AWGN":
         samp_offset = prefix_len
     else:
-        samp_offset = 69
+        samp_offset = 67
 
     # Reshape into matrix. Dim: [num clients, num_sc+cp, num_ofdm]
     payload = samples
@@ -362,8 +362,8 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est):
     x = np.zeros((num_cl, num_sc, n_ofdm_syms), dtype=complex)
     for symIdx in range(n_ofdm_syms):
         for scIdx in range(num_sc):
-            this_w = np.squeeze(bf_weights[:, :, scIdx])
-            y = np.squeeze(rxSig_freq[:, scIdx, symIdx])
+            this_w = np.squeeze(bf_weights[:, [3, 5, 7], scIdx]) * 10 # FIXME - REMOVE "10" factor, I just added to visualize and debug - also remove [3, 5, 7]. these are the "good" antennas for this run
+            y = np.squeeze(rxSig_freq[[3, 5, 7], scIdx, symIdx])
             x[:, scIdx, symIdx] = np.dot(this_w, y)  # np.transpose(np.matmul(this_w, y))
 
 
@@ -373,7 +373,7 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est):
         x = np.zeros((num_cl, num_sc, n_ofdm_syms), dtype=complex)
         chan_est_tmp = np.squeeze(chan_est)
         for symIdx in range(n_ofdm_syms):
-            antIdx = 7
+            antIdx = 3
             x[0, :, symIdx] = rxSig_freq[antIdx, :, symIdx] / chan_est_tmp[antIdx, :]
     ## END FIXME REMOVE
 
@@ -871,14 +871,15 @@ if __name__ == '__main__':
 
     parser = OptionParser()
     # Params
-    parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
-    parser.add_option("--mode",       type="string",       dest="mode",       default="AWGN", help="Options: REPLAY/AWGN/OTA [default: %default]")
+    # parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
+    parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-3-16-15-12-43_1x8x1.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
+    parser.add_option("--mode",       type="string",       dest="mode",       default="REPLAY", help="Options: REPLAY/AWGN/OTA [default: %default]")
     parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
     parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=True,  help="Apply CFO correction [default: %default]")
     parser.add_option("--sfoCorr",    action="store_true", dest="sfo_corr",   default=True,  help="Apply SFO correction [default: %default]")
     parser.add_option("--phaseCorr",  action="store_true", dest="phase_corr", default=True,  help="Apply phase correction [default: %default]")
     parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=1,     help="FFT Offset:# CP samples for FFT [default: %default]")
-    parser.add_option("--numClPlot",  type="int",          dest="num_cl_plot",default=2,     help="Number of clients to plot. Max of 2 [default: %default]")
+    parser.add_option("--numClPlot",  type="int",          dest="num_cl_plot",default=1,     help="Number of clients to plot. Max of 2 [default: %default]")
     (options, args) = parser.parse_args()
 
     # Params
@@ -897,7 +898,7 @@ if __name__ == '__main__':
     num_cl_plot = options.num_cl_plot     # number of clients to plot
     this_plotter = Plotter(num_cl_plot)
 
-    # rx_app(filename, user_params, this_plotter)
+    #rx_app(filename, user_params, this_plotter)
     # RX app thread
     rxth = threading.Thread(target=rx_app, args=(filename, user_params, this_plotter))
     rxth.start()
