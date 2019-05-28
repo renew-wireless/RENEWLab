@@ -487,8 +487,10 @@ void Recorder::openHDF5()
     int cndims_pilot = 0;
     if (H5D_CHUNKED == pilot_prop.getLayout())
         cndims_pilot = pilot_prop.getChunk(ndims, cdims_pilot);
+#if DEBUG_PRINT
     cout << "dim pilot chunk = " << cndims_pilot << endl;
     cout << "New Pilot Dataset Dimension " << ndims << "," << dims_pilot[0] << "," << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << "," << dims_pilot[4] << endl;
+#endif
     pilot_filespace->close();
     // Get Dataset for DATA (If Enabled) and check the shape of it
     if((config_dump_data == 1))
@@ -503,8 +505,10 @@ void Recorder::openHDF5()
         int cndims_data = 0;
         if (H5D_CHUNKED == data_prop.getLayout())
             cndims_data = data_prop.getChunk(ndims, cdims_data);
+#if DEBUG_PRINT
         cout << "dim data chunk = " << cndims_data << endl;;
         cout << "New Data Dataset Dimension " << ndims << "," << dims_data[0] << "," << dims_data[1] << "," << dims_data[2] << ","<< dims_data[3] << "," << dims_data[4] << endl;
+#endif
         data_filespace->close();
     }
 }
@@ -533,16 +537,21 @@ void Recorder::closeHDF5()
 
     file->close();
 
-    cout << "Closing HDF5, " << frameNumber << " frames saved." << endl;
+    cout << "Saving HDF5, " << frameNumber << " frames saved." << endl;
 }
 
 Recorder::~Recorder()
 {
-    this->closeHDF5();
-    receiver_.reset();
     delete [] socket_buffer_;
     delete [] task_threads;
     delete [] context;
+}
+
+void Recorder::stop()
+{
+    cfg->running = false;
+    receiver_.reset();
+    this->closeHDF5();
 }
 
 void Recorder::start()
@@ -574,7 +583,7 @@ void Recorder::start()
 
     Event_data events_list[dequeue_bulk_size];
     int ret = 0;
-    while(cfg->running)
+    while(cfg->running && !SignalHandler::gotExitSignal())
     {
         // get a bulk of events
         ret = message_queue_.try_dequeue_bulk(ctok, events_list, dequeue_bulk_size);
@@ -613,6 +622,7 @@ void Recorder::start()
             }
         }
     }
+    this->stop();
 }
 
 void* Recorder::taskThread(void* context)
@@ -740,7 +750,9 @@ herr_t Recorder::record(int tid, int offset)
                                   ? std::min(dims_pilot[0] + config_pilot_extent_step, (long long unsigned int)cfg->max_frame+1) // 400 is a threshold.
                                   : dims_pilot[0] + config_pilot_extent_step; 
                 pilot_dataset->extend(dims_pilot);
+#if DEBUG_PRINT
                 std::cout << "FrameId " << frame_id << ", (Pilot) Extent to " << dims_pilot[0] << " Frames" << std::endl;
+#endif
             }
             // Select a hyperslab in extended portion of the dataset
             pilot_filespace = new DataSpace(pilot_dataset->getSpace());

@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <system_error>
 #include <pthread.h>
+#include <signal.h>
 #include <queue>
 #include <math.h>
 #include <ctime>
@@ -26,6 +27,7 @@
 #include "hdf5.h"
 #include "H5Cpp.h"
 #include "receiver.h"
+#include "signalHandler.hpp"
 
 using std::cout;
 using std::endl;
@@ -44,6 +46,7 @@ public:
     ~Recorder();
 
     void start();
+    void stop();
     herr_t initHDF5(std::string);
     void openHDF5();
     void closeHDF5();
@@ -97,6 +100,5 @@ private:
     EventHandlerContext *context; //[TASK_THREAD_NUM];
 
     std::vector<std::unique_ptr<moodycamel::ProducerToken>> task_ptok; //[TASK_THREAD_NUM];
-
 };
 #endif
