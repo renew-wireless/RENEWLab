@@ -18,19 +18,24 @@ Recorder::Recorder(Config *cfg)
     if (cfg->bsPresent) rx_thread_num = nCores >= 2*SOCKET_THREAD_NUM and cfg->nBsSdrs[0] >= SOCKET_THREAD_NUM ? SOCKET_THREAD_NUM : 1; // TODO: read number of cores and assign accordingly
     else rx_thread_num = 0; 
     printf("allocating %d cores to receive threads ... \n", rx_thread_num);
-    task_queue_ = moodycamel::ConcurrentQueue<Event_data>(SOCKET_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas() * 36);
-    message_queue_ = moodycamel::ConcurrentQueue<Event_data>(SOCKET_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas() * 36);
+    size_t buffer_chunk_size = SOCKET_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas();
+    task_queue_ = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
+    message_queue_ = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
     
     // initialize socket buffer
+    socket_buffer_ = new SocketBuffer[SOCKET_THREAD_NUM];
     for(int i = 0; i < rx_thread_num; i++)
     {
-        socket_buffer_[i].buffer.resize(cfg->getPackageLength() * cfg->getNumAntennas() * cfg->symbolsPerFrame * SOCKET_BUFFER_FRAME_NUM);
-        socket_buffer_[i].buffer_status.resize(cfg->symbolsPerFrame * SOCKET_BUFFER_FRAME_NUM * cfg->getNumAntennas());
+        socket_buffer_[i].buffer.resize(buffer_chunk_size * cfg->getPackageLength());
+        socket_buffer_[i].buffer_status.resize(buffer_chunk_size);
     }
     cfg->running = true;
     receiver_.reset(new Receiver(rx_thread_num, cfg, &message_queue_));
 
-    // create task thread
+    // task threads
+    task_ptok.resize(TASK_THREAD_NUM); 
+    task_threads = new pthread_t[TASK_THREAD_NUM];
+    context = new EventHandlerContext[TASK_THREAD_NUM];
     for(int i = 0; i < TASK_THREAD_NUM; i++)
     {
         context[i].obj_ptr = this;
@@ -45,8 +50,6 @@ Recorder::Recorder(Config *cfg)
 
 herr_t Recorder::initHDF5(std::string hdf5)
 {
-    char tmpstr[1024];
-    
     hdf5name = hdf5; 
     hdf5group = "/"; // make sure it starts with '/' 
     std::cout << "Set HDF5 File to " << hdf5name << " and group to " << hdf5group << std::endl;	
@@ -65,8 +68,8 @@ herr_t Recorder::initHDF5(std::string hdf5)
     dims_data[2] = cfg->ulSymsPerFrame;
     dims_data[3] = cfg->getNumAntennas();
     dims_data[4] = 2 * cfg->sampsPerSymbol; // IQ
-    hsize_t cdims_data[5] = {1, 1, 1, 1, 2 * cfg->sampsPerSymbol}; // data chunk size, TODO: optimize size
-    hsize_t max_dims_data[5] = {H5S_UNLIMITED, cfg->nCells, cfg->ulSymsPerFrame, cfg->getNumAntennas(), 2 * cfg->sampsPerSymbol};
+    hsize_t cdims_data[5] = {1, 1, 1, 1, 2 * (hsize_t)cfg->sampsPerSymbol}; // data chunk size, TODO: optimize size
+    hsize_t max_dims_data[5] = {H5S_UNLIMITED, (hsize_t)cfg->nCells, (hsize_t)cfg->ulSymsPerFrame, cfg->getNumAntennas(), 2 * (hsize_t)cfg->sampsPerSymbol};
 
     // Used to create variable strings
     std::ostringstream oss;
@@ -484,8 +487,10 @@ void Recorder::openHDF5()
     int cndims_pilot = 0;
     if (H5D_CHUNKED == pilot_prop.getLayout())
         cndims_pilot = pilot_prop.getChunk(ndims, cdims_pilot);
+#if DEBUG_PRINT
     cout << "dim pilot chunk = " << cndims_pilot << endl;
     cout << "New Pilot Dataset Dimension " << ndims << "," << dims_pilot[0] << "," << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << "," << dims_pilot[4] << endl;
+#endif
     pilot_filespace->close();
     // Get Dataset for DATA (If Enabled) and check the shape of it
     if((config_dump_data == 1))
@@ -500,8 +505,10 @@ void Recorder::openHDF5()
         int cndims_data = 0;
         if (H5D_CHUNKED == data_prop.getLayout())
             cndims_data = data_prop.getChunk(ndims, cdims_data);
+#if DEBUG_PRINT
         cout << "dim data chunk = " << cndims_data << endl;;
         cout << "New Data Dataset Dimension " << ndims << "," << dims_data[0] << "," << dims_data[1] << "," << dims_data[2] << ","<< dims_data[3] << "," << dims_data[4] << endl;
+#endif
         data_filespace->close();
     }
 }
@@ -530,11 +537,20 @@ void Recorder::closeHDF5()
 
     file->close();
 
-    cout << "Closing HDF5, " << frameNumber << " frames saved." << endl;
+    cout << "Saving HDF5, " << frameNumber << " frames saved." << endl;
 }
 
 Recorder::~Recorder()
 {
+    delete [] socket_buffer_;
+    delete [] task_threads;
+    delete [] context;
+}
+
+void Recorder::stop()
+{
+    cfg->running = false;
+    receiver_.reset();
     this->closeHDF5();
 }
 
@@ -567,7 +583,7 @@ void Recorder::start()
 
     Event_data events_list[dequeue_bulk_size];
     int ret = 0;
-    while(cfg->running)
+    while(cfg->running && !SignalHandler::gotExitSignal())
     {
         // get a bulk of events
         ret = message_queue_.try_dequeue_bulk(ctok, events_list, dequeue_bulk_size);
@@ -606,6 +622,7 @@ void Recorder::start()
             }
         }
     }
+    this->stop();
 }
 
 void* Recorder::taskThread(void* context)
@@ -733,7 +750,9 @@ herr_t Recorder::record(int tid, int offset)
                                   ? std::min(dims_pilot[0] + config_pilot_extent_step, (long long unsigned int)cfg->max_frame+1) // 400 is a threshold.
                                   : dims_pilot[0] + config_pilot_extent_step; 
                 pilot_dataset->extend(dims_pilot);
+#if DEBUG_PRINT
                 std::cout << "FrameId " << frame_id << ", (Pilot) Extent to " << dims_pilot[0] << " Frames" << std::endl;
+#endif
             }
             // Select a hyperslab in extended portion of the dataset
             pilot_filespace = new DataSpace(pilot_dataset->getSpace());

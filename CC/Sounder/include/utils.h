@@ -40,7 +40,7 @@ public:
     Utils();
     ~Utils();
 
-    static std::vector<std::complex<int16_t>> double_to_int16(std::vector<std::vector<double>> in, std::string order);
+    static std::vector<std::complex<int16_t>> double_to_int16(std::vector<std::vector<double>> in);
     static std::vector<uint32_t> cint16_to_uint32(std::vector<std::complex<int16_t>> in, bool conj, std::string order);
     static std::vector<std::vector<size_t>> loadSymbols(std::vector<std::string> frames, char sym);
     static void loadDevices(std::string filename, std::vector<std::string> &data);

@@ -11,7 +11,6 @@
 
 #include "include/receiver.h"
 
-static sig_atomic_t loopDone = false;
 Receiver::Receiver(int N_THREAD, Config *cfg)
 {
 
@@ -33,11 +32,10 @@ Receiver(N_THREAD, config)
 
 Receiver::~Receiver()
 {
-    delete[] socket_;
-    delete[] context;
     radioconfig_->radioStop();
     delete radioconfig_;
-    delete config_;
+    delete[] socket_;
+    delete[] context;
 }
 
 std::vector<pthread_t> Receiver::startRecv(void** in_buffer, int** in_buffer_status, int in_buffer_frame_num, int in_buffer_length, int in_core_id)
@@ -247,6 +245,7 @@ void* Receiver::loopRecv(void *in_context)
             maxQueueLength = maxQueueLength > cur_queue_len ? maxQueueLength : cur_queue_len;
 
         }
+#if DEBUG_PRINT
         package_num++;
         // print some information
         if(package_num >= 1e4)
@@ -261,6 +260,7 @@ void* Receiver::loopRecv(void *in_context)
             package_num = 0;
             //radio->readSensors();
         }
+#endif
     }
     return 0;
 }

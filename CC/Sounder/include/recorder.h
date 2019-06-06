@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <system_error>
 #include <pthread.h>
+#include <signal.h>
 #include <queue>
 #include <math.h>
 #include <ctime>
@@ -26,6 +27,7 @@
 #include "hdf5.h"
 #include "H5Cpp.h"
 #include "receiver.h"
+#include "signalHandler.hpp"
 
 using std::cout;
 using std::endl;
@@ -44,6 +46,7 @@ public:
     ~Recorder();
 
     void start();
+    void stop();
     herr_t initHDF5(std::string);
     void openHDF5();
     void closeHDF5();
@@ -59,7 +62,8 @@ public:
 private:
     Config *cfg;
     std::unique_ptr<Receiver> receiver_;
-    SocketBuffer socket_buffer_[SOCKET_THREAD_NUM];
+    SocketBuffer *socket_buffer_;
+    //SocketBuffer socket_buffer_[SOCKET_THREAD_NUM];
 
     H5std_string hdf5name;
     H5std_string hdf5group;
@@ -91,11 +95,10 @@ private:
     int rx_thread_num;
     moodycamel::ConcurrentQueue<Event_data> task_queue_;
     moodycamel::ConcurrentQueue<Event_data> message_queue_;
-    pthread_t task_threads[TASK_THREAD_NUM];
+    pthread_t *task_threads; //[TASK_THREAD_NUM];
 
-    EventHandlerContext context[TASK_THREAD_NUM];
+    EventHandlerContext *context; //[TASK_THREAD_NUM];
 
-    std::unique_ptr<moodycamel::ProducerToken> task_ptok[TASK_THREAD_NUM];
-
+    std::vector<std::unique_ptr<moodycamel::ProducerToken>> task_ptok; //[TASK_THREAD_NUM];
 };
 #endif

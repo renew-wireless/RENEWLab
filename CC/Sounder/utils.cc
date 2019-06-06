@@ -23,7 +23,7 @@ int pin_to_core(int core_id) {
     return pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
 }
 
-std::vector<std::complex<int16_t>> Utils::double_to_int16(std::vector<std::vector<double>> in, std::string order)
+std::vector<std::complex<int16_t>> Utils::double_to_int16(std::vector<std::vector<double>> in)
 {
     int len = in[0].size();
     std::vector<std::complex<int16_t>> out(len, 0); 

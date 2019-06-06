@@ -51,17 +51,17 @@ public:
     std::string beacon_seq;
     
     // BS features
-    int nCells;
+    size_t nCells;
     std::vector<std::string> bs_sdr_file;
     std::string hub_file;
     std::string ref_sdr;
     std::vector<std::vector<std::string>> bs_sdr_ids;
     std::vector<std::string> hub_ids;
-    int beacon_ant;
+    size_t beacon_ant;
     bool beamsweep;
-    std::vector<int> nBsSdrs;
-    std::vector<int> nBsAntennas;
-    int bsSdrCh;
+    std::vector<size_t> nBsSdrs;
+    std::vector<size_t> nBsAntennas;
+    size_t bsSdrCh;
     std::string bsChannel;
     int framePeriod;
     std::vector<std::string> frames;
@@ -109,8 +109,8 @@ public:
     const int data_offset = sizeof(int) * 4;
     // header 4 int for: frame_id, subframe_id, cell_id, ant_id
     // ushort for: I/Q samples
-    int getPackageLength() { return sizeof(int) * 4 + sizeof(ushort) * sampsPerSymbol * 2; }
-    int getNumAntennas(); //{ return nRadios*nChannels; }
+    size_t getPackageLength() { return sizeof(int) * 4 + sizeof(ushort) * (size_t)sampsPerSymbol * 2; }
+    size_t getNumAntennas(); //{ return nRadios*nChannels; }
     int getClientId(int, int);
     int getUlSFIndex(int, int);
     int getDlSFIndex(int, int);

@@ -63,12 +63,16 @@ RadioConfig::RadioConfig(Config *cfg):
                 context[i].ptr = this;
                 context[i].tid = i;
                 context[i].cell = c;
+#ifdef THREADED_INIT
                 pthread_t init_thread_;
                 if(pthread_create( &init_thread_, NULL, RadioConfig::initBSRadio, (void *)(&context[i])) != 0)
                 {
                     perror("init thread create failed");
                     exit(0);
                 }
+#else
+                RadioConfig::initBSRadio((void *)&context[i]);
+#endif
             }
 
             while(remainingJobs>0);
@@ -420,7 +424,6 @@ void RadioConfig::radioStart()
                         bsSdrs[0][i]->writeRegisters("TX_RAM_B", 0, zeros);
                     }
                     bsSdrs[0][i]->writeRegister("RFCORE", 156, 0);
-                    std::cout << "beamsweeping not enabled!" << std::endl;
                 } 
                 else // beamsweep
                 {
@@ -444,7 +447,6 @@ void RadioConfig::radioStart()
                     }
                     bsSdrs[0][i]->writeRegister("RFCORE", 156, nBsSdrs[0]);
                     bsSdrs[0][i]->writeRegister("RFCORE", 160, 1);
-                    std::cout << "beamsweeping enabled!" << std::endl;
                 }
             }
             bsSdrs[0][i]->activateStream(this->bsRxStreams[0][i], flags, 0);
@@ -504,7 +506,7 @@ void RadioConfig::radioStart()
             conf["frame_mode"] = _cfg->frame_mode;
             int max_frame_ = (int)(2.0 / ((_cfg->sampsPerSymbol * _cfg->symbolsPerFrame) / _cfg->rate));
             conf["max_frame"] = max_frame_; 
-            std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;
+            //std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;
 #else
             conf["trigger_out"] = true; 
             conf["wait_trigger"] = true; 
@@ -585,19 +587,19 @@ void RadioConfig::radioStop()
     {
         for (int i = 0; i < nBsSdrs[0]; i++)
         {
+            // write schedule
+            for (int j = 0; j < _cfg->frames.size(); j++) 
+            {
+                for(int k = 0; k < _cfg->symbolsPerFrame; k++) // symnum <= 256
+                {
+            	    bsSdrs[0][i]->writeRegister("RFCORE", SCH_ADDR_REG, j*256+k);
+            	    bsSdrs[0][i]->writeRegister("RFCORE", SCH_MODE_REG, 0);
+                }
+            }
             bsSdrs[0][i]->writeSetting("TDD_MODE", "false");
             bsSdrs[0][i]->writeRegister("IRIS30", 48, (1<<29)| 0x1);
             bsSdrs[0][i]->writeRegister("IRIS30", 48, (1<<29));
             bsSdrs[0][i]->writeRegister("IRIS30", 48, 0);
-            // write schedule
-            for (int j = 0; j < 16; j++) 
-            {
-                for(int k = 0; k < _cfg->symbolsPerFrame; k++) // symnum <= 256
-                {
-            	bsSdrs[0][i]->writeRegister("RFCORE", 136, j*256+k);
-            	bsSdrs[0][i]->writeRegister("RFCORE", 140, 0);
-                }
-            }
         }
     }
     if (_cfg->clPresent)
@@ -687,6 +689,7 @@ RadioConfig::~RadioConfig()
             bsSdrs[0][i]->deactivateStream(this->bsTxStreams[0][i]);
             bsSdrs[0][i]->closeStream(this->bsRxStreams[0][i]);
             bsSdrs[0][i]->closeStream(this->bsTxStreams[0][i]);
+            SoapySDR::Device::unmake(bsSdrs[0][i]);
         }
     }
     if (_cfg->clPresent)
@@ -699,6 +702,7 @@ RadioConfig::~RadioConfig()
 
             device->closeStream(rxss[i]);
             device->closeStream(txss[i]);
+            SoapySDR::Device::unmake(device);
         }
     }
 }
