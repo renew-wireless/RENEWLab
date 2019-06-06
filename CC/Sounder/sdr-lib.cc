@@ -875,7 +875,7 @@ int RadioConfig::sampleOffsetCal()
         }
 
         // Find correlation index at each board
-        int peak;
+        int peak=0;
         for (int j = 0; j < nBsSdrs[cellIdx] - 1; j++)
         {
             // Across all base station boards
@@ -958,7 +958,7 @@ int RadioConfig::sampleOffsetCal()
                 samp_offset_ver[j] = most_freq_ver[cal_ref_idx] - most_freq_ver[j];
 
                 // debug print
-                //std::cout << "Board[" << j << "] - Cal Offsets: " << samp_offset[j] << " Ver Offsets: " << samp_offset_ver[j] << " Most Freq[0]: " << most_freq[0] << " MostFreq[j]: " << most_freq[j] <<  " MostFreqVer[0]: " << most_freq_ver[0] << " MostFreqVer[j]: "<< most_freq_ver[j] << std::endl;
+                std::cout << "Board[" << j << "] - Cal Offsets: " << samp_offset[j] << " Ver Offsets: " << samp_offset_ver[j] << " Most Freq[0]: " << most_freq[0] << " MostFreq[j]: " << most_freq[j] <<  " MostFreqVer[0]: " << most_freq_ver[0] << " MostFreqVer[j]: "<< most_freq_ver[j] << std::endl;
             }
         } // end verification
     } // end numCalTx + numVerTx for loop
