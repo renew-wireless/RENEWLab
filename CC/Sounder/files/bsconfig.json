@@ -4,7 +4,7 @@
 		 "sdr_id" : ["files/iris_serials.txt"],
 		 "hub_id" : "files/hub_serials.txt",
 		 "frequency" : 3.6e9,
-		 "channel" : "AB",
+		 "channel" : "A",
 		 "rxgainA" : 30,
 		 "txgainA" : 35,
 		 "rxgainB" : 30,

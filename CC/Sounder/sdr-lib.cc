@@ -694,10 +694,10 @@ int RadioConfig::sampleOffsetCal()
 {
     /*
      * Calibrate sample offset observed between boards in Base Station
-     * Procedure: Transmit pilot from a reference board
-     * OBCH!!!
-     *
-     *
+     * Procedure: (i)   Transmit pilot from Board0 (first in list of BS boards)
+     *		  (ii)  Find correlation peak index at all antennas in BS
+     *		  (iii) Calculate index offset with respect to reference board Board1
+     *		  (iv)  Adjust trigger delay (increase or decrease accordingly)
      */
 
     /************
@@ -768,7 +768,7 @@ int RadioConfig::sampleOffsetCal()
     // write config for reference radio node
     std::vector<std::string> sched = {"PG"};
     //std::string sched = "PG";
-    std::cout << "Ref node schedule: " << sched[0] << std::endl;
+    std::cout << "Samp Offset Cal Ref node schedule: " << sched[0] << std::endl;
 #ifdef JSON
     json conf;
     conf["tdd_enabled"] = true;
@@ -793,7 +793,7 @@ int RadioConfig::sampleOffsetCal()
     {
         sched.clear();
         sched = {"RG"};
-        std::cout << "node " << i << " schedule: " << sched[0] << std::endl;
+        std::cout << "Samp Offset Cal node " << i << " schedule: " << sched[0] << std::endl;
 #ifdef JSON
         conf["tdd_enabled"] = true;
         conf["trigger_out"] = false;
@@ -820,9 +820,9 @@ int RadioConfig::sampleOffsetCal()
      *********************************/
     // Multiple iterations
     int numCalTx = 100;
-    int numVerTx = 100;
+    int numVerTx = 200;
     // Cal-Passing Threshold
-    double pass_thresh = 0.8 * numCalTx;
+    double pass_thresh = 0.7 * numCalTx;
     // Read buffers
     //std::vector<std::complex<float>> buffA(symSamp);
     //std::vector<std::complex<float>> buffB(symSamp);
@@ -836,12 +836,12 @@ int RadioConfig::sampleOffsetCal()
     // Aggregate over iterations (for calibration and for verification)
     std::vector<std::vector<int>> calCorrIdx(nBsSdrs[cellIdx] - 1, std::vector<int>(numCalTx, 0));
     std::vector<std::vector<int>> verCorrIdx(nBsSdrs[cellIdx] - 1, std::vector<int>(numVerTx, 0));
-    std::vector<int> max_freq(nBsSdrs[cellIdx] - 1, 0);
-    std::vector<int> most_freq(nBsSdrs[cellIdx] - 1, -1);
-    std::vector<int> samp_offset(nBsSdrs[cellIdx] - 1, 0);
-    std::vector<int> max_freq_ver(nBsSdrs[cellIdx] - 1, 0);
-    std::vector<int> most_freq_ver(nBsSdrs[cellIdx] - 1, -1);
-    std::vector<int> samp_offset_ver(nBsSdrs[cellIdx] - 1, 0);
+    std::vector<int> max_freq(nBsSdrs[cellIdx] - 1, -999);
+    std::vector<int> most_freq(nBsSdrs[cellIdx] - 1, -999);
+    std::vector<int> samp_offset(nBsSdrs[cellIdx] - 1, -999);
+    std::vector<int> max_freq_ver(nBsSdrs[cellIdx] - 1, -999);
+    std::vector<int> most_freq_ver(nBsSdrs[cellIdx] - 1, -999);
+    std::vector<int> samp_offset_ver(nBsSdrs[cellIdx] - 1, -999);
 
     for (int i = 0; i < numCalTx + numVerTx; i++)
     {
@@ -860,9 +860,11 @@ int RadioConfig::sampleOffsetCal()
         // Ignore first board (TX)
         for (int j = _cfg->bsSdrCh; j < nBsAntennas[cellIdx]; j+=_cfg->bsSdrCh)
         {
+	    int index1 = j/_cfg->bsSdrCh;
+	    int index2 = j/_cfg->bsSdrCh - _cfg->bsSdrCh;
             // Read stream data type: SOAPY_SDR_CS16
             int r = bsSdrs[cellIdx][j/_cfg->bsSdrCh]->readStream(this->bsRxStreams[cellIdx][j/_cfg->bsSdrCh], buffs.data(), symSamp, flags, frameTime, 1000000);
-            std::cout << "ReadStream: " << r << "  Num BS ant: " << nBsAntennas[cellIdx] << std::endl;
+            //std::cout << "ReadStream: " << r << "  Num BS ant: " << nBsAntennas[cellIdx] << std::endl;
             // cast vectors
             //std::vector<std::complex<double>> buffA_d(buffA.begin(), buffA.end());
             //std::vector<std::complex<double>> buffB_d(buffB.begin(), buffB.end());
@@ -871,7 +873,6 @@ int RadioConfig::sampleOffsetCal()
             waveRxA[j/_cfg->bsSdrCh - _cfg->bsSdrCh] = buffA_d;
             waveRxB[j/_cfg->bsSdrCh - _cfg->bsSdrCh] = buffB_d;
         }
-        std::cout << "waveRxA: " << waveRxA.size() << " waveRxA[0]: " << waveRxA[0].size() << std::endl;
 
         // Find correlation index at each board
         int peak;
@@ -883,7 +884,7 @@ int RadioConfig::sampleOffsetCal()
                 // Across all RX channels in base station board j
                 if (k==0) peak = CommsLib::findLTS(waveRxA[j]);
                 if (k==1) peak = CommsLib::findLTS(waveRxB[j]);
-                std::cout << "Peak[" << j << "]: " << peak << std::endl;
+                //std::cout << "Peak[" << j << "]: " << peak << std::endl;
 
                 if (peak == -1){
                     // If no LTS found, use value from second channel
@@ -899,6 +900,12 @@ int RadioConfig::sampleOffsetCal()
 
         // Calibrate: If we are done collecting datapoints for cal
         if(i == numCalTx-1){
+               /* bsSdrs[cellIdx][1]->writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_DECR_TIME);
+                bsSdrs[cellIdx][1]->writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_DECR_TIME);
+                bsSdrs[cellIdx][1]->writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_DECR_TIME);
+                bsSdrs[cellIdx][1]->writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_DECR_TIME);
+                usleep(5000);
+	       */
             // Find most common corr. index for each BS board (ignore tx board)
             int cal_ref_idx = 0;
             for (int j = 0; j < nBsSdrs[cellIdx] - 1; j++) {
@@ -911,22 +918,26 @@ int RadioConfig::sampleOffsetCal()
                         most_freq[j] = *vi;
                     }
                 }
-                if (max_freq[j] < pass_thresh) {
-                    std::cout << "Sample Offset Calibration FAILED at board " << j << " ... Re-Run!" << std::endl;
+                if (max_freq[j] < pass_thresh || most_freq[j] == 0) {
+                    std::cout << "Sample Offset Calibration FAILED at board " << j << " ... RE-RUN!" << std::endl;
                     return -1;
                 }
                 // record sample offset (from a reference board)
                 samp_offset[j] = most_freq[cal_ref_idx] - most_freq[j];
                 for (int k = 0; k < abs(samp_offset[j]); k++) {
                     if (samp_offset[j] > 0) {
+			std::cout << "Board[" << j << "]: INCREASE" << std::endl;
                         bsSdrs[cellIdx][j+1]->writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_INCR_TIME);
+			usleep(5000);
                     } else if (samp_offset[j] < 0) {
+			std::cout << "Board[" << j << "]: DECREASE" << std::endl;
                         bsSdrs[cellIdx][j+1]->writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_DECR_TIME);
+			usleep(5000);
                     }
                 }
             }
-            usleep(100000);
         } // end calibration
+
 
         // Verification
         if(i == numCalTx + numVerTx - 1){
@@ -935,9 +946,10 @@ int RadioConfig::sampleOffsetCal()
             for (int j = 0; j < nBsSdrs[cellIdx] - 1; j++) {
                 std::map<int,int> m;
                 typedef std::vector<int>::const_iterator iter;
-                for (iter vi = verCorrIdx[j].begin(); vi != verCorrIdx[j].end(); vi++) {
+		// Change takes time to take effect, only consider second half of verification vals
+                for (iter vi = verCorrIdx[j].begin()+(numVerTx/2); vi != verCorrIdx[j].end(); vi++) {
                     int count = m[*vi]++;
-                    if (count > max_freq[j]) {
+                    if (count > max_freq_ver[j]) {
                         max_freq_ver[j] = count;
                         most_freq_ver[j] = *vi;
                     }
@@ -945,12 +957,13 @@ int RadioConfig::sampleOffsetCal()
                 // record sample offset (from a reference board)
                 samp_offset_ver[j] = most_freq_ver[cal_ref_idx] - most_freq_ver[j];
 
-                // print
-                std::cout << "Board[" << j << "] - Cal Offsets: " << samp_offset[j] << " Ver Offsets: " << samp_offset_ver[j] << std::endl;
+                // debug print
+                //std::cout << "Board[" << j << "] - Cal Offsets: " << samp_offset[j] << " Ver Offsets: " << samp_offset_ver[j] << " Most Freq[0]: " << most_freq[0] << " MostFreq[j]: " << most_freq[j] <<  " MostFreqVer[0]: " << most_freq_ver[0] << " MostFreqVer[j]: "<< most_freq_ver[j] << std::endl;
             }
         } // end verification
     } // end numCalTx + numVerTx for loop
 
+    /*
     std::ofstream myfile;
     myfile.open("./cal_ver.txt");
     myfile << "CALIBRATION VALUES:";
@@ -972,6 +985,7 @@ int RadioConfig::sampleOffsetCal()
         myfile << std::endl;
     }
     myfile.close();
+    */
 
     return 0;
 }
