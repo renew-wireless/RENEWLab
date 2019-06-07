@@ -705,6 +705,7 @@ int RadioConfig::sampleOffsetCal()
      ************/
     // Only one cell considered at the moment
     int cellIdx = 0;
+    int debug = 0;
 
 
     /***********************
@@ -860,11 +861,11 @@ int RadioConfig::sampleOffsetCal()
         // Ignore first board (TX)
         for (int j = _cfg->bsSdrCh; j < nBsAntennas[cellIdx]; j+=_cfg->bsSdrCh)
         {
-	    int index1 = j/_cfg->bsSdrCh;
-	    int index2 = j/_cfg->bsSdrCh - _cfg->bsSdrCh;
             // Read stream data type: SOAPY_SDR_CS16
             int r = bsSdrs[cellIdx][j/_cfg->bsSdrCh]->readStream(this->bsRxStreams[cellIdx][j/_cfg->bsSdrCh], buffs.data(), symSamp, flags, frameTime, 1000000);
-            //std::cout << "ReadStream: " << r << "  Num BS ant: " << nBsAntennas[cellIdx] << std::endl;
+            if(r == -1){
+		std::cout << "ReadStream: " << r << "  Num BS ant: " << nBsAntennas[cellIdx] << std::endl;
+	    }
             // cast vectors
             //std::vector<std::complex<double>> buffA_d(buffA.begin(), buffA.end());
             //std::vector<std::complex<double>> buffB_d(buffB.begin(), buffB.end());
@@ -879,12 +880,13 @@ int RadioConfig::sampleOffsetCal()
         for (int j = 0; j < nBsSdrs[cellIdx] - 1; j++)
         {
             // Across all base station boards
-            for (int k = 0; k < _cfg->bsSdrCh; k++)
+            for (size_t k = 0; k < _cfg->bsSdrCh; k++)
             {
+
                 // Across all RX channels in base station board j
                 if (k==0) peak = CommsLib::findLTS(waveRxA[j]);
                 if (k==1) peak = CommsLib::findLTS(waveRxB[j]);
-                //std::cout << "Peak[" << j << "]: " << peak << std::endl;
+                //std::cout << "Peak[" << j << "]: " << peak << " K: " << k << std::endl;
 
                 if (peak == -1){
                     // If no LTS found, use value from second channel
@@ -926,11 +928,11 @@ int RadioConfig::sampleOffsetCal()
                 samp_offset[j] = most_freq[cal_ref_idx] - most_freq[j];
                 for (int k = 0; k < abs(samp_offset[j]); k++) {
                     if (samp_offset[j] > 0) {
-			std::cout << "Board[" << j << "]: INCREASE" << std::endl;
+			//std::cout << "Board[" << j << "]: INCREASE" << std::endl;
                         bsSdrs[cellIdx][j+1]->writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_INCR_TIME);
 			usleep(5000);
                     } else if (samp_offset[j] < 0) {
-			std::cout << "Board[" << j << "]: DECREASE" << std::endl;
+			//std::cout << "Board[" << j << "]: DECREASE" << std::endl;
                         bsSdrs[cellIdx][j+1]->writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_DECR_TIME);
 			usleep(5000);
                     }
@@ -958,34 +960,36 @@ int RadioConfig::sampleOffsetCal()
                 samp_offset_ver[j] = most_freq_ver[cal_ref_idx] - most_freq_ver[j];
 
                 // debug print
-                std::cout << "Board[" << j << "] - Cal Offsets: " << samp_offset[j] << " Ver Offsets: " << samp_offset_ver[j] << " Most Freq[0]: " << most_freq[0] << " MostFreq[j]: " << most_freq[j] <<  " MostFreqVer[0]: " << most_freq_ver[0] << " MostFreqVer[j]: "<< most_freq_ver[j] << std::endl;
+		if(debug){
+                    std::cout << "Board[" << j << "] - Cal Offsets: " << samp_offset[j] << " Ver Offsets: " << samp_offset_ver[j] << " Most Freq[0]: " << most_freq[0] << " MostFreq[j]: " << most_freq[j] <<  " MostFreqVer[0]: " << most_freq_ver[0] << " MostFreqVer[j]: "<< most_freq_ver[j] << std::endl;
+		}
             }
         } // end verification
     } // end numCalTx + numVerTx for loop
 
-    /*
-    std::ofstream myfile;
-    myfile.open("./cal_ver.txt");
-    myfile << "CALIBRATION VALUES:";
-    myfile << std::endl;
-    for (size_t idx = 0; idx<calCorrIdx[0].size(); idx++){
-        for (size_t idx2 = 0; idx2<calCorrIdx.size(); idx2++) {
-            myfile << calCorrIdx[idx2][idx];
-            myfile << ",  ";
-        }
+    if(debug){
+        std::ofstream myfile;
+        myfile.open("./cal_ver.txt");
+        myfile << "CALIBRATION VALUES:";
         myfile << std::endl;
-    }
-    myfile << "VERIFICATION VALUES:";
-    myfile << std::endl;
-    for (size_t idx = 0; idx<verCorrIdx[0].size(); idx++){
-        for (size_t idx2 = 0; idx2<verCorrIdx.size(); idx2++) {
-            myfile << verCorrIdx[idx2][idx];
-            myfile << ",  ";
+        for (size_t idx = 0; idx<calCorrIdx[0].size(); idx++){
+            for (size_t idx2 = 0; idx2<calCorrIdx.size(); idx2++) {
+                myfile << calCorrIdx[idx2][idx];
+                myfile << ",  ";
+            }
+            myfile << std::endl;
         }
+        myfile << "VERIFICATION VALUES:";
         myfile << std::endl;
+        for (size_t idx = 0; idx<verCorrIdx[0].size(); idx++){
+            for (size_t idx2 = 0; idx2<verCorrIdx.size(); idx2++) {
+                myfile << verCorrIdx[idx2][idx];
+                myfile << ",  ";
+            }
+            myfile << std::endl;
+        }
+        myfile.close();
     }
-    myfile.close();
-    */
 
     return 0;
 }
