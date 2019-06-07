@@ -705,7 +705,7 @@ int RadioConfig::sampleOffsetCal()
      ************/
     // Only one cell considered at the moment
     int cellIdx = 0;
-    int debug = 1;
+    int debug = 0;
 
 
     /***********************
@@ -821,9 +821,9 @@ int RadioConfig::sampleOffsetCal()
      *********************************/
     // Multiple iterations
     int numCalTx = 100;
-    int numVerTx = 200;
+    int numVerTx = debug?200:0;
     // Cal-Passing Threshold
-    double pass_thresh = 0.7 * numCalTx;
+    double pass_thresh = 0.6 * numCalTx;
     // Read buffers
     //std::vector<std::complex<float>> buffA(symSamp);
     //std::vector<std::complex<float>> buffB(symSamp);
@@ -936,7 +936,7 @@ int RadioConfig::sampleOffsetCal()
 
 
         // Verification
-        if(i == numCalTx + numVerTx - 1){
+        if((i == numCalTx + numVerTx - 1) && debug){
             // Find most common corr. index for each BS board (ignore tx board)
             int cal_ref_idx = 0;
             for (int j = 0; j < nBsSdrs[cellIdx] - 1; j++) {
@@ -954,9 +954,7 @@ int RadioConfig::sampleOffsetCal()
                 samp_offset_ver[j] = most_freq_ver[cal_ref_idx] - most_freq_ver[j];
 
                 // debug print
-		if(debug){
                     std::cout << "Board[" << j << "] - Cal Offsets: " << samp_offset[j] << " Ver Offsets: " << samp_offset_ver[j] << " Most Freq[0]: " << most_freq[0] << " MostFreq[j]: " << most_freq[j] <<  " MostFreqVer[0]: " << most_freq_ver[0] << " MostFreqVer[j]: "<< most_freq_ver[j] << std::endl;
-		}
             }
         } // end verification
     } // end numCalTx + numVerTx for loop
