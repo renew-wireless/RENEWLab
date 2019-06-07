@@ -53,7 +53,7 @@ fi
 sudo apt update
 sudo apt install -y software-properties-common git python3 python-numpy python3-numpy cmake swig python-dev build-essential libqt4-dev swig sip-dev python3-dev avahi-daemon libavahi-client-dev
 sudo apt install -y python3-software-properties python-software-properties || true #these error on 18.04, so do them seperately. 
-
+sudo apt install -y sshpass avahi-dnsconfd avahi-discover avahi-utils
 #remove existing install
 sudo apt remove -y soapysdr soapysdr-server libsoapysdr-dev python-soapysdr python3-soapysdr soapysdr-module-remote || true
 
