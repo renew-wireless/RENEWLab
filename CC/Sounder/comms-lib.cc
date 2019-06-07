@@ -24,31 +24,31 @@
 #include <itpp/itbase.h>
 
 
-int CommsLib::findLTS(std::vector<std::complex<double>> iq)
+int CommsLib::findLTS(std::vector<std::complex<double>> iq, int seqLen)
 {
     /*
      * Find 802.11-based LTS (Long Training Sequence)
      * Input:
-     *     iq        -  IQ complex samples (vector)
+     *     iq        - IQ complex samples (vector)
+     *     seqLen    - Length of sequence
      * Output:
      *     best_peak - LTS peak index (correlation peak)
      */
 
     float lts_thresh = 0.8;
     std::vector<std::vector<double> > lts_seq;
-    int dummy = 0;
     int best_peak;
 
     // Original LTS sequence
-    lts_seq = CommsLib::getSequence(dummy, LTS_SEQ);
+    lts_seq = CommsLib::getSequence(seqLen, LTS_SEQ);
 
     // Re-arrange into complex vector, flip, and compute conjugate
     std::vector<std::complex<double>> lts_sym;
     std::vector<std::complex<double>> lts_sym_conj;
     for(int i=0; i<64; i++){
-	// lts_seq is a 2x160 matrix (real/imag by 160 elements)
+	// lts_seq is a 2x160 matrix (real/imag by seqLen=160 elements)
 	// grab one symbol and flip around
-        lts_sym.push_back(std::complex<double>(lts_seq[0][160-1-i], lts_seq[1][160-1-i]));
+        lts_sym.push_back(std::complex<double>(lts_seq[0][seqLen-1-i], lts_seq[1][seqLen-1-i]));
 	// conjugate
         lts_sym_conj.push_back(std::conj(lts_sym[i]));
     }
@@ -333,7 +333,7 @@ std::vector<std::vector<double> > CommsLib::getSequence(int N, int type)
         }
     }
     else if(type == LTS_SEQ){
-	// LTS - 802.11 Long training sequence (2.5 symbols, cp length of 32 samples)
+	// LTS - 802.11 Long training sequence (160 samples == 2.5 symbols, cp length of 32 samples)
         matrix.resize(2);
  
 	double lts_re[160]={-0.15625, 0.012284590458567165, 0.09171654912240956, -0.09188755526278, -0.002805944173488664, 
@@ -402,9 +402,11 @@ std::vector<std::vector<double> > CommsLib::getSequence(int N, int type)
 			   0.11500464362403023, -0.0040763264805083466, 0.025888347648318433, 0.10617091261510256, 0.05518049537437035, 
 			   0.08770675983572167, -0.027885918828227545, -0.08279790948776067, 0.11115794305116433, 0.12032513267372755};
 
+	// Grab the last N samples (sequence length specified, provide more flexibility)
+	int startIdx = 160 - N;
         for (int j = 0; j < 2; j++){
 	    std::vector<double> a;
-            for (int i = 0; i < 160; i++){
+            for (int i = startIdx; i < 160; i++){
 		if(j == 0){
 	            a.push_back(lts_re[i]);
 		}
@@ -740,14 +742,14 @@ int main(int argc, char *argv[])
 {
     std::vector<std::vector<double> > sequence;
     int type = CommsLib::LTS_SEQ; //atoi(argv[1]);
-    int N = 0; 			  //atoi(argv[2]); 	// If Hadamard, possible N: {2, 4, 8, 16, 32, 64}
+    int N = 160; 			  //atoi(argv[2]); 	// If Hadamard, possible N: {2, 4, 8, 16, 32, 64}
     sequence = CommsLib::getSequence(N, type);
 
     std::vector<std::complex<double>> sequence_c;
     for(int i=0; i<sequence[0].size(); i++){
         sequence_c.push_back(std::complex<double>(sequence[0][i], sequence[1][i]));
     }
-    double peak = CommsLib::findLTS(sequence_c);
+    double peak = CommsLib::findLTS(sequence_c, N);
     std::cout << "LTS PEAK: " << peak << std::endl;
 
     return 0;

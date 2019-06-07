@@ -705,7 +705,7 @@ int RadioConfig::sampleOffsetCal()
      ************/
     // Only one cell considered at the moment
     int cellIdx = 0;
-    int debug = 0;
+    int debug = 1;
 
 
     /***********************
@@ -715,7 +715,7 @@ int RadioConfig::sampleOffsetCal()
     std::vector<std::complex<int16_t>> pilot_cint16;
     // Pilot consists of 802.11-based LTF sequences (or LTS)
     int type = CommsLib::LTS_SEQ;
-    int N = 0; // dummy variable
+    int N = 160;  // Sequence length
     pilot = CommsLib::getSequence(N, type);
     // double array to complex 16-bit int vector
     for (int i=0; i<static_cast<int>(pilot[0].size()); i++) {
@@ -882,10 +882,10 @@ int RadioConfig::sampleOffsetCal()
             // Across all base station boards
             for (size_t k = 0; k < _cfg->bsSdrCh; k++)
             {
-
                 // Across all RX channels in base station board j
-                if (k==0) peak = CommsLib::findLTS(waveRxA[j]);
-                if (k==1) peak = CommsLib::findLTS(waveRxB[j]);
+                int seqLen = 160;
+                if (k==0) peak = CommsLib::findLTS(waveRxA[j], seqLen);
+                if (k==1) peak = CommsLib::findLTS(waveRxB[j], seqLen);
                 //std::cout << "Peak[" << j << "]: " << peak << " K: " << k << std::endl;
 
                 if (peak == -1){
@@ -902,12 +902,6 @@ int RadioConfig::sampleOffsetCal()
 
         // Calibrate: If we are done collecting datapoints for cal
         if(i == numCalTx-1){
-               /* bsSdrs[cellIdx][1]->writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_DECR_TIME);
-                bsSdrs[cellIdx][1]->writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_DECR_TIME);
-                bsSdrs[cellIdx][1]->writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_DECR_TIME);
-                bsSdrs[cellIdx][1]->writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_DECR_TIME);
-                usleep(5000);
-	       */
             // Find most common corr. index for each BS board (ignore tx board)
             int cal_ref_idx = 0;
             for (int j = 0; j < nBsSdrs[cellIdx] - 1; j++) {

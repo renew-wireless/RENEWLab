@@ -51,6 +51,7 @@ std::vector<pthread_t> Receiver::startRecv(void** in_buffer, int** in_buffer_sta
         printf("Sample Offset Calibration Failed \n");
         exit(0);
     }
+    std::cout << "Sample Offset Calibration Done" << std::endl;
     radioconfig_->radioStart();
 
     std::vector<pthread_t> client_threads;
