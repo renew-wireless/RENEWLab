@@ -263,17 +263,15 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
             sdr.setFrequency(SOAPY_SDR_TX, ch, 'BB', .75*rate)
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'BB', .75*rate)
             if "CBRS" in info["frontend"]:
-                sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', 0)  # [-18,0] by 3
-                sdr.setGain(SOAPY_SDR_TX, ch, 'PA1', 15)  # [0,15]
-                sdr.setGain(SOAPY_SDR_TX, ch, 'PA2', 0)   # [0,15]
-                sdr.setGain(SOAPY_SDR_TX, ch, 'PA3', 30)  # [0,30]
-            sdr.setGain(SOAPY_SDR_TX, ch, 'IAMP', 12)     # [0,12]
-            sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)  # [-52,0]
+                sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', -6)  # {-18,-12,-6,0}
+                sdr.setGain(SOAPY_SDR_TX, ch, 'PA2', 0)    # LO: [0|17], HI:[0|14]
+            sdr.setGain(SOAPY_SDR_TX, ch, 'IAMP', 0)       # [-12,12]
+            sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)   # [0,52]
 
             if "CBRS" in info["frontend"]:
-                sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', 0)   # [-18,0]
+                sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', 0)   # {-18,-12,-6,0}
                 sdr.setGain(SOAPY_SDR_RX, ch, 'LNA1', 30)  # [0,33]
-                sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 17)  # [0,17]
+                sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 14)  # LO: [0|17], HI:[0|14]
 
             # LMS gains
             if agc_en:

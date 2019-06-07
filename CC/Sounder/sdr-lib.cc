@@ -115,28 +115,36 @@ RadioConfig::RadioConfig(Config *cfg):
                 device->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->freq-.75*_cfg->rate);
                 device->setFrequency(SOAPY_SDR_TX, ch, "BB", .75*_cfg->rate);
  
+                // receive gains
+
                 if (info["frontend"].find("CBRS") != std::string::npos)
                 {
                     device->setGain(SOAPY_SDR_RX, ch, "ATTN", 0); //[-18,0]  
                     device->setGain(SOAPY_SDR_RX, ch, "LNA1", 30); //[0,33]
-                    device->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //[0,17]
+                    if ( cfg->freq < 3e9 && cfg->freq > 2e9) 
+                        device->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //[0,17]
+                    else if (cfg->freq >= 3e9) 
+                        device->setGain(SOAPY_SDR_RX, ch, "LNA2", 14); //[0,14]
                 }
 
 		device->setGain(SOAPY_SDR_RX, ch, "LNA", ch ? _cfg->clRxgainB_vec[i] : _cfg->clRxgainA_vec[i]);  //[0,30]
                 device->setGain(SOAPY_SDR_RX, ch, "TIA", 0);  //[0,12]
                 device->setGain(SOAPY_SDR_RX, ch, "PGA", 0);  //[-12,19]
 
+                // transmit gains
+
                 if (info["frontend"].find("CBRS") != std::string::npos)
                 {
-                    device->setGain(SOAPY_SDR_TX, ch, "ATTN", 0);       //[-18,0] by 3
-                    device->setGain(SOAPY_SDR_TX, ch, "PA1", 15);       //[0|15]
+                    device->setGain(SOAPY_SDR_TX, ch, "ATTN", -6);           //{-18,-12,-6,0}
                     if (info["frontend"].find("CBRSc") != std::string::npos) // on revC front-end, it is safe to turn on PA2
-                        device->setGain(SOAPY_SDR_TX, ch, "PA2", 17);       //[0|17]
+                        if ( cfg->freq < 3e9 && cfg->freq > 2e9) 
+                            device->setGain(SOAPY_SDR_TX, ch, "PA2", 0);     //CBRS LO, [0|17]
+                        else if (cfg->freq >= 3e9) 
+                            device->setGain(SOAPY_SDR_TX, ch, "PA2", 0);     //CBRS HI, [0|14]
                     else
-                        device->setGain(SOAPY_SDR_TX, ch, "PA2", 0);       //[0|17]
-                    device->setGain(SOAPY_SDR_TX, ch, "PA3", 30);       //[0|30]
+                        device->setGain(SOAPY_SDR_TX, ch, "PA2", 0);         //[0|17]
                 }
-                device->setGain(SOAPY_SDR_TX, ch, "IAMP", 0);          //[0,12] 
+                device->setGain(SOAPY_SDR_TX, ch, "IAMP", 0);                //[-12,12] 
 		device->setGain(SOAPY_SDR_TX, ch, "PAD", ch ? _cfg->clTxgainB_vec[i] : _cfg->clTxgainA_vec[i]);       //[0,52]
             }
 
@@ -247,7 +255,7 @@ void *RadioConfig::initBSRadio(void *in_context)
         if (info["frontend"].find("CBRS") != std::string::npos && cfg->freq < 3e9 && cfg->freq > 2e9) // CBRS LO
         {
             rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "ATTN", 0);  //[-18,0] by 3
-            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA1", 15);  //[0|14] no bypass
+            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA1", 14);  //[0|14] no bypass
             rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA2", 0);   //[0|17]   can bypass. Can cause saturation or PA damage!! DO NOT USE IF NOT SURE!!!
             rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA3", 30);  //[0|31.5]   no bypass
         }

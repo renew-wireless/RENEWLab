@@ -93,8 +93,9 @@ def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, numSamps, serial, sigT
             sdr.setFrequency(SOAPY_SDR_TX, c, "BB", bbfreq) 
         if "CBRS" in info["frontend"]:
             print("set CBRS front-end gains")
-            sdr.setGain(SOAPY_SDR_TX, c, 'ATTN', 0)  # [-18,0] by 3
-        sdr.setGain(SOAPY_SDR_TX, c, 'IAMP', 0)      # [0,12]
+            sdr.setGain(SOAPY_SDR_TX, c, 'ATTN', -6)  # {-18,-12,-6,0}
+            sdr.setGain(SOAPY_SDR_TX, c, 'PA2', 0)   # LO: [0|17], HI:[0|14]
+        sdr.setGain(SOAPY_SDR_TX, c, 'IAMP', 0)      # [-12,12]
         sdr.setGain(SOAPY_SDR_TX, c, "PAD", gain)
 
     # Generate TX signal

@@ -391,17 +391,17 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
                 sdrTx.setFrequency(SOAPY_SDR_TX, c, "BB", bbfreq)
             if "CBRS" in infoTx["frontend"]:
                 print("set CBRS front-end gains")
-                sdrTx.setGain(SOAPY_SDR_TX, c, 'ATTN', 0)  # [-18,0] by 3
-                sdrTx.setGain(SOAPY_SDR_TX, c, 'PA2', 0)   # [0|17]
-            sdrTx.setGain(SOAPY_SDR_TX, c, 'IAMP', 0)      # [0,12]
+                sdrTx.setGain(SOAPY_SDR_TX, c, 'ATTN', -6) # {-18,-12,-6,0}
+                sdrTx.setGain(SOAPY_SDR_TX, c, 'PA2', 0)   # LO: [0|17], HI:[0|14]
+            sdrTx.setGain(SOAPY_SDR_TX, c, 'IAMP', 0)      # [-12,12]
             sdrTx.setGain(SOAPY_SDR_TX, c, "PAD", txgain)
 
             sdrRx.setFrequency(SOAPY_SDR_RX, c, freq)
             sdrRx.setSampleRate(SOAPY_SDR_RX, c, rate)
             if "CBRS" in infoRx["frontend"]:
-                sdrRx.setGain(SOAPY_SDR_RX, c, 'LNA2', rx_gains[5])  # [0,17]
-                # sdrRx.setGain(SOAPY_SDR_RX, c, 'LNA1', 30)  # [0,33]
-                sdrRx.setGain(SOAPY_SDR_RX, c, 'ATTN', rx_gains[3])  # [-18,0]
+                sdrRx.setGain(SOAPY_SDR_RX, c, 'LNA2', rx_gains[5])  # LO: [0|17], HI:[0|14]
+                sdrRx.setGain(SOAPY_SDR_RX, c, 'LNA1', 30)           # [0,33]
+                sdrRx.setGain(SOAPY_SDR_RX, c, 'ATTN', rx_gains[3])  # {-18,-12,-6,0}
             sdrRx.setGain(SOAPY_SDR_RX, c, 'LNA', rx_gains[2])       # [0,30]
             sdrRx.setGain(SOAPY_SDR_RX, c, 'TIA', rx_gains[1])       # [0,12]
             sdrRx.setGain(SOAPY_SDR_RX, c, 'PGA', rx_gains[0])       # [-12,19]
