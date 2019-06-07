@@ -89,7 +89,7 @@ def demult(csi, data, method='zf'):
                 sig_intf[frame, :, sc] = np.dot(data[frame, :, sc], np.transpose(np.conj(userCSI[frame, :, :, sc]), (1, 0)))
     return sig_intf 
 
-def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_inspect = 100):
+def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_inspect = 100, frame_to_plot = 0, ref_ant=0):
     """ 
     Finds the end of the pilots' frames, finds all the lts indices relative to that.
     Divides the data with lts sequences, calculates csi per lts, csi per frame, csi total.  
@@ -102,8 +102,7 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_
     test_mf = False
     write_to_file = True
     fst_frame = 0
-    frame_to_plot = 69;
-    ref_ant = 7;
+    
     # dimensions of pilots_dump
     n_frame = pilots_dump.shape[0]      # no. of captured frames
     n_cell = pilots_dump.shape[1]       # no. of cells
