@@ -3,12 +3,12 @@
 		 "cells" : 1,
 		 "sdr_id" : ["files/iris_serials.txt"],
 		 "hub_id" : "files/hub_serials.txt",
-		 "frequency" : 3.6e9,
+		 "frequency" : 2.492e9,
 		 "channel" : "AB",
-		 "rxgainA" : 30,
-		 "txgainA" : 35,
-		 "rxgainB" : 30,
-		 "txgainB" : 35,
+		 "rxgainA" : 20,
+		 "txgainA" : 25,
+		 "rxgainB" : 20,
+		 "txgainB" : 25,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
 		     "BGPGGGGGGGGGGGGGGGGG"
