@@ -34,8 +34,6 @@ Receiver::~Receiver()
 {
     radioconfig_->radioStop();
     delete radioconfig_;
-    delete[] socket_;
-    delete[] context;
 }
 
 std::vector<pthread_t> Receiver::startRecv(void** in_buffer, int** in_buffer_status, int in_buffer_frame_num, int in_buffer_length, int in_core_id)
