@@ -94,7 +94,7 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_
     Finds the end of the pilots' frames, finds all the lts indices relative to that.
     Divides the data with lts sequences, calculates csi per lts, csi per frame, csi total.  
     """
-    print("********************* csi_from_pilots *********************")
+    print("********************* csi_from_pilots(): *********************")
     
     # Reviewing options and vars: 
     show_plot = True
@@ -177,7 +177,6 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_
     if write_to_file:
         # write the nan_indices into a file
         np.savetxt("nan_indices.txt", nan_indices, fmt='%i')
-       #np.savetxt('"nan_indices.txt"', nan_indices, delimiter=',')
         
     if debug:
         print("Shape of truncated complex pilots: {} , l_lts_fc = {}, v0.shape = {}, v1.shape = {}, m_filt.shape = {}".
@@ -225,6 +224,8 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_
     if debug:
         print("Indexing time: %f \n" % ( indexing_end -indexing_start) )      
         print("Shape of: pilots_rx_t = {}\n".format(pilots_rx_t.shape))
+        print("Shape of: rho_max = {}, rho_min = {}, ipos = {}, sf_start = {}".format(
+        rho_max.shape, rho_min.shape, ipos.shape, sf_start.shape))
         
     
     # take fft and get the raw CSI matrix (no averaging)
@@ -242,21 +243,26 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_
         print("Shape of: csi = {}\n".format(csi.shape))
     
     # plot something to see if it worked!
-    if (debug and show_plot) :
-        print("Shape of: rho_max = {}, rho_min = {}, ipos = {}, sf_start = {}".format(
-        rho_max.shape, rho_min.shape, ipos.shape, sf_start.shape))
-        print(ipos)
+    if show_plot:
         fig = plt.figure()
         ax1 = fig.add_subplot(3, 1, 1)
         ax1.grid(True)
         ax1.set_title('Re of Rx pilot at ref antenna {} and ref frame {}'.format(ref_ant,frame_to_plot))
         print("cmpx_pilots.shape = {}".format(cmpx_pilots.shape))
         ax1.plot(np.real(cmpx_pilots[frame_to_plot,0,0,ref_ant,:]))
-
+        
+        if debug:
+            loc_sec = lts_t_rep_tst
+        else:
+            z_pre = np.zeros(82, dtype='complex64')
+            z_post = np.zeros(68, dtype='complex64')
+            lts_t_rep = np.tile(lts_tmp, k_lts)
+            loc_sec = np.append(z_pre,lts_t_rep)
+            loc_sec = np.append(loc_sec, z_post)
         ax2 = fig.add_subplot(3, 1, 2)
         ax2.grid(True)
         ax2.set_title('Local LTS sequence zero padded')
-        ax2.plot(lts_t_rep_tst)
+        ax2.plot(loc_sec)
 
         ax3 = fig.add_subplot(3, 1, 3)
         ax3.grid(True)
@@ -264,7 +270,7 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_
         ax3.stem(m_filt[frame_to_plot, 0,0,ref_ant,:])
         plt.show()
 
-    print("********************* csi_from_pilots *********************\n\n\n")
+    print("********************* csi_from_pilots(): *********************\n\n\n")
     return csi, m_filt, sf_start, k_lts, n_lts
 
 

@@ -37,9 +37,8 @@ import pdb
 import collections
 from channel_analysis import *
 from scipy import signal
-from scipy.signal import find_peaks
  
-def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, ref_ant=0, cp=16):
+def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, plt_ant=0, cp=16):
     """ 
     Creates a map of the frames per antenna. 3 categories: Good frames, bad frames, probably partial frames.
     Good frames are those where all k_lts peaks are present and spaced n_lts samples apart.
@@ -51,6 +50,8 @@ def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, ref_ant=0, cp=16):
     Finally, the function checks if these k_lts peaks are at the correct n_lts offstes.  
     Disclaimer: This function is good only for a high SNR scenario!
     """
+    
+    print("********************* frame_sanity(): *********************")
     debug = False
     n_frame = match_filt.shape[0]      # no. of captured frames
     n_cell = match_filt.shape[1]       # no. of cells
@@ -117,8 +118,8 @@ def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, ref_ant=0, cp=16):
     # plot a frame:
     fig = plt.figure()
     plt.grid(True)
-    plt.title('MF Frame # {} Antenna # {}'.format(frame_to_plot, ref_ant))   
-    plt.stem(match_filt[frame_to_plot, 0,0,ref_ant,:])
+    plt.title('MF Frame # {} Antenna # {}'.format(frame_to_plot, plt_ant))   
+    plt.stem(match_filt[frame_to_plot, 0,0,plt_ant,:])
     plt.show()
     # plot frame_map:
     fig, ax = plt.subplots()
@@ -128,8 +129,9 @@ def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, ref_ant=0, cp=16):
     ax.set_xlabel('Frame #')
     cbar = plt.colorbar(c, ticks=[-1, 0, 1], orientation = 'horizontal', aspect=90)
     cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame']) 
+    plt.tight_layout()
     plt.show()
-
+    print("********************* frame_sanity(): *********************\n")
 class hdfDump:
 
     def __init__(self, filename):
@@ -382,7 +384,7 @@ class hdfDump:
                         'UL_SAMPS': samples_ulData,
                         }
 
-    def verify_hdf5(self, default_frame=100, ref_ant=0):
+    def verify_hdf5(self, default_frame=100, ant_i =0):
         """
         Plot data in file to verify contents.
 
@@ -443,15 +445,14 @@ class hdfDump:
             # For correlation use a fft size of 64
             print("******** Calling samps2csi with fft_size = 64, offset = {}, bound = cp = 0 *********".format(offset))
             csi, samps = samps2csi(samples, num_cl_tmp, symbol_length, fft_size=64, offset=offset, bound=0, cp=0)
-            print("After calling samps2csi(): csi.shape = {}, samps.shape = {}".format(csi.shape, samps.shape))
             
             print("******** Calling csi_from_pilots and frame_sanity *********")
-            frames_to_inspect = 4000
-            frame_to_plot = default_frame
-            n_fft = 64
+            n_frame_inspct = samples.shape[0]
+            frm_plt = min(default_frame, n_frame_inspct)
             csi_mat, match_filt, sub_fr_strt,k_lts, n_lts = csi_from_pilots(
-                    samples, z_padding, n_fft, cp, frames_to_inspect, frame_to_plot, ref_ant)
-            frame_sanity(match_filt, k_lts, n_lts, frame_to_plot, ref_ant)
+                    samples, z_padding, frames_to_inspect = n_frame_inspct, frame_to_plot = frm_plt, ref_ant =ant_i)
+            
+            frame_sanity(match_filt, k_lts, n_lts, frm_plt, plt_ant = ant_i)
             
             # Correlation (Debug plot useful for checking sync)
             amps = np.mean(np.abs(samps[:, 0, 0, 0, 0, :]), axis=1)
@@ -517,20 +518,21 @@ class hdfDump:
 if __name__ == '__main__':
     # Tested with inputs: ./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5 300  (for two users)
     #                     ./data_in/Argos-2019-3-30-12-20-50_1x8x1.hdf5 300  (for one user)
-    if len(sys.argv) > 1:
+
+    if len(sys.argv) >1:
         if sys.argv[1] == "-h":
-            print('format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)>')
+            print('>>> format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)> <<<')
             sys.exit(0)
 
         if len(sys.argv) > 4:
-            print('Too many arguments! format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)>')
+            print('Too many arguments! >>> format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)> <<<')
             sys.exit(0)
 
         filename = sys.argv[1]
         frame_to_plot = []
         if len(sys.argv) == 3:
             frame_to_plot = int(sys.argv[2])
-            
+            ref_ant = 0
         if len(sys.argv) == 4:
             frame_to_plot = int(sys.argv[2])
             ref_ant = int(sys.argv[3])
@@ -564,15 +566,12 @@ if __name__ == '__main__':
         samples = hdf5.samples
       
         if frame_to_plot and ref_ant:
-            print("THIS!")
             hdf5.verify_hdf5(frame_to_plot, ref_ant)
             
         elif frame_to_plot and not(ref_ant):
-            print("THIS! TOO!!")
-            hdf5.verify_hdf5(frame_to_plot, 0)
+            hdf5.verify_hdf5(frame_to_plot)
             
         else:
-            print("THIS! really??!!")
             hdf5.verify_hdf5()
             
             
