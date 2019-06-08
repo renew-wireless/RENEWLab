@@ -98,7 +98,7 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_
     
     # Reviewing options and vars: 
     show_plot = True
-    debug  = True
+    debug  = False
     test_mf = False
     write_to_file = True
     fst_frame = 0
