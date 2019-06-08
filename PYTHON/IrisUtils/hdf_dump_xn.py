@@ -58,7 +58,9 @@ def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, plt_ant=0, cp=16):
     n_ue = match_filt.shape[2]         # no. of UEs 
     n_ant = match_filt.shape[3]        # no. of BS antennas
     n_corr = match_filt.shape[4]       # no. of corr. samples
-    print("rame_sanity(): n_frame = {}, n_cell = {}, n_ue = {}, n_ant = {}, n_corr = {}, k_lts = {}".format(
+    
+    if debug:
+        print("frame_sanity(): n_frame = {}, n_cell = {}, n_ue = {}, n_ant = {}, n_corr = {}, k_lts = {}".format(
         n_frame, n_cell, n_ue, n_ant, n_corr, k_lts) )
     
 
@@ -129,9 +131,18 @@ def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, plt_ant=0, cp=16):
     ax.set_xlabel('Frame #')
     cbar = plt.colorbar(c, ticks=[-1, 0, 1], orientation = 'horizontal', aspect=90)
     cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame']) 
-    plt.tight_layout()
+    plt.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
     plt.show()
-    print("********************* frame_sanity(): *********************\n")
+    
+    #print results:
+    n_rf = frame_map.size
+    n_gf = frame_map[frame_map == 1].size
+    n_bf = frame_map[frame_map == -1].size
+    n_pr = frame_map[frame_map == 0].size
+    print("\t>>>>> \t frame_sanity(): frame status:\t<<<<<")
+    print("Out of total {} received frames: \nGood frames:{}\nBad frames:{}\nProbably Partially received or corrupt:{}".format(
+            n_rf, n_gf, n_bf, n_pr,))
+    print("********************* frame_sanity() *********************\n")
 class hdfDump:
 
     def __init__(self, filename):
