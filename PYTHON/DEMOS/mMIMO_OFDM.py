@@ -449,8 +449,6 @@ def rf_setup(rate, txgain, freq, bbfreq, serialBS, serialUE, rx_gains, UEchained
         sdrBS[i].writeRegister("IRIS30", RF_RST_REG, (1 << 29))
         sdrBS[i].writeRegister("IRIS30", RF_RST_REG, 0)
 
-        # Use both channels for transmission/reception (consider two antennas at each BS board)
-        sdrBS[i].writeSetting("SPI_TDD_MODE", "MIMO")
         # Gain control
         sdrBS[i].writeRegister("IRIS30", TX_GAIN_CTRL, 0)
         # Compute delays in chains
@@ -493,11 +491,6 @@ def rf_setup(rate, txgain, freq, bbfreq, serialBS, serialUE, rx_gains, UEchained
         sdrUE[i].writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 0x1)
         sdrUE[i].writeRegister("IRIS30", RF_RST_REG, (1 << 29))
         sdrUE[i].writeRegister("IRIS30", RF_RST_REG, 0)
-
-        # For the UE, we only care about channel A (consider a single antenna UE)
-        sdrUE[i].writeSetting("SPI_TDD_MODE", "SISO")
-        sdrUE[i].writeSetting(SOAPY_SDR_RX, 1, 'ENABLE_CHANNEL', 'false')
-        sdrUE[i].writeSetting(SOAPY_SDR_TX, 1, 'ENABLE_CHANNEL', 'false')
 
         # Measure delays or reset correlator depending on whether the UEs are chained to the BS or separated
         if UEchainedToBS:

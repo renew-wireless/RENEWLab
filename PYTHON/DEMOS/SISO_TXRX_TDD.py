@@ -97,10 +97,6 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
             sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
             sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
 
-        sdr.writeSetting("SPI_TDD_MODE", "SISO")
-        sdr.writeSetting(SOAPY_SDR_RX, 1, 'ENABLE_CHANNEL', 'false')
-        sdr.writeSetting(SOAPY_SDR_TX, 1, 'ENABLE_CHANNEL', 'false')
-
     # TX_GAIN_CTRL and SYNC_DELAYS
     msdr.writeRegister("IRIS30", TX_GAIN_CTRL, 0)
     bsdr.writeSetting("SYNC_DELAYS", "")

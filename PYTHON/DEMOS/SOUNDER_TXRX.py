@@ -302,11 +302,8 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
         sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29))
         sdr.writeRegister("IRIS30", RF_RST_REG, 0)
         if not both_channels:
-            sdr.writeSetting("SPI_TDD_MODE", "SISO")
             sdr.writeSetting(SOAPY_SDR_RX, 1, 'ENABLE_CHANNEL', 'false')
             sdr.writeSetting(SOAPY_SDR_TX, 1, 'ENABLE_CHANNEL', 'false')
-        else:
-            sdr.writeSetting("SPI_TDD_MODE", "MIMO")
     # pdb.set_trace()
     msdr.writeRegister("IRIS30", TX_GAIN_CTRL, 0)  
     if use_trig:

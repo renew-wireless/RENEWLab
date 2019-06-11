@@ -155,12 +155,6 @@ RadioConfig::RadioConfig(Config *cfg):
                 device->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
             }
 
-            if (_cfg->clSdrCh == 1)
-            {
-                device->writeSetting(SOAPY_SDR_RX, 1, "ENABLE_CHANNEL", "false");
-                device->writeSetting(SOAPY_SDR_TX, 1, "ENABLE_CHANNEL", "false");
-            }
-
             device->writeRegister("IRIS30", RF_RST_REG, (1<<29) | 1);
             device->writeRegister("IRIS30", RF_RST_REG, (1<<29));
             device->writeRegister("IRIS30", RF_RST_REG, 0);
@@ -277,87 +271,6 @@ void *RadioConfig::initBSRadio(void *in_context)
         rc->bsSdrs[c][i]->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
     }
 
-    if (cfg->bsSdrCh == 1)
-    {
-        // we setup SPI TDD mode to bypass the internal LDO issue in revision D and prior
-        if (cfg->freq > 3e9 and cfg->bs_sdr_ids[c][i].find("RF3E") == std::string::npos)
-        {
-            std::cout << "setting up SPI_TDD" << std::endl;
-            std::vector<unsigned> txActive, rxActive;
-            unsigned ch = rc->bsSdrs[c][i]->readRegister("LMS7IC", 0x0020);
-            rc->bsSdrs[c][i]->writeRegister("LMS7IC", 0x0020, (ch & 0xFFFC) | 1);
-            //unsigned regRfeA = bsSdrs[c][i]->readRegister("LMS7IC", 0x010C);
-            //unsigned regRfeALo = bsSdrs[c][i]->readRegister("LMS7IC", 0x010D);
-            unsigned regRbbA = rc->bsSdrs[c][i]->readRegister("LMS7IC", 0x0115);
-            //unsigned regTrfA = bsSdrs[c][i]->readRegister("LMS7IC", 0x0100);
-            unsigned regTbbA = rc->bsSdrs[c][i]->readRegister("LMS7IC", 0x0105);
-
-            // disable TX
-            txActive = {
-                //0xa10C0000 | 0xfe, //RFE in power down
-                //0xa10D0000 | 0x0, //RFE SISO and disables
-                0xa1150000 | 0xe, //RBB in power down
-                //0xa1000000 | regTrfA //TRF stays the same
-                0xa1050000 | regTbbA //TBB stays the same
-            };
-            rc->bsSdrs[c][i]->writeRegisters("LMS7_PROG_SPI", 16, txActive); //trig1 offset
-            // disable RX
-            rxActive = {
-                //0xa10C0000 | regRfeA, //RFE stays the same
-                //0xa10D0000 | regRfeALo, //RFE stays the same
-                0xa1150000 | regRbbA, //RBB stays the same
-                //0xa1000000 | 0xe //TRF in power down + SISO
-                0xa1050000 | 0x1e //TBB in power down
-            };
-            rc->bsSdrs[c][i]->writeRegisters("LMS7_PROG_SPI", 32, rxActive); //trig2 offset
-
-            //bsSdrs[i]->writeSetting("SPI_TDD_MODE", "SISO"); // a FPGA hack that bypasses the LDO issue
-        }
-        rc->bsSdrs[c][i]->writeSetting(SOAPY_SDR_RX, 1, "ENABLE_CHANNEL", "false");
-        rc->bsSdrs[c][i]->writeSetting(SOAPY_SDR_TX, 1, "ENABLE_CHANNEL", "false");
-    } 
-    else if (cfg->bsSdrCh == 2)
-    {
-        // we setup SPI TDD mode to bypass the internal LDO issue in revision D and prior
-        if (cfg->freq > 3e9 and cfg->bs_sdr_ids[c][i].find("RF3E") == std::string::npos)
-        {
-            std::vector<unsigned> txActive, rxActive;
-            unsigned ch = rc->bsSdrs[c][i]->readRegister("LMS7IC", 0x0020);
-            rc->bsSdrs[c][i]->writeRegister("LMS7IC", 0x0020, (ch & 0xFFFC) | 1);
-            //unsigned regRfeA = bsSdrs[c][i]->readRegister("LMS7IC", 0x010C);
-            //unsigned regRfeALo = bsSdrs[c][i]->readRegister("LMS7IC", 0x010D);
-            unsigned regRbbA = rc->bsSdrs[c][i]->readRegister("LMS7IC", 0x0115);
-            //unsigned regTrfA = bsSdrs[c][i]->readRegister("LMS7IC", 0x0100);
-            unsigned regTbbA = rc->bsSdrs[c][i]->readRegister("LMS7IC", 0x0105);
-
-            ch = rc->bsSdrs[c][i]->readRegister("LMS7IC", 0x0020);
-            rc->bsSdrs[c][i]->writeRegister("LMS7IC", 0x0020, (ch & 0xFFFC) | 2);
-            //unsigned regRfeB = bsSdrs[c][i]->readRegister("LMS7IC", 0x010C);
-            //unsigned regRbbB = bsSdrs[c][i]->readRegister("LMS7IC", 0x0115);
-            //unsigned regTrfB = bsSdrs[c][i]->readRegister("LMS7IC", 0x0100);
-            //unsigned regTbbB = bsSdrs[c][i]->readRegister("LMS7IC", 0x0105);
-
-            txActive = {
-                //0xe10C0000 | 0xfe, //RFE in power down
-                //0xe10D0000 | 0x0, //RFE SISO and disables
-                0xe1150000 | 0xe, //RBB in power down
-                //0xe1000000 | regTrfA, //TRF stays the same
-                0xe1050000 | regTbbA}; //TBB stays the same
-
-            rxActive = {
-                //0xe10C0000 | regRfeA, //RFE stays the same
-                //0xe10D0000 | regRfeALo, //RFE stays the same
-                0xe1150000 | regRbbA, //RBB stays the same
-                //0xe1000000 | 0xe, //TRF in power down + SISO
-                0xe1050000 | 0x1e}; //TBB in power down
-
-            rc->bsSdrs[c][i]->writeRegisters("LMS7_PROG_SPI", 16, txActive); //trig1 offset
-            rc->bsSdrs[c][i]->writeRegisters("LMS7_PROG_SPI", 32, rxActive); //trig2 offset
-            //bsSdrs[i]->writeSetting("SPI_TDD_MODE", "MIMO");
-        }
-    }
-    //The following must be done by the driver at initialization
-    //bsSdrs[i]->writeRegister("RFCORE", 120, 0); // reset the tdd mode in the FPGA
     // resets the DATA_clk domain logic. 
     rc->bsSdrs[c][i]->writeRegister("IRIS30", 48, (1<<29) | 0x1);
     rc->bsSdrs[c][i]->writeRegister("IRIS30", 48, (1<<29));
