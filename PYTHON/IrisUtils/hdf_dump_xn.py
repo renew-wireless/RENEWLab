@@ -21,22 +21,11 @@
 """
 
 import sys
-import struct
 import numpy as np
-import os
-import math
 import h5py
-import time
-import datetime
-import logging
-import scipy
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-from matplotlib.colors import LogNorm
-import pdb
 import collections
 from channel_analysis import *
-from scipy import signal
  
 def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, plt_ant=0, cp=16):
     """ 
@@ -109,7 +98,7 @@ def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, plt_ant=0, cp=16):
         print("frame_sanity(): Shape of k_max.shape = {}, k_amax.shape = {}, lst_pk_idx.shape = {}".format(
                 k_max.shape, k_amax.shape, lst_pk_idx.shape) )
         print("frame_sanity(): k_amax = {}".format(k_amax))
-        print("frame_sanity(): frame_map = \n{}".format(frame_map))
+        print("frame_sanity(): frame_map.shape = \n{}".format(frame_map.shape))
         
     frame_map[frame_map == 1] = -1
     frame_map[frame_map == k_lts] = 1
@@ -474,7 +463,7 @@ class hdfDump:
             cellCSI = csi[:, 0, :, :, :, :]     # First cell
             userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
             print("userCSI.shape = {} ".format(userCSI.shape))
-            corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2)))
+            corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2) ) )
             best_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.99]
             good_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.95]
             bad_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.9 and corr_total[i, 0] <= 0.94]
