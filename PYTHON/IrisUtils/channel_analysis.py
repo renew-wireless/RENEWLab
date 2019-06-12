@@ -169,7 +169,7 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_
     v0 = signal.lfilter(lts_seq_conj, a, cmpx_pilots, axis = 4)
     v1 = signal.lfilter(unos, a, (abs(cmpx_pilots)**2), axis = 4)     
     m_filt = (np.abs(v0)**2)/v1
-    
+
     # clean up nan samples: replace nan with -1 
     nan_indices = np.argwhere(np.isnan(m_filt))    
     m_filt[np.isnan(m_filt)] = -0.5 # the only negative value in m_filt
