@@ -30,10 +30,6 @@
 #include <atomic>
 #include <vector>
 #include <time.h>
-#include <SoapySDR/Device.hpp>
-#include <SoapySDR/Formats.hpp>
-#include <SoapySDR/Errors.hpp>
-#include <SoapySDR/Time.hpp>
 
 int pin_to_core(int core_id);
 
@@ -44,7 +40,6 @@ public:
     Utils();
     ~Utils();
 
-    static void drain_buffers(SoapySDR::Device * ibsSdrs, SoapySDR::Stream * istream, std::vector<void *> buffs, int symSamp);
     static std::vector<std::complex<int16_t>> double_to_int16(std::vector<std::vector<double>> in);
     static std::vector<std::complex<double>> uint32tocdouble(std::vector<uint32_t> in, std::string order);
     static std::vector<uint32_t> cint16_to_uint32(std::vector<std::complex<int16_t>> in, bool conj, std::string order);

@@ -823,7 +823,7 @@ int RadioConfig::sampleOffsetCal()
     int numCalTx = 100;
     int numVerTx = debug?200:0;
     // Cal-Passing Threshold
-    double pass_thresh = 0.7 * numCalTx;
+    double pass_thresh = 0.6 * numCalTx;
     // Read buffers
     //std::vector<std::complex<float>> buffA(symSamp);
     //std::vector<std::complex<float>> buffB(symSamp);
@@ -838,7 +838,7 @@ int RadioConfig::sampleOffsetCal()
     for (int j = _cfg->bsSdrCh; j < nBsAntennas[cellIdx]; j+=_cfg->bsSdrCh)
     {
 	std::cout << "Draining Rx Chain: " << j << std::endl;
-        Utils::drain_buffers(bsSdrs[cellIdx][j/_cfg->bsSdrCh], this->bsRxStreams[cellIdx][j/_cfg->bsSdrCh], buffs, symSamp);
+        RadioConfig::drain_buffers(bsSdrs[cellIdx][j/_cfg->bsSdrCh], this->bsRxStreams[cellIdx][j/_cfg->bsSdrCh], buffs, symSamp);
     }
     std::cout << "Done Draining Rx Chains" << std::endl;
 
@@ -922,7 +922,7 @@ int RadioConfig::sampleOffsetCal()
                     }
                 }
                 if (max_freq[j] < pass_thresh || most_freq[j] == 0) {
-                    std::cout << "Sample Offset Calibration FAILED at board " << j << " ... RE-RUN!" << std::endl;
+                    std::cout << "Sample Offset Calibration FAILED at board " << j << " MostFreq: " << most_freq[j] << " Counts: " << max_freq[j] << " ... RE-RUN!" << std::endl;
                     return -1;
                 }
                 // record sample offset (from a reference board)
@@ -991,6 +991,27 @@ int RadioConfig::sampleOffsetCal()
     }
 
     return 0;
+}
+
+void RadioConfig::drain_buffers(SoapySDR::Device * ibsSdrs, SoapySDR::Stream * istream, std::vector<void *> buffs, int symSamp) {
+    /*
+     *  "Drain" rx buffers during initialization
+     *  Input:
+     *      ibsSdrs - Current Iris board
+     *      istream - Current SoapySDR stream
+     *      buffs   - Vector to which we will write received IQ samples
+     *      symSamp - Number of samples
+     *
+     *  Output:
+     *      None
+     */
+    long long frameTime=0;
+    int flags=0, r=0, i=0;
+    while (r != -1){
+        r = ibsSdrs->readStream(istream, buffs.data(), symSamp, flags, frameTime, 1000000);
+        i++;
+    }
+    std::cout << "Number of reads needed to drain: " << i << std::endl;
 }
 
 RadioConfig::~RadioConfig()
