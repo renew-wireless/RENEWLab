@@ -823,7 +823,7 @@ int RadioConfig::sampleOffsetCal()
     int numCalTx = 100;
     int numVerTx = debug?200:0;
     // Cal-Passing Threshold
-    double pass_thresh = 0.6 * numCalTx;
+    double pass_thresh = 0.7 * numCalTx;
     // Read buffers
     //std::vector<std::complex<float>> buffA(symSamp);
     //std::vector<std::complex<float>> buffB(symSamp);
@@ -833,6 +833,14 @@ int RadioConfig::sampleOffsetCal()
     std::vector<void *> buffs(2);
     buffs[0] = buffA.data();
     buffs[1] = buffB.data();
+
+    // "Drain" rx buffers
+    for (int j = _cfg->bsSdrCh; j < nBsAntennas[cellIdx]; j+=_cfg->bsSdrCh)
+    {
+	std::cout << "Draining Rx Chain: " << j << std::endl;
+        Utils::drain_buffers(bsSdrs[cellIdx][j/_cfg->bsSdrCh], this->bsRxStreams[cellIdx][j/_cfg->bsSdrCh], buffs, symSamp);
+    }
+    std::cout << "Done Draining Rx Chains" << std::endl;
 
     // Aggregate over iterations (for calibration and for verification)
     std::vector<std::vector<int>> calCorrIdx(nBsSdrs[cellIdx] - 1, std::vector<int>(numCalTx, 0));
@@ -880,13 +888,12 @@ int RadioConfig::sampleOffsetCal()
         for (int j = 0; j < nBsSdrs[cellIdx] - 1; j++)
         {
             // Across all base station boards
-            for (size_t k = 0; k < _cfg->bsSdrCh; k++)
+            for (int k = 0; k < static_cast<int>(_cfg->bsSdrCh); k++)
             {
                 // Across all RX channels in base station board j
                 int seqLen = 160;
                 if (k==0) peak = CommsLib::findLTS(waveRxA[j], seqLen);
                 if (k==1) peak = CommsLib::findLTS(waveRxB[j], seqLen);
-                //std::cout << "Peak[" << j << "]: " << peak << " K: " << k << std::endl;
 
                 if (peak == -1){
                     // If no LTS found, use value from second channel
@@ -954,7 +961,7 @@ int RadioConfig::sampleOffsetCal()
                 samp_offset_ver[j] = most_freq_ver[cal_ref_idx] - most_freq_ver[j];
 
                 // debug print
-                    std::cout << "Board[" << j << "] - Cal Offsets: " << samp_offset[j] << " Ver Offsets: " << samp_offset_ver[j] << " Most Freq[0]: " << most_freq[0] << " MostFreq[j]: " << most_freq[j] <<  " MostFreqVer[0]: " << most_freq_ver[0] << " MostFreqVer[j]: "<< most_freq_ver[j] << std::endl;
+                std::cout << "Board[" << j << "] - Cal Offsets: " << samp_offset[j] << " Ver Offsets: " << samp_offset_ver[j] << " Most Freq[0]: " << most_freq[0] << " MostFreq[j]: " << most_freq[j] <<  " MostFreqVer[0]: " << most_freq_ver[0] << " MostFreqVer[j]: "<< most_freq_ver[j] << std::endl;
             }
         } // end verification
     } // end numCalTx + numVerTx for loop

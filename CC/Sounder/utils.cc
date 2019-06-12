@@ -23,6 +23,27 @@ int pin_to_core(int core_id) {
     return pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
 }
 
+void Utils::drain_buffers(SoapySDR::Device * ibsSdrs, SoapySDR::Stream * istream, std::vector<void *> buffs, int symSamp) {
+    /*
+     *  "Drain" rx buffers during initialization
+     *  Input:
+     *      ibsSdrs - Current Iris board
+     *      istream - Current SoapySDR stream
+     *	    buffs   - Vector to which we will write received IQ samples
+     *      symSamp - Number of samples
+     *
+     *  Output:
+     *      None
+     */
+    long long frameTime=0;
+    int flags=0, r=0, i=0;
+    while (r != -1){
+        r = ibsSdrs->readStream(istream, buffs.data(), symSamp, flags, frameTime, 1000000);
+        i++;
+    }
+    std::cout << "Number of reads needed to drain: " << i << std::endl;
+}
+
 std::vector<std::complex<int16_t>> Utils::double_to_int16(std::vector<std::vector<double>> in)
 {
     int len = in[0].size();
