@@ -60,12 +60,10 @@ def print_thread(sdr, info):
         print('-'*80)
         print_sensor([sdr], 'LMS7_TEMP')
         print_sensor([sdr], 'ZYNQ_TEMP')
-        print_sensor([sdr], 'FE_RX_TEMP')
-        print_sensor([sdr], 'FE_TX_TEMP')
         time.sleep(2)
 
 
-def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, numSamps, serial, sigType):
+def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, waveFreq, numSamps, serial, sigType, lo_tone):
     """
     Generate signal and write stream to RAM for TX
     """
@@ -74,7 +72,7 @@ def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, numSamps, serial, sigT
     # Device information
     sdr = SoapySDR.Device(dict(serial=serial))
     info = sdr.getHardwareInfo()
-
+    amplFixed = int(ampl*(1 << 13))
     if ant == 'A':
         txChannel = [0]
     elif ant == 'B':
@@ -87,13 +85,16 @@ def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, numSamps, serial, sigT
     # Settings
     for c in txChannel:
         print("Writing settings for channel {}".format(c))
-        sdr.setFrequency(SOAPY_SDR_TX, c, freq+bbfreq)
+        sdr.setFrequency(SOAPY_SDR_TX, c, "RF", freq+bbfreq)
         sdr.setSampleRate(SOAPY_SDR_TX, c, rate)
-        if bbfreq > 0:
-            sdr.setFrequency(SOAPY_SDR_TX, c, "BB", bbfreq) 
+        sdr.setFrequency(SOAPY_SDR_TX, c, "BB", bbfreq)
+        sdr.setAntenna(SOAPY_SDR_TX, c, "TRX")
+        if lo_tone:
+            sdr.writeSetting(SOAPY_SDR_TX, c, 'TSP_TSG_CONST', str(amplFixed))
+            sdr.writeSetting(SOAPY_SDR_TX, c, 'TX_ENB_OVERRIDE', 'true')
         if "CBRS" in info["frontend"]:
             print("set CBRS front-end gains")
-            sdr.setGain(SOAPY_SDR_TX, c, 'ATTN', -6)  # {-18,-12,-6,0}
+            sdr.setGain(SOAPY_SDR_TX, c, 'ATTN', 0)  # {-18,-12,-6,0}
             sdr.setGain(SOAPY_SDR_TX, c, 'PA2', 0)   # LO: [0|17], HI:[0|14]
         sdr.setGain(SOAPY_SDR_TX, c, 'IAMP', 0)      # [-12,12]
         sdr.setGain(SOAPY_SDR_TX, c, "PAD", gain)
@@ -116,8 +117,10 @@ def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, numSamps, serial, sigT
     elif sigType == "SINE":
         # Sine Waveform
         Ts = 1 / rate
-        waveFreq = rate / 50
-        # numSamps = int(20 * rate / waveFreq)  # 20 period worth of samples
+        if waveFreq is None:
+            waveFreq = rate / 20
+        x = 20
+        numSamps = int(x * rate / waveFreq)  # x period worth of samples
         s_freq = waveFreq
         s_time_vals = np.array(np.arange(0, numSamps)).transpose() * Ts
         txSignal = np.exp(s_time_vals * 1j * 2 * np.pi * s_freq).astype(np.complex64) * ampl
@@ -131,15 +134,16 @@ def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, numSamps, serial, sigT
     pilot1_ui32 = cfloat2uint32(txSignal)
     pilot2_ui32 = cfloat2uint32(wbz)
 
-    replay_addr = 0
-    if ant == 'A':
-        sdr.writeRegisters("TX_RAM_A", replay_addr, pilot1_ui32.tolist())
-    elif ant == 'B':
-        sdr.writeRegisters("TX_RAM_B", replay_addr, pilot1_ui32.tolist())
-    elif ant == 'AB':
-        sdr.writeRegisters("TX_RAM_A", replay_addr, pilot1_ui32.tolist())
-        sdr.writeRegisters("TX_RAM_B", replay_addr, pilot1_ui32.tolist())
-    sdr.writeSetting("TX_REPLAY", str(numSamps)) # this starts transmission
+    if not lo_tone:
+        replay_addr = 0
+        if ant == 'A':
+            sdr.writeRegisters("TX_RAM_A", replay_addr, pilot1_ui32.tolist())
+        elif ant == 'B':
+            sdr.writeRegisters("TX_RAM_B", replay_addr, pilot1_ui32.tolist())
+        elif ant == 'AB':
+            sdr.writeRegisters("TX_RAM_A", replay_addr, pilot1_ui32.tolist())
+            sdr.writeRegisters("TX_RAM_B", replay_addr, pilot1_ui32.tolist())
+        sdr.writeSetting("TX_REPLAY", str(numSamps)) # this starts transmission
 
     # Plot signal
     debug = 0
@@ -176,15 +180,17 @@ def signal_handler(signal, frame):
 def main():
     parser = OptionParser()
     parser.add_option("--args", type="string", dest="args", help="device factor arguments", default="")
-    parser.add_option("--rate", type="float", dest="rate", help="Tx and Rx sample rate", default=5e6)
-    parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
+    parser.add_option("--rate", type="float", dest="rate", help="Tx and Rx sample rate", default=10e6)
+    parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=0.5)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
-    parser.add_option("--gain", type="float", dest="gain", help="Tx gain (dB)", default=20.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=3.6e9)
+    parser.add_option("--gain", type="float", dest="gain", help="Tx gain (dB)", default=30.0)
+    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=3.597e9)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
+    parser.add_option("--waveFreq", type="float", dest="waveFreq", help="Baseband waveform freq (Hz)", default=None)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=1024)
     parser.add_option("--serial", type="string", dest="serial", help="serial number of the device", default="")
     parser.add_option("--sigType", type="string", dest="sigType", help="Signal Type: LTE/LTS/STS/SINE", default="SINE")
+    parser.add_option("--lo-tone", action="store_true", dest="lo_tone", help="generate tone using the LO ", default=True)
     (options, args) = parser.parse_args()
 
     # Display parameters
@@ -208,9 +214,11 @@ def main():
         gain=options.gain,
         freq=options.freq,
         bbfreq=options.bbfreq,
+        waveFreq=options.waveFreq,
         numSamps=options.numSamps,
         serial=options.serial,
         sigType=options.sigType,
+        lo_tone=options.lo_tone,
     )
 
 
