@@ -27,6 +27,7 @@ public:
     int radioRx(int, void ** buffs, long long & frameTime);
     int sampleOffsetCal();
     static void drain_buffers(SoapySDR::Device * ibsSdrs, SoapySDR::Stream * istream, std::vector<void *> buffs, int symSamp);
+    void sync_delays(int cellIdx);
 
     ~RadioConfig();
     std::vector<SoapySDR::Device *> devs;

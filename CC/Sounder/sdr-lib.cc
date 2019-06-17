@@ -555,18 +555,34 @@ void RadioConfig::radioStart()
         }
     }
 
+    // "Drain" rx buffers before sounding
+    int cellIdx = 0;
+    int symSamp = _cfg->pilot.size();
+    std::vector<uint32_t> buffA(symSamp);
+    std::vector<uint32_t> buffB(symSamp);
+    std::vector<void *> buffs(2);
+    buffs[0] = buffA.data();
+    buffs[1] = buffB.data();
+    for (int j = _cfg->bsSdrCh; j < nBsAntennas[cellIdx]; j+=_cfg->bsSdrCh)
+    {
+        std::cout << "SOUNDER: Draining Rx Chain: " << j << std::endl;
+        RadioConfig::drain_buffers(bsSdrs[cellIdx][j/_cfg->bsSdrCh], this->bsRxStreams[cellIdx][j/_cfg->bsSdrCh], buffs, symSamp);
+    }
+    std::cout << "SOUNDER: Done Draining Rx Chains" << std::endl;
+
+
     if (_cfg->bsPresent)
     {
         if (hubs.size() == 0)
         {
             std::cout << "triggering first Iris ..." << std::endl;
-            //bsSdrs[0][0]->writeSetting("SYNC_DELAYS", "");   // Already doing this doing sample offset cal
+            //bsSdrs[0][0]->writeSetting("SYNC_DELAYS", "");   // Already doing this before sample offset cal
             bsSdrs[0][0]->writeSetting("TRIGGER_GEN", "");
         }
         else
         {
             std::cout << "triggering Hub ..." << std::endl;
-            //hubs[0]->writeSetting("SYNC_DELAYS", "");       // Already doing this doing sample offset cal
+            //hubs[0]->writeSetting("SYNC_DELAYS", "");       // Already doing this before sample offset cal
             hubs[0]->writeSetting("TRIGGER_GEN", "");
         }
     }
@@ -739,11 +755,12 @@ int RadioConfig::sampleOffsetCal()
     /***********************************************
      *             Compute Sync Delays             *
      ***********************************************/
-    if (!hubs.empty()) {
-        hubs[cellIdx]->writeSetting("SYNC_DELAYS", "");
-    } else {
-        bsSdrs[cellIdx][0]->writeSetting("SYNC_DELAYS", "");
-    }
+    // NOTE: MOVED TO RECEIVER.CPP
+    //if (!hubs.empty()) {
+    //    hubs[cellIdx]->writeSetting("SYNC_DELAYS", "");
+    //} else {
+    //    bsSdrs[cellIdx][0]->writeSetting("SYNC_DELAYS", "");
+    //}
 
 
     /***********************************************
@@ -837,10 +854,10 @@ int RadioConfig::sampleOffsetCal()
     // "Drain" rx buffers
     for (int j = _cfg->bsSdrCh; j < nBsAntennas[cellIdx]; j+=_cfg->bsSdrCh)
     {
-	std::cout << "Draining Rx Chain: " << j << std::endl;
+	std::cout << "SAMP_CAL: Draining Rx Chain: " << j << std::endl;
         RadioConfig::drain_buffers(bsSdrs[cellIdx][j/_cfg->bsSdrCh], this->bsRxStreams[cellIdx][j/_cfg->bsSdrCh], buffs, symSamp);
     }
-    std::cout << "Done Draining Rx Chains" << std::endl;
+    std::cout << "SAMP_CAL: Done Draining Rx Chains" << std::endl;
 
     // Aggregate over iterations (for calibration and for verification)
     std::vector<std::vector<int>> calCorrIdx(nBsSdrs[cellIdx] - 1, std::vector<int>(numCalTx, 0));
@@ -989,7 +1006,6 @@ int RadioConfig::sampleOffsetCal()
         }
         myfile.close();
     }
-
     return 0;
 }
 
@@ -1012,6 +1028,18 @@ void RadioConfig::drain_buffers(SoapySDR::Device * ibsSdrs, SoapySDR::Stream * i
         i++;
     }
     std::cout << "Number of reads needed to drain: " << i << std::endl;
+}
+
+void RadioConfig::sync_delays(int cellIdx)
+{
+    /*
+     * Compute Sync Delays
+     */
+    if (!hubs.empty()) {
+        hubs[cellIdx]->writeSetting("SYNC_DELAYS", "");
+    } else {
+        bsSdrs[cellIdx][0]->writeSetting("SYNC_DELAYS", "");
+    }
 }
 
 RadioConfig::~RadioConfig()
