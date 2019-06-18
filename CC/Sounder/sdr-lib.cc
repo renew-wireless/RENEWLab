@@ -12,6 +12,9 @@
 #include "include/sdr-lib.h"
 #include "include/comms-lib.h"
 
+#include <iostream>
+#include <fstream>
+
 RadioConfig::RadioConfig(Config *cfg):
     _cfg(cfg)
 {
@@ -278,7 +281,7 @@ void *RadioConfig::initBSRadio(void *in_context)
     rc->bsRxStreams[c][i] = rc->bsSdrs[c][i]->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CS16, channels, sargs);
     rc->bsTxStreams[c][i] = rc->bsSdrs[c][i]->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CS16, channels, sargs);
     rc->remainingJobs--;
-    return 0;    
+
 }
 
 void RadioConfig::radioStart()
@@ -465,18 +468,34 @@ void RadioConfig::radioStart()
         }
     }
 
+    // "Drain" rx buffers before sounding
+    int cellIdx = 0;
+    int symSamp = _cfg->pilot.size();
+    std::vector<uint32_t> buffA(symSamp);
+    std::vector<uint32_t> buffB(symSamp);
+    std::vector<void *> buffs(2);
+    buffs[0] = buffA.data();
+    buffs[1] = buffB.data();
+    for (int j = _cfg->bsSdrCh; j < nBsAntennas[cellIdx]; j+=_cfg->bsSdrCh)
+    {
+        std::cout << "SOUNDER: Draining Rx Chain: " << j << std::endl;
+        RadioConfig::drain_buffers(bsSdrs[cellIdx][j/_cfg->bsSdrCh], this->bsRxStreams[cellIdx][j/_cfg->bsSdrCh], buffs, symSamp);
+    }
+    std::cout << "SOUNDER: Done Draining Rx Chains" << std::endl;
+
+
     if (_cfg->bsPresent)
     {
         if (hubs.size() == 0)
         {
             std::cout << "triggering first Iris ..." << std::endl;
-            bsSdrs[0][0]->writeSetting("SYNC_DELAYS", "");
+            //bsSdrs[0][0]->writeSetting("SYNC_DELAYS", "");   // Already doing this before sample offset cal
             bsSdrs[0][0]->writeSetting("TRIGGER_GEN", "");
         }
         else
         {
             std::cout << "triggering Hub ..." << std::endl;
-            hubs[0]->writeSetting("SYNC_DELAYS", "");
+            //hubs[0]->writeSetting("SYNC_DELAYS", "");       // Already doing this before sample offset cal
             hubs[0]->writeSetting("TRIGGER_GEN", "");
         }
     }
@@ -598,6 +617,342 @@ int RadioConfig::radioRx(int r /*radio id*/, void ** buffs, long long & frameTim
     }
     std::cout << "invalid radio id " << r << std::endl;
     return 0;
+}
+
+int RadioConfig::sampleOffsetCal()
+{
+    /*
+     * Calibrate sample offset observed between boards in Base Station
+     * Procedure: (i)   Transmit pilot from Board0 (first in list of BS boards)
+     *		  (ii)  Find correlation peak index at all antennas in BS
+     *		  (iii) Calculate index offset with respect to reference board Board1
+     *		  (iv)  Adjust trigger delay (increase or decrease accordingly)
+     */
+
+    /************
+     *   Init   *
+     ************/
+    // Only one cell considered at the moment
+    int cellIdx = 0;
+    int debug = 0;
+
+
+    /***********************
+     *   Generate pilots   *
+     ***********************/
+    std::vector<std::vector<double>> pilot;
+    std::vector<std::complex<int16_t>> pilot_cint16;
+    // Pilot consists of 802.11-based LTF sequences (or LTS)
+    int type = CommsLib::LTS_SEQ;
+    int N = 160;  // Sequence length
+    pilot = CommsLib::getSequence(N, type);
+    // double array to complex 16-bit int vector
+    for (int i=0; i<static_cast<int>(pilot[0].size()); i++) {
+        pilot_cint16.push_back(std::complex<int16_t>((int16_t)(pilot[0][i]*32768),(int16_t)(pilot[1][i]*32768)));
+    }
+
+    // Prepend/Append vectors with prefix/postfix number of null samples
+    std::vector<std::complex<int16_t>> prefix_vec(_cfg->prefix, 0);
+    std::vector<std::complex<int16_t>> postfix_vec(_cfg->postfix, 0);
+    pilot_cint16.insert(pilot_cint16.begin(), prefix_vec.begin(), prefix_vec.end());
+    pilot_cint16.insert(pilot_cint16.end(), postfix_vec.begin(), postfix_vec.end());
+    // Transmitting from only one chain, create a null vector for chainB
+    std::vector<std::complex<int16_t>> pilot_dummy(pilot_cint16.size(), 0);
+    pilot_uint32 = Utils::cint16_to_uint32(pilot_cint16, false, "IQ");
+    dummy_uint32 = Utils::cint16_to_uint32(pilot_dummy, false, "IQ");
+    int symSamp = pilot_cint16.size();
+    std::cout << "Number of TX pilot samples: " << pilot[0].size() << std::endl;
+    std::cout << "Number of TX total samples: " << symSamp << std::endl;
+
+
+    /***********************************************
+     *             Compute Sync Delays             *
+     ***********************************************/
+    // NOTE: MOVED TO RECEIVER.CPP
+    //if (!hubs.empty()) {
+    //    hubs[cellIdx]->writeSetting("SYNC_DELAYS", "");
+    //} else {
+    //    bsSdrs[cellIdx][0]->writeSetting("SYNC_DELAYS", "");
+    //}
+
+
+    /***********************************************
+     *   Write pilots to RAM and activate stream   *
+     ***********************************************/
+    int flags = 0;
+    for (int i = 0; i < nBsSdrs[cellIdx]; i++)
+    {
+        bsSdrs[cellIdx][i]->writeRegisters("TX_RAM_A", 0, pilot_uint32);
+        if (_cfg->bsSdrCh == 2) {
+            // Doesn't matter: for cal, chainB not used
+            bsSdrs[cellIdx][i]->writeRegisters("TX_RAM_B", 2048, dummy_uint32);
+        }
+        bsSdrs[cellIdx][i]->activateStream(this->bsRxStreams[cellIdx][i], flags, 0);
+    }
+
+
+    /***********************
+     *   Create schedule   *
+     ***********************/
+    // For now, we assume reference board is part of the BS and is triggered from hub
+    int refBoardId = 0;
+    // write config for reference radio node
+    std::vector<std::string> sched = {"PG"};
+    //std::string sched = "PG";
+    std::cout << "Samp Offset Cal Ref node schedule: " << sched[0] << std::endl;
+#ifdef JSON
+    json conf;
+    conf["tdd_enabled"] = true;
+    conf["trigger_out"] = false;
+    conf["frames"] = sched;
+    conf["symbol_size"] = symSamp;
+    conf["max_frame"] = 1;
+    std::string confString = conf.dump();
+#else
+    std::string confString ="{\"tdd_enabled\":true,\"trigger_out\":false,";
+    confString +="\"symbol_size\":"+std::to_string(symSamp);
+    confString +=",\"frames\":[\"";
+    confString += sched;
+    confString +="\"]}";
+    std::cout << confString << std::endl;
+#endif
+    bsSdrs[cellIdx][refBoardId]->writeSetting("TDD_CONFIG", confString);
+    bsSdrs[cellIdx][refBoardId]->writeSetting("TDD_MODE", "true");
+    bsSdrs[cellIdx][refBoardId]->writeSetting("TX_SW_DELAY", "30");
+    // write config for array radios (all boards in Base Station except Board0==refBoard)
+    for (int i = 0; i < nBsSdrs[cellIdx] - 1; i++)
+    {
+        sched.clear();
+        sched = {"RG"};
+        std::cout << "Samp Offset Cal node " << i << " schedule: " << sched[0] << std::endl;
+#ifdef JSON
+        conf["tdd_enabled"] = true;
+        conf["trigger_out"] = false;
+        conf["frames"] = sched;
+        conf["symbol_size"] = symSamp;
+        conf["max_frame"] = 1;
+        confString = conf.dump();
+#else
+        confString ="{\"tdd_enabled\":true,\"trigger_out\":false,";
+        confString +="\"symbol_size\":"+std::to_string(symSamp);
+        confString +=",\"frames\":[\"";
+        confString += sched;
+        confString +="\"]}";
+        std::cout << confString << std::endl;
+#endif
+        bsSdrs[cellIdx][i+1]->writeSetting("TDD_CONFIG", confString);
+        bsSdrs[cellIdx][i+1]->writeSetting("TDD_MODE", "true");
+        bsSdrs[cellIdx][i+1]->writeSetting("TX_SW_DELAY", "30");
+    }
+
+
+    /*********************************
+     *   Begin Calibration Process   *
+     *********************************/
+    // Multiple iterations
+    int numCalTx = 100;
+    int numVerTx = debug?200:0;
+    // Cal-Passing Threshold
+    double pass_thresh = 0.6 * numCalTx;
+    // Read buffers
+    //std::vector<std::complex<float>> buffA(symSamp);
+    //std::vector<std::complex<float>> buffB(symSamp);
+    std::vector<uint32_t> buffA(symSamp);
+    std::vector<uint32_t> buffB(symSamp);
+
+    std::vector<void *> buffs(2);
+    buffs[0] = buffA.data();
+    buffs[1] = buffB.data();
+
+    // "Drain" rx buffers
+    for (int j = _cfg->bsSdrCh; j < nBsAntennas[cellIdx]; j+=_cfg->bsSdrCh)
+    {
+	std::cout << "SAMP_CAL: Draining Rx Chain: " << j << std::endl;
+        RadioConfig::drain_buffers(bsSdrs[cellIdx][j/_cfg->bsSdrCh], this->bsRxStreams[cellIdx][j/_cfg->bsSdrCh], buffs, symSamp);
+    }
+    std::cout << "SAMP_CAL: Done Draining Rx Chains" << std::endl;
+
+    // Aggregate over iterations (for calibration and for verification)
+    std::vector<std::vector<int>> calCorrIdx(nBsSdrs[cellIdx] - 1, std::vector<int>(numCalTx, 0));
+    std::vector<std::vector<int>> verCorrIdx(nBsSdrs[cellIdx] - 1, std::vector<int>(numVerTx, 0));
+    std::vector<int> max_freq(nBsSdrs[cellIdx] - 1, -999);
+    std::vector<int> most_freq(nBsSdrs[cellIdx] - 1, -999);
+    std::vector<int> samp_offset(nBsSdrs[cellIdx] - 1, -999);
+    std::vector<int> max_freq_ver(nBsSdrs[cellIdx] - 1, -999);
+    std::vector<int> most_freq_ver(nBsSdrs[cellIdx] - 1, -999);
+    std::vector<int> samp_offset_ver(nBsSdrs[cellIdx] - 1, -999);
+
+    for (int i = 0; i < numCalTx + numVerTx; i++)
+    {
+        // Generate trigger. Use hub if present, otherwise use
+        if (!hubs.empty()) {
+            hubs[cellIdx]->writeSetting("TRIGGER_GEN", ""); // assume a single cell and single hub
+        } else {
+            bsSdrs[cellIdx][0]->writeSetting("TRIGGER_GEN", ""); // assume a single cell and single hub
+        }
+
+        // Read streams
+        long long frameTime = 0;
+        std::vector<std::vector<std::complex<double>>> waveRxA(nBsSdrs[cellIdx]-1, std::vector<std::complex<double>>(symSamp, 0));
+        std::vector<std::vector<std::complex<double>>> waveRxB(nBsSdrs[cellIdx]-1, std::vector<std::complex<double>>(symSamp, 0));
+
+        // Ignore first board (TX)
+        for (int j = _cfg->bsSdrCh; j < nBsAntennas[cellIdx]; j+=_cfg->bsSdrCh)
+        {
+            // Read stream data type: SOAPY_SDR_CS16
+            int r = bsSdrs[cellIdx][j/_cfg->bsSdrCh]->readStream(this->bsRxStreams[cellIdx][j/_cfg->bsSdrCh], buffs.data(), symSamp, flags, frameTime, 1000000);
+            if(r == -1){
+		std::cout << "ReadStream: " << r << "  Num BS ant: " << nBsAntennas[cellIdx] << std::endl;
+	    }
+            // cast vectors
+            //std::vector<std::complex<double>> buffA_d(buffA.begin(), buffA.end());
+            //std::vector<std::complex<double>> buffB_d(buffB.begin(), buffB.end());
+            std::vector<std::complex<double>> buffA_d = Utils::uint32tocdouble(buffA, "IQ");
+            std::vector<std::complex<double>> buffB_d = Utils::uint32tocdouble(buffB, "IQ");
+            waveRxA[j/_cfg->bsSdrCh - _cfg->bsSdrCh] = buffA_d;
+            waveRxB[j/_cfg->bsSdrCh - _cfg->bsSdrCh] = buffB_d;
+        }
+
+        // Find correlation index at each board
+        int peak=0;
+        for (int j = 0; j < nBsSdrs[cellIdx] - 1; j++)
+        {
+            // Across all base station boards
+            for (int k = 0; k < static_cast<int>(_cfg->bsSdrCh); k++)
+            {
+                // Across all RX channels in base station board j
+                int seqLen = 160;
+                if (k==0) peak = CommsLib::findLTS(waveRxA[j], seqLen);
+                if (k==1) peak = CommsLib::findLTS(waveRxB[j], seqLen);
+
+                if (peak == -1){
+                    // If no LTS found, use value from second channel
+                    continue;
+                }
+                if (i < numCalTx) {
+                    calCorrIdx[j][i] = peak;
+                } else {
+                    verCorrIdx[j][i-numCalTx] = peak;
+                }
+            }
+        }
+
+        // Calibrate: If we are done collecting datapoints for cal
+        if(i == numCalTx-1){
+            // Find most common corr. index for each BS board (ignore tx board)
+            int cal_ref_idx = 0;
+            for (int j = 0; j < nBsSdrs[cellIdx] - 1; j++) {
+                std::map<int,int> m;
+                typedef std::vector<int>::const_iterator iter;
+                for (iter vi = calCorrIdx[j].begin(); vi != calCorrIdx[j].end(); vi++) {
+                    int count = m[*vi]++;
+                    if (count > max_freq[j]) {
+                        max_freq[j] = count;
+                        most_freq[j] = *vi;
+                    }
+                }
+                if (max_freq[j] < pass_thresh || most_freq[j] == 0) {
+                    std::cout << "Sample Offset Calibration FAILED at board " << j << " MostFreq: " << most_freq[j] << " Counts: " << max_freq[j] << " ... RE-RUN!" << std::endl;
+                    return -1;
+                }
+                // record sample offset (from a reference board)
+                samp_offset[j] = most_freq[cal_ref_idx] - most_freq[j];
+                for (int k = 0; k < abs(samp_offset[j]); k++) {
+                    if (samp_offset[j] > 0) {
+			//std::cout << "Board[" << j << "]: INCREASE" << std::endl;
+                        bsSdrs[cellIdx][j+1]->writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_INCR_TIME);
+			usleep(5000);
+                    } else if (samp_offset[j] < 0) {
+			//std::cout << "Board[" << j << "]: DECREASE" << std::endl;
+                        bsSdrs[cellIdx][j+1]->writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_DECR_TIME);
+			usleep(5000);
+                    }
+                }
+            }
+        } // end calibration
+
+
+        // Verification
+        if((i == numCalTx + numVerTx - 1) && debug){
+            // Find most common corr. index for each BS board (ignore tx board)
+            int cal_ref_idx = 0;
+            for (int j = 0; j < nBsSdrs[cellIdx] - 1; j++) {
+                std::map<int,int> m;
+                typedef std::vector<int>::const_iterator iter;
+		// Change takes time to take effect, only consider second half of verification vals
+                for (iter vi = verCorrIdx[j].begin()+(numVerTx/2); vi != verCorrIdx[j].end(); vi++) {
+                    int count = m[*vi]++;
+                    if (count > max_freq_ver[j]) {
+                        max_freq_ver[j] = count;
+                        most_freq_ver[j] = *vi;
+                    }
+                }
+                // record sample offset (from a reference board)
+                samp_offset_ver[j] = most_freq_ver[cal_ref_idx] - most_freq_ver[j];
+
+                // debug print
+                std::cout << "Board[" << j << "] - Cal Offsets: " << samp_offset[j] << " Ver Offsets: " << samp_offset_ver[j] << " Most Freq[0]: " << most_freq[0] << " MostFreq[j]: " << most_freq[j] <<  " MostFreqVer[0]: " << most_freq_ver[0] << " MostFreqVer[j]: "<< most_freq_ver[j] << std::endl;
+            }
+        } // end verification
+    } // end numCalTx + numVerTx for loop
+
+    if(debug){
+        std::ofstream myfile;
+        myfile.open("./cal_ver.txt");
+        myfile << "CALIBRATION VALUES:";
+        myfile << std::endl;
+        for (size_t idx = 0; idx<calCorrIdx[0].size(); idx++){
+            for (size_t idx2 = 0; idx2<calCorrIdx.size(); idx2++) {
+                myfile << calCorrIdx[idx2][idx];
+                myfile << ",  ";
+            }
+            myfile << std::endl;
+        }
+        myfile << "VERIFICATION VALUES:";
+        myfile << std::endl;
+        for (size_t idx = 0; idx<verCorrIdx[0].size(); idx++){
+            for (size_t idx2 = 0; idx2<verCorrIdx.size(); idx2++) {
+                myfile << verCorrIdx[idx2][idx];
+                myfile << ",  ";
+            }
+            myfile << std::endl;
+        }
+        myfile.close();
+    }
+    return 0;
+}
+
+void RadioConfig::drain_buffers(SoapySDR::Device * ibsSdrs, SoapySDR::Stream * istream, std::vector<void *> buffs, int symSamp) {
+    /*
+     *  "Drain" rx buffers during initialization
+     *  Input:
+     *      ibsSdrs - Current Iris board
+     *      istream - Current SoapySDR stream
+     *      buffs   - Vector to which we will write received IQ samples
+     *      symSamp - Number of samples
+     *
+     *  Output:
+     *      None
+     */
+    long long frameTime=0;
+    int flags=0, r=0, i=0;
+    while (r != -1){
+        r = ibsSdrs->readStream(istream, buffs.data(), symSamp, flags, frameTime, 1000000);
+        i++;
+    }
+    std::cout << "Number of reads needed to drain: " << i << std::endl;
+}
+
+void RadioConfig::sync_delays(int cellIdx)
+{
+    /*
+     * Compute Sync Delays
+     */
+    if (!hubs.empty()) {
+        hubs[cellIdx]->writeSetting("SYNC_DELAYS", "");
+    } else {
+        bsSdrs[cellIdx][0]->writeSetting("SYNC_DELAYS", "");
+    }
 }
 
 RadioConfig::~RadioConfig()

@@ -21,6 +21,143 @@
 
 
 #include "include/comms-lib.h"
+//#include <itpp/itbase.h>
+
+
+int CommsLib::findLTS(std::vector<std::complex<double>> iq, int seqLen)
+{
+    /*
+     * Find 802.11-based LTS (Long Training Sequence)
+     * Input:
+     *     iq        - IQ complex samples (vector)
+     *     seqLen    - Length of sequence
+     * Output:
+     *     best_peak - LTS peak index (correlation peak)
+     */
+
+    float lts_thresh = 0.8;
+    std::vector<std::vector<double> > lts_seq;
+    int best_peak;
+
+    // Original LTS sequence
+    lts_seq = CommsLib::getSequence(seqLen, LTS_SEQ);
+
+    // Re-arrange into complex vector, flip, and compute conjugate
+    std::vector<std::complex<double>> lts_sym;
+    std::vector<std::complex<double>> lts_sym_conj;
+    for(int i=0; i<64; i++){
+	// lts_seq is a 2x160 matrix (real/imag by seqLen=160 elements)
+	// grab one symbol and flip around
+        lts_sym.push_back(std::complex<double>(lts_seq[0][seqLen-1-i], lts_seq[1][seqLen-1-i]));
+	// conjugate
+        lts_sym_conj.push_back(std::conj(lts_sym[i]));
+    }
+
+    // Equivalent to numpy's sign function
+    std::vector<std::complex<double>> iq_sign = CommsLib::csign(iq);
+
+    // Convolution
+    std::vector<double> lts_corr = CommsLib::convolve(iq_sign, lts_sym_conj);
+
+    // Find all peaks
+    std::vector<int> peaks;
+    for(size_t i=0; i<lts_corr.size(); i++){
+        if(lts_corr[i] > (lts_thresh * *std::max_element(lts_corr.begin(), lts_corr.end()))){
+            // Index of valid peaks
+            peaks.push_back(i);
+        }
+    }
+
+    std::vector<std::vector<int>> x_vec(peaks.size());
+    std::vector<std::vector<int>> y_vec(peaks.size());
+    CommsLib::meshgrid(peaks, peaks, x_vec, y_vec);
+
+    // Find peaks that are 64 samples apart
+    std::vector<int> valid_peaks;
+    for(size_t i=0; i<x_vec.size(); i++){
+        for(size_t j=0; j<x_vec[0].size(); j++){
+            int idx_diff = y_vec[i][j] - x_vec[i][j];
+            if(idx_diff == static_cast<int>(lts_sym.size())){
+                valid_peaks.push_back(peaks[i]);
+            }
+        }
+    }
+    // Use first LTS found
+    if(valid_peaks.empty()){
+        best_peak = -1;
+    } else {
+        best_peak = valid_peaks[0];
+    }
+
+    return best_peak;
+}
+
+void CommsLib::meshgrid(std::vector<int> x_in, std::vector<int> y_in, std::vector<std::vector<int>> &x, std::vector<std::vector<int>> &y)
+{
+    /*
+     * Simplified version of numpy's meshgrid function. Input vectors must be of same length.
+     * Returns coordinate matrices from coordinate vectors.
+     */
+    int nx = x_in.size();
+    int ny = y_in.size();
+
+    if(nx != ny){
+        throw std::invalid_argument( " Input vectors to meshgrid function must have same length. " );
+    }
+    for(int i=0; i<nx; i++){
+        for(int j=0; j<ny; j++){
+            x[i].push_back(x_in[j]);
+            y[i].push_back(y_in[i]);
+	    //std::cout << "XXXX x[" << i << "][" << j << "]: " << x[i][j] << std::endl;
+	    //std::cout << "YYYY y[" << i << "][" << j << "]: " << y[i][j] << std::endl;
+        }
+    }
+}
+
+std::vector<std::complex<double>> CommsLib::csign(std::vector<std::complex<double>> iq)
+{
+    /*
+     * Return element-wise indication of the sign of a number (for complex vector).
+     *
+     * For complex-valued inputs:
+     *     sign(x.real) + 0j if x.real != 0 else sign(x.imag) + 0j
+     *
+     * where sign(x) is given by
+     *     -1 if x < 0, 0 if x==0, 1 if x > 0
+     */
+    std::vector<std::complex<double>> iq_sign;
+    for(int i=0; i<static_cast<int>(iq.size()); i++){
+        // sign(x.real) + 0j if x.real != 0 else sign(x.imag) + 0j
+        std::complex<double> x = iq[i];
+        if(x.real() != 0){
+            iq_sign.push_back((x.real() > 0) ? 1 : (x.real() < 0) ? -1 : 0);
+        } else {
+            iq_sign.push_back((x.imag() > 0) ? 1 : (x.imag() < 0) ? -1 : 0);
+        }
+    }
+    return iq_sign;
+}
+
+std::vector<double> CommsLib::convolve(std::vector<std::complex<double>> const &f, std::vector<std::complex<double>> const &g) {
+    /* Convolution of two vectors
+     * Source:
+     * https://stackoverflow.com/questions/24518989/how-to-perform-1-dimensional-valid-convolution
+     */
+    int const nf = f.size();
+    int const ng = g.size();
+    int const n  = nf + ng - 1;
+    std::vector<double> out(n, 0);
+    std::vector<std::complex<double>> outc(n, 0);
+    for(auto i(0); i < n; ++i) {
+        int const jmn = (i >= ng - 1)? i - (ng - 1) : 0;
+        int const jmx = (i <  nf - 1)? i            : nf - 1;
+        for(auto j(jmn); j <= jmx; ++j) {
+	    outc[i] += f[j] * g[i - j];
+        }
+        out[i] += abs(outc[i]);
+    }
+    return out;
+}
 
 std::vector<int> CommsLib::getDataSc(int fftSize)
 {
@@ -196,7 +333,7 @@ std::vector<std::vector<double> > CommsLib::getSequence(int N, int type)
         }
     }
     else if(type == LTS_SEQ){
-	// LTS - 802.11 Long training sequence (2.5 symbols, cp length of 32 samples)
+	// LTS - 802.11 Long training sequence (160 samples == 2.5 symbols, cp length of 32 samples)
         matrix.resize(2);
  
 	double lts_re[160]={-0.15625, 0.012284590458567165, 0.09171654912240956, -0.09188755526278, -0.002805944173488664, 
@@ -265,9 +402,11 @@ std::vector<std::vector<double> > CommsLib::getSequence(int N, int type)
 			   0.11500464362403023, -0.0040763264805083466, 0.025888347648318433, 0.10617091261510256, 0.05518049537437035, 
 			   0.08770675983572167, -0.027885918828227545, -0.08279790948776067, 0.11115794305116433, 0.12032513267372755};
 
+	// Grab the last N samples (sequence length specified, provide more flexibility)
+	int startIdx = 160 - N;
         for (int j = 0; j < 2; j++){
 	    std::vector<double> a;
-            for (int i = 0; i < 160; i++){
+            for (int i = startIdx; i < 160; i++){
 		if(j == 0){
 	            a.push_back(lts_re[i]);
 		}
@@ -602,9 +741,17 @@ std::vector<std::vector<double> > CommsLib::getSequence(int N, int type)
 int main(int argc, char *argv[])
 {
     std::vector<std::vector<double> > sequence;
-    int type = atoi(argv[1]);
-    int N = atoi(argv[2]); 	// If Hadamard, possible N: {2, 4, 8, 16, 32, 64}
-    sequence = SequenceGen::getSequence(N, type);
+    int type = CommsLib::LTS_SEQ; //atoi(argv[1]);
+    int N = 160; 			  //atoi(argv[2]); 	// If Hadamard, possible N: {2, 4, 8, 16, 32, 64}
+    sequence = CommsLib::getSequence(N, type);
+
+    std::vector<std::complex<double>> sequence_c;
+    for(int i=0; i<sequence[0].size(); i++){
+        sequence_c.push_back(std::complex<double>(sequence[0][i], sequence[1][i]));
+    }
+    double peak = CommsLib::findLTS(sequence_c, N);
+    std::cout << "LTS PEAK: " << peak << std::endl;
+
     return 0;
 }
 */

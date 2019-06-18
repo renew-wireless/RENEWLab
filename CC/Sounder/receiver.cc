@@ -46,6 +46,21 @@ std::vector<pthread_t> Receiver::startRecv(void** in_buffer, int** in_buffer_sta
     buffer_status_ = in_buffer_status; // for save status
 
     core_id_ = in_core_id;
+
+    int cellIdx = 0;
+    // Measure Sync Delays now!
+    radioconfig_->sync_delays(cellIdx);
+
+    bool enable_samp_cal = false;
+    if(enable_samp_cal){
+	std::cout << "Begin Sample Offset Calibration" << std::endl;
+        int cal_passed = radioconfig_->sampleOffsetCal();
+        if (cal_passed == -1) {
+            printf("Sample Offset Calibration Failed \n");
+            exit(0);
+        }
+        std::cout << "Sample Offset Calibration Done" << std::endl;
+    }
     radioconfig_->radioStart();
 
     std::vector<pthread_t> client_threads;

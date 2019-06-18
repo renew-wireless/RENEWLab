@@ -32,4 +32,10 @@
 #define MAX_FRAME_INC 2000
 #define TIME_DELTA 20 //ms 
 
+// Triggers - Used for Samples Offset Calibration
+#define FPGA_IRIS30_TRIGGERS 44
+#define FPGA_IRIS30_INCR_TIME (1 << 2)
+#define FPGA_IRIS30_DECR_TIME (1 << 3)
+
+
 #endif
