@@ -26,7 +26,7 @@ file(MAKE_DIRECTORY ${directory})
 
 add_definitions(-DJSON)
 add_definitions(-DNEWCORR)
-add_definitions(-DTHREADED_INIT)
+#add_definitions(-DTHREADED_INIT)
 
 message(STATUS "SoapySDR_INCLUDE_DIRS: ${SoapySDR_INCLUDE_DIRS}")
 message(STATUS "SoapySDR_LIBRARIES: ${SoapySDR_LIBRARIES}")

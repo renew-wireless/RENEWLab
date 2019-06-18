@@ -3,12 +3,12 @@
 		 "cells" : 1,
 		 "sdr_id" : ["files/iris_serials.txt"],
 		 "hub_id" : "files/hub_serials.txt",
-		 "frequency" : 2.492e9,
+		 "frequency" : 2.5e9,
 		 "channel" : "AB",
 		 "rxgainA" : 20,
-		 "txgainA" : 25,
+		 "txgainA" : 40,
 		 "rxgainB" : 20,
-		 "txgainB" : 25,
+		 "txgainB" : 40,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
 		     "BGPGGGGGGGGGGGGGGGGG"
@@ -27,15 +27,15 @@
 
 	"Clients" : {
 		 "sdr_id" : [
-		     "RF3E000045"
+		     "RF3E000145"
 		 ],
-		 "frequency" : 2.492e9,
+		 "frequency" : 2.5e9,
 		 "channel" : "A",
 		 "agc_en" : false,
 		 "rxgainA" : [20],
-		 "txgainA" : [25],
+		 "txgainA" : [40],
 		 "rxgainB" : [20],
-		 "txgainB" : [25],
+		 "txgainB" : [40],
 		 "rate" : 5e6,
 		 "frame_schedule" : [
 		     "GGPGGGGGGGGGGGGGGGGG"

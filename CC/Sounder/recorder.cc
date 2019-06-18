@@ -642,7 +642,7 @@ void* Recorder::taskThread(void* context)
         tar_core_id = (tar_core_id - 18) + 36;
     if(pin_to_core(tar_core_id) != 0)
     {
-        printf("stitch thread %d to core %d failed\n", tid, tar_core_id);
+        printf("pinning thread %d to core %d failed\n", tid, tar_core_id);
         exit(0);
     }
 #endif
