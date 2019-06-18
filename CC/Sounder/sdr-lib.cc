@@ -79,6 +79,8 @@ RadioConfig::RadioConfig(Config *cfg):
             }
 
             while(remainingJobs>0);
+            // Measure Sync Delays now!
+            sync_delays(0);
 
         }
     }
@@ -287,8 +289,19 @@ void *RadioConfig::initBSRadio(void *in_context)
 void RadioConfig::radioStart()
 {
     int flags = 0;
+    bool enable_samp_cal = false;
     if (_cfg->bsPresent)
     {
+
+        if(enable_samp_cal){
+            std::cout << "Begin Sample Offset Calibration" << std::endl;
+            int cal_passed = sampleOffsetCal();
+            if (cal_passed == -1) {
+                printf("Sample Offset Calibration Failed \n");
+                exit(0);
+            }
+            std::cout << "Sample Offset Calibration Done" << std::endl;
+        }
 
         std::vector<std::string> _tddSched;
         _tddSched.resize(_cfg->framePeriod);
@@ -468,24 +481,27 @@ void RadioConfig::radioStart()
         }
     }
 
-    // "Drain" rx buffers before sounding
-    int cellIdx = 0;
-    int symSamp = _cfg->pilot.size();
-    std::vector<uint32_t> buffA(symSamp);
-    std::vector<uint32_t> buffB(symSamp);
-    std::vector<void *> buffs(2);
-    buffs[0] = buffA.data();
-    buffs[1] = buffB.data();
-    for (int j = _cfg->bsSdrCh; j < nBsAntennas[cellIdx]; j+=_cfg->bsSdrCh)
-    {
-        std::cout << "SOUNDER: Draining Rx Chain: " << j << std::endl;
-        RadioConfig::drain_buffers(bsSdrs[cellIdx][j/_cfg->bsSdrCh], this->bsRxStreams[cellIdx][j/_cfg->bsSdrCh], buffs, symSamp);
-    }
-    std::cout << "SOUNDER: Done Draining Rx Chains" << std::endl;
-
 
     if (_cfg->bsPresent)
     {
+        if(enable_samp_cal)
+        {
+            // "Drain" rx buffers before sounding
+            int cellIdx = 0;
+            int symSamp = _cfg->pilot.size();
+            std::vector<uint32_t> buffA(symSamp);
+            std::vector<uint32_t> buffB(symSamp);
+            std::vector<void *> buffs(2);
+            buffs[0] = buffA.data();
+            buffs[1] = buffB.data();
+            for (int j = _cfg->bsSdrCh; j < nBsAntennas[cellIdx]; j+=_cfg->bsSdrCh)
+            {
+                std::cout << "SOUNDER: Draining Rx Chain: " << j << std::endl;
+                RadioConfig::drain_buffers(bsSdrs[cellIdx][j/_cfg->bsSdrCh], this->bsRxStreams[cellIdx][j/_cfg->bsSdrCh], buffs, symSamp);
+            }
+            std::cout << "SOUNDER: Done Draining Rx Chains" << std::endl;
+        }
+
         if (hubs.size() == 0)
         {
             std::cout << "triggering first Iris ..." << std::endl;

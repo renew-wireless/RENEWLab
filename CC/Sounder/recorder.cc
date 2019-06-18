@@ -551,7 +551,7 @@ void Recorder::stop()
 {
     cfg->running = false;
     receiver_.reset();
-    this->closeHDF5();
+    if (cfg->bsPresent) this->closeHDF5();
 }
 
 void Recorder::start()
