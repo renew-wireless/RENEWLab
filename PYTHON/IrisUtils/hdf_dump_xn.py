@@ -544,7 +544,7 @@ class hdfDump:
         plt.title('Frame starts')
         for j in range(n_ant):
             plt.plot(sf_strts[:,j].flatten(), label = 'Antenna: {}'.format(j) )
-        ax.legend(loc='lower right', ncol=16, frameon=False)
+        ax.legend(loc='lower right', ncol=8, frameon=False)
         ax.set_xlabel('Frame no.')
         ax.set_ylabel('Sample Index')
         plt.show()
