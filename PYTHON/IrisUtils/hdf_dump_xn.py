@@ -84,6 +84,8 @@ def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, plt_ant=0, cp=16):
     # get the k_lts largest peaks and their position
     k_max = np.sort(match_filt, axis = -1)[:,:,:,:, -k_lts:]
     k_amax =np.argsort(match_filt, axis = -1)[:,:,:,:, -k_lts:]
+    print("shape of k_amax  = {}".format(k_amax.shape))
+    print(k_amax[frame_to_plot,0,0,plt_ant,:])
     # If the frame is good, the largerst peak is at the last place of k_amax
     lst_pk_idx = np.expand_dims(k_amax[:,:,:,:,-1], axis = 4)
     lst_pk_idx = np.tile(lst_pk_idx, (1,1,1,1,base_arr.shape[0]))
@@ -99,12 +101,33 @@ def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, plt_ant=0, cp=16):
                 k_max.shape, k_amax.shape, lst_pk_idx.shape) )
         print("frame_sanity(): k_amax = {}".format(k_amax))
         print("frame_sanity(): frame_map.shape = \n{}".format(frame_map.shape))
-        
+
+    print(idx_diff[frame_to_plot,0,0,plt_ant,:])    
     frame_map[frame_map == 1] = -1
-    frame_map[frame_map == k_lts] = 1
+    frame_map[frame_map >= (k_lts -1)] = 1
     frame_map[frame_map > 1] = 0
     if debug:
         print("frame_sanity(): frame_map = \n{}".format(frame_map))
+    
+    #print results:
+    n_rf = frame_map.size
+    n_gf = frame_map[frame_map == 1].size
+    n_bf = frame_map[frame_map == -1].size
+    n_pr = frame_map[frame_map == 0].size
+    print("\t>>>>> \t frame_sanity(): frame status:\t<<<<<")
+    print("Out of total {} received frames: \nGood frames:{}\nBad frames:{}\nProbably Partially received or corrupt:{}".format(
+            n_rf, n_gf, n_bf, n_pr,))
+  
+    
+    if n_gf == 0:
+      frame_map[0,0] = 1
+      print("No good frames! colored frame 0 of ant 0 good to keep plotter happy!")
+    if n_pr == 0:
+      frame_map[0,0] = 0
+      print("No good frames! colored frame 0 of ant 0 partial to keep plotter happy!")
+    if n_bf == 0:
+      frame_map[0,0] = -1
+      print("No bad frames! colored frame 0 of ant 0 bad to keep plotter happy!")
     
     # plot a frame:
     fig = plt.figure()
@@ -123,15 +146,8 @@ def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, plt_ant=0, cp=16):
     plt.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
     plt.show()
     
-    #print results:
-    n_rf = frame_map.size
-    n_gf = frame_map[frame_map == 1].size
-    n_bf = frame_map[frame_map == -1].size
-    n_pr = frame_map[frame_map == 0].size
-    print("\t>>>>> \t frame_sanity(): frame status:\t<<<<<")
-    print("Out of total {} received frames: \nGood frames:{}\nBad frames:{}\nProbably Partially received or corrupt:{}".format(
-            n_rf, n_gf, n_bf, n_pr,))
-    print("********************* frame_sanity() *********************\n")
+    print("********************* frame_sanity() *********************\n")   
+
 class hdfDump:
 
     def __init__(self, filename):
@@ -448,6 +464,7 @@ class hdfDump:
             
             print("******** Calling csi_from_pilots and frame_sanity *********")
             n_frame_inspct = samples.shape[0]
+            #n_frame_inspct = 400
             frm_plt = min(default_frame, n_frame_inspct)
             csi_mat, match_filt, sub_fr_strt,k_lts, n_lts = csi_from_pilots(
                     samples, z_padding, frames_to_inspect = n_frame_inspct, frame_to_plot = frm_plt, ref_ant =ant_i)
@@ -485,14 +502,14 @@ class hdfDump:
 
             # Verify default_frame does not exceed max number of collected frames
             frame_to_plot = min(default_frame, samps.shape[0])
-
+            ant_plt = ant_i
             # Plotter
             # Samps Dimensions: (Frame, Cell, User, Pilot Rep, Antenna, Sample)
             axes[0, idx].set_ylabel('Frame %d ant 0 (Re)' % frame_to_plot)
-            axes[0, idx].plot(np.real(samps[frame_to_plot, 0, 0, 0, 1, :]))
+            axes[0, idx].plot(np.real(samps[frame_to_plot, 0, 0, 0, ant_plt, :]))
 
             axes[1, idx].set_ylabel('Frame %d ant 1 (Re)' % frame_to_plot)
-            axes[1, idx].plot(np.real(samps[frame_to_plot, 0, 0, 0, 1, :]))
+            axes[1, idx].plot(np.real(samps[frame_to_plot, 0, 0, 0, ant_plt, :]))
 
             axes[2, idx].set_ylabel('All Frames ant 0 (Re)')
             axes[2, idx].plot(np.real(samps[:, 0, 0, 0, 0, :]).flatten())
@@ -513,7 +530,24 @@ class hdfDump:
             axes[5, idx].set_xlabel('Frame')
 
         plt.show()
-
+        
+        #plot F starts
+        n_frame = sub_fr_strt.shape[0]      # no. of captured frames
+        n_cell = sub_fr_strt.shape[1]       # no. of cells
+        n_ue = sub_fr_strt.shape[2]         # no. of UEs 
+        n_ant = sub_fr_strt.shape[3]        # no. of BS antennas
+        
+        sf_strts = np.reshape(sub_fr_strt, (n_frame*n_cell*n_ue,n_ant))
+        fig = plt.figure()
+        ax = fig.add_subplot(1,1,1)
+        plt.grid(True)
+        plt.title('Frame starts')
+        for j in range(n_ant):
+            plt.plot(sf_strts[:,j].flatten(), label = 'Antenna: {}'.format(j) )
+        ax.legend(loc='lower right', ncol=16, frameon=False)
+        ax.set_xlabel('Frame no.')
+        ax.set_ylabel('Sample Index')
+        plt.show()
 
 if __name__ == '__main__':
     # Tested with inputs: ./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5 300  (for two users)

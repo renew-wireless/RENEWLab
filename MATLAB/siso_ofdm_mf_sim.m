@@ -14,7 +14,7 @@ CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_snr_db              = 30;          % simulation data SC SNR
 
 % Waveform params
-N_OFDM_SYMS             = 3200;         % Number of OFDM symbols
+N_OFDM_SYMS             = 320;         % Number of OFDM symbols
 MOD_ORDER               = 16;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
 TX_SCALE                = 1.0;          % Scale for Tx waveform ([0:1])
 
@@ -98,7 +98,7 @@ ifft_in_mat_pl = zeros(N_SC, N_OFDM_SYMS);
 ifft_in_mat_pl(SC_IND_DATA, :)   = tx_syms_mat;
 ifft_in_mat_pl(SC_IND_PILOTS, :) = pilots_mat;
 
-ifft_in_mat = [lts_f.' lts_f.' ifft_in_mat_pl];
+ifft_in_mat = [repmat(lts_f.', 1, N_LTS) ifft_in_mat_pl];
 %Perform the IFFT
 tx_payload_mat = ifft(ifft_in_mat, N_SC, 1);
 
@@ -180,10 +180,9 @@ payload_mat_noCP = payload_mat(CP_LEN-FFT_OFFSET+[1:N_SC], :);
 syms_f_mat_sc = fft(payload_mat_noCP, N_SC, 1);
 syms_f_mat = syms_f_mat_sc(SC_IND_DATA,:);
 
-rx_lts1_f = syms_f_mat(:,1);
-rx_lts2_f = syms_f_mat(:,2);
+rx_lts_f = syms_f_mat(:,1:N_LTS);
 
-rx_H_est0 = [rx_lts1_f rx_lts2_f]./repmat(lts_f(SC_IND_DATA).', 1, N_LTS);
+rx_H_est0 = rx_lts_f ./repmat(lts_f(SC_IND_DATA).', 1, N_LTS);
 rx_H_est = mean(rx_H_est0,2);
 
 % Equalize (zero-forcing, just divide by complex chan estimates)
