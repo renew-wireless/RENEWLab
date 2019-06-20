@@ -502,7 +502,7 @@ class hdfDump:
             # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
             # For looking at the whole picture, use a fft size of whole symbol_length as fft window (for visualization),
             # and no offset
-            print("************ Calling samps2csi AGAIN with fft_size = symbol_length, no offset************")
+            print("************ Calling samps2csi *AGAIN*(?) with fft_size = symbol_length, no offset************")
             csi, samps = samps2csi(samples, num_cl_tmp, symbol_length, fft_size=symbol_length, offset=0, bound=0, cp=0)
 
             # Verify default_frame does not exceed max number of collected frames
