@@ -25,6 +25,7 @@ import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 import collections
+import time
 from channel_analysis import *
  
 def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, plt_ant=0, cp=16):
@@ -457,7 +458,21 @@ class hdfDump:
                 samples = data['UplinkData']['Samples']
                 num_cl_tmp = 1  # number of UEs to plot data for
             
-            
+            print("******** Calling csi_from_pilots and frame_sanity *********")
+            if self.n_frms > 0:
+                n_frame_inspct = self.n_frms
+            else:
+                n_frame_inspct = samples.shape[0]
+            frm_plt = min(default_frame, n_frame_inspct)
+            csi_from_pilots_start = time.time()
+            csi_mat, match_filt, sub_fr_strt,k_lts, n_lts = csi_from_pilots(
+                    samples, z_padding, frames_to_inspect = n_frame_inspct, frame_to_plot = frm_plt, ref_ant =ant_i)
+            csi_from_pilots_end = time.time()
+            frame_sanity_start = time.time()
+            frame_sanity(match_filt, k_lts, n_lts, frm_plt, plt_ant = ant_i)
+            frame_sanity_end = time.time()
+            print(">>>> csi_from_pilots time: %f \n" % ( csi_from_pilots_end - csi_from_pilots_start) )
+            print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
             # Compute CSI from IQ samples
             # Samps: #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Samples
             # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
@@ -465,17 +480,7 @@ class hdfDump:
             print("******** Calling samps2csi with fft_size = 64, offset = {}, bound = cp = 0 *********".format(offset))
             csi, samps = samps2csi(samples, num_cl_tmp, symbol_length, fft_size=64, offset=offset, bound=0, cp=0)
             
-            print("******** Calling csi_from_pilots and frame_sanity *********")
-            if self.n_frms > 0:
-                n_frame_inspct = self.n_frms
-            else:
-                n_frame_inspct = samples.shape[0]
-            frm_plt = min(default_frame, n_frame_inspct)
-            csi_mat, match_filt, sub_fr_strt,k_lts, n_lts = csi_from_pilots(
-                    samples, z_padding, frames_to_inspect = n_frame_inspct, frame_to_plot = frm_plt, ref_ant =ant_i)
-            
-            frame_sanity(match_filt, k_lts, n_lts, frm_plt, plt_ant = ant_i)
-            
+           
             # Correlation (Debug plot useful for checking sync)
             amps = np.mean(np.abs(samps[:, 0, 0, 0, 0, :]), axis=1)
             pilot_frames = [i for i in range(len(amps)) if amps[i] > 0.001]
@@ -557,7 +562,7 @@ class hdfDump:
 if __name__ == '__main__':
     # Tested with inputs: ./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5 300  (for two users)
     #                     ./data_in/Argos-2019-3-30-12-20-50_1x8x1.hdf5 300  (for one user)
-
+    scrpt_strt = time.time()
     if len(sys.argv) >1:
         if sys.argv[1] == "-h":
             print('>>> format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)> <n_frames_to_inspect (optional, default=0)> <<<')
@@ -626,6 +631,9 @@ if __name__ == '__main__':
             hdf5.verify_hdf5()
             
             
-
+    
     else:
         raise Exception("format: ./hdfPlot.py <filename>")
+    
+    scrpt_end = time.time()
+    print(">>>> Script Duration: time: %f \n" % ( scrpt_end - scrpt_strt) )
