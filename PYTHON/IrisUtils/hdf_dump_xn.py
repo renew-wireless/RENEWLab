@@ -27,8 +27,8 @@ import matplotlib.pyplot as plt
 import collections
 import time
 from channel_analysis import *
- 
-def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, plt_ant=0, cp=16):
+ # add frame_start for plot indexing!
+def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_ant=0, cp=16):
     """ 
     Creates a map of the frames per antenna. 3 categories: Good frames, bad frames, probably partial frames.
     Good frames are those where all k_lts peaks are present and spaced n_lts samples apart.
@@ -86,7 +86,7 @@ def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, plt_ant=0, cp=16):
     k_max = np.sort(match_filt, axis = -1)[:,:,:,:, -k_lts:]
     k_amax =np.argsort(match_filt, axis = -1)[:,:,:,:, -k_lts:]
     print("shape of k_amax  = {}".format(k_amax.shape))
-    print(k_amax[frame_to_plot,0,0,plt_ant,:])
+    print(k_amax[frame_to_plot - st_frame,0,0,plt_ant,:])
     # If the frame is good, the largerst peak is at the last place of k_amax
     lst_pk_idx = np.expand_dims(k_amax[:,:,:,:,-1], axis = 4)
     lst_pk_idx = np.tile(lst_pk_idx, (1,1,1,1,base_arr.shape[0]))
@@ -103,7 +103,7 @@ def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, plt_ant=0, cp=16):
         print("frame_sanity(): k_amax = {}".format(k_amax))
         print("frame_sanity(): frame_map.shape = \n{}".format(frame_map.shape))
 
-    print(idx_diff[frame_to_plot,0,0,plt_ant,:])    
+    print(idx_diff[frame_to_plot - st_frame,0,0,plt_ant,:])    
     frame_map[frame_map == 1] = -1
     frame_map[frame_map >= (k_lts -1)] = 1
     frame_map[frame_map > 1] = 0
@@ -134,7 +134,7 @@ def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, plt_ant=0, cp=16):
     fig = plt.figure()
     plt.grid(True)
     plt.title('MF Frame # {} Antenna # {}'.format(frame_to_plot, plt_ant))   
-    plt.stem(match_filt[frame_to_plot, 0,0,plt_ant,:])
+    plt.stem(match_filt[frame_to_plot - st_frame, 0,0,plt_ant,:])
     plt.show()
     # plot frame_map:
     fig, ax = plt.subplots()
@@ -142,23 +142,26 @@ def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, plt_ant=0, cp=16):
     ax.set_title('Frame Map')
     ax.set_ylabel('Antenna #')
     ax.set_xlabel('Frame #')
+    plt.xlim(st_frame, st_frame + frame_map.shape[0])
     cbar = plt.colorbar(c, ticks=[-1, 0, 1], orientation = 'horizontal', aspect=90)
     cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame']) 
     plt.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
     plt.show()
-    
+    print("IDX1 = {}, IDX2 = {}".format(st_frame, st_frame + frame_map.shape[0]) )
     print("********************* frame_sanity() *********************\n")   
 
 class hdfDump:
 
-    def __init__(self, filename, n_fr_insp = 0):
+    def __init__(self, filename, n_frames_to_inspect=0, n_fr_insp_st = 0):
         self.h5file = None
         self.filename = filename
         self.h5struct = []
         self.data = []
         self.metadata = {}
         self.samples = {}
-        self.n_frms = n_fr_insp
+        self.n_frm_st = n_fr_insp_st                                # index of last frame
+        self.n_frm_end = self.n_frm_st + n_frames_to_inspect    # index of last frame in the range of n_frames_to_inspect
+
     def get_hdf5(self):
         """
         Get the most recent log file, open it if necessary.
@@ -227,8 +230,9 @@ class hdfDump:
                     if not isinstance(item[k], h5py.Group):
                         # dataset = np.array(item[k].value)  # dataset.value has been deprecated. dataset[()] instead
                         dtst_ptr = item[(k)]
-                        if (len(dtst_ptr.shape) == 5) and (self.n_frms >0):
-                            dataset = np.array(dtst_ptr[:self.n_frms,:,:,:,:])
+                        n_frm = np.abs(self.n_frm_end - self.n_frm_st)
+                        if (len(dtst_ptr.shape) == 5) and (n_frm > 0 and self.n_frm_st >=0 and self.n_frm_end >= 0):
+                            dataset = np.array(dtst_ptr[self.n_frm_st:self.n_frm_end,:,:,:,:])
                         else:
                             dataset = np.array(dtst_ptr)
 
@@ -458,18 +462,14 @@ class hdfDump:
                 samples = data['UplinkData']['Samples']
                 num_cl_tmp = 1  # number of UEs to plot data for
             
-            print("******** Calling csi_from_pilots and frame_sanity *********")
-            if self.n_frms > 0:
-                n_frame_inspct = self.n_frms
-            else:
-                n_frame_inspct = samples.shape[0]
-            frm_plt = min(default_frame, n_frame_inspct)
+            print("********     Calling csi_from_pilots and frame_sanity    *********")
+            frm_plt = min(default_frame, samples.shape[0] + self.n_frm_st)
             csi_from_pilots_start = time.time()
             csi_mat, match_filt, sub_fr_strt,k_lts, n_lts = csi_from_pilots(
-                    samples, z_padding, frames_to_inspect = n_frame_inspct, frame_to_plot = frm_plt, ref_ant =ant_i)
+                    samples, z_padding, frm_st_idx = self.n_frm_st, frame_to_plot = frm_plt, ref_ant =ant_i)
             csi_from_pilots_end = time.time()
             frame_sanity_start = time.time()
-            frame_sanity(match_filt, k_lts, n_lts, frm_plt, plt_ant = ant_i)
+            frame_sanity(match_filt, k_lts, n_lts, self.n_frm_st, frm_plt, plt_ant = ant_i)
             frame_sanity_end = time.time()
             print(">>>> csi_from_pilots time: %f \n" % ( csi_from_pilots_end - csi_from_pilots_start) )
             print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
@@ -552,9 +552,11 @@ class hdfDump:
         ax = fig.add_subplot(1,1,1)
         plt.grid(True)
         plt.title('Frame starts')
+        x_pl = np.arange(sf_strts.shape[0]) + self.n_frm_st
         for j in range(n_ant):
-            plt.plot(sf_strts[:,j].flatten(), label = 'Antenna: {}'.format(j) )
+            plt.plot(x_pl,sf_strts[:,j].flatten(), label = 'Antenna: {}'.format(j) )
         ax.legend(loc='lower right', ncol=8, frameon=False)
+        #ax.set_xlim(self.n_frm_st,self.n_frm_st + sf_strts.shape[0])
         ax.set_xlabel('Frame no.')
         ax.set_ylabel('Sample Index')
         plt.show()
@@ -568,8 +570,8 @@ if __name__ == '__main__':
             print('>>> format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)> <n_frames_to_inspect (optional, default=0)> <<<')
             sys.exit(0)
 
-        if len(sys.argv) > 5:
-            print('Too many arguments! >>> format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)> <n_frames_to_inspect (optional, default=0)> <<<')
+        if len(sys.argv) > 6:
+            print('Too many arguments! >>> format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)> <n_frames_to_inspect (optional, default=0)> <n_fr_strt (optional, default=0)> <<<')
             sys.exit(0)
 
         filename = sys.argv[1]
@@ -577,24 +579,40 @@ if __name__ == '__main__':
         if len(sys.argv) == 3:
             frame_to_plot = int(sys.argv[2])
             ref_ant = 0
-            n_fr_insp = 0
+            n_frames_to_inspect = 0
+            n_f_st = 0
         if len(sys.argv) == 4:
             frame_to_plot = int(sys.argv[2])
             ref_ant = int(sys.argv[3])
-            n_fr_insp = 0 
+            n_frames_to_inspect = 0
+            n_f_st = 0
         
         if len(sys.argv) == 5:
             frame_to_plot = int(sys.argv[2])
             ref_ant = int(sys.argv[3])
-            n_fr_insp = int(sys.argv[4])
-            if frame_to_plot > n_fr_insp:
-                print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames: frame_to_plot:{} >  n_fr_insp:{}. ".format(
-                        frame_to_plot, n_fr_insp))
+            n_frames_to_inspect = int(sys.argv[4])
+            n_f_st = 0
+            if frame_to_plot > n_frames_to_inspect:
+                print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames: frame_to_plot:{} >  n_frames_to_inspect:{}. ".format(
+                        frame_to_plot, n_frames_to_inspect))
                 print("Setting the frame to inspect to 0")
                 frame_to_plot = 0
+            
                 
+        if len(sys.argv) == 6:
+            frame_to_plot = int(sys.argv[2])
+            ref_ant = int(sys.argv[3])
+            n_frames_to_inspect = int(sys.argv[4])
+            n_f_st = int(sys.argv[5])
+            if (frame_to_plot > n_frames_to_inspect) or (frame_to_plot < n_f_st) :
+                print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames or at an index smaller than the required start of the frames: frame_to_plot:{} >  n_frames_to_inspect:{} or frame_to_plot:{} <  n_f_st:{}. ".format(
+                        frame_to_plot, n_frames_to_inspect, frame_to_plot, n_f_st))
+                print("Setting the frame to inspect to n_f_st")
+                frame_to_plot = n_f_st
+            
+        print("frame_to_plot={},ref_ant={},n_frames_to_inspect={}, n_f_st ={}".format(frame_to_plot,ref_ant,n_frames_to_inspect, n_f_st))
         # Instantiate
-        hdf5 = hdfDump(filename, n_fr_insp)
+        hdf5 = hdfDump(filename, n_frames_to_inspect, n_f_st)
         hdf5.get_hdf5()
         hdf5.parse_hdf5()
 
