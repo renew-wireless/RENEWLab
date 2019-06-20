@@ -187,7 +187,7 @@ class Plotter:
         ax.set_ylabel('Magnitude')
         ax.set_xlabel('Sample index')
         self.line_tx_sig, = ax.plot([], [], color='r', label='RFA', lw=2)
-        ax.set_ylim(-0.30, 0.30)
+        ax.set_ylim(-0.70, 0.70)
         ax.set_xlim(0, self.FIG_LEN)
         ax.legend(fontsize=10)
 
@@ -198,7 +198,7 @@ class Plotter:
         ax.set_ylabel('Magnitude')
         ax.set_xlabel('Sample index')
         self.line_tx_sig2, = ax.plot([], [], color='b', label='RFA', lw=2)
-        ax.set_ylim(-0.30, 0.30)
+        ax.set_ylim(-0.70, 0.70)
         ax.set_xlim(0, self.FIG_LEN)
         ax.legend(fontsize=10)
 
@@ -238,7 +238,7 @@ class Plotter:
         ax.set_ylabel('')
         self.line_corr_pk, = ax.plot([], [], color='r', label='RFA')
         self.line_corr_th, = ax.plot([], [], '--b', label='Thresh')  # markers
-        ax.set_ylim(0, 5)
+        ax.set_ylim(0, 8)
         ax.set_xlim(0, self.pilot_len)
         ax.legend(fontsize=10)
 
@@ -249,7 +249,7 @@ class Plotter:
         ax.set_ylabel('')
         self.line_corr_pk2, = ax.plot([], [], color='b', label='RFA')
         self.line_corr_th2, = ax.plot([], [], '--r', label='Thresh')  # markers
-        ax.set_ylim(0, 5)
+        ax.set_ylim(0, 8)
         ax.set_xlim(0, self.pilot_len)
         ax.legend(fontsize=10)
 

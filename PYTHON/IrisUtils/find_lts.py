@@ -14,9 +14,10 @@ import numpy as np
 from generate_sequence import *
 import matplotlib
 import matplotlib.pyplot as plt
+import scipy.io as sio  # For .mat format
 
 
-def find_lts(iq, thresh=0.8, us=1, cp=32):
+def find_lts(iq, thresh=0.8, us=1, cp=32, flip=False):
 	"""
 		Find the indices of LTSs in the input "iq" signal (upsampled by a factor of "up").
 		"thresh" sets sensitivity.
@@ -26,6 +27,7 @@ def find_lts(iq, thresh=0.8, us=1, cp=32):
 			thresh: threshold to detect peak
 			us: upsampling factor, needed for generate_training_seq() function
 			cp: cyclic prefix
+			flip: Flag to specify order or LTS sequence.
 
 		Returns:
 			best_pk: highest LTS peak,
@@ -35,14 +37,23 @@ def find_lts(iq, thresh=0.8, us=1, cp=32):
 	debug = False
 
 	lts, lts_f = generate_training_seq(preamble_type='lts', cp=cp, upsample=us)
+	# lts contains 2.5 64-sample-LTS sequences, we need only one symbol
 	lts_tmp = lts[-64:]
-	lts_flip = lts_tmp[::-1]  # lts contains 2.5 64-sample-LTS sequences, we need only one symbol
+
+	if flip:
+		lts_flip = lts_tmp[::-1]
+	else:
+		lts_flip = lts_tmp
+
 	lts_flip_conj = np.conjugate(lts_flip)
-	lts_corr = np.abs(np.convolve(lts_flip_conj, np.sign(iq)))
+	lts_corr = np.abs(np.convolve(lts_flip_conj, iq/abs(iq))) 	# Equivalent to Matlab's sign function (X/abs(X))
 	lts_pks = np.where(lts_corr > (thresh * np.max(lts_corr)))
 	lts_pks = np.squeeze(lts_pks)
 	x_vec, y_vec = np.meshgrid(lts_pks, lts_pks)
 	second_peak_idx, y = np.where((y_vec - x_vec) == len(lts[-64:]))
+
+	# To save mat files
+	# sio.savemat('rx_iq_pilot.mat', {'iq_pilot': iq})
 
 	if not second_peak_idx.any():
 		print("NO LTS FOUND!")
