@@ -150,14 +150,14 @@ def frame_sanity(match_filt, k_lts, n_lts, frame_to_plot = 0, plt_ant=0, cp=16):
 
 class hdfDump:
 
-    def __init__(self, filename):
+    def __init__(self, filename, n_fr_insp = 0):
         self.h5file = None
         self.filename = filename
         self.h5struct = []
         self.data = []
         self.metadata = {}
         self.samples = {}
-
+        self.n_frms = n_fr_insp
     def get_hdf5(self):
         """
         Get the most recent log file, open it if necessary.
@@ -210,7 +210,6 @@ class hdfDump:
         g = self.h5file
         prefix = ''
         self.data = collections.defaultdict(lambda: collections.defaultdict(dict))
-
         for key in g.keys():
             item = g[key]
             path = '{}/{}'.format(prefix, key)
@@ -226,7 +225,11 @@ class hdfDump:
                 for k in keys:
                     if not isinstance(item[k], h5py.Group):
                         # dataset = np.array(item[k].value)  # dataset.value has been deprecated. dataset[()] instead
-                        dataset = np.array(item[(k)])
+                        dtst_ptr = item[(k)]
+                        if (len(dtst_ptr.shape) == 5) and (self.n_frms >0):
+                            dataset = np.array(dtst_ptr[:self.n_frms,:,:,:,:])
+                        else:
+                            dataset = np.array(dtst_ptr)
 
                         if type(dataset) is np.ndarray:
                             if dataset.size != 0:
@@ -463,8 +466,10 @@ class hdfDump:
             csi, samps = samps2csi(samples, num_cl_tmp, symbol_length, fft_size=64, offset=offset, bound=0, cp=0)
             
             print("******** Calling csi_from_pilots and frame_sanity *********")
-            n_frame_inspct = samples.shape[0]
-            #n_frame_inspct = 400
+            if self.n_frms > 0:
+                n_frame_inspct = self.n_frms
+            else:
+                n_frame_inspct = samples.shape[0]
             frm_plt = min(default_frame, n_frame_inspct)
             csi_mat, match_filt, sub_fr_strt,k_lts, n_lts = csi_from_pilots(
                     samples, z_padding, frames_to_inspect = n_frame_inspct, frame_to_plot = frm_plt, ref_ant =ant_i)
@@ -555,11 +560,11 @@ if __name__ == '__main__':
 
     if len(sys.argv) >1:
         if sys.argv[1] == "-h":
-            print('>>> format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)> <<<')
+            print('>>> format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)> <n_frames_to_inspect (optional, default=0)> <<<')
             sys.exit(0)
 
-        if len(sys.argv) > 4:
-            print('Too many arguments! >>> format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)> <<<')
+        if len(sys.argv) > 5:
+            print('Too many arguments! >>> format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)> <n_frames_to_inspect (optional, default=0)> <<<')
             sys.exit(0)
 
         filename = sys.argv[1]
@@ -567,12 +572,24 @@ if __name__ == '__main__':
         if len(sys.argv) == 3:
             frame_to_plot = int(sys.argv[2])
             ref_ant = 0
+            n_fr_insp = 0
         if len(sys.argv) == 4:
             frame_to_plot = int(sys.argv[2])
             ref_ant = int(sys.argv[3])
-
+            n_fr_insp = 0 
+        
+        if len(sys.argv) == 5:
+            frame_to_plot = int(sys.argv[2])
+            ref_ant = int(sys.argv[3])
+            n_fr_insp = int(sys.argv[4])
+            if frame_to_plot > n_fr_insp:
+                print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames: frame_to_plot:{} >  n_fr_insp:{}. ".format(
+                        frame_to_plot, n_fr_insp))
+                print("Setting the frame to inspect to 0")
+                frame_to_plot = 0
+                
         # Instantiate
-        hdf5 = hdfDump(filename)
+        hdf5 = hdfDump(filename, n_fr_insp)
         hdf5.get_hdf5()
         hdf5.parse_hdf5()
 
