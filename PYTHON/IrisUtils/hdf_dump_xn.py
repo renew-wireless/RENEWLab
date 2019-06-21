@@ -41,7 +41,6 @@ def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_
     Disclaimer: This function is good only for a high SNR scenario!
     """
     
-    print("********************* frame_sanity(): *********************")
     debug = False
     n_frame = match_filt.shape[0]      # no. of captured frames
     n_cell = match_filt.shape[1]       # no. of cells
@@ -85,8 +84,6 @@ def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_
     # get the k_lts largest peaks and their position
     k_max = np.sort(match_filt, axis = -1)[:,:,:,:, -k_lts:]
     k_amax =np.argsort(match_filt, axis = -1)[:,:,:,:, -k_lts:]
-    print("shape of k_amax  = {}".format(k_amax.shape))
-    print(k_amax[frame_to_plot - st_frame,0,0,plt_ant,:])
     # If the frame is good, the largerst peak is at the last place of k_amax
     lst_pk_idx = np.expand_dims(k_amax[:,:,:,:,-1], axis = 4)
     lst_pk_idx = np.tile(lst_pk_idx, (1,1,1,1,base_arr.shape[0]))
@@ -97,13 +94,14 @@ def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_
     frame_map = (idx_diff ==0).astype(np.int)
     # count the 0 and non-zero elements and reshape to n_frame-by-n_ant 
     frame_map = np.reshape(np.sum(frame_map, axis =-1), (n_frame*n_cell*n_ue,n_ant))
+    
     if debug: 
         print("frame_sanity(): Shape of k_max.shape = {}, k_amax.shape = {}, lst_pk_idx.shape = {}".format(
                 k_max.shape, k_amax.shape, lst_pk_idx.shape) )
         print("frame_sanity(): k_amax = {}".format(k_amax))
         print("frame_sanity(): frame_map.shape = \n{}".format(frame_map.shape))
-
-    print(idx_diff[frame_to_plot - st_frame,0,0,plt_ant,:])    
+        print(idx_diff[frame_to_plot - st_frame,0,0,plt_ant,:])    
+    
     frame_map[frame_map == 1] = -1
     frame_map[frame_map >= (k_lts -1)] = 1
     frame_map[frame_map > 1] = 0
@@ -119,36 +117,8 @@ def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_
     print("Out of total {} received frames: \nGood frames:{}\nBad frames:{}\nProbably Partially received or corrupt:{}".format(
             n_rf, n_gf, n_bf, n_pr,))
   
-    
-    if n_gf == 0:
-      frame_map[0,0] = 1
-      print("No good frames! colored frame 0 of ant 0 good to keep plotter happy!")
-    if n_pr == 0:
-      frame_map[0,0] = 0
-      print("No good frames! colored frame 0 of ant 0 partial to keep plotter happy!")
-    if n_bf == 0:
-      frame_map[0,0] = -1
-      print("No bad frames! colored frame 0 of ant 0 bad to keep plotter happy!")
-    
-    # plot a frame:
-    fig = plt.figure()
-    plt.grid(True)
-    plt.title('MF Frame # {} Antenna # {}'.format(frame_to_plot, plt_ant))   
-    plt.stem(match_filt[frame_to_plot - st_frame, 0,0,plt_ant,:])
-    plt.show()
-    # plot frame_map:
-    fig, ax = plt.subplots()
-    c = ax.pcolor(frame_map.T, cmap=plt.cm.get_cmap('Blues', 3), edgecolors='0.75', linewidths = 0.1)
-    ax.set_title('Frame Map')
-    ax.set_ylabel('Antenna #')
-    ax.set_xlabel('Frame #')
-    plt.xlim(st_frame, st_frame + frame_map.shape[0])
-    cbar = plt.colorbar(c, ticks=[-1, 0, 1], orientation = 'horizontal', aspect=90)
-    cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame']) 
-    plt.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
-    plt.show()
-    print("IDX1 = {}, IDX2 = {}".format(st_frame, st_frame + frame_map.shape[0]) )
     print("********************* frame_sanity() *********************\n")   
+    return match_filt, frame_map
 
 class hdfDump:
 
@@ -231,9 +201,12 @@ class hdfDump:
                         # dataset = np.array(item[k].value)  # dataset.value has been deprecated. dataset[()] instead
                         dtst_ptr = item[(k)]
                         n_frm = np.abs(self.n_frm_end - self.n_frm_st)
+                        #check if the shape of the data set is the one assumed,
+                        # and if the number fof requested frames and, upper and lower bounds make sense
                         if (len(dtst_ptr.shape) == 5) and (n_frm > 0 and self.n_frm_st >=0 and self.n_frm_end >= 0):
                             dataset = np.array(dtst_ptr[self.n_frm_st:self.n_frm_end,:,:,:,:])
                         else:
+                            #if previous if Flase, do as usual:
                             dataset = np.array(dtst_ptr)
 
                         if type(dataset) is np.ndarray:
@@ -447,6 +420,24 @@ class hdfDump:
         z_padding = prefix_len + postfix_len
 
         print(" symbol_length = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}".format(symbol_length, cp, prefix_len, postfix_len, z_padding))
+       
+        print("********     verify_hdf5(): Calling csi_from_pilots and frame_sanity    *********")
+        samples_P = data['Pilot_Samples']['Samples']
+        n_ue = num_cl
+        frm_plt = min(default_frame, samples_P.shape[0] + self.n_frm_st)
+       
+        csi_from_pilots_start = time.time()
+        csi_mat, match_filt, sub_fr_strt,k_lts, n_lts = csi_from_pilots(
+                samples_P, z_padding, frm_st_idx = self.n_frm_st, frame_to_plot = frm_plt, ref_ant =ant_i)
+        csi_from_pilots_end = time.time()
+        
+        frame_sanity_start = time.time()
+        match_filt_clr, frame_map = frame_sanity(match_filt, k_lts, n_lts, self.n_frm_st, frm_plt, plt_ant = ant_i)
+        frame_sanity_end = time.time()
+       
+        print(">>>> csi_from_pilots time: %f \n" % ( csi_from_pilots_end - csi_from_pilots_start) )
+        print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
+        
         # PLOTTER
         # Plot pilots or data or both
         fig, axes = plt.subplots(nrows=6, ncols=len(data_types_avail), squeeze=False)
@@ -462,22 +453,12 @@ class hdfDump:
                 samples = data['UplinkData']['Samples']
                 num_cl_tmp = 1  # number of UEs to plot data for
             
-            print("********     Calling csi_from_pilots and frame_sanity    *********")
-            frm_plt = min(default_frame, samples.shape[0] + self.n_frm_st)
-            csi_from_pilots_start = time.time()
-            csi_mat, match_filt, sub_fr_strt,k_lts, n_lts = csi_from_pilots(
-                    samples, z_padding, frm_st_idx = self.n_frm_st, frame_to_plot = frm_plt, ref_ant =ant_i)
-            csi_from_pilots_end = time.time()
-            frame_sanity_start = time.time()
-            frame_sanity(match_filt, k_lts, n_lts, self.n_frm_st, frm_plt, plt_ant = ant_i)
-            frame_sanity_end = time.time()
-            print(">>>> csi_from_pilots time: %f \n" % ( csi_from_pilots_end - csi_from_pilots_start) )
-            print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
+
             # Compute CSI from IQ samples
             # Samps: #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Samples
             # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
             # For correlation use a fft size of 64
-            print("******** Calling samps2csi with fft_size = 64, offset = {}, bound = cp = 0 *********".format(offset))
+            print("*verify_hdf5(): Calling samps2csi with fft_size = 64, offset = {}, bound = cp = 0 *".format(offset))
             csi, samps = samps2csi(samples, num_cl_tmp, symbol_length, fft_size=64, offset=offset, bound=0, cp=0)
             
            
@@ -489,36 +470,36 @@ class hdfDump:
             #else: return 
             cellCSI = csi[:, 0, :, :, :, :]     # First cell
             userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
-            print("userCSI.shape = {} ".format(userCSI.shape))
             corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2) ) )
             best_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.99]
             good_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.95]
             bad_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.9 and corr_total[i, 0] <= 0.94]
             worst_frames = [i for i in pilot_frames if corr_total[i, 0] < 0.9]
+            print("====================== OLD STATS: ========================")
             print("Good frames len: %d" % len(pilot_frames))
             print("Amplitude of reference frame %d is %f" % (ref_frame, amps[ref_frame]))
             print("num of best frames %d" % len(best_frames))
             print("num of good frames %d" % len(good_frames))
             print("num of bad frames   %d" % len(bad_frames))
             print("num of worst frames   %d" % len(worst_frames))
-
+            print("===========================================================")
             # Compute CSI from IQ samples
             # Samps: #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Samples
             # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
             # For looking at the whole picture, use a fft size of whole symbol_length as fft window (for visualization),
             # and no offset
-            print("************ Calling samps2csi *AGAIN*(?) with fft_size = symbol_length, no offset************")
+            print("*verify_hdf5():Calling samps2csi *AGAIN*(?) with fft_size = symbol_length, no offset*")
             csi, samps = samps2csi(samples, num_cl_tmp, symbol_length, fft_size=symbol_length, offset=0, bound=0, cp=0)
 
             # Verify default_frame does not exceed max number of collected frames
-            frame_to_plot = min(default_frame, samps.shape[0])
+            frame_to_plot = min(default_frame - self.n_frm_st, samps.shape[0])
             ant_plt = ant_i
             # Plotter
             # Samps Dimensions: (Frame, Cell, User, Pilot Rep, Antenna, Sample)
-            axes[0, idx].set_ylabel('Frame %d ant 0 (Re)' % frame_to_plot)
+            axes[0, idx].set_ylabel('Frame %d ant 0 (Re)' %(frame_to_plot + self.n_frm_st))
             axes[0, idx].plot(np.real(samps[frame_to_plot, 0, 0, 0, ant_plt, :]))
 
-            axes[1, idx].set_ylabel('Frame %d ant 1 (Re)' % frame_to_plot)
+            axes[1, idx].set_ylabel('Frame %d ant 1 (Re)' %(frame_to_plot + self.n_frm_st))
             axes[1, idx].plot(np.real(samps[frame_to_plot, 0, 0, 0, ant_plt, :]))
 
             axes[2, idx].set_ylabel('All Frames ant 0 (Re)')
@@ -538,29 +519,10 @@ class hdfDump:
             for u in range(num_cl_tmp):
                 axes[5, idx].plot(corr_total[pilot_frames, u])
             axes[5, idx].set_xlabel('Frame')
-
         plt.show()
         
-        #plot F starts
-        n_frame = sub_fr_strt.shape[0]      # no. of captured frames
-        n_cell = sub_fr_strt.shape[1]       # no. of cells
-        n_ue = sub_fr_strt.shape[2]         # no. of UEs 
-        n_ant = sub_fr_strt.shape[3]        # no. of BS antennas
-        
-        sf_strts = np.reshape(sub_fr_strt, (n_frame*n_cell*n_ue,n_ant))
-        fig = plt.figure()
-        ax = fig.add_subplot(1,1,1)
-        plt.grid(True)
-        plt.title('Frame starts')
-        x_pl = np.arange(sf_strts.shape[0]) + self.n_frm_st
-        for j in range(n_ant):
-            plt.plot(x_pl,sf_strts[:,j].flatten(), label = 'Antenna: {}'.format(j) )
-        ax.legend(loc='lower right', ncol=8, frameon=False)
-        #ax.set_xlim(self.n_frm_st,self.n_frm_st + sf_strts.shape[0])
-        ax.set_xlabel('Frame no.')
-        ax.set_ylabel('Sample Index')
-        plt.show()
-
+        return csi_mat, match_filt_clr, frame_map, sub_fr_strt
+    
 if __name__ == '__main__':
     # Tested with inputs: ./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5 300  (for two users)
     #                     ./data_in/Argos-2019-3-30-12-20-50_1x8x1.hdf5 300  (for one user)
@@ -604,8 +566,8 @@ if __name__ == '__main__':
             ref_ant = int(sys.argv[3])
             n_frames_to_inspect = int(sys.argv[4])
             n_f_st = int(sys.argv[5])
-            if (frame_to_plot > n_frames_to_inspect) or (frame_to_plot < n_f_st) :
-                print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames or at an index smaller than the required start of the frames: frame_to_plot:{} >  n_frames_to_inspect:{} or frame_to_plot:{} <  n_f_st:{}. ".format(
+            if (frame_to_plot > n_f_st + n_frames_to_inspect) or (frame_to_plot < n_f_st) :
+                print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames +  or at an index smaller than the required start of the frames: frame_to_plot:{} >  n_frames_to_inspect:{} or frame_to_plot:{} <  n_f_st:{}. ".format(
                         frame_to_plot, n_frames_to_inspect, frame_to_plot, n_f_st))
                 print("Setting the frame to inspect to n_f_st")
                 frame_to_plot = n_f_st
@@ -640,18 +602,80 @@ if __name__ == '__main__':
         samples = hdf5.samples
       
         if frame_to_plot and ref_ant:
-            hdf5.verify_hdf5(frame_to_plot, ref_ant)
+            csi_mat, match_filt_clr, frame_map, sub_fr_strt = hdf5.verify_hdf5(frame_to_plot, ref_ant)
             
         elif frame_to_plot and not(ref_ant):
-            hdf5.verify_hdf5(frame_to_plot)
-            
+            csi_mat, match_filt_clr, frame_map, sub_fr_strt = hdf5.verify_hdf5(frame_to_plot)
+            ref_ant = 0
         else:
-            hdf5.verify_hdf5()
-            
+            csi_mat, match_filt_clr, frame_map, sub_fr_strt = hdf5.verify_hdf5()
+            frame_to_plot = 0
             
     
     else:
         raise Exception("format: ./hdfPlot.py <filename>")
     
     scrpt_end = time.time()
+    
+    #plots:
+    
+    print("Plotting the results:")
+    
+    # plot a frame:
+    fig = plt.figure()
+    plt.grid(True)
+    plt.title('MF Frame # {} Antenna # {}'.format(frame_to_plot, ref_ant))   
+    plt.stem(match_filt_clr[frame_to_plot - hdf5.n_frm_st, 0,0,ref_ant,:])
+    plt.show()
+    
+    # plot frame_map:
+    n_rf = frame_map.size
+    n_gf = frame_map[frame_map == 1].size
+    n_bf = frame_map[frame_map == -1].size
+    n_pr = frame_map[frame_map == 0].size
+    if n_gf == 0:
+      frame_map[0,0] = 1
+      print("No good frames! colored frame 0 of ant 0 good to keep plotter happy!")
+    if n_pr == 0:
+      frame_map[0,0] = 0
+      print("No good frames! colored frame 0 of ant 0 partial to keep plotter happy!")
+    if n_bf == 0:
+      frame_map[0,0] = -1
+      print("No bad frames! colored frame 0 of ant 0 bad to keep plotter happy!")
+      
+    fig, ax = plt.subplots()
+    x = np.arange(frame_map.shape[0]) + hdf5.n_frm_st
+    y = np.arange(frame_map.shape[1])
+    X,Y = np.meshgrid(x,y)
+    c = ax.pcolor(X, Y,frame_map.T, cmap=plt.cm.get_cmap('Blues', 3), edgecolors='0.75', linewidths = 0.1)
+    ax.set_title('Frame Map')
+    ax.set_ylabel('Antenna #')
+    ax.set_xlabel('Frame #')
+    plt.xlim(hdf5.n_frm_st, hdf5.n_frm_st + frame_map.shape[0])
+    cbar = plt.colorbar(c, ticks=[-1, 0, 1], orientation = 'horizontal', aspect=90)
+    cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame']) 
+    plt.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
+    plt.show()
+    
+    #plot F starts for each antenna
+    n_frame = sub_fr_strt.shape[0]      # no. of captured frames
+    n_cell = sub_fr_strt.shape[1]       # no. of cells
+    n_ue = sub_fr_strt.shape[2]         # no. of UEs 
+    n_ant = sub_fr_strt.shape[3]        # no. of BS antennas 
+    sf_strts = np.reshape(sub_fr_strt, (n_frame*n_cell*n_ue,n_ant))
+    fig = plt.figure()
+    ax = fig.add_subplot(1,1,1)
+    plt.grid(True)
+    plt.title('Frame starts')
+    x_pl = np.arange(sf_strts.shape[0]) + hdf5.n_frm_st
+    for j in range(n_ant):
+        plt.plot(x_pl,sf_strts[:,j].flatten(), label = 'Antenna: {}'.format(j) )
+    ax.legend(loc='lower right', ncol=8, frameon=False)
+    #ax.set_xlim(self.n_frm_st,self.n_frm_st + sf_strts.shape[0])
+    ax.set_xlabel('Frame no.')
+    ax.set_ylabel('Sample Index')
+    plt.show()
+    
+    print("** WARNING: If you attempt to plot a different frame after running this script, remember to subtract the frame_start you gave! **")
+    print("E.g.: frame no. 1763 and frame_start = 1500 --> plot(match_filter_clr[<frame 1736 - 1500>, <cell>, <ue>, ref_antenna,:])")
     print(">>>> Script Duration: time: %f \n" % ( scrpt_end - scrpt_strt) )
