@@ -113,11 +113,11 @@ def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_
     n_gf = frame_map[frame_map == 1].size
     n_bf = frame_map[frame_map == -1].size
     n_pr = frame_map[frame_map == 0].size
-    print("\t>>>>> \t frame_sanity(): frame status:\t<<<<<")
-    print("Out of total {} received frames: \nGood frames:{}\nBad frames:{}\nProbably Partially received or corrupt:{}".format(
+    print("===================== frame_sanity(): frame status: ============")
+    print("Out of total {} received frames: \nGood frames: {}\nBad frames: {}\nProbably Partially received or corrupt: {}".format(
             n_rf, n_gf, n_bf, n_pr,))
-  
-    print("********************* frame_sanity() *********************\n")   
+    print("===================== ============================= ============")
+   
     return match_filt, frame_map
 
 class hdfDump:
@@ -203,10 +203,13 @@ class hdfDump:
                         n_frm = np.abs(self.n_frm_end - self.n_frm_st)
                         #check if the shape of the data set is the one assumed,
                         # and if the number fof requested frames and, upper and lower bounds make sense
-                        if (len(dtst_ptr.shape) == 5) and (n_frm > 0 and self.n_frm_st >=0 and self.n_frm_end >= 0):
+                        # also check if end_frame > strt_frame:
+                        if (len(dtst_ptr.shape) == 5) and (n_frm > 0 and self.n_frm_st >=0 and (
+                                self.n_frm_end >= 0 and self.n_frm_end > self.n_frm_st) ):
                             dataset = np.array(dtst_ptr[self.n_frm_st:self.n_frm_end,:,:,:,:])
                         else:
                             #if previous if Flase, do as usual:
+                            print("WARNING: No frames_to_inspect given and/or boundries don't make sense. Will process the whole dataset.") 
                             dataset = np.array(dtst_ptr)
 
                         if type(dataset) is np.ndarray:
@@ -425,7 +428,6 @@ class hdfDump:
         samples_P = data['Pilot_Samples']['Samples']
         n_ue = num_cl
         frm_plt = min(default_frame, samples_P.shape[0] + self.n_frm_st)
-       
         csi_from_pilots_start = time.time()
         csi_mat, match_filt, sub_fr_strt,k_lts, n_lts = csi_from_pilots(
                 samples_P, z_padding, frm_st_idx = self.n_frm_st, frame_to_plot = frm_plt, ref_ant =ant_i)
@@ -470,19 +472,20 @@ class hdfDump:
             #else: return 
             cellCSI = csi[:, 0, :, :, :, :]     # First cell
             userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
+            #print("====================== OLD STATS: ========================")
             corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2) ) )
-            best_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.99]
-            good_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.95]
-            bad_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.9 and corr_total[i, 0] <= 0.94]
-            worst_frames = [i for i in pilot_frames if corr_total[i, 0] < 0.9]
-            print("====================== OLD STATS: ========================")
-            print("Good frames len: %d" % len(pilot_frames))
-            print("Amplitude of reference frame %d is %f" % (ref_frame, amps[ref_frame]))
-            print("num of best frames %d" % len(best_frames))
-            print("num of good frames %d" % len(good_frames))
-            print("num of bad frames   %d" % len(bad_frames))
-            print("num of worst frames   %d" % len(worst_frames))
-            print("===========================================================")
+            #best_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.99]
+            #good_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.95]
+            #bad_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.9 and corr_total[i, 0] <= 0.94]
+            #worst_frames = [i for i in pilot_frames if corr_total[i, 0] < 0.9]
+            #print("Good frames len: %d" % len(pilot_frames))
+            #print("Amplitude of reference frame %d is %f" % (ref_frame, amps[ref_frame]))
+            #print("num of best frames %d" % len(best_frames))
+            #print("num of good frames %d" % len(good_frames))
+            #print("num of bad frames   %d" % len(bad_frames))
+            #print("num of worst frames   %d" % len(worst_frames))
+            #print("===========================================================")
+            
             # Compute CSI from IQ samples
             # Samps: #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Samples
             # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
@@ -529,31 +532,52 @@ if __name__ == '__main__':
     scrpt_strt = time.time()
     if len(sys.argv) >1:
         if sys.argv[1] == "-h":
-            print('>>> format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)> <n_frames_to_inspect (optional, default=0)> <<<')
+            print('>>> format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)> <n_frames_to_inspect (optional, default=0)> <start_of_frames (optional, default=0)><<<')
             sys.exit(0)
 
         if len(sys.argv) > 6:
-            print('Too many arguments! >>> format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)> <n_frames_to_inspect (optional, default=0)> <n_fr_strt (optional, default=0)> <<<')
+            print('Too many arguments! >>> format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)> <n_frames_to_inspect (optional, default=0)> <start_of_frames (optional, default=0)> <<<')
             sys.exit(0)
 
         filename = sys.argv[1]
-        frame_to_plot = []
+        frame_to_plot = None
+        ref_ant = None
         if len(sys.argv) == 3:
             frame_to_plot = int(sys.argv[2])
-            ref_ant = 0
             n_frames_to_inspect = 0
             n_f_st = 0
+            if n_frames_to_inspect == 0:
+                print("WARNING: No frames_to_inspect given. Will process the whole dataset.") 
         if len(sys.argv) == 4:
             frame_to_plot = int(sys.argv[2])
             ref_ant = int(sys.argv[3])
             n_frames_to_inspect = 0
             n_f_st = 0
+            if frame_to_plot < 0:
+                frame_to_plot = 0
+                print("WARNING: Gave negative value for frame _to_plot, set it to {}".format(frame_to_plot))
+            if ref_ant < 0:
+                ref_ant = 0
+                print("WARNING: Gave negative value for ref_ant, set it to {}.".format(ref_ant))
+            if n_frames_to_inspect == 0:
+                print("WARNING: No frames_to_inspect given. Will process the whole dataset.") 
+                
         
         if len(sys.argv) == 5:
             frame_to_plot = int(sys.argv[2])
             ref_ant = int(sys.argv[3])
             n_frames_to_inspect = int(sys.argv[4])
             n_f_st = 0
+            if frame_to_plot < 0:
+                frame_to_plot = 0
+                print("WARNING: Gave negative value for frame _to_plot, set it to {}.".format(frame_to_plot)) 
+            if ref_ant < 0:
+                ref_ant = 0
+                print("WARNING: Gave negative value for ref_ant, set it to {}.".format(ref_ant))
+            if n_frames_to_inspect <= 0:
+                n_frames_to_inspect = 1
+                print("WARNING: Gave negative/zero value for n_frames_to_inspect, set it to {}.".format(n_frames_to_inspect))               
+                
             if frame_to_plot > n_frames_to_inspect:
                 print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames: frame_to_plot:{} >  n_frames_to_inspect:{}. ".format(
                         frame_to_plot, n_frames_to_inspect))
@@ -566,13 +590,27 @@ if __name__ == '__main__':
             ref_ant = int(sys.argv[3])
             n_frames_to_inspect = int(sys.argv[4])
             n_f_st = int(sys.argv[5])
+
+            if frame_to_plot < 0:
+                frame_to_plot = 0
+                print("WARNING: Gave negative value for frame _to_plot, set it to {}.".format(frame_to_plot))
+            if ref_ant < 0:
+                ref_ant = 0
+                print("WARNING: Gave negative value for ref_ant, set it to {}.".format(ref_ant))
+            if n_frames_to_inspect <= 0:
+                n_frames_to_inspect = 1
+                print("WARNING: Gave negative/zero value for n_frames_to_inspect, set it to {}.".format(n_frames_to_inspect))               
+            if n_f_st < 0:
+                n_f_st = 0
+                print("WARNING: Gave negative value for start_of_frames, set it to {}.".format(n_f_st))
+                               
             if (frame_to_plot > n_f_st + n_frames_to_inspect) or (frame_to_plot < n_f_st) :
-                print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames +  or at an index smaller than the required start of the frames: frame_to_plot:{} >  n_frames_to_inspect:{} or frame_to_plot:{} <  n_f_st:{}. ".format(
+                print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames +  or at an index smaller than the required start of the frames: frame_to_plot:{} > n_frames_to_inspect:{} or frame_to_plot:{} <  n_f_st:{}. ".format(
                         frame_to_plot, n_frames_to_inspect, frame_to_plot, n_f_st))
-                print("Setting the frame to inspect to n_f_st")
+                print("Setting the frame to inspect/plot to {}".format(n_f_st))
                 frame_to_plot = n_f_st
             
-        print("frame_to_plot={},ref_ant={},n_frames_to_inspect={}, n_f_st ={}".format(frame_to_plot,ref_ant,n_frames_to_inspect, n_f_st))
+        print(">> frame to plot = {}, ref. ant = {}, no. of frames to inspect = {}, starting frame = {} <<".format(frame_to_plot,ref_ant,n_frames_to_inspect, n_f_st))
         # Instantiate
         hdf5 = hdfDump(filename, n_frames_to_inspect, n_f_st)
         hdf5.get_hdf5()
@@ -601,10 +639,10 @@ if __name__ == '__main__':
         metadata = hdf5.metadata
         samples = hdf5.samples
       
-        if frame_to_plot and ref_ant:
+        if frame_to_plot is not None and ref_ant is not None:
             csi_mat, match_filt_clr, frame_map, sub_fr_strt = hdf5.verify_hdf5(frame_to_plot, ref_ant)
             
-        elif frame_to_plot and not(ref_ant):
+        elif frame_to_plot is not None and ref_ant is None:
             csi_mat, match_filt_clr, frame_map, sub_fr_strt = hdf5.verify_hdf5(frame_to_plot)
             ref_ant = 0
         else:
@@ -619,7 +657,7 @@ if __name__ == '__main__':
     
     #plots:
     
-    print("Plotting the results:")
+    print("Plotting the results:\n")
     
     # plot a frame:
     fig = plt.figure()
@@ -676,6 +714,6 @@ if __name__ == '__main__':
     ax.set_ylabel('Sample Index')
     plt.show()
     
-    print("** WARNING: If you attempt to plot a different frame after running this script, remember to subtract the frame_start you gave! **")
-    print("E.g.: frame no. 1763 and frame_start = 1500 --> plot(match_filter_clr[<frame 1736 - 1500>, <cell>, <ue>, ref_antenna,:])")
+    print("** \tWARNING: If you attempt to plot a different frame after running this script, remember to subtract the frame_start you gave! **")
+    print(">> \tE.g.: frame no. 1763 and frame_start = 1500 --> plot(match_filter_clr[<frame 1736 - 1500>, <cell>, <ue>, ref_antenna,:])\n")
     print(">>>> Script Duration: time: %f \n" % ( scrpt_end - scrpt_strt) )
