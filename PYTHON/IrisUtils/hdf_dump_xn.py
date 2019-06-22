@@ -41,7 +41,7 @@ def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_
     Disclaimer: This function is good only for a high SNR scenario!
     """
     
-    debug = False
+    debug = True
     n_frame = match_filt.shape[0]      # no. of captured frames
     n_cell = match_filt.shape[1]       # no. of cells
     n_ue = match_filt.shape[2]         # no. of UEs 
@@ -99,14 +99,16 @@ def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_
         print("frame_sanity(): Shape of k_max.shape = {}, k_amax.shape = {}, lst_pk_idx.shape = {}".format(
                 k_max.shape, k_amax.shape, lst_pk_idx.shape) )
         print("frame_sanity(): k_amax = {}".format(k_amax))
-        print("frame_sanity(): frame_map.shape = \n{}".format(frame_map.shape))
+        print("frame_sanity(): frame_map.shape = {}\n".format(frame_map.shape))
+        print(k_amax[frame_to_plot - st_frame,0,0,plt_ant,:])  
         print(idx_diff[frame_to_plot - st_frame,0,0,plt_ant,:])    
     
     frame_map[frame_map == 1] = -1
     frame_map[frame_map >= (k_lts -1)] = 1
     frame_map[frame_map > 1] = 0
     if debug:
-        print("frame_sanity(): frame_map = \n{}".format(frame_map))
+        print("frame_sanity(): frame_map = \n{}".format(frame_map)) 
+        print(frame_to_plot - st_frame)
     
     #print results:
     n_rf = frame_map.size
@@ -682,17 +684,24 @@ if __name__ == '__main__':
       print("No bad frames! colored frame 0 of ant 0 bad to keep plotter happy!")
       
     fig, ax = plt.subplots()
-    x = np.arange(frame_map.shape[0]) + hdf5.n_frm_st
-    y = np.arange(frame_map.shape[1])
-    X,Y = np.meshgrid(x,y)
-    c = ax.pcolor(X, Y,frame_map.T, cmap=plt.cm.get_cmap('Blues', 3), edgecolors='0.75', linewidths = 0.1)
+    n_ant = frame_map.shape[1]
+    c = ax.imshow(frame_map.T, cmap=plt.cm.get_cmap('Blues', 3), interpolation='none',
+                  extent=[hdf5.n_frm_st,hdf5.n_frm_end, n_ant,0],  aspect="auto")
     ax.set_title('Frame Map')
     ax.set_ylabel('Antenna #')
     ax.set_xlabel('Frame #')
-    plt.xlim(hdf5.n_frm_st, hdf5.n_frm_st + frame_map.shape[0])
     cbar = plt.colorbar(c, ticks=[-1, 0, 1], orientation = 'horizontal', aspect=90)
     cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame']) 
-    plt.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
+    
+    gax = plt.gca();
+    # Minor ticks
+    gax.set_xticks(np.arange(hdf5.n_frm_st, hdf5.n_frm_end, 1), minor=True);
+    gax.set_yticks(np.arange(0, n_ant, 1), minor=True);
+
+    # Gridlines based on minor ticks
+    gax.grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
+    
+    
     plt.show()
     
     #plot F starts for each antenna
