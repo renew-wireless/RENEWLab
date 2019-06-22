@@ -721,7 +721,7 @@ if __name__ == '__main__':
     ax.legend(loc='lower right', ncol=8, frameon=False)
     #ax.set_xlim(self.n_frm_st,self.n_frm_st + sf_strts.shape[0])
     ax.set_xlabel('Frame no.')
-    ax.set_ylabel('starting index')
+    ax.set_ylabel('Starting index')
     plt.show()
     
     print("** \tWARNING: If you attempt to plot a different frame after running this script, remember to subtract the frame_start you gave! **")
