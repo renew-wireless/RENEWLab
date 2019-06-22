@@ -41,7 +41,7 @@ def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_
     Disclaimer: This function is good only for a high SNR scenario!
     """
     
-    debug = True
+    debug = False
     n_frame = match_filt.shape[0]      # no. of captured frames
     n_cell = match_filt.shape[1]       # no. of cells
     n_ue = match_filt.shape[2]         # no. of UEs 
@@ -662,10 +662,11 @@ if __name__ == '__main__':
     print("Plotting the results:\n")
     
     # plot a frame:
-    fig = plt.figure()
+    fig, ax = plt.subplots()
     plt.grid(True)
     plt.title('MF Frame # {} Antenna # {}'.format(frame_to_plot, ref_ant))   
     plt.stem(match_filt_clr[frame_to_plot - hdf5.n_frm_st, 0,0,ref_ant,:])
+    ax.set_xlabel('Samples')
     plt.show()
     
     # plot frame_map:
@@ -713,7 +714,7 @@ if __name__ == '__main__':
     fig = plt.figure()
     ax = fig.add_subplot(1,1,1)
     plt.grid(True)
-    plt.title('Frame starts')
+    plt.title('Frames\' starting index across antennas')
     x_pl = np.arange(sf_strts.shape[0]) + hdf5.n_frm_st
     for j in range(n_ant):
         plt.plot(x_pl,sf_strts[:,j].flatten(), label = 'Antenna: {}'.format(j) )

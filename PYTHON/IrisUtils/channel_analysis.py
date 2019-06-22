@@ -271,6 +271,7 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frm_st_idx
         ax3.grid(True)
         ax3.set_title('channel_analysis:csi_from_pilots(): MF (uncleared peaks) - ref frame {} and ref ant. {}'.format(frame_to_plot, ref_ant))
         ax3.stem(m_filt[frame_to_plot - frm_st_idx, 0,0,ref_ant,:])
+        ax3.set_xlabel('Samples')
         plt.show()
 
     print("********************* ******************** *********************\n")
