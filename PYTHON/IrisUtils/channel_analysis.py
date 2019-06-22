@@ -30,17 +30,20 @@ def samps2csi(samps, num_users,samps_per_user=224, fft_size=64, offset=0, bound=
     """Input samps dims: Frame, Cell, Antenna, User, Sample"""
     """Returns iq with Frame, Cell, User, Pilot Rep, Antenna, Sample"""
     """Returns csi with Frame, Cell, User, Pilot Rep, Antenna, Subcarrier"""
+    debug = False
     chunkstart = time.time()
     usersamps = np.reshape(samps, (samps.shape[0], samps.shape[1], num_users, samps.shape[3], samps_per_user, 2))
     nbat = min([(samps_per_user-bound)//(fft_size+cp),2]) #What is this? It is eiter 1 or 2: 2 LTSs??
     iq = np.empty((samps.shape[0],samps.shape[1],num_users,samps.shape[3],nbat,fft_size),dtype='complex64')
-    print("chunkstart = {}, usersamps.shape = {}, samps.shape = {}, samps_per_user = {}, nbat= {}, iq.shape = {}".format(chunkstart, usersamps.shape, samps.shape, samps_per_user, nbat, iq.shape))
+    if debug:
+        print("chunkstart = {}, usersamps.shape = {}, samps.shape = {}, samps_per_user = {}, nbat= {}, iq.shape = {}".format(chunkstart, usersamps.shape, samps.shape, samps_per_user, nbat, iq.shape))
     for i in range(nbat):  # 2 first symbols (assumed LTS) seperate estimates
         iq[:, :, :, :, i, :] = (usersamps[:, :, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size, 0] +
                                 usersamps[:, :, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size, 1]*1j)*2**-15
 
     iq = iq.swapaxes(3, 4) 
-    print("iq.shape after axes swapping: {}".format(iq.shape))
+    if debug:
+        print("iq.shape after axes swapping: {}".format(iq.shape))
 
     fftstart = time.time()
     csi = np.empty(iq.shape, dtype='complex64')
@@ -49,9 +52,11 @@ def samps2csi(samps, num_users,samps_per_user=224, fft_size=64, offset=0, bound=
         _, lts_freq = generate_training_seq(preamble_type='lts', seq_length=[], cp=32, upsample=1, reps=[])
         pre_csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 5), 5)
         csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 5), 5) * lts_freq
-        print("csi.shape:{} lts_freq.shape: {}, pre_csi.shape = {}".format(csi.shape, lts_freq.shape, pre_csi.shape))
+        if debug:
+            print("csi.shape:{} lts_freq.shape: {}, pre_csi.shape = {}".format(csi.shape, lts_freq.shape, pre_csi.shape))
         endtime = time.time()
-        print("chunk time: %f fft time: %f" % (fftstart - chunkstart, endtime -fftstart) )
+        if debug:
+            print("chunk time: %f fft time: %f" % (fftstart - chunkstart, endtime -fftstart) )
         csi = np.delete(csi, [0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63], 5)  # remove zero subcarriers
     return csi, iq
 
@@ -89,7 +94,7 @@ def demult(csi, data, method='zf'):
                 sig_intf[frame, :, sc] = np.dot(data[frame, :, sc], np.transpose(np.conj(userCSI[frame, :, :, sc]), (1, 0)))
     return sig_intf 
 
-def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_inspect = 100, frame_to_plot = 0, ref_ant=0):
+def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frm_st_idx = 0, frame_to_plot = 0, ref_ant=0):
     """ 
     Finds the end of the pilots' frames, finds all the lts indices relative to that.
     Divides the data with lts sequences, calculates csi per lts, csi per frame, csi total.  
@@ -101,7 +106,6 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_
     debug  = False
     test_mf = False
     write_to_file = True
-    fst_frame = 0
     
     # dimensions of pilots_dump
     n_frame = pilots_dump.shape[0]      # no. of captured frames
@@ -109,10 +113,9 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_
     n_ue = pilots_dump.shape[2]         # no. of UEs 
     n_ant = pilots_dump.shape[3]        # no. of BS antennas
     n_iq = pilots_dump.shape[4]         # no. of IQ samples per frame
-
-    n_frame = frames_to_inspect         # eventually needs to be deleted
     
     if debug:
+        print("input : z_padding = {}, fft_size={}, cp={}, frm_st_idx = {}, frame_to_plot = {}, ref_ant={}".format(z_padding, fft_size, cp, frm_st_idx, frame_to_plot, ref_ant))
         print("n_frame = {}, n_cell = {}, n_ue = {}, n_ant = {}, n_iq = {}".format(
         n_frame, n_cell, n_ue, n_ant, n_iq) )
 
@@ -127,8 +130,6 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_
 
     # make a new data structure where the iq samples become complex numbers
     cmpx_pilots = (pilots_dump[:,:,:,:,idx_e] + 1j*pilots_dump[:,:,:,:,idx_o])*2**-15
-    # should be deleted in the final version:
-    cmpx_pilots = cmpx_pilots[fst_frame:fst_frame+frames_to_inspect,:,:,:,:]
 
     # take a time-domain lts sequence, concatenate more copies, flip, conjugate
     lts_t, lts_f = generate_training_seq(preamble_type='lts', seq_length=[], cp=32, upsample=1, reps=[])    # TD LTS sequences (x2.5), FD LTS sequences
@@ -159,7 +160,7 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_
         if test_mf:
             w = np.random.normal(0, 0.1/2, len(lts_t_rep_tst)) + 1j*np.random.normal(0, 0.1/2, len(lts_t_rep_tst))
             lts_t_rep_tst = lts_t_rep_tst + w
-            cmpx_pilots = np.tile(lts_t_rep_tst,(frames_to_inspect,cmpx_pilots.shape[1],cmpx_pilots.shape[2],cmpx_pilots.shape[3],1))
+            cmpx_pilots = np.tile(lts_t_rep_tst,(n_frame,cmpx_pilots.shape[1],cmpx_pilots.shape[2],cmpx_pilots.shape[3],1))
             print("if test_mf: Shape of lts_t_rep_tst: {} , cmpx_pilots.shape = {}".format(lts_t_rep_tst.shape, cmpx_pilots.shape))
             
 
@@ -247,9 +248,11 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_
         fig = plt.figure()
         ax1 = fig.add_subplot(3, 1, 1)
         ax1.grid(True)
-        ax1.set_title('Re of Rx pilot at ref antenna {} and ref frame {}'.format(ref_ant,frame_to_plot))
-        print("cmpx_pilots.shape = {}".format(cmpx_pilots.shape))
-        ax1.plot(np.real(cmpx_pilots[frame_to_plot,0,0,ref_ant,:]))
+        ax1.set_title('channel_analysis:csi_from_pilots(): Re of Rx pilot - ref frame {} and ref ant. {}'.format(frame_to_plot, ref_ant))
+        if debug:
+            print("cmpx_pilots.shape = {}".format(cmpx_pilots.shape))
+            
+        ax1.plot(np.real(cmpx_pilots[frame_to_plot - frm_st_idx,0,0,ref_ant,:]))
         
         if debug:
             loc_sec = lts_t_rep_tst
@@ -261,16 +264,16 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frames_to_
             loc_sec = np.append(loc_sec, z_post)
         ax2 = fig.add_subplot(3, 1, 2)
         ax2.grid(True)
-        ax2.set_title('Local LTS sequence zero padded')
+        ax2.set_title('channel_analysis:csi_from_pilots(): Local LTS sequence zero padded')
         ax2.plot(loc_sec)
 
         ax3 = fig.add_subplot(3, 1, 3)
         ax3.grid(True)
-        ax3.set_title('MF for ref antenna {} and ref frame {}'.format(ref_ant,frame_to_plot))
-        ax3.stem(m_filt[frame_to_plot, 0,0,ref_ant,:])
+        ax3.set_title('channel_analysis:csi_from_pilots(): MF (uncleared peaks) - ref frame {} and ref ant. {}'.format(frame_to_plot, ref_ant))
+        ax3.stem(m_filt[frame_to_plot - frm_st_idx, 0,0,ref_ant,:])
         plt.show()
 
-    print("********************* csi_from_pilots(): *********************\n\n\n")
+    print("********************* ******************** *********************\n")
     return csi, m_filt, sf_start, k_lts, n_lts
 
 
