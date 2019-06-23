@@ -139,7 +139,7 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frm_st_idx
     lts_seq = lts_tmp
     lts_seq = np.tile(lts_tmp, k_lts)                # concatenate k LTS's to filter/correlate below             
     #lts_seq = lts_seq[::-1]                         # flip
-    z_pad = np.zeros( n_cmpx -len(lts_seq) , dtype='complex64')
+    #z_pad = np.zeros( n_cmpx -len(lts_seq) , dtype='complex64')
     lts_seq_conj = np.conjugate(lts_seq)             # conjugate the local LTS sequence
     #lts_seq_conj = np.append(z_pad, lts_seq_conj)
     l_lts_fc = len(lts_seq_conj)                     # length of the local LTS seq.
@@ -188,7 +188,7 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frm_st_idx
     rho_max = np.amax(m_filt, axis = 4)         # maximum peak per SF per antenna
     rho_min = np.amin(m_filt, axis  = 4)        # minimum peak per SF per antenna
     ipos = np.argmax(m_filt, axis = 4)          # positons of the max peaks
-    sf_start = ipos - l_lts_fc + 1              # start of every received SF 
+    sf_start = ipos - l_lts_fc + 1             # start of every received SF 
     sf_start = np.where(sf_start < 0, 0, sf_start)  #get rid of negative indices in case of an incorrect peak
          
     # get the pilot samples from the cmpx_pilots array and reshape for k_lts LTS pilots:
