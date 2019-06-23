@@ -92,21 +92,24 @@ def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_
     #subtract. In case of a good frame their should only be zeros in every postion
     idx_diff = k_amax - pk_idx
     frame_map = (idx_diff ==0).astype(np.int)
-    # count the 0 and non-zero elements and reshape to n_frame-by-n_ant 
-    frame_map = np.reshape(np.sum(frame_map, axis =-1), (n_frame*n_cell*n_ue,n_ant))
+    # count the 0 and non-zero elements and reshape to n_frame-by-n_ant
+    frame_map = np.sum(frame_map, axis =-1)
+    
     
     if debug: 
         print("frame_sanity(): Shape of k_max.shape = {}, k_amax.shape = {}, lst_pk_idx.shape = {}".format(
                 k_max.shape, k_amax.shape, lst_pk_idx.shape) )
         print("frame_sanity(): k_amax = {}".format(k_amax))
-        print("frame_sanity(): frame_map.shape = \n{}".format(frame_map.shape))
+        print("frame_sanity(): frame_map.shape = {}\n".format(frame_map.shape))
+        print(k_amax[frame_to_plot - st_frame,0,0,plt_ant,:])  
         print(idx_diff[frame_to_plot - st_frame,0,0,plt_ant,:])    
     
     frame_map[frame_map == 1] = -1
     frame_map[frame_map >= (k_lts -1)] = 1
     frame_map[frame_map > 1] = 0
     if debug:
-        print("frame_sanity(): frame_map = \n{}".format(frame_map))
+        print("frame_sanity(): frame_map = \n{}".format(frame_map)) 
+        print(frame_to_plot - st_frame)
     
     #print results:
     n_rf = frame_map.size
@@ -117,7 +120,7 @@ def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_
     print("Out of total {} received frames: \nGood frames: {}\nBad frames: {}\nProbably Partially received or corrupt: {}".format(
             n_rf, n_gf, n_bf, n_pr,))
     print("===================== ============================= ============")
-   
+    
     return match_filt, frame_map
 
 class hdfDump:
@@ -429,7 +432,7 @@ class hdfDump:
         n_ue = num_cl
         frm_plt = min(default_frame, samples_P.shape[0] + self.n_frm_st)
         csi_from_pilots_start = time.time()
-        csi_mat, match_filt, sub_fr_strt,k_lts, n_lts = csi_from_pilots(
+        csi_mat, match_filt, sub_fr_strt, cmpx_pilots, k_lts, n_lts = csi_from_pilots(
                 samples_P, z_padding, frm_st_idx = self.n_frm_st, frame_to_plot = frm_plt, ref_ant =ant_i)
         csi_from_pilots_end = time.time()
         
@@ -524,7 +527,7 @@ class hdfDump:
             axes[5, idx].set_xlabel('Frame')
         plt.show()
         
-        return csi_mat, match_filt_clr, frame_map, sub_fr_strt
+        return csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots
     
 if __name__ == '__main__':
     # Tested with inputs: ./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5 300  (for two users)
@@ -640,13 +643,13 @@ if __name__ == '__main__':
         samples = hdf5.samples
       
         if frame_to_plot is not None and ref_ant is not None:
-            csi_mat, match_filt_clr, frame_map, sub_fr_strt = hdf5.verify_hdf5(frame_to_plot, ref_ant)
+            csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots = hdf5.verify_hdf5(frame_to_plot, ref_ant)
             
         elif frame_to_plot is not None and ref_ant is None:
-            csi_mat, match_filt_clr, frame_map, sub_fr_strt = hdf5.verify_hdf5(frame_to_plot)
+            csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots = hdf5.verify_hdf5(frame_to_plot)
             ref_ant = 0
         else:
-            csi_mat, match_filt_clr, frame_map, sub_fr_strt = hdf5.verify_hdf5()
+            csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots = hdf5.verify_hdf5()
             frame_to_plot = 0
             
     
@@ -658,41 +661,63 @@ if __name__ == '__main__':
     #plots:
     
     print("Plotting the results:\n")
-    
+    n_cell = match_filt_clr.shape[1]
+    n_ue = match_filt_clr.shape[2]
+   
     # plot a frame:
-    fig = plt.figure()
-    plt.grid(True)
-    plt.title('MF Frame # {} Antenna # {}'.format(frame_to_plot, ref_ant))   
-    plt.stem(match_filt_clr[frame_to_plot - hdf5.n_frm_st, 0,0,ref_ant,:])
+    fig, axes = plt.subplots(nrows=n_cell, ncols=n_ue, squeeze=False)
+    fig.suptitle('MF Frame # {} Antenna # {}'.format(frame_to_plot, ref_ant)) 
+    for n_c in range(n_cell):
+        for n_u in range(n_ue):
+            axes[n_c, n_u].stem(match_filt_clr[frame_to_plot - hdf5.n_frm_st, n_c,n_u,ref_ant,:])
+            axes[n_c, n_u].set_xlabel('Samples')
+            axes[n_c, n_u].set_title('Cell {} UE {}'.format(n_c, n_u))
+            axes[n_c, n_u].grid(True)
     plt.show()
     
     # plot frame_map:
-    n_rf = frame_map.size
-    n_gf = frame_map[frame_map == 1].size
-    n_bf = frame_map[frame_map == -1].size
-    n_pr = frame_map[frame_map == 0].size
-    if n_gf == 0:
-      frame_map[0,0] = 1
-      print("No good frames! colored frame 0 of ant 0 good to keep plotter happy!")
-    if n_pr == 0:
-      frame_map[0,0] = 0
-      print("No good frames! colored frame 0 of ant 0 partial to keep plotter happy!")
-    if n_bf == 0:
-      frame_map[0,0] = -1
-      print("No bad frames! colored frame 0 of ant 0 bad to keep plotter happy!")
+    n_cell = frame_map.shape[1]
+    n_ue = frame_map.shape[2]
+    n_ant = frame_map.shape[3]
+    
+    # For some damm reason, if one of the subplots has all of the frames in the same state (good/bad/partial)
+    # it chooses a random color to paint the whole subplot!
+    # Below is some sort of remedy (will fail if SISO!):
+    for n_c in range(n_cell):
+        for n_u in range(n_ue):
+            f_map = frame_map[:,n_c,n_u,:]
+            n_gf = f_map[f_map == 1].size
+            n_bf = f_map[f_map == -1].size
+            n_pr = f_map[f_map == 0].size
+            if n_gf == 0:
+                frame_map[-1,n_c,n_u,-1] = 1
+                print("No good frames! Colored the last frame of the last antenna Good for cell {} and UE {} to keep plotter happy!".format(n_c,n_u))
+            if n_pr == 0:
+                frame_map[0,n_c,n_u,-1] = 0
+                print("No partial frames! Colored frame 0 of the last antenna for cell {} and UE {} Partial to keep plotter happy!".format(n_c,n_u))
+            if n_bf == 0:
+                frame_map[-1,n_c,n_u,0] = -1
+                print("No bad frames! Colored the last frame of antenna 0 Bad for cell {} and UE {} to keep plotter happy!".format(n_c,n_u))
       
-    fig, ax = plt.subplots()
-    x = np.arange(frame_map.shape[0]) + hdf5.n_frm_st
-    y = np.arange(frame_map.shape[1])
-    X,Y = np.meshgrid(x,y)
-    c = ax.pcolor(X, Y,frame_map.T, cmap=plt.cm.get_cmap('Blues', 3), edgecolors='0.75', linewidths = 0.1)
-    ax.set_title('Frame Map')
-    ax.set_ylabel('Antenna #')
-    ax.set_xlabel('Frame #')
-    plt.xlim(hdf5.n_frm_st, hdf5.n_frm_st + frame_map.shape[0])
-    cbar = plt.colorbar(c, ticks=[-1, 0, 1], orientation = 'horizontal', aspect=90)
-    cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame']) 
-    plt.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
+    fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+    c = []
+    fig.suptitle('Frame Map')
+    for n_c in range(n_cell):
+        for n_u in range(n_ue):
+            c.append( axes[n_u, n_c].imshow(frame_map[:,n_c,n_u,:].T, cmap=plt.cm.get_cmap('Blues', 3), interpolation='none',
+                  extent=[hdf5.n_frm_st,hdf5.n_frm_end, n_ant,0],  aspect="auto") )
+            axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
+            axes[n_u, n_c].set_ylabel('Antenna #')
+            axes[n_u, n_c].set_xlabel('Frame #')
+            # Minor ticks
+            axes[n_u, n_c].set_xticks(np.arange(hdf5.n_frm_st, hdf5.n_frm_end, 1), minor=True);
+            axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True);
+            # Gridlines based on minor ticks
+            axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
+    
+            
+    cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')       
+    cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])  
     plt.show()
     
     #plot F starts for each antenna
@@ -701,17 +726,19 @@ if __name__ == '__main__':
     n_ue = sub_fr_strt.shape[2]         # no. of UEs 
     n_ant = sub_fr_strt.shape[3]        # no. of BS antennas 
     sf_strts = np.reshape(sub_fr_strt, (n_frame*n_cell*n_ue,n_ant))
-    fig = plt.figure()
-    ax = fig.add_subplot(1,1,1)
-    plt.grid(True)
-    plt.title('Frame starts')
-    x_pl = np.arange(sf_strts.shape[0]) + hdf5.n_frm_st
-    for j in range(n_ant):
-        plt.plot(x_pl,sf_strts[:,j].flatten(), label = 'Antenna: {}'.format(j) )
-    ax.legend(loc='lower right', ncol=8, frameon=False)
-    #ax.set_xlim(self.n_frm_st,self.n_frm_st + sf_strts.shape[0])
-    ax.set_xlabel('Frame no.')
-    ax.set_ylabel('Sample Index')
+    
+    fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+    fig.suptitle('Frames\' starting indices per antenna')
+    for n_c in range(n_cell):
+        for n_u in range(n_ue):
+            sf_strts = sub_fr_strt[:,n_c,n_u,:]
+            x_pl = np.arange(sf_strts.shape[0]) + hdf5.n_frm_st
+            for j in range(n_ant):
+                axes[n_u, n_c].plot(x_pl,sf_strts[:,j].flatten(), label = 'Antenna: {}'.format(j) )
+            axes[n_u, n_c].legend(loc='lower right', ncol=8, frameon=False)
+            axes[n_u, n_c].set_xlabel('Frame no.')
+            axes[n_u, n_c].set_ylabel('Starting index')
+            axes[n_u, n_c].grid(True)
     plt.show()
     
     print("** \tWARNING: If you attempt to plot a different frame after running this script, remember to subtract the frame_start you gave! **")

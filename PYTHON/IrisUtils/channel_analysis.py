@@ -139,7 +139,9 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frm_st_idx
     lts_seq = lts_tmp
     lts_seq = np.tile(lts_tmp, k_lts)                # concatenate k LTS's to filter/correlate below             
     #lts_seq = lts_seq[::-1]                         # flip
+    z_pad = np.zeros( n_cmpx -len(lts_seq) , dtype='complex64')
     lts_seq_conj = np.conjugate(lts_seq)             # conjugate the local LTS sequence
+    #lts_seq_conj = np.append(z_pad, lts_seq_conj)
     l_lts_fc = len(lts_seq_conj)                     # length of the local LTS seq.
 
     if debug:
@@ -248,7 +250,7 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frm_st_idx
         fig = plt.figure()
         ax1 = fig.add_subplot(3, 1, 1)
         ax1.grid(True)
-        ax1.set_title('channel_analysis:csi_from_pilots(): Re of Rx pilot - ref frame {} and ref ant. {}'.format(frame_to_plot, ref_ant))
+        ax1.set_title('channel_analysis:csi_from_pilots(): Re of Rx pilot - ref frame {} and ref ant. {} (UE 0)'.format(frame_to_plot, ref_ant))
         if debug:
             print("cmpx_pilots.shape = {}".format(cmpx_pilots.shape))
             
@@ -269,12 +271,13 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frm_st_idx
 
         ax3 = fig.add_subplot(3, 1, 3)
         ax3.grid(True)
-        ax3.set_title('channel_analysis:csi_from_pilots(): MF (uncleared peaks) - ref frame {} and ref ant. {}'.format(frame_to_plot, ref_ant))
+        ax3.set_title('channel_analysis:csi_from_pilots(): MF (uncleared peaks) - ref frame {} and ref ant. {} (UE 0)'.format(frame_to_plot, ref_ant))
         ax3.stem(m_filt[frame_to_plot - frm_st_idx, 0,0,ref_ant,:])
+        ax3.set_xlabel('Samples')
         plt.show()
 
     print("********************* ******************** *********************\n")
-    return csi, m_filt, sf_start, k_lts, n_lts
+    return csi, m_filt, sf_start, cmpx_pilots, k_lts, n_lts
 
 
 
