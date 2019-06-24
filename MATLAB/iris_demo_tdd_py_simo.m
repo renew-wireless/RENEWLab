@@ -23,12 +23,11 @@ end
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_MOD                 = 1;
-DEBUG                   = 1;
 sim_N0                  = 0.01;     
 sim_H_var               = 4;
 %Iris params:
-N_BS_NODE = 8;
-N_UE = 2;
+N_BS_NODE = 2;
+N_UE = 1;
 b_ids = string.empty();
 b_scheds = string.empty();
 ue_ids = string.empty();
@@ -36,7 +35,7 @@ ue_scheds = string.empty();
 
 
 % Waveform params
-N_OFDM_SYM              = 32;         % Number of OFDM symbols for burst, it needs to be less than 47
+N_OFDM_SYM              = 46;         % Number of OFDM symbols for burst, it needs to be less than 47
 MOD_ORDER               = 16;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
 TX_SCALE                = .5;         % Scale for Tx waveform ([0:1])
 
@@ -62,15 +61,19 @@ DO_APPLY_PHASE_ERR_CORRECTION = 1;           % Enable Residual CFO estimation/co
 %% Define the preamble
 % LTS for fine CFO and channel estimation
 lts_f = [0 1 -1 -1 1 1 -1 1 -1 1 -1 -1 -1 -1 -1 1 1 -1 -1 1 -1 1 -1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 ...
-    1 1 -1 -1 1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1].';
-lts_t = ifft(lts_f, N_SC); %time domain
+    1 1 -1 -1 1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1];
+lts_t = ifft(lts_f, 64); %time domain
 
-preamble_common = [lts_t(33:64); lts_t; lts_t];
-pre_z = zeros(size(preamble_common));
-preamble = [ preamble_common pre_z;pre_z preamble_common];
-cor_rng  = length(preamble) +  N_ZPAD_PRE + 100;
+sts_f = zeros(1,64);
+sts_f(1:27) = [0 0 0 0 -1-1i 0 0 0 -1-1i 0 0 0 1+1i 0 0 0 1+1i 0 0 0 1+1i 0 0 0 1+1i 0 0];
+sts_f(39:64) = [0 0 1+1i 0 0 0 -1-1i 0 0 0 1+1i 0 0 0 -1-1i 0 0 0 -1-1i 0 0 0 1+1i 0 0 0];
+sts_t = ifft(sqrt(13/6).*sts_f, 64);
+sts_t = sts_t(1:16);
+
+preamble = [repmat(sts_t, 1, 2) lts_t(33:64) lts_t lts_t];
+
 %% Generate a payload of random integers
-tx_data = randi(MOD_ORDER, N_DATA_SYMS, N_UE) - 1;
+tx_data = randi(MOD_ORDER, 1, N_DATA_SYMS) - 1;
 
 % Functions for data -> complex symbol mapping (like qammod, avoids comm toolbox requirement)
 % These anonymous functions implement the modulation mapping from IEEE 802.11-2012 Section 18.3.5.8
@@ -99,53 +102,55 @@ switch MOD_ORDER
 end
 
 % Reshape the symbol vector to a matrix with one column per OFDM symbol
-tx_syms_mat = reshape(tx_syms, length(SC_IND_DATA), N_OFDM_SYM, N_UE);
+tx_syms_mat = reshape(tx_syms, length(SC_IND_DATA), N_OFDM_SYM);
 
 % Define the pilot tone values as BPSK symbols
 pilots = [1 1 -1 1].';
 
 % Repeat the pilots across all OFDM symbols
-pilots_mat = repmat(pilots, 1, N_OFDM_SYM, N_UE);
+pilots_mat = repmat(pilots, 1, N_OFDM_SYM);
 
 %% IFFT
 
 % Construct the IFFT input matrix
-ifft_in_mat = zeros(N_SC, N_OFDM_SYM, N_UE);
+ifft_in_mat = zeros(N_SC, N_OFDM_SYM);
 
 % Insert the data and pilot values; other subcarriers will remain at 0
-ifft_in_mat(SC_IND_DATA, :, :)   = tx_syms_mat;
-ifft_in_mat(SC_IND_PILOTS, :, :) = pilots_mat;
+ifft_in_mat(SC_IND_DATA, :)   = tx_syms_mat;
+ifft_in_mat(SC_IND_PILOTS, :) = pilots_mat;
 
 %Perform the IFFT
 tx_payload_mat = ifft(ifft_in_mat, N_SC, 1);
 
 % Insert the cyclic prefix
 if(CP_LEN > 0)
-    tx_cp = tx_payload_mat((end-CP_LEN+1 : end), :, :);
+    tx_cp = tx_payload_mat((end-CP_LEN+1 : end), :);
     tx_payload_mat = [tx_cp; tx_payload_mat];
 end
 
 % Reshape to a vector
-tx_payload_vecs = reshape(tx_payload_mat, ceil(numel(tx_payload_mat)/N_UE), N_UE);
+tx_payload_vec = reshape(tx_payload_mat, 1, numel(tx_payload_mat));
+
 
 % Construct the full time-domain OFDM waveform
-tx_vecs = [zeros(N_ZPAD_PRE, N_UE); preamble; tx_payload_vecs; zeros(N_ZPAD_POST, N_UE)];
+tx_vec = [zeros(1,N_ZPAD_PRE) preamble tx_payload_vec zeros(1,N_ZPAD_POST)];
+%tx_vec = [preamble tx_payload_vec];
 
 % Leftover from zero padding:
-tx_vecs_iris = tx_vecs;
+tx_vec_iris = tx_vec.';
 % Scale the Tx vector to +/- 1
-tx_vecs_iris = TX_SCALE .* tx_vecs_iris ./ max(abs(tx_vecs_iris));
+tx_vec_iris = TX_SCALE .* tx_vec_iris ./ max(abs(tx_vec_iris));
+
 if (SIM_MOD) 
     
     DO_APPLY_CFO_CORRECTION       = 0;       
     DO_APPLY_SFO_CORRECTION       = 0;  
     DO_APPLY_PHASE_ERR_CORRECTION = 1;
 
-    H_ul = sqrt(sim_H_var/2) .* ( randn(N_BS_NODE, N_UE) + 1i*randn(N_BS_NODE, N_UE) );
-    W_ul = sqrt(sim_N0/2) * (randn(N_BS_NODE, length(tx_vecs_iris)) + ...
-        1i*randn(N_BS_NODE, length(tx_vecs_iris)) );
-    rx_vec_iris = H_ul*tx_vecs_iris.' + W_ul;
-
+    H = sqrt(sim_H_var/2) .* ( randn(N_BS_NODE, 1) + 1i*randn(N_BS_NODE, 1) );
+    rx_vec_iris = repmat(H,1, length(tx_vec_iris)).* repmat(tx_vec_iris.',N_BS_NODE,1) + ...
+        sqrt(sim_N0/2) * (randn(N_BS_NODE, length(tx_vec_iris)) + ...
+        1i*randn(N_BS_NODE, length(tx_vec_iris)));
         SAMP_FREQ = 5e6;
 else
 
@@ -155,7 +160,7 @@ else
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     % Create a two Iris node objects:
-    b_ids = ["0328", "0339", "0268", "0282", "0344", "0233", "0334", "0402"];
+    b_ids = ["RF3C000007", "RF3C000028"];
     ue_ids= "RF3C000053";
 
     b_prim_sched = "PGGGGGRG";           % BS primary noede's schedule: Send Beacon only from one Iris board
@@ -172,7 +177,7 @@ else
         ue_scheds(iu,:) = ue_sched;
     end
 
-    n_samp = length(tx_vecs_iris);
+    n_samp = length(tx_vec_iris);
     % Iris nodes' parameters
     sdr_params = struct(...
         'id', b_ids, ...
@@ -216,7 +221,7 @@ else
 
 
     node_bs.sdr_txbeacon(N_ZPAD_PRE);
-    node_ue.sdrtx(tx_vecs_iris);
+    node_ue.sdrtx(tx_vec_iris);
 
     node_bs.sdr_activate_rx();
 
@@ -234,70 +239,74 @@ else
 
     fprintf('Matlab script: Length of the received vector: \tUE:%d\n', data0_len);
 end
+rx_vec_iris = rx_vec_iris.';
+%rx_vec_iris(:,2) = rx_vec_iris(:,1);
 raw_rx_dec = rx_vec_iris;
 rx_vec_air = raw_rx_dec; %NB: Change this, unecessary assignment!
 
 l_rx_dec=length(raw_rx_dec);
 
 %% Correlate for LTS
-%NB: start here!
 
 % Complex cross correlation of Rx waveform with time-domain LTS
 lts_corr = double.empty();
 for ibs=1:N_BS_NODE
-    lts_corr(:,ibs) = abs(conv( conj(flipud(lts_t)), sign(raw_rx_dec(ibs,:))));
+    lts_corr(:,ibs) = abs(conv( conj(fliplr(lts_t)), sign(raw_rx_dec(:,ibs))));
 end
 
+lts_corr = sum(lts_corr,2);
 % Skip early and late samples - avoids occasional false positives from pre-AGC samples
-lts_corr = lts_corr(32:end-32,:);
-
-if DEBUG
-    figure,
-    for sp = 1:N_BS_NODE
-        subplot(8,1,sp);
-        plot(lts_corr(:,sp)) 
-        xlabel('Samples');
-        y_label = sprintf('Anetnna %d',sp);
-        ylabel(y_label);
-    end
-    sgtitle('LTS correlations accross antennas')
-end
-
+lts_corr = lts_corr(32:end-32);
 % Find all correlation peaks
-rx_lts_mat = double.empty();
-for ibs=1:N_BS_NODE
-    lts_peaks = find(lts_corr(1:cor_rng) > LTS_CORR_THRESH*max(lts_corr(:,ibs)));
+lts_peaks = find(lts_corr(1:800) > LTS_CORR_THRESH*max(lts_corr));
 
-    % Select best candidate correlation peak as LTS-payload boundary
-    [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
-    [lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
-    % Stop if no valid correlation peak was found
-    if(isempty(lts_second_peak_index))
-        fprintf('No LTS Correlation Peaks Found!\n');
-        return;
-    end    
-    % Set the sample indices of the payload symbols and preamble
-    payload_ind = lts_peaks(max(lts_second_peak_index)) + (2*CP_LEN);
-    pream_ind_ibs = payload_ind-length(preamble);
-    rx_lts_mat(ibs,:) = raw_rx_dec(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 ); 
+% Select best candidate correlation peak as LTS-payload boundary
+[LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
+[lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
+
+% Stop if no valid correlation peak was found
+if(isempty(lts_second_peak_index))
+    fprintf('No LTS Correlation Peaks Found!\n');
+    return;
 end
 
+% Set the sample indices of the payload symbols and preamble
+% The "+32" corresponds to the 32-sample cyclic prefix on the preamble LTS
+% The "-160" corresponds to the length of the preamble LTS (2.5 copies of 64-sample LTS)
+payload_ind = lts_peaks(max(lts_second_peak_index)) + 32;
+lts_ind = payload_ind-160;
+
+
+% NB: Do it for ALL BS antennas!!
+rx_cfo_est_sts = zeros(1,N_BS_NODE);
 rx_cfo_est_lts = zeros(1,N_BS_NODE,1);
-rx_dec_cfo_corr = raw_rx_dec;
 
-% Reshape pilots to N_BS_NODE x 160 x N_UE
-% NB: Assume orthogonality in time: 1st 160: samples UE1, next 160 UE2,...
-% ulp_st = CP_LEN +1
-% ulp_ed = 
-% ul_pilots_mat = rx_lts_mat(:,[17:80 81:144]);
-%ul_pilots_mat = reshape(rx_lts_mat, N_BS_NODE,ceil(length(rx_lts_mat)/N_UE),N_UE); 
-return;
+if(DO_APPLY_CFO_CORRECTION)
+    %Extract LTS (not yet CFO corrected)
+    for ibs=1:N_BS_NODE
+        rx_lts = raw_rx_dec(lts_ind : lts_ind+159,ibs);
+        rx_lts1 = rx_lts(-64+-FFT_OFFSET + (97:160) );
+        rx_lts2 = rx_lts(-FFT_OFFSET + (97:160) );
 
+        %Calculate coarse CFO est
+        rx_cfo_est_lts(ibs) = mean(unwrap(angle(rx_lts2 .* conj(rx_lts1))));
+        rx_cfo_est_lts(ibs) = rx_cfo_est_lts(ibs)/(2*pi*64);
+    end
+end
+
+
+% Apply CFO correction to raw Rx waveform
+rx_cfo_corr_t = exp(-1i*2*pi* repmat(rx_cfo_est_lts, length(raw_rx_dec), 1).*...
+    repmat((0:l_rx_dec-1)',1,N_BS_NODE) );
+rx_dec_cfo_corr = raw_rx_dec .* rx_cfo_corr_t;
+
+% Re-extract LTS for channel estimate
+rx_lts = rx_dec_cfo_corr(lts_ind : lts_ind+159,:);
 rx_lts_idx1 = -64+-FFT_OFFSET + (97:160);
 rx_lts_idx2 = -FFT_OFFSET + (97:160);
 rx_lts_b1 = [rx_lts(rx_lts_idx1,1)  rx_lts(rx_lts_idx2,1)];
 rx_lts_b2 = [rx_lts(rx_lts_idx1,2)  rx_lts(rx_lts_idx2,2)];
-
+return;
 % Received LTSs for each branch.  
 rx_lts_b1_f = fft(rx_lts_b1);
 rx_lts_b2_f = fft(rx_lts_b2);
@@ -473,14 +482,14 @@ cf = cf + 1;
 figure(cf);clf;
 
 subplot(2,1,1);
-plot(real(tx_vecs_iris), 'b');
-axis([0 length(tx_vecs_iris) -TX_SCALE TX_SCALE])
+plot(real(tx_vec_iris), 'b');
+axis([0 length(tx_vec_iris) -TX_SCALE TX_SCALE])
 grid on;
 title('Tx Waveform (I)');
 
 subplot(2,1,2);
-plot(imag(tx_vecs_iris), 'r');
-axis([0 length(tx_vecs_iris) -TX_SCALE TX_SCALE])
+plot(imag(tx_vec_iris), 'r');
+axis([0 length(tx_vec_iris) -TX_SCALE TX_SCALE])
 grid on;
 title('Tx Waveform (Q)');
 
@@ -797,6 +806,21 @@ fprintf('Num Bytes:   %d\n', N_DATA_SYMS * log2(MOD_ORDER) / 8);
 fprintf('Sym Errors:  %d (of %d total symbols)\n', sym_errs, N_DATA_SYMS);
 fprintf('Bit Errors:  %d (of %d total bits)\n', bit_errs, N_DATA_SYMS * log2(MOD_ORDER));
 
+cfo_est_lts = rx_cfo_est_lts*(SAMP_FREQ);
+cfo_est_phaseErr = mean(diff(unwrap(pilot_phase_err_mrc)))/(4e-6*2*pi);
+cfo_total_ppm = ((cfo_est_lts + cfo_est_phaseErr) /  ((3.6+(.005*(CHANNEL-1)))*1e9)) * 1e6;
+
+fprintf('CFO Est:     %3.2f kHz (%3.2f ppm)\n', (cfo_est_lts + cfo_est_phaseErr)*1e-3, cfo_total_ppm);
+fprintf('     LTS CFO Est:                  %3.2f kHz\n', cfo_est_lts*1e-3);
+fprintf('     Phase Error Residual CFO Est: %3.2f kHz\n', cfo_est_phaseErr*1e-3);
+
+if DO_APPLY_SFO_CORRECTION
+    drift_sec = pilot_slope_mat_mrc / (2*pi*312500);
+    sfo_est_ppm =  1e6*mean((diff(drift_sec) / 4e-6));
+    sfo_est = sfo_est_ppm*20;
+    fprintf('SFO Est:     %3.2f Hz (%3.2f ppm)\n', sfo_est, sfo_est_ppm);
+
+end
 sc_data_idx = [(2:27)'; (39:64)' ];
 % SNR estimation based on the LTS signals
 n_var_1 = sum( sum( abs(H0_b1(sc_data_idx,:) - repmat(H_b1(sc_data_idx), 1,2) ).^2,2 ))/(52*2);

@@ -264,7 +264,7 @@ if DEBUG
 end
 
 % Find all correlation peaks
-rx_lts_mat = double.empty();
+pream_ind = double.empty();
 for ibs=1:N_BS_NODE
     lts_peaks = find(lts_corr(1:cor_rng) > LTS_CORR_THRESH*max(lts_corr(:,ibs)));
 
@@ -278,19 +278,17 @@ for ibs=1:N_BS_NODE
     end    
     % Set the sample indices of the payload symbols and preamble
     payload_ind = lts_peaks(max(lts_second_peak_index)) + (2*CP_LEN);
-    pream_ind_ibs = payload_ind-length(preamble);
-    rx_lts_mat(ibs,:) = raw_rx_dec(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 ); 
+    pream_ind(ibs) = payload_ind-length(preamble);
 end
 
 rx_cfo_est_lts = zeros(1,N_BS_NODE,1);
 rx_dec_cfo_corr = raw_rx_dec;
 
-% Reshape pilots to N_BS_NODE x 160 x N_UE
-% NB: Assume orthogonality in time: 1st 160: samples UE1, next 160 UE2,...
-% ulp_st = CP_LEN +1
-% ulp_ed = 
-% ul_pilots_mat = rx_lts_mat(:,[17:80 81:144]);
-%ul_pilots_mat = reshape(rx_lts_mat, N_BS_NODE,ceil(length(rx_lts_mat)/N_UE),N_UE); 
+% Extract LTS for channel estimate
+rx_lts_mat = rx_dec_cfo_corr(:, pream_ind : pream_ind + length(preamble));
+
+for
+
 return;
 
 rx_lts_idx1 = -64+-FFT_OFFSET + (97:160);
