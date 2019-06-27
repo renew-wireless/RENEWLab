@@ -132,7 +132,7 @@ FPGA_IRIS030_WR_PKT_DET_NEW_FRAME = 300
 #########################################
 running = True
 record = True
-exit_plot = True
+exit_plot = False
 bsdr = None
 msdr = None
 txStreamM = None
@@ -269,7 +269,7 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
             sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)   # [0,52]
 
             if "CBRS" in info["frontend"]:
-                sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', 0)   # {-18,-12,-6,0}
+                sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', -6)   # {-18,-12,-6,0}
                 sdr.setGain(SOAPY_SDR_RX, ch, 'LNA1', 30)  # [0,33]
                 sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 14)  # LO: [0|17], HI:[0|14]
 
@@ -282,7 +282,7 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
             else:
                 sdr.setGain(SOAPY_SDR_RX, ch, 'LNA', rxgain)   # [0,30]
                 sdr.setGain(SOAPY_SDR_RX, ch, 'TIA', 0)       # [0,12]
-                sdr.setGain(SOAPY_SDR_RX, ch, 'PGA', -10)       # [-12,19]
+                sdr.setGain(SOAPY_SDR_RX, ch, 'PGA', 0)       # [-12,19]
 
             sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
             sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
@@ -344,7 +344,7 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
 
     ampl = 1
     beacon = preambles[0, :]*ampl
-    coe = cfloat2uint32(np.conj(beacon), order='QI')     # FPGA correlator takes coefficients in QI order
+    coe = cfloat2uint32(np.conj(beacon), order='IQ')     # FPGA correlator takes coefficients in QI order
     ltsSym, lts_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
     # ltsSym = lts.genLTS(upsample=1, cp=0)
     pad1 = np.array([0]*(prefix_length), np.complex64)   # to comprensate for front-end group delay
@@ -367,7 +367,7 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
     #bconf = {"tdd_enabled": True, "trigger_out": False, "symbol_size": symSamp, "frames": [bsched]}
     bconf = {"tdd_enabled": True, "frame_mode": "free_running", "symbol_size": symSamp, "frames": [bsched]}
     #mconf = {"tdd_enabled": True, "trigger_out": not use_trig, "wait_trigger": wait_trigger, "dual_pilot": both_channels, "symbol_size" : symSamp, "frames": [msched]}
-    mconf = {"tdd_enabled": True, "frame_mode": "free_running" if use_trig else "triggered" if wait_trigger else "hybrid", "dual_pilot": both_channels, "symbol_size" : symSamp, "frames": [msched]}
+    mconf = {"tdd_enabled": True, "frame_mode": "free_running" if use_trig else "triggered" if wait_trigger else "continuous_resync", "dual_pilot": both_channels, "symbol_size" : symSamp, "frames": [msched]}
     # mconf = {"tdd_enabled": True, "trigger_out": not use_trig, "wait_trigger": True, "symbol_size" : symSamp, "frames": [msched]}
     bsdr.writeSetting("TDD_CONFIG", json.dumps(bconf))
     msdr.writeSetting("TDD_CONFIG", json.dumps(mconf))
@@ -428,8 +428,13 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
     if record:
         rxth = threading.Thread(target=rx_thread, args=(bsdr, rxStreamB, symSamp, txSymNum, both_channels))
         rxth.start()
-    signal.pause()
-
+    #signal.pause()
+    num_trig = 0
+    while True:
+        time.sleep(1)
+        t = SoapySDR.timeNsToTicks(msdr.getHardwareTime(""),rate) >> 32 #trigger count is top 32 bits.
+        print("%d new triggers, %d total" % (t - num_trig, t))
+        num_trig = t
 
 def signal_handler(rate, numSyms, txSymNum, signal, frame):
     global bsdr, msdr, running, txStreamM, rxStreamB, exit_plot
