@@ -42,11 +42,12 @@ def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_
     """
     
     debug = False
-    n_frame = match_filt.shape[0]      # no. of captured frames
-    n_cell = match_filt.shape[1]       # no. of cells
-    n_ue = match_filt.shape[2]         # no. of UEs 
-    n_ant = match_filt.shape[3]        # no. of BS antennas
-    n_corr = match_filt.shape[4]       # no. of corr. samples
+    dtct_eal_tx = True                  # Detect early transmission: further processing if this is desired
+    n_frame = match_filt.shape[0]       # no. of captured frames
+    n_cell = match_filt.shape[1]        # no. of cells
+    n_ue = match_filt.shape[2]          # no. of UEs 
+    n_ant = match_filt.shape[3]         # no. of BS antennas
+    n_corr = match_filt.shape[4]        # no. of corr. samples
     
     if debug:
         print("frame_sanity(): n_frame = {}, n_cell = {}, n_ue = {}, n_ant = {}, n_corr = {}, k_lts = {}".format(
@@ -60,9 +61,19 @@ def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_
         for j in range(n_cell):
             for k in range(n_ue):
                 for l in range(n_ant):
-                    for m in range(base_arr.shape[0]):
-                        # misleading peaks seem to apear at +- argmax and argmax -1/+1/+2 CP and 29-30
-                        mfa = mf_amax[i,j,k,l] 
+                    mfa = mf_amax[i,j,k,l] 
+                   # NB: addition: try to detect early packets: TEST it!
+                    if dtct_eal_tx:
+                            for ik in range(k_lts):
+                                mf_prev = match_filt[i,j,k,l, (mfa - n_lts) if (mfa - n_lts) >= 0 else 0] 
+                                if 1 - np.abs(match_filt[i,j,k,l, mfa] -  mf_prev)/match_filt[i,j,k,l, mfa] >= 0.89:
+                                    mfa = (mfa - n_lts) if (mfa - n_lts) >= 0 else 0
+                                else:
+                                    break
+                    # NB: addition: Clean everything right of the largest peak.
+                    match_filt[i,j,k,l, mfa+1:] = 0         # we don't care about the peaks after the largest.
+                    # misleading peaks seem to apear at +- argmax and argmax -1/+1/+2 CP and 29-30
+                    for m in range(base_arr.shape[0]):                        
                         adj_idx1 = (mfa - 1) - base_arr[m]
                         adj_idx2 = (mfa + 1) - base_arr[m]
                         cp_idx1 = (mfa + cp) - base_arr[m]
@@ -94,8 +105,10 @@ def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_
     frame_map = (idx_diff ==0).astype(np.int)
     # count the 0 and non-zero elements and reshape to n_frame-by-n_ant
     frame_map = np.sum(frame_map, axis =-1)
-    
-    
+    #NB:
+    zetas = frame_map*n_lts
+    f_st = mf_amax - zetas
+    print("f_st = {}".format(f_st[frame_to_plot - st_frame,0,0,:]))    
     if debug: 
         print("frame_sanity(): Shape of k_max.shape = {}, k_amax.shape = {}, lst_pk_idx.shape = {}".format(
                 k_max.shape, k_amax.shape, lst_pk_idx.shape) )
@@ -121,7 +134,7 @@ def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_
             n_rf, n_gf, n_bf, n_pr,))
     print("===================== ============================= ============")
     
-    return match_filt, frame_map
+    return match_filt, frame_map, f_st
 
 class hdfDump:
 
@@ -204,12 +217,11 @@ class hdfDump:
                         # dataset = np.array(item[k].value)  # dataset.value has been deprecated. dataset[()] instead
                         dtst_ptr = item[(k)]
                         n_frm = np.abs(self.n_frm_end - self.n_frm_st)
-                        #check if the shape of the data set is the one assumed,
-                        # and if the number fof requested frames and, upper and lower bounds make sense
+                    
+                        # check if the number fof requested frames and, upper and lower bounds make sense
                         # also check if end_frame > strt_frame:
-                        if (len(dtst_ptr.shape) == 5) and (n_frm > 0 and self.n_frm_st >=0 and (
-                                self.n_frm_end >= 0 and self.n_frm_end > self.n_frm_st) ):
-                            dataset = np.array(dtst_ptr[self.n_frm_st:self.n_frm_end,:,:,:,:])
+                        if (n_frm > 0 and self.n_frm_st >=0 and (self.n_frm_end >= 0 and self.n_frm_end > self.n_frm_st) ):
+                            dataset = np.array(dtst_ptr[self.n_frm_st:self.n_frm_end,...])
                         else:
                             #if previous if Flase, do as usual:
                             print("WARNING: No frames_to_inspect given and/or boundries don't make sense. Will process the whole dataset.") 
@@ -437,7 +449,7 @@ class hdfDump:
         csi_from_pilots_end = time.time()
         
         frame_sanity_start = time.time()
-        match_filt_clr, frame_map = frame_sanity(match_filt, k_lts, n_lts, self.n_frm_st, frm_plt, plt_ant = ant_i)
+        match_filt_clr, frame_map, f_st = frame_sanity(match_filt, k_lts, n_lts, self.n_frm_st, frm_plt, plt_ant = ant_i)
         frame_sanity_end = time.time()
        
         print(">>>> csi_from_pilots time: %f \n" % ( csi_from_pilots_end - csi_from_pilots_start) )
@@ -525,9 +537,9 @@ class hdfDump:
             for u in range(num_cl_tmp):
                 axes[5, idx].plot(corr_total[pilot_frames, u])
             axes[5, idx].set_xlabel('Frame')
-        plt.show()
+        #plt.show()
         
-        return csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots
+        return csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots, f_st
     
 if __name__ == '__main__':
     # Tested with inputs: ./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5 300  (for two users)
@@ -643,13 +655,13 @@ if __name__ == '__main__':
         samples = hdf5.samples
       
         if frame_to_plot is not None and ref_ant is not None:
-            csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots = hdf5.verify_hdf5(frame_to_plot, ref_ant)
+            csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots, f_st = hdf5.verify_hdf5(frame_to_plot, ref_ant)
             
         elif frame_to_plot is not None and ref_ant is None:
-            csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots = hdf5.verify_hdf5(frame_to_plot)
+            csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots, f_st = hdf5.verify_hdf5(frame_to_plot)
             ref_ant = 0
         else:
-            csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots = hdf5.verify_hdf5()
+            csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots, f_st = hdf5.verify_hdf5()
             frame_to_plot = 0
             
     
@@ -673,7 +685,7 @@ if __name__ == '__main__':
             axes[n_c, n_u].set_xlabel('Samples')
             axes[n_c, n_u].set_title('Cell {} UE {}'.format(n_c, n_u))
             axes[n_c, n_u].grid(True)
-    plt.show()
+    #plt.show()
     
     # plot frame_map:
     n_cell = frame_map.shape[1]
@@ -718,9 +730,10 @@ if __name__ == '__main__':
             
     cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')       
     cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])  
-    plt.show()
+    #plt.show()
     
     #plot F starts for each antenna
+    sub_fr_strt = f_st
     n_frame = sub_fr_strt.shape[0]      # no. of captured frames
     n_cell = sub_fr_strt.shape[1]       # no. of cells
     n_ue = sub_fr_strt.shape[2]         # no. of UEs 
