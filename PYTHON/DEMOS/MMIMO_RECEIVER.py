@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
- mMIMO_receiver.py
+ MMIMO_RECEIVER.py
 
  Simple massive MIMO receiver. Tested only for two clients but code can be easily expanded to more clients.
  
@@ -40,23 +40,21 @@
 #                Include                #
 #########################################
 import sys
+sys.path.append('../IrisUtils/')
+sys.path.append('../IrisUtils/data_in/')
+
 import numpy as np
-import h5py
 import threading
 import signal
-import random
 from optparse import OptionParser
-import matplotlib
 import matplotlib.pyplot as plt
-from matplotlib import animation
-from matplotlib import gridspec
 from hdf_dump import *
 # from radio_lib import *
 from find_lts import *
 from generate_sequence import *
 from ofdmtxrx import *
-from plotter import *
-import scipy.io as sio
+from ofdm_plotter import *
+
 
 #########################################
 #              Global Vars              #
@@ -543,9 +541,8 @@ def rx_stats(tx_syms, rx_data, cfo_est, lts_evm, metadata, n_ofdm_syms, ofdm_obj
         sym_err_rate[idxCl] = 100 * sum(sym_error)/len(sym_error)
         cfo[idxCl, :] = cfo_est[idxCl, :] * np.squeeze(rate)
 
-    #print("======= STATS ========")
-    #print("Error Rate: {}".format(sym_err_rate))
-    #print("CFO Estimate: {}".format(cfo))
+    print("======= STATS ========")
+    print("Error Rate: {}".format(sym_err_rate))
 
 
 def rx_app(filename, user_params, this_plotter):
@@ -593,9 +590,9 @@ def rx_app(filename, user_params, this_plotter):
     ofdm_pilot = metadata['OFDM_PILOT_TIME']
     if not cl_present:
         cl_frame_sched = metadata['BS_FRAME_SCHED']
-        #print('ERROR: Script needs client metadata. Sounder must be run in joint mode (BS and client together)')
+        # print('ERROR: Script needs client metadata. Sounder must be run in joint mode (BS and client together)')
         print('WARNING: Client(s) metadata is not available. Demodulation will not be available.')
-        #sys.exit()
+        # sys.exit()
     else:
         cl_frame_sched = metadata['CL_FRAME_SCHED']
         ofdm_data = metadata['OFDM_DATA']   # Freq domain TX data (Does not contain cyclic prefix or prefix/postfix)
@@ -611,16 +608,16 @@ def rx_app(filename, user_params, this_plotter):
     assert pilot_dim[4] == 2 * sym_len  # No complex values in HDF5, x2 to account for IQ
 
     # Check if there's uplink data present
-    #if len(ofdm_data) == 0:
+    # if len(ofdm_data) == 0:
     #    print("No uplink data present in the log file. Exiting now...")
-        #sys.exit(0)
+    #    sys.exit(0)
 
     ###########################
     #     Build TX signals    #
     ###########################
     # Process TX freq domain samples (from HDF5). These are the samples generated for transmission and stored in file,
     # not what has been received
-    num_samps_freq_dom = fft_size*sym_len_no_pad//(fft_size+cp_len)#len(ofdm_data[0])
+    num_samps_freq_dom = fft_size*sym_len_no_pad//(fft_size+cp_len) #len(ofdm_data[0])
     ofdm_size = fft_size                        # OFDM_data does not contain cyclic prefix
     n_ofdm_syms = num_samps_freq_dom//ofdm_size
 
@@ -861,12 +858,13 @@ def rx_app(filename, user_params, this_plotter):
                         rx_data.extend(IQ_pilots[cell_plot, clIdx, ant_plot, :])
                     rx_data.extend(IQ[ant_plot, :])
 
-                    # Calculate Statistics
+                    # Calculate Statistics - TODO
                     # rx_stats(tx syms, rx syms, CFO, LTS EVM, )
                     cfo_est_tmp = cfo_est[num_cells - 1, :, :, frameIdx]
                     lts_evm_tmp = lts_evm[num_cells - 1, :, :, frameIdx]
-                    if cl_present:
-                        rx_stats(ofdm_data, rx_data_val, cfo_est_tmp, lts_evm_tmp, metadata, n_ofdm_syms, ofdm_obj, phase_error)
+                    # if cl_present:
+                    #    rx_stats(ofdm_data, rx_data_val, cfo_est_tmp, lts_evm_tmp,
+                    #             metadata, n_ofdm_syms, ofdm_obj, phase_error)
 
                     debug = False
                     if frameIdx > 60 and debug:
@@ -960,7 +958,7 @@ if __name__ == '__main__':
 
     parser = OptionParser()
     # Params
-    parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-5-19-9-1-18_1x8x1_BEST.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
+    parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-5-19-9-1-18_1x8x1_BEST.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
     parser.add_option("--mode",       type="string",       dest="mode",       default="REPLAY", help="Options: REPLAY/AWGN/OTA [default: %default]")
     parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
     parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=False,  help="Apply CFO correction [default: %default]")
@@ -984,7 +982,7 @@ if __name__ == '__main__':
 
     # Rx Application. Matplotlib GUI needs to run on main thread.
     num_cl_plot = options.num_cl_plot     # number of clients to plot
-    this_plotter = Plotter(num_cl_plot)
+    this_plotter = OFDMplotter(num_cl_plot)
 
     # rx_app(filename, user_params, this_plotter)
     # RX app thread

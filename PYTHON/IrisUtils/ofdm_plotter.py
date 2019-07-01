@@ -1,5 +1,5 @@
 """
- plotter.py
+ ofdm_plotter.py
 
     Hardcoded for two clients. Need to parameterize for variable
     number of clients
@@ -22,7 +22,7 @@ from matplotlib import animation
 plt.style.use('ggplot')
 
 
-class Plotter:
+class OFDMplotter:
 
     def __init__(self, num_cl):
         signal.signal(signal.SIGTERM, self.signal_handler)
