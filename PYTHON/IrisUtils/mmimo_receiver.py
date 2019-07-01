@@ -577,9 +577,6 @@ def rx_app(filename, user_params, this_plotter):
     #        Attributes       #
     ###########################
     cl_present = metadata['CLIENT_PRESENT']
-    if not cl_present:
-        print('ERROR: Script needs client metadata. Sounder must be run in joint mode (BS and client together)')
-        sys.exit()
     prefix_len = metadata['PREFIX_LEN']
     postfix_len = metadata['POSTFIX_LEN']
     pilot_type = metadata['PILOT_SEQ']
@@ -591,11 +588,19 @@ def rx_app(filename, user_params, this_plotter):
     sym_len = metadata['SYM_LEN']
     sym_len_no_pad = metadata['SYM_LEN_NO_PAD']
     fft_size = metadata['FFT_SIZE']
+    cp_len = metadata['CP_LEN']
     ofdm_data_sc = metadata['OFDM_DATA_SC']
     ofdm_pilot = metadata['OFDM_PILOT_TIME']
-    cl_frame_sched = metadata['CL_FRAME_SCHED']
-    ofdm_data = metadata['OFDM_DATA']   # Freq domain TX data (Does not contain cyclic prefix or prefix/postfix)
-    ofdm_data_time = metadata['OFDM_DATA_TIME']
+    if not cl_present:
+        cl_frame_sched = metadata['BS_FRAME_SCHED']
+        #print('ERROR: Script needs client metadata. Sounder must be run in joint mode (BS and client together)')
+        print('WARNING: Client(s) metadata is not available. Demodulation will not be available.')
+        #sys.exit()
+    else:
+        cl_frame_sched = metadata['CL_FRAME_SCHED']
+        ofdm_data = metadata['OFDM_DATA']   # Freq domain TX data (Does not contain cyclic prefix or prefix/postfix)
+        ofdm_data_time = metadata['OFDM_DATA_TIME']
+
     pilot_dim = pilot_samples.shape
     num_frames = pilot_dim[0]
 
@@ -606,16 +611,16 @@ def rx_app(filename, user_params, this_plotter):
     assert pilot_dim[4] == 2 * sym_len  # No complex values in HDF5, x2 to account for IQ
 
     # Check if there's uplink data present
-    if len(ofdm_data) == 0:
-        print("No uplink data present in the log file. Exiting now...")
-        sys.exit(0)
+    #if len(ofdm_data) == 0:
+    #    print("No uplink data present in the log file. Exiting now...")
+        #sys.exit(0)
 
     ###########################
     #     Build TX signals    #
     ###########################
     # Process TX freq domain samples (from HDF5). These are the samples generated for transmission and stored in file,
     # not what has been received
-    num_samps_freq_dom = len(ofdm_data[0])
+    num_samps_freq_dom = fft_size*sym_len_no_pad//(fft_size+cp_len)#len(ofdm_data[0])
     ofdm_size = fft_size                        # OFDM_data does not contain cyclic prefix
     n_ofdm_syms = num_samps_freq_dom//ofdm_size
 
@@ -628,23 +633,26 @@ def rx_app(filename, user_params, this_plotter):
     # One pilot per client + overlapping data + add a prefix so that TX and RX plots are the same (for showing purposes)
     tx_sig = np.zeros((num_cl, (num_cl*sym_len + num_samps_freq_dom + prefix_len)), dtype=complex)
 
-    for clIdx in range(num_cl):
-        data_freq = ofdm_data[clIdx]
-        ofdm_data_mat = np.reshape(np.squeeze(data_freq), (ofdm_size, n_ofdm_syms), order='F')
-        ofdm_data_mat_time = np.fft.ifft(ofdm_data_mat, axis=0)
-        ofdm_data_vec_time = np.reshape(ofdm_data_mat_time, (1, ofdm_data_mat_time.shape[0]*ofdm_data_mat_time.shape[1]), order='F')
-        tx_sig[clIdx, (clIdx*len(full_pilot)):(clIdx+1)*len(full_pilot)] = full_pilot
-        tx_sig[clIdx, num_cl*len(full_pilot)::] = np.concatenate((np.zeros(prefix_len), np.squeeze(ofdm_data_vec_time)))
+    if cl_present:
+        for clIdx in range(num_cl):
+            data_freq = ofdm_data[clIdx]
+            ofdm_data_mat = np.reshape(np.squeeze(data_freq), (ofdm_size, n_ofdm_syms), order='F')
+            ofdm_data_mat_time = np.fft.ifft(ofdm_data_mat, axis=0)
+            ofdm_data_vec_time = np.reshape(ofdm_data_mat_time, (1, ofdm_data_mat_time.shape[0]*ofdm_data_mat_time.shape[1]), order='F')
+            tx_sig[clIdx, (clIdx*len(full_pilot)):(clIdx+1)*len(full_pilot)] = full_pilot
+            tx_sig[clIdx, num_cl*len(full_pilot)::] = np.concatenate((np.zeros(prefix_len), np.squeeze(ofdm_data_vec_time)))
 
     # Remove pilots
     ofdm_tx_syms = np.empty((num_cl, len(ofdm_data_sc)*n_ofdm_syms)).astype(complex)
-    for clIdx in range(num_cl):
-        tmp = np.reshape(ofdm_data[clIdx], (ofdm_size, n_ofdm_syms), order='F')
-        tmp = tmp[ofdm_data_sc, :]
-        ofdm_tx_syms[clIdx, :] = np.reshape(tmp, (1, len(ofdm_data_sc)*n_ofdm_syms), order='F')
+    if cl_present:
+        for clIdx in range(num_cl):
+            tmp = np.reshape(ofdm_data[clIdx], (ofdm_size, n_ofdm_syms), order='F')
+            tmp = tmp[ofdm_data_sc, :]
+            ofdm_tx_syms[clIdx, :] = np.reshape(tmp, (1, len(ofdm_data_sc)*n_ofdm_syms), order='F')
 
     # Number of uplink data symbols. Assume all clients are transmitting the same number of data symbols
-    if num_cl > 1:
+    #if num_cl > 1:
+    if type(cl_frame_sched) == list:
         this_cl_sched = cl_frame_sched[0]  # Client index 0
     else:
         this_cl_sched = str(cl_frame_sched)
@@ -857,7 +865,8 @@ def rx_app(filename, user_params, this_plotter):
                     # rx_stats(tx syms, rx syms, CFO, LTS EVM, )
                     cfo_est_tmp = cfo_est[num_cells - 1, :, :, frameIdx]
                     lts_evm_tmp = lts_evm[num_cells - 1, :, :, frameIdx]
-                    rx_stats(ofdm_data, rx_data_val, cfo_est_tmp, lts_evm_tmp, metadata, n_ofdm_syms, ofdm_obj, phase_error)
+                    if cl_present:
+                        rx_stats(ofdm_data, rx_data_val, cfo_est_tmp, lts_evm_tmp, metadata, n_ofdm_syms, ofdm_obj, phase_error)
 
                     debug = False
                     if frameIdx > 60 and debug:
