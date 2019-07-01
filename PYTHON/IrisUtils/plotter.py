@@ -187,7 +187,7 @@ class Plotter:
         ax.set_ylabel('Magnitude')
         ax.set_xlabel('Sample index')
         self.line_tx_sig, = ax.plot([], [], color='r', label='RFA', lw=2)
-        ax.set_ylim(-0.70, 0.70)
+        ax.set_ylim(-1.00, 1.00)
         ax.set_xlim(0, self.FIG_LEN)
         ax.legend(fontsize=10)
 
@@ -198,7 +198,7 @@ class Plotter:
         ax.set_ylabel('Magnitude')
         ax.set_xlabel('Sample index')
         self.line_tx_sig2, = ax.plot([], [], color='b', label='RFA', lw=2)
-        ax.set_ylim(-0.70, 0.70)
+        ax.set_ylim(-1.00, 1.00)
         ax.set_xlim(0, self.FIG_LEN)
         ax.legend(fontsize=10)
 

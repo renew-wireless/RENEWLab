@@ -6,8 +6,8 @@
  
  -Three modes: simulation and real-time
      a) Sim (AWGN):      Simulation mode/Debug mode. Take time domain TX samples from specified
-                         HDF5 file and pass them through an AWGN channel. Currently it only
-                         supports 2 clients and a variable number of BS antennas.
+                         HDF5 file and pass them through an AWGN channel. Tested for up to 2 clients and a
+                         variable number of BS antennas.
      a) Replay (REPLAY): Read HDF5 file and run mMIMO receiver on the
                          collected data
      b) Real-Time (OTA): NOT SUPPORTED YET. Continuously read RX buffer as UEs are transmitting
@@ -21,14 +21,14 @@
      f) Demodulate data
      g) Plotter
 
-
     Currently only supports one-cell system (one Base Station).
-    NOTE: Currently, script only runs when both the Base Station and Client
-          are run together. E.g., using tddconfig.json
+    NOTE: Because of the HDF5 file formatting, this script only runs
+          when both the Base Station and Client are run together. E.g., using tddconfig.json
 
     Usage example: Run sounder script ("./CC/Sounder/sounder ./CC/Sounder/files/tddconfig.json")
     This will run both the Base station and clients from same machine and will generate a log
-    file inside "/CC/Sounder/logs". Use file as input to this script: "python3 mmimo_receiver.py <path/filename>"
+    file inside "/CC/Sounder/logs".
+    Use file as input to this script: "python3 mmimo_receiver.py --file <path/filename>"
 
 ---------------------------------------------------------------------
  Copyright © 2018-2019. Rice University.
@@ -119,7 +119,7 @@ def read_rx_samples(rx_mode, filename):
         
     else:
         # If OTA
-        # FIXME - TODO - retrieve config data (metadata) and actual samples
+        # TODO - retrieve config data (metadata) and actual samples
         raise Exception("Realtime (OTA) not yet supported")
         radLib = radioLib()
         samples = radLib.data
@@ -264,7 +264,7 @@ def beamforming_weights(chan_est, user_params):
         # Zero Forcing
         # inv(H^H*H)*H^H*y
         for scIdx in range(num_sc):
-            H = H_tmp[:, :, scIdx] # * 0.25  # FIXME - REMOVE 0.25
+            H = H_tmp[:, :, scIdx]
             HH = np.matrix.getH(H)
             W = np.matmul(HH, np.linalg.pinv(np.matmul(H, HH)))
             # W = (np.linalg.pinv(HH.dot(H))).dot(HH)
@@ -374,21 +374,19 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est, lts_start)
     x = np.zeros((num_cl, num_sc, n_ofdm_syms), dtype=complex)
     for symIdx in range(n_ofdm_syms):
         for scIdx in range(num_sc):
-            this_w = np.squeeze(bf_weights[:, [0,1,2,3,4,5,6,7], scIdx])  # * 10 # FIXME - REMOVE "10" factor, I just added to visualize and debug - also remove [3, 5, 7]. these are the "good" antennas for this run
-            y = np.squeeze(rxSig_freq[[0,1,2,3,4,5,6,7], scIdx, symIdx])
+            this_w = np.squeeze(bf_weights[:, :, scIdx])
+            y = np.squeeze(rxSig_freq[:, scIdx, symIdx])
             x[:, scIdx, symIdx] = np.dot(this_w, y)  # np.transpose(np.matmul(this_w, y))
 
-
-    ## FIXME - REMOVE
-    if 0:
+    # Single antenna equalization
+    debug2 = 0
+    if debug2:
         # Equalizer
         x = np.zeros((num_cl, num_sc, n_ofdm_syms), dtype=complex)
         chan_est_tmp = np.squeeze(chan_est)
         for symIdx in range(n_ofdm_syms):
-            antIdx = 6  # 6 is best
+            antIdx = 2  # 6 is best
             x[0, :, symIdx] = rxSig_freq[antIdx, :, symIdx] / chan_est_tmp[antIdx, :]
-    ## END FIXME REMOVE
-
 
     streams = x
     return streams
@@ -680,13 +678,13 @@ def rx_app(filename, user_params, this_plotter):
 
                 if num_cl == 1:
                     tx_data_sim_cl1 = np.concatenate([full_pilot, np.squeeze(ofdm_data_time[0])])
-                    tx_data_sim_cl1 = tx_data_sim_cl1 / max(abs(tx_data_sim_cl1))
+                    # tx_data_sim_cl1 = tx_data_sim_cl1 / max(abs(tx_data_sim_cl1))  # remove if already done in sounder
                     tx_data_sim_cl2 = 0 * tx_data_sim_cl1
                 elif num_cl == 2:
                     tx_data_sim_cl1 = np.concatenate([full_pilot, np.zeros(len(full_pilot)), np.squeeze(ofdm_data_time[0])])
-                    tx_data_sim_cl1 = tx_data_sim_cl1 / max(abs(tx_data_sim_cl1))
+                    # tx_data_sim_cl1 = tx_data_sim_cl1 / max(abs(tx_data_sim_cl1))  # remove if already done in sounder
                     tx_data_sim_cl2 = np.concatenate([np.zeros(len(full_pilot)), full_pilot, np.squeeze(ofdm_data_time[1])])
-                    tx_data_sim_cl2 = tx_data_sim_cl2/max(abs(tx_data_sim_cl2))
+                    # tx_data_sim_cl2 = tx_data_sim_cl2/max(abs(tx_data_sim_cl2))    # remove if already done in sounder
 
                 # Merge signals (adding data of both)
                 mult1 = 0.5
@@ -700,7 +698,7 @@ def rx_app(filename, user_params, this_plotter):
                 num_samps_full_frame = len(tx_data_sim[0, :])
                 ofdm_rx_syms_awgn = np.zeros((num_bs_ant, num_samps_full_frame)).astype(complex)
                 for antIdx in range(num_bs_ant):
-                    noise = 0.01 * (np.random.randn(num_samps_full_frame) + np.random.randn(num_samps_full_frame) * 1j)
+                    noise = 0.001 * (np.random.randn(num_samps_full_frame) + np.random.randn(num_samps_full_frame) * 1j)
                     ofdm_rx_syms_awgn[antIdx, :] = tx_data_sim[antIdx, :] + noise
                     # Remove DC
                     ofdm_rx_syms_awgn[antIdx, :] -= np.mean(ofdm_rx_syms_awgn[antIdx, :])
@@ -789,15 +787,6 @@ def rx_app(filename, user_params, this_plotter):
 
                         IQ_pilots[num_cells - 1, clIdx, antIdx, :] = IQ  # For 'plotter' use
 
-                        # FIXME start - REMOVE ME
-                        if clIdx == 0 and frameIdx == 61 and antIdx == 6:
-                            IQpilot_bad = IQ
-                        if clIdx == 0 and frameIdx == 62 and antIdx == 6:
-                            IQpilot_bad2 = IQ
-                        if clIdx == 0 and frameIdx == 64 and antIdx == 6:
-                            IQpilot_good = IQ
-                        # FIXME end - REMOVE ME
-
                         # Find potential pilots. tx_pilot is a "struct" with dims:  [lts_time seq, lts_freq seq]
                         # No need to flip for OTA captures
                         this_pilot, tx_pilot, lts_corr_tmp, pilot_thresh[clIdx, antIdx], best_pk, lts_start[clIdx, antIdx] = pilot_finder(IQ, pilot_type, flip=False)
@@ -871,20 +860,7 @@ def rx_app(filename, user_params, this_plotter):
                     rx_stats(ofdm_data, rx_data_val, cfo_est_tmp, lts_evm_tmp, metadata, n_ofdm_syms, ofdm_obj, phase_error)
 
                     debug = False
-                    matlab_debug = False
                     if frameIdx > 60 and debug:
-                        if matlab_debug:
-                            IQall = []
-                            if frameIdx == 61:
-                                IQall = np.concatenate([IQpilot_bad, IQ[6, :]])
-                                sio.savemat('rx_iq_bad.mat', {'iq': IQall})
-                            if frameIdx == 62:
-                                IQall = np.concatenate([IQpilot_bad2, IQ[6, :]])
-                                sio.savemat('rx_iq_bad2.mat', {'iq': IQall})
-                            if frameIdx == 64:
-                                IQall = np.concatenate([IQpilot_good, IQ[6, :]])
-                                sio.savemat('rx_iq_good.mat', {'iq': IQall})
-
                         print("Frame: {} \t Sample Offset: {}".format(frameIdx, lts_start))
                         fig = plt.figure(100)
 
@@ -975,11 +951,10 @@ if __name__ == '__main__':
 
     parser = OptionParser()
     # Params
-    parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-5-18-16-35-55_1x8x1_NOTNORM.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")  # TESTED ONE CLIENT
-    #parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-5-19-9-1-18_1x8x1_BEST.hdf5", help=" TEST!! [default: %default]") # FIXME BEST
+    parser.add_option("--file",       type="string",       dest="file",       default="./data_in/Argos-2019-5-19-9-1-18_1x8x1_BEST.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
     parser.add_option("--mode",       type="string",       dest="mode",       default="REPLAY", help="Options: REPLAY/AWGN/OTA [default: %default]")
     parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
-    parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=True,  help="Apply CFO correction [default: %default]")
+    parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=False,  help="Apply CFO correction [default: %default]")
     parser.add_option("--sfoCorr",    action="store_true", dest="sfo_corr",   default=True,  help="Apply SFO correction [default: %default]")
     parser.add_option("--phaseCorr",  action="store_true", dest="phase_corr", default=True,  help="Apply phase correction [default: %default]")
     parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=5,     help="FFT Offset:# CP samples for FFT [default: %default]")
