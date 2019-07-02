@@ -56,7 +56,8 @@ def find_lts(iq, thresh=0.8, us=1, cp=32, flip=False):
 	# sio.savemat('rx_iq_pilot.mat', {'iq_pilot': iq})
 
 	if not second_peak_idx.any():
-		print("NO LTS FOUND!")
+		if debug:
+			print("NO LTS FOUND!")
 		best_pk = []
 	else:
 		best_pk = lts_pks[second_peak_idx[0]]  # Grab only the first packet we have received

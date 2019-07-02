@@ -267,6 +267,12 @@ class ofdmTxRx:
         """
         # Get LTS
         lts = rxSignal[lts_start: lts_start + lts_syms_len]
+
+        # Verify number of samples
+        if len(lts) != 160:
+            coarse_cfo_est = 0
+            return coarse_cfo_est
+
         lts_1 = lts[-64 + -fft_offset + np.array(range(97, 161))]
         lts_2 = lts[-fft_offset + np.array(range(97, 161))]
         # Compute CFO
