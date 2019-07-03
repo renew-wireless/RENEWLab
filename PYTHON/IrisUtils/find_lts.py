@@ -46,7 +46,10 @@ def find_lts(iq, thresh=0.8, us=1, cp=32, flip=False):
 		lts_flip = lts_tmp
 
 	lts_flip_conj = np.conjugate(lts_flip)
-	lts_corr = np.abs(np.convolve(lts_flip_conj, iq/abs(iq))) 	# Equivalent to Matlab's sign function (X/abs(X))
+	sign_fct = iq/abs(iq)									  	# Equivalent to Matlab's sign function (X/abs(X))
+	sign_fct = np.nan_to_num(sign_fct, copy=True)				# Replace NaN values
+	lts_corr = np.abs(np.convolve(lts_flip_conj, sign_fct))
+
 	lts_pks = np.where(lts_corr > (thresh * np.max(lts_corr)))
 	lts_pks = np.squeeze(lts_pks)
 	x_vec, y_vec = np.meshgrid(lts_pks, lts_pks)
