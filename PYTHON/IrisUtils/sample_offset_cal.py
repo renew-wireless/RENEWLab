@@ -3,8 +3,7 @@
     sample_offset_cal_prototype.py
 
     ** NOTE **
-    This script is used to test sample offset and calibration. Not a Demo script
-    so don't expect it to work as is
+    This script is used to test sample offset and calibration.
 
     One-time calibration procedure to align samples from all radios in the base station
 
@@ -52,7 +51,7 @@ FPGA_IRIS30_DECR_TIME = (1 << 3)
 #########################################
 #              Functions                #
 #########################################
-def txrx_app(serials, ref_node_idx, hub_serial, rate, freq, txgain, rxgain, numSamps, prefix_pad, postfix_pad):
+def txrx_app(serials, ref_node_idx, hub_serial, rate, freq, txgain, rxgain, numSamps, prefix_pad, postfix_pad, debug):
     """
     Function to configure Iris boards, generate pilot to be transmitted,
     write pilots to RAM, set up schedule (frame), transmit, and receive.
@@ -136,19 +135,15 @@ def txrx_app(serials, ref_node_idx, hub_serial, rate, freq, txgain, rxgain, numS
     [sdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(pilot2, order='IQ').tolist()) for sdr in (ssdr + [msdr])]
 
     # Set Schedule
-    ref_sched = "PGRGRG"
-    ref2_sched = "RGPGRG"
-    other_sched = "RGRGPG"
+    ref_sched = "PG"
+    other_sched = "RG"
     frame_len = len(ref_sched)                  # Number of subframes (e.g., 3 if PGP, 4 if PGPG)
     num_rx_pilots = other_sched.count('R')      # Two R's for "other" base station radios
     print("Ref node schedule %s " % ref_sched)
-    print("Ref node2 schedule %s " % ref2_sched)
-    print("Other node schedule %s " % other_sched)
+    print("Other nodes schedule %s " % other_sched)
     # Send one frame (set max_frame to 1)
-    ref_conf = {"tdd_enabled": True, "trigger_out": False, "symbol_size": symSamp, "frames": [ref_sched],
-                "max_frame": 1}
-    ref2_conf = {"tdd_enabled": True, "trigger_out": False, "symbol_size": symSamp, "frames": [ref2_sched],
-                "max_frame": 1}
+    ref_conf = {"tdd_enabled": True, "trigger_out": False, "dual_pilot": False, "symbol_size": symSamp,
+                "frames": [ref_sched], "max_frame": 1}
     other_conf = {"tdd_enabled": True, "trigger_out": False, "dual_pilot": False, "symbol_size": symSamp,
                   "frames": [other_sched], "max_frame": 1}
 
@@ -159,8 +154,7 @@ def txrx_app(serials, ref_node_idx, hub_serial, rate, freq, txgain, rxgain, numS
 
     # Write TDD settings (schedule and parameters)
     msdr.writeSetting("TDD_CONFIG", json.dumps(ref_conf))
-    ssdr[0].writeSetting("TDD_CONFIG", json.dumps(ref2_conf))
-    for i, sdr in enumerate(ssdr[1::]):
+    for i, sdr in enumerate(ssdr):
         sdr.writeSetting("TDD_CONFIG", json.dumps(other_conf))
 
     # Begin pilot+calibration process: Send multiple pilots and pick the correlation index that occurs more frequently
@@ -168,16 +162,19 @@ def txrx_app(serials, ref_node_idx, hub_serial, rate, freq, txgain, rxgain, numS
     num_ver_tx = 100
     pass_thresh = 0.8*num_cal_tx
     # Aggregate over iterations (for calibration and for verification)
-    waveRxA_agg = np.zeros((num_cal_tx, num_rx_pilots*len(serials_all), symSamp))
-    waveRxB_agg = np.zeros((num_cal_tx, num_rx_pilots*len(serials_all), symSamp))
-    waveRxA_ver = np.zeros((num_ver_tx, num_rx_pilots*len(serials_all), symSamp))
-    waveRxB_ver = np.zeros((num_ver_tx, num_rx_pilots*len(serials_all), symSamp))
+    waveRxA_agg = np.zeros((num_cal_tx, num_rx_pilots*(len(serials_all)-1), symSamp))
+    waveRxB_agg = np.zeros((num_cal_tx, num_rx_pilots*(len(serials_all)-1), symSamp))
+    waveRxA_ver = np.zeros((num_ver_tx, num_rx_pilots*(len(serials_all)-1), symSamp))
+    waveRxB_ver = np.zeros((num_ver_tx, num_rx_pilots*(len(serials_all)-1), symSamp))
 
     for idx in range(num_cal_tx+num_ver_tx):
         # Initialize RX arrays
-        # Reference + other nodes. Assume num_rx_pilots entries for each node, regardless of whether we use them or not
-        waveRxA = [np.array([0] * symSamp, np.uint32) for i in range(num_rx_pilots) for j in range(len(ssdr) + 1)]
-        waveRxB = [np.array([0] * symSamp, np.uint32) for i in range(num_rx_pilots) for j in range(len(ssdr) + 1)]
+        # All nodes except ref. Assume num_rx_pilots entries for each node, regardless of whether we use them or not
+        waveRxA = [np.array([0] * symSamp, np.uint32) for i in range(num_rx_pilots) for j in range(len(ssdr))]
+        waveRxB = [np.array([0] * symSamp, np.uint32) for i in range(num_rx_pilots) for j in range(len(ssdr))]
+
+        dummyA = np.array([0] * symSamp, np.uint32)
+        dummyB = np.array([0] * symSamp, np.uint32)
 
         # Activate streams
         flags = 0
@@ -189,6 +186,15 @@ def txrx_app(serials, ref_node_idx, hub_serial, rate, freq, txgain, rxgain, numS
             if r2 < 0:
                 print("Problem activating stream #2")
 
+        # Drain buffers
+        valid = 0
+        for i, sdr in enumerate(ssdr):
+            while valid is not -1:
+                r0 = sdr.readStream(s_rxStream[i], [dummyA, dummyB], symSamp)
+                valid = r0.ret
+                if debug:
+                    print("draining buffers: ({}). Board: {}".format(r0, i))
+
         # Generate trigger
         if hub_serial != "":
             hub.writeSetting("TRIGGER_GEN", "")
@@ -196,35 +202,24 @@ def txrx_app(serials, ref_node_idx, hub_serial, rate, freq, txgain, rxgain, numS
             msdr.writeSetting("TRIGGER_GEN", "")
 
         # Read Streams
-        # B0 <-- B1
+        # B0 <-- B1 (NOT REALLY NEEDED WITH THE CURRENT SCHEDULE)
+        # curr_rx_idx = 0
+        # r1 = msdr.readStream(m_rxStream, [waveRxA[curr_rx_idx], waveRxB[curr_rx_idx]], symSamp)
+        # print("reading stream ref antenna: ({})".format(r1))
+
         curr_rx_idx = 0
-        r1 = msdr.readStream(m_rxStream, [waveRxA[curr_rx_idx], waveRxB[curr_rx_idx]], symSamp)
-        print("reading stream ref antenna: ({})".format(r1))
-        # B0 <-- B2
-        curr_rx_idx = 1
-        r1 = msdr.readStream(m_rxStream, [waveRxA[curr_rx_idx], waveRxB[curr_rx_idx]], symSamp)
-        print("reading stream ref antenna: ({})".format(r1))
-        # B1 <-- B0
-        curr_rx_idx = 2
-        r2 = ssdr[0].readStream(s_rxStream[0], [waveRxA[curr_rx_idx], waveRxB[curr_rx_idx]], symSamp)
-        print("reading stream from second ref antenna: ({})".format(r2))
-        # B1 <-- B2
-        curr_rx_idx = 3
-        r2 = ssdr[0].readStream(s_rxStream[0], [waveRxA[curr_rx_idx], waveRxB[curr_rx_idx]], symSamp)
-        print("reading stream from second ref antenna: ({})".format(r2))
-        # B2 <-- B0
-        # B2 <-- B1
-        # ...
-        for i, sdr in enumerate(ssdr[1::]):
+        for i, sdr in enumerate(ssdr):
             for j in range(num_rx_pilots):
+                r1 = sdr.readStream(s_rxStream[i], [waveRxA[curr_rx_idx], waveRxB[curr_rx_idx]], symSamp)
                 curr_rx_idx = curr_rx_idx + 1
-                r3 = sdr.readStream(s_rxStream[i+1], [waveRxA[curr_rx_idx], waveRxB[curr_rx_idx]], symSamp)
-                print("reading stream other nodes: ({})".format(r3))
+                if debug:
+                    print("reading stream non-reference nodes: ({})".format(r1))
 
         # Timestamps
-        print("Timestamps:")
-        for sdr in ([msdr] + ssdr):
-            print(hex(SoapySDR.timeNsToTicks(sdr.getHardwareTime(""), rate)))
+        if debug:
+            print("Timestamps:")
+            for sdr in ([msdr] + ssdr):
+                print(hex(SoapySDR.timeNsToTicks(sdr.getHardwareTime(""), rate)))
 
         waveRxA = uint32tocfloat(waveRxA)
         waveRxB = uint32tocfloat(waveRxB)
@@ -235,43 +230,27 @@ def txrx_app(serials, ref_node_idx, hub_serial, rate, freq, txgain, rxgain, numS
 
             if idx == num_cal_tx-1:
                 # Find correlation indexes
-                idx_mat_tmp = find_corr_idx(waveRxA_agg, waveRxB_agg)
-                idx_mat_cal = idx_mat_tmp
-                # indexes = [0, 2] + list(range(4, idx_mat_tmp.shape[1]))     # FIXME - back in
-                # idx_mat = idx_mat_tmp[:, indexes]                           # FIXME - back in
-                idx_mat = idx_mat_tmp                                         # FIXME - out
+                idx_mat_cal = find_corr_idx(waveRxA_agg, waveRxB_agg)
 
-                # Find most frequent occurrence (most common correlation index) for two RX boards
-                #                  [     0       1       2       3       4           5           6           7      ...]
-                # idx_mat columns: [B0_rxPilot, [], B1_rxPilot, [], B2_rxPilot, B2_rxPilot, B3_rxPilot, B3_rxPilot, ...]
-                corr_idx_mat_re = np.zeros((num_rx_pilots+1, len(serials_all)))  # FIXME - remove +1
-                freq_mat_re = np.zeros((num_rx_pilots+1, len(serials_all)))        # FIXME - remove +1
-                most_freq = np.zeros(idx_mat.shape[1])
-                num_occurr = np.zeros(idx_mat.shape[1])
-                corr_idx_mat_re[:] = np.nan
-                freq_mat_re[:] = np.nan
-                el0 = list(range(2*(len(serials_all)-1+1)))   # FIXME - remove +1 # list column elements in one-dimensional structure
-                el1 = list(range(len(serials_all)))         # list column elements in two-dimensional structure
-                for colIdx in range(idx_mat.shape[1]):
-                    occurr_cnt = Counter(idx_mat[:, colIdx])
+                # Find most common value at each board
+                most_freq = np.zeros(idx_mat_cal.shape[1])
+                num_occurr = np.zeros(idx_mat_cal.shape[1])
+                for colIdx in range(idx_mat_cal.shape[1]):
+                    occurr_cnt = Counter(idx_mat_cal[:, colIdx])
                     most_freq[colIdx] = (occurr_cnt.most_common(1))[0][0]
                     num_occurr[colIdx] = (occurr_cnt.most_common(1))[0][1]
 
-                corr_idx_mat_re[0, [1] + el1[2::]] = most_freq[[2, 4]]  # most_freq[[1] + el0[2::2]]  # FIXME swap back
-                corr_idx_mat_re[1, [0] + el1[2::]] = most_freq[[0, 5]]  # most_freq[[0] + el0[3::2]]  # FIXME swap back
-                corr_idx_mat_re[2, [0] + [1]] = most_freq[[1, 3]]  # FIXME- remove line
-                freq_mat_re[0, [1] + el1[2::]] = num_occurr[[2, 4]]  # num_occurr[[1] + el0[2::2]]# FIXME swap back
-                freq_mat_re[1, [0] + el1[2::]] = num_occurr[[0, 5]]  # num_occurr[[0] + el0[3::2]]# FIXME swap back
-                freq_mat_re[2, [0] + [1]] = num_occurr[[1, 3]]  # FIXME- remove line
+                # Re-assign
+                corr_idx_vec_cal = most_freq
 
                 # Check if we didn't meet "PASSING" threshold (i.e., confidence on rx pilots)
                 if any(num_occurr < pass_thresh):
                     cleanup([msdr] + ssdr, frame_len, m_rxStream, s_rxStream)
                     flag = -1
-                    return flag, corr_idx_mat_re
+                    return flag, corr_idx_vec_cal, [], []
 
                 # Perform calibration
-                cal_coeff = calibrate(corr_idx_mat_re, ref_node_idx, ssdr)
+                cal_coeff = calibrate(most_freq, ssdr)
 
         elif idx >= num_cal_tx:
             waveRxA_ver[idx-num_cal_tx, :, :] = waveRxA
@@ -279,86 +258,33 @@ def txrx_app(serials, ref_node_idx, hub_serial, rate, freq, txgain, rxgain, numS
 
             if idx == num_cal_tx + num_ver_tx - 1:
                 # Find correlation indexes
-                idx_mat_tmp = find_corr_idx(waveRxA_ver, waveRxB_ver)
-                # indexes = [0, 2] + list(range(4, idx_mat_tmp.shape[1]))
-                # idx_mat = idx_mat_tmp[:, indexes]
-                idx_mat_ver = idx_mat_tmp
+                idx_mat = find_corr_idx(waveRxA_ver, waveRxB_ver)
+                idx_mat_ver = idx_mat
 
-    # Show results
-    if 1:
-        print("Index Matrix: \n {}".format(corr_idx_mat_re))
-        print("Cal Coefficient: \n {}".format(cal_coeff))
+                # Find most common value at each board
+                most_freq = np.zeros(idx_mat_ver.shape[1])
+                num_occurr = np.zeros(idx_mat_ver.shape[1])
+                for colIdx in range(idx_mat_ver.shape[1]):
+                    occurr_cnt = Counter(idx_mat_ver[:, colIdx])
+                    most_freq[colIdx] = (occurr_cnt.most_common(1))[0][0]
+                    num_occurr[colIdx] = (occurr_cnt.most_common(1))[0][1]
 
-        print("MEGD VER: \n {}".format(idx_mat_ver))
-
-        fig = plt.figure(figsize=(20, 8), dpi=120)
-        fig.subplots_adjust(hspace=.5, top=.85)
-        num_rows = 2
-        num_cols = 3
-
-        ax11 = fig.add_subplot(num_rows, num_cols, 1)
-        ax11.grid(True)
-        ax11.set_title("Calibrate Ref TX")
-        ax11.plot(idx_mat_cal[:, 2], '-.sb', label='Node2', alpha=0.7)
-        ax11.plot(idx_mat_cal[:, 4], '-+r', label='Node3', alpha=0.7)
-        ax11.set_ylim(324, 334)
-        ax11.legend(fontsize=10)
-
-        ax12 = fig.add_subplot(num_rows, num_cols, 2)
-        ax12.grid(True)
-        ax12.set_title("Calibrate Node2 TX")
-        ax12.plot(idx_mat_cal[:, 0], '--*g', label='Node1', alpha=1)
-        ax12.plot(idx_mat_cal[:, 5], '-+r', label='Node3', alpha=0.7)
-        ax12.set_ylim(324, 334)
-        ax12.legend(fontsize=10)
-
-        ax13 = fig.add_subplot(num_rows, num_cols, 3)
-        ax13.grid(True)
-        ax13.set_title("Calibrate Node3 TX")
-        ax13.plot(idx_mat_cal[:, 1], '--*g', label='Node1', alpha=1)
-        ax13.plot(idx_mat_cal[:, 3], '-.sb', label='Node2', alpha=0.5)
-        ax13.set_ylim(324, 334)
-        ax13.legend(fontsize=10)
-
-        ax21 = fig.add_subplot(num_rows, num_cols, 4)
-        ax21.grid(True)
-        ax21.set_title("Verify Ref TX")
-        ax21.plot(idx_mat_ver[:, 2], '-sb', label='Node2', alpha=0.7)
-        ax21.plot(idx_mat_ver[:, 4], '-+r', label='Node3', alpha=0.7)
-        ax21.set_ylim(324, 334)
-        ax21.legend(fontsize=10)
-
-        ax22 = fig.add_subplot(num_rows, num_cols, 5)
-        ax22.grid(True)
-        ax22.set_title("Verify Node2 TX")
-        ax22.plot(idx_mat_ver[:, 0], '--*g', label='Node1', alpha=1)
-        ax22.plot(idx_mat_ver[:, 5], '-+r', label='Node3', alpha=0.7)
-        ax22.set_ylim(324, 334)
-        ax22.legend(fontsize=10)
-
-        ax23 = fig.add_subplot(num_rows, num_cols, 6)
-        ax23.grid(True)
-        ax23.set_title("Verify Node3 TX")
-        ax23.plot(idx_mat_ver[:, 1], '--*g', label='Node1', alpha=1)
-        ax23.plot(idx_mat_ver[:, 3], '-.sb', label='Node2', alpha=0.5)
-        ax23.set_ylim(324, 334)
-        ax23.legend(fontsize=10)
-
-        plt.show()
+                # Re-assign
+                corr_idx_vec_ver = most_freq
 
     cleanup([msdr] + ssdr, frame_len, m_rxStream, s_rxStream)
-    return flag, corr_idx_mat_re
+    return flag, corr_idx_vec_cal, corr_idx_vec_ver, cal_coeff
 
 
 def find_corr_idx(waveRxA, waveRxB):
     """
     Find correlation indexes
     Input:
-        serials - serial number of all base station boards (including reference)
-        waveRxA -
-        waveRxB -
+        waveRxA - vector of IQ samples from RF chain A
+        waveRxB - vector of IQ samples from RF chain B
 
     Output:
+        idx_mat - matrix with correlation indexes at all boards
 
     """
     idx_mat = np.empty((waveRxA.shape[0], waveRxA.shape[1]))   # Matrix: 2x#radios. two pilots
@@ -369,14 +295,14 @@ def find_corr_idx(waveRxA, waveRxB):
     for i in range(waveRxA.shape[0]):
         for j in range(waveRxA.shape[1]):
             # Both channels
-            best_peakA, all_peaksA, corrA = find_lts(waveRxA[i, j], thresh=lts_thresh)
-            best_peakB, all_peaksB, corrB = find_lts(waveRxB[i, j], thresh=lts_thresh)
+            best_peakA, all_peaksA, corrA = find_lts(waveRxA[i, j], thresh=lts_thresh, flip=False)
+            best_peakB, all_peaksB, corrB = find_lts(waveRxB[i, j], thresh=lts_thresh, flip=False)
 
-            #print("Best peak BOARD: {},  A: {}    and B: {}".format(j, best_peakA, best_peakB))
-            #plt.figure(count)
-            #plt.plot(corrA)
-            #plt.plot(corrB)
-            #plt.show()
+            # print("Best peak BOARD: {},  A: {}    and B: {}".format(j, best_peakA, best_peakB))
+            # plt.figure(100)
+            # plt.plot(corrA)
+            # plt.plot(corrB)
+            # plt.show()
 
             # Check if LTS found
             if not best_peakA and not best_peakB:
@@ -389,55 +315,38 @@ def find_corr_idx(waveRxA, waveRxB):
     return idx_mat
 
 
-def calibrate(corr_idx_mat, ref_node, ssdr):
+def calibrate(corr_idx_vec, ssdr):
     """
     Calibrate
 
     Find correction factor between reference board and the rest:
-        1) Find difference between second board and another board
-        2) Find difference between reference board and the rest
-        3) Use combined info to find difference between reference board and second board
 
     Input:
-
+        corr_idx_vec - vector of absolute correlation indexes for all boards
+        ssdr         - sdr objects
 
     Output:
+        cal_coeff    - vector of sample index offsets from reference board
 
     """
-    diff_board2 = corr_idx_mat[0, ref_node+1] - corr_idx_mat[0, 2]
-    diff_all = corr_idx_mat[1, ref_node] - corr_idx_mat[1, :]
-
-    diff_all[1] = diff_all[2] - diff_board2
-    cal_coeff = diff_all
+    cal_coeff = corr_idx_vec[0] - corr_idx_vec
 
     # BY INCREASING ONCE, THE SAMPLE JUMPS (INCREASES) BY ONE IN ALL CASES. E.G., FROM 328 TO 329
     # SIMILARLY BY DECREASING ONCE, THE SAMPLE JUMPS (DECREASES) BY ONE IN ALL CASES. E.G., FROM 326 TO 325
     # ANOTHER OBSERVATION: FIRST ITERATION IS ALWAYS DIFFERENT TO THE REST. THE REST ARE THE SAME THOUGH
-    if 0:
-        for i, sdr in enumerate(ssdr):
-            ioffset = int(cal_coeff[i+1])       # ignore reference node
-            num_iter = abs(ioffset)
-            for j in range(num_iter):
-                if ioffset > 0:
-                    sdr.writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_INCR_TIME)
-                elif ioffset < 0:
-                    sdr.writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_DECR_TIME)
+    # First board transmitted pilots, second board becomes reference for computing offset, adjustment
+    # starts at ssdr[1]
+    for i, sdr in enumerate(ssdr[1::]):
+        ioffset = int(cal_coeff[i+1])       # ignore reference node
+        num_iter = abs(ioffset)
+        for j in range(num_iter):
+            if ioffset > 0:
+                sdr.writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_INCR_TIME)
+            elif ioffset < 0:
+                sdr.writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_DECR_TIME)
 
-        time.sleep(5)
+    time.sleep(1)
 
-    # FIXME - test
-    if 1:
-        target = np.round(np.mean(corr_idx_mat[0, 1::]))
-        print("****** TARGET: {}  *******".format(target))
-        offset = target - corr_idx_mat[0, :]
-        for i, sdr in enumerate(ssdr):
-            ioffset = int(offset[i+1])       # ignore reference node
-            num_iter = abs(ioffset)
-            for j in range(num_iter):
-                if ioffset > 0:
-                    sdr.writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_INCR_TIME)
-                elif ioffset < 0:
-                    sdr.writeRegister("IRIS30", FPGA_IRIS30_TRIGGERS, FPGA_IRIS30_DECR_TIME)
     return cal_coeff
 
 
@@ -459,32 +368,6 @@ def cleanup(sdrs, frame_len, m_rxStream, s_rxStream):
         sdr.closeStream(s_rxStream[i])
 
 
-def plotter(symSamp, waveRxA, waveRxB, serials):
-    """
-    Output: None
-    """
-    # Plotter
-    fig = plt.figure(figsize=(20, 8), dpi=120)
-    fig.subplots_adjust(hspace=.5, top=.85)
-
-    # Plot results from a max of 5 boards
-    nplot = min(5, len(serials))
-
-    ax = []
-    for idx, serial in enumerate(serials):
-        ax.append(fig.add_subplot(nplot, 1, idx+1))
-        ax[idx].grid(True)
-        ax[idx].set_title('Board Serial: %s' % serials[idx])
-        ax[idx].set_ylabel('Signal (units)')
-        ax[idx].set_xlabel('Sample index')
-        ax[idx].plot(range(len(waveRxA[idx])), np.real(waveRxA[idx]), label='ChA I Node 1')
-        ax[idx].plot(range(len(waveRxB[idx])), np.real(waveRxB[idx]), label='ChB I Node 1')
-        ax[idx].set_ylim(-1, 1)
-        ax[idx].set_xlim(0, symSamp)
-        ax[idx].legend(fontsize=10)
-    plt.show()
-
-
 #########################################
 #                  Main                 #
 #########################################
@@ -500,6 +383,7 @@ def main():
     parser.add_option("--numPilotSamps", type="int", dest="nPilotSamps", help="Num actual pilot samples to tx (len of LTS is 160 samps)", default=160)
     parser.add_option("--prefix-pad", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=100)
     parser.add_option("--postfix-pad", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=100)
+    parser.add_option("--debug", action="store_true", dest="debug", help="Debug flag", default=False)
     (options, args) = parser.parse_args()
 
     # Get all serial numbers for Base Station boards
@@ -508,12 +392,17 @@ def main():
         for line in f.read().split():
             serials.append(line)
 
+    # Plotter
+    fig = plt.figure(figsize=(20, 8), dpi=120)
+    fig.subplots_adjust(hspace=.5, top=.85)
+    num_rows = 2
+    num_cols = 1
+
     # Transmit/Receive pilots
-    corr_idx_mat_all = []
     for idxTx in range(1):
         flag = -1
         while flag == -1:
-            flag, corr_idx_mat = txrx_app(
+            flag, corr_cal, corr_ver, cal_coeff = txrx_app(
                 serials=serials.copy(),
                 ref_node_idx=options.ref_node,
                 hub_serial=options.hub_serial,
@@ -524,18 +413,39 @@ def main():
                 numSamps=options.nPilotSamps,
                 prefix_pad=options.prefix_length,
                 postfix_pad=options.postfix_length,
+                debug=options.debug,
             )
             if flag == -1:
-                print("Calibration failed. Re-run!")
-                # sys.exit(0)
+                print("Calibration failed. Automatic Re-run!")
 
-        corr_idx_mat_all.append(corr_idx_mat)
-    print("Final Corr Mat: \n {}".format(corr_idx_mat_all))
+        cal_offset = corr_cal[0] - corr_cal
+        ver_offset = corr_ver[0] - corr_ver
 
-    # Plot results
-    #plotter(symSamp, waveRxA, waveRxB, serials)
+        if any(ver_offset != 0):
+            print("**** CALIBRATION FAILED !!! ****")
+
+        # Show results
+        if 1:
+            print("Cal Matrix: \n {}".format(corr_cal))
+            print("Cal Coefficient: \n {}".format(cal_coeff))
+            print("Ver Matrix: \n {}".format(corr_ver))
+
+            ax1 = fig.add_subplot(num_rows, num_cols, 1)
+            ax1.grid(True)
+            ax1.set_title("Offset Before Calibration (indexAll[0] - indexAll)")
+            ax1.plot(cal_offset, '--o', alpha=0.7)
+            ax1.set_ylim(-5, 5)
+            ax1.legend(fontsize=10)
+
+            ax2 = fig.add_subplot(num_rows, num_cols, 2)
+            ax2.grid(True)
+            ax2.set_title("Offset After Calibration (indexAll[0] - indexAll)")
+            ax2.plot(ver_offset, '--o', alpha=0.7)
+            ax2.set_ylim(-5, 5)
+            ax2.legend(fontsize=10)
+
+            plt.show()
 
 
 if __name__ == '__main__':
     main()
-
