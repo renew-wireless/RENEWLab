@@ -8,8 +8,12 @@ Author: Tristan Mansfield (except for the parts stolen from SISO_TX.py)
 ##############################
 
 import sys
-sys.path.append('/home/argos/Desktop/renew-software-master/PYTHON/IrisUtils/') #TODO: Make these paths relative.
-sys.path.append('/home/argos/Desktop/renew-software-master/PYTHON/IrisUtils/data_in/')
+sys.path.append('../PYTHON/IrisUtils/')
+sys.path.append('../PYTHON/IrisUtils/data_in/')
+
+
+
+import SoapySDR
 import visa
 import numpy as np
 import time
