@@ -180,17 +180,20 @@ def txrx_app(serials, ref_node_idx, hub_serial, rate, freq, txgain, rxgain, numS
         flags = 0
         r1 = msdr.activateStream(m_rxStream, flags, 0)
         if r1 < 0:
-            print("Problem activating stream #1")
+            print("Problem activating RefNode stream (Node0)")
         for i, sdr in enumerate(ssdr):
             r2 = sdr.activateStream(s_rxStream[i], flags, 0)
             if r2 < 0:
-                print("Problem activating stream #2")
+                print("Problem activating stream at RxNode #{}".format(i+1))
 
         # Drain buffers
-        valid = 0
-        for i, sdr in enumerate(ssdr):
+        for i, sdr in enumerate([msdr] + ssdr):
+            valid = 0
             while valid is not -1:
-                r0 = sdr.readStream(s_rxStream[i], [dummyA, dummyB], symSamp)
+                if i == 0:
+                    r0 = sdr.readStream(m_rxStream, [dummyA, dummyB], symSamp)
+                else:
+                    r0 = sdr.readStream(s_rxStream[i-1], [dummyA, dummyB], symSamp)
                 valid = r0.ret
                 if debug:
                     print("draining buffers: ({}). Board: {}".format(r0, i))
@@ -247,7 +250,7 @@ def txrx_app(serials, ref_node_idx, hub_serial, rate, freq, txgain, rxgain, numS
                 if any(num_occurr < pass_thresh):
                     cleanup([msdr] + ssdr, frame_len, m_rxStream, s_rxStream)
                     flag = -1
-                    return flag, corr_idx_vec_cal, [], []
+                    return flag, corr_idx_vec_cal, idx_mat_cal, num_occurr
 
                 # Perform calibration
                 cal_coeff = calibrate(most_freq, ssdr)
@@ -305,13 +308,13 @@ def find_corr_idx(waveRxA, waveRxB):
             # plt.show()
 
             # Check if LTS found
-            if not best_peakA and not best_peakB:
-                print("No LTS Found! Board")
+            if not best_peakA: # and not best_peakB:
+                print("No LTS Found!")
                 continue
             if not (best_peakA == best_peakB):
                 print("Same board, different indexes. Wut??")
 
-            idx_mat[i, j] = best_peakA if best_peakA else best_peakB
+            idx_mat[i, j] = best_peakA # best_peakA if best_peakA else best_peakB
     return idx_mat
 
 
@@ -377,8 +380,8 @@ def main():
     parser.add_option("--refNode", type="int", dest="ref_node", help="Index of reference node", default=0)
     parser.add_option("--hubSerial", type="string", dest="hub_serial", help="Serial of Faros HUB", default="")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=25.0)
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB)", default=25.0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=30.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB)", default=30.0)
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.5e9)
     parser.add_option("--numPilotSamps", type="int", dest="nPilotSamps", help="Num actual pilot samples to tx (len of LTS is 160 samps)", default=160)
     parser.add_option("--prefix-pad", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=100)
@@ -416,7 +419,12 @@ def main():
                 debug=options.debug,
             )
             if flag == -1:
-                print("Calibration failed. Automatic Re-run!")
+                bad_mat = corr_ver     # returns different vals if fails
+                bad_occur = cal_coeff  # returns different vals if fails
+                print("==== Calibration failed. Automatic Re-run! ====")
+                print("{}".format(bad_mat))
+                print("{}".format(bad_occur))
+                time.sleep(5)
 
         cal_offset = corr_cal[0] - corr_cal
         ver_offset = corr_ver[0] - corr_ver
