@@ -130,18 +130,15 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frm_st_idx
 
     # make a new data structure where the iq samples become complex numbers
     cmpx_pilots = (pilots_dump[:,:,:,:,idx_e] + 1j*pilots_dump[:,:,:,:,idx_o])*2**-15
-
+    #cmpx_pilots = cmpx_pilots[...,::-1]
     # take a time-domain lts sequence, concatenate more copies, flip, conjugate
     lts_t, lts_f = generate_training_seq(preamble_type='lts', seq_length=[], cp=32, upsample=1, reps=[])    # TD LTS sequences (x2.5), FD LTS sequences
     lts_tmp = lts_t[-80:]                            # last 80 samps (assume 16 cp)
     n_lts = len(lts_tmp)              
     k_lts = n_csamp // n_lts                         # no. of LTS sequences in a pilot SF
-    lts_seq = lts_tmp
     lts_seq = np.tile(lts_tmp, k_lts)                # concatenate k LTS's to filter/correlate below             
     #lts_seq = lts_seq[::-1]                         # flip
-    #z_pad = np.zeros( n_cmpx -len(lts_seq) , dtype='complex64')
     lts_seq_conj = np.conjugate(lts_seq)             # conjugate the local LTS sequence
-    #lts_seq_conj = np.append(z_pad, lts_seq_conj)
     l_lts_fc = len(lts_seq_conj)                     # length of the local LTS seq.
 
     if debug:
@@ -274,7 +271,7 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frm_st_idx
         ax3.set_title('channel_analysis:csi_from_pilots(): MF (uncleared peaks) - ref frame {} and ref ant. {} (UE 0)'.format(frame_to_plot, ref_ant))
         ax3.stem(m_filt[frame_to_plot - frm_st_idx, 0,0,ref_ant,:])
         ax3.set_xlabel('Samples')
-        plt.show()
+        #plt.show()
 
     print("********************* ******************** *********************\n")
     return csi, m_filt, sf_start, cmpx_pilots, k_lts, n_lts
