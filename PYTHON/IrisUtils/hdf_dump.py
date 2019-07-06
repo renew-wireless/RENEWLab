@@ -64,7 +64,7 @@ def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_
                     mfa = mf_amax[i,j,k,l] 
                    # NB: addition: try to detect early packets: TEST it!
                     if dtct_eal_tx:
-                        sim_thrsh  = 0.9 # similarity threshold bewtween two consequitive peaks
+                        sim_thrsh  = 0.95 # similarity threshold bewtween two consequitive peaks
                         for ik in range(k_lts):
                             mf_prev = match_filt[i,j,k,l, (mfa - n_lts) if (mfa - n_lts) >= 0 else 0] 
                             if 1 - np.abs(match_filt[i,j,k,l, mfa] -  mf_prev)/match_filt[i,j,k,l, mfa] >= sim_thrsh:
