@@ -225,13 +225,12 @@ Config::Config(std::string jsonfile)
         pilot_ci16.insert(pilot_ci16.end(), post.begin(), post.end());
 
         pilot = Utils::cint16_to_uint32(pilot_ci16, false, "IQ");
-//#if DEBUG_PRINT
+#if DEBUG_PRINT
         for (int j = 0; j < pilot.size(); j++)
         {
-           //std::cout << "Pilot[" << j << "]: \t " << pilot_ci16[j] << std::endl;
-	   std::cout  << pilot_ci16[j].imag() << ", ";
+           std::cout << "Pilot[" << j << "]: \t " << pilot_ci16[j] << std::endl;
         }
-//#endif
+#endif
 
         // compose data subframe
         if ((bsPresent and ULSymbols[0].size() > 0) or (clPresent and clULSymbols[0].size() > 0))
