@@ -4,7 +4,7 @@
 		 "sdr_id" : ["files/iris_serials.txt"],
 		 "hub_id" : "files/hub_serials.txt",
 		 "frequency" : 3.6e9,
-		 "channel" : "AB",
+		 "channel" : "A",
 		 "rxgainA" : 30,
 		 "txgainA" : 35,
 		 "rxgainB" : 30,
@@ -13,12 +13,12 @@
 		 "frame_schedule" : [
 		     "BGPGGGGGGGGGGGGGGGGG"
 		 ],
-		 "max_frame" : 0,
+		 "max_frame" : 4000,
 		 "subframe_size" : 400,
 		 "fft_size" : 64,
 		 "cp_size" : 16,
-		 "prefix" : 82,
-		 "postfix" : 68,
+		 "prefix" : 100,
+		 "postfix" : 60,
 		 "beacon_seq" : "gold_ifft",
 		 "beamsweep" : true,
 		 "beacon_antenna" : 0,
@@ -27,7 +27,7 @@
 
 	"Clients" : {
 		 "sdr_id" : [
-		     "RF3C000045"
+		     "RF3C000037"
 		 ],
 		 "frequency" : 3.6e9,
 		 "channel" : "A",
@@ -44,8 +44,8 @@
 		 "subframe_size" : 400,
 		 "fft_size" : 64,
 		 "cp_size" : 16,
-		 "prefix" : 82,
-		 "postfix" : 68,
+		 "prefix" : 100,
+		 "postfix" : 60,
 		 "beacon_seq" : "gold_ifft",
 		 "pilot_seq" : "lts",
 		 "modulation" : "QPSK"

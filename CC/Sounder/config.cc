@@ -211,11 +211,11 @@ Config::Config(std::string jsonfile)
         coeffs = Utils::cint16_to_uint32(coeffs_ci16, true, "QI");
 #endif
         // compose pilot subframe
-        std::vector<std::vector<double>> lts = CommsLib::getSequence(160, CommsLib::LTS_SEQ);
+        std::vector<std::vector<double>> lts = CommsLib::getSequence(80, CommsLib::LTS_SEQ);
         std::vector<std::complex<int16_t>> lts_ci16 = Utils::double_to_int16(lts); 
         int nSamps = sampsPerSymbol - prefix - postfix;
-        int rep = nSamps / 160;
-        int frac = nSamps % 160;
+        int rep = nSamps / 80;
+        int frac = nSamps % 80;
         pilot_ci16.insert(pilot_ci16.begin(), pre.begin(), pre.end());
 
         for (int i = 0 ; i < rep; i++)
@@ -225,12 +225,13 @@ Config::Config(std::string jsonfile)
         pilot_ci16.insert(pilot_ci16.end(), post.begin(), post.end());
 
         pilot = Utils::cint16_to_uint32(pilot_ci16, false, "IQ");
-#if DEBUG_PRINT
+//#if DEBUG_PRINT
         for (int j = 0; j < pilot.size(); j++)
         {
-            std::cout << "Pilot[" << j << "]: \t " << pilot_ci16[j] << std::endl;
+           //std::cout << "Pilot[" << j << "]: \t " << pilot_ci16[j] << std::endl;
+	   std::cout  << pilot_ci16[j].imag() << ", ";
         }
-#endif
+//#endif
 
         // compose data subframe
         if ((bsPresent and ULSymbols[0].size() > 0) or (clPresent and clULSymbols[0].size() > 0))
