@@ -277,6 +277,12 @@ def animate(i, num_samps_rd, rxStream, sdr, ofdm_params, tx_struct, ota, ofdm_ob
     # Channel estimation
     # Get LTS again (after CFO correction)
     lts = rxSignal_cfo[lts_start: lts_start + lts_syms_len]
+
+    # Verify number of samples
+    if len(lts) != 160:
+        print("INCORRECT START OF PAYLOAD... CONTINUE!")
+        return line1, line2, line3, line4, line5, line6, line7, line8, line9, line10, line11, line12
+
     lts_1 = lts[-64 + -fft_offset + np.array(range(97, 161))]
     lts_2 = lts[-fft_offset + np.array(range(97, 161))]
 
@@ -293,7 +299,12 @@ def animate(i, num_samps_rd, rxStream, sdr, ofdm_params, tx_struct, ota, ofdm_ob
         print("TOO LATE... CONTINUE! ")
         return line1, line2, line3, line4, line5, line6, line7, line8, line9, line10, line11, line12
 
-    payload_samples_mat_cp = np.reshape(payload_samples, ((num_sc + data_cp_len), n_ofdm_syms), order="F")
+    # Assert
+    if len(payload_samples) != ((num_sc + data_cp_len) * n_ofdm_syms):
+        print("INCORRECT START OF PAYLOAD... CONTINUE!")
+        return line1, line2, line3, line4, line5, line6, line7, line8, line9, line10, line11, line12
+    else:
+        payload_samples_mat_cp = np.reshape(payload_samples, ((num_sc + data_cp_len), n_ofdm_syms), order="F")
 
     # Remove cyclic prefix
     payload_samples_mat = payload_samples_mat_cp[data_cp_len - fft_offset + 1 + np.array(range(0, num_sc)), :]
@@ -391,9 +402,9 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
                 sdrTx.setFrequency(SOAPY_SDR_TX, c, "BB", bbfreq)
             if "CBRS" in infoTx["frontend"]:
                 print("set CBRS front-end gains")
-                sdrTx.setGain(SOAPY_SDR_TX, c, 'ATTN', -6) # {-18,-12,-6,0}
+                sdrTx.setGain(SOAPY_SDR_TX, c, 'ATTN', 0) # {-18,-12,-6,0}
                 sdrTx.setGain(SOAPY_SDR_TX, c, 'PA2', 0)   # LO: [0|17], HI:[0|14]
-            sdrTx.setGain(SOAPY_SDR_TX, c, 'IAMP', 0)      # [-12,12]
+            sdrTx.setGain(SOAPY_SDR_TX, c, 'IAMP', 12)      # [-12,12]
             sdrTx.setGain(SOAPY_SDR_TX, c, "PAD", txgain)
 
             sdrRx.setFrequency(SOAPY_SDR_RX, c, freq)
@@ -484,7 +495,7 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx and Rx sample rate", default=5e6)
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
-    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=-25.0) # with CBRS -25
+    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=30.0) # with CBRS 20
     parser.add_option("--LNA", type="float", dest="LNA", help="LNA gain (dB) [0:1:30]", default=25.0) # with CBRS 15
     parser.add_option("--TIA", type="float", dest="TIA", help="TIA gain (dB) [0, 3, 9, 12]", default=0.0) # with CBRS 0
     parser.add_option("--PGA", type="float", dest="PGA", help="PGA gain (dB) [-12:1:19]", default=-12.0) # with CBRS -12
