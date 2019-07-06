@@ -38,7 +38,7 @@ def find_lts(iq, thresh=0.8, us=1, cp=32, flip=False):
 
 	lts, lts_f = generate_training_seq(preamble_type='lts', cp=cp, upsample=us)
 	# lts contains 2.5 64-sample-LTS sequences, we need only one symbol
-	lts_tmp = lts[-80:]
+	lts_tmp = lts[-64:]
 
 	if flip:
 		lts_flip = lts_tmp[::-1]
@@ -53,7 +53,7 @@ def find_lts(iq, thresh=0.8, us=1, cp=32, flip=False):
 	lts_pks = np.where(lts_corr > (thresh * np.max(lts_corr)))
 	lts_pks = np.squeeze(lts_pks)
 	x_vec, y_vec = np.meshgrid(lts_pks, lts_pks)
-	second_peak_idx, y = np.where((y_vec - x_vec) == len(lts[-80:]))
+	second_peak_idx, y = np.where((y_vec - x_vec) == len(lts[-64:]))
 
 	# To save mat files
 	# sio.savemat('rx_iq_pilot.mat', {'iq_pilot': iq})
