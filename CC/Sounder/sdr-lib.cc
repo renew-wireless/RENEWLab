@@ -48,6 +48,8 @@ RadioConfig::RadioConfig(Config *cfg):
             //isUE = _cfg->isUE;
             if (_cfg->hub_ids.size() > 0)
             {
+                args["driver"] = "remote";
+                args["timeout"] = "1000000";
                 args["serial"] = _cfg->hub_ids.at(c);
                 hubs.push_back(SoapySDR::Device::make(args)); 
             }
@@ -200,8 +202,9 @@ void *RadioConfig::initBSRadio(void *in_context)
 
     SoapySDR::Kwargs args;
     SoapySDR::Kwargs sargs;
-    args["serial"] = cfg->bs_sdr_ids[0][i];
+    args["driver"] = "iris";
     args["timeout"] = "1000000";
+    args["serial"] = cfg->bs_sdr_ids[0][i];
     rc->bsSdrs[c][i] = (SoapySDR::Device::make(args));
     //use the TRX antenna port for both tx and rx
     for (auto ch : channels) rc->bsSdrs[c][i]->setAntenna(SOAPY_SDR_RX, ch, "TRX");
@@ -1062,12 +1065,20 @@ RadioConfig::~RadioConfig()
 {
     if (_cfg->bsPresent)
     {
+        if (_cfg->hub_ids.size() > 0)
+        {
+            for (int i = 0; i < hubs.size(); i++)
+                SoapySDR::Device::unmake(hubs[i]);
+        }
         for (int i = 0; i < nBsSdrs[0]; i++)
         {
             bsSdrs[0][i]->deactivateStream(this->bsRxStreams[0][i]);
             bsSdrs[0][i]->deactivateStream(this->bsTxStreams[0][i]);
             bsSdrs[0][i]->closeStream(this->bsRxStreams[0][i]);
             bsSdrs[0][i]->closeStream(this->bsTxStreams[0][i]);
+        }
+        for (int i = 0; i < nBsSdrs[0]; i++)
+        {
             SoapySDR::Device::unmake(bsSdrs[0][i]);
         }
     }
