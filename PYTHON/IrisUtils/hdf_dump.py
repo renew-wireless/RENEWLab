@@ -443,6 +443,7 @@ class hdfDump:
        
         print("********     verify_hdf5(): Calling csi_from_pilots and frame_sanity    *********")
         samples_P = data['Pilot_Samples']['Samples']
+        print(samples_P.shape)
         n_ue = num_cl
         frm_plt = min(default_frame, samples_P.shape[0] + self.n_frm_st)
         csi_from_pilots_start = time.time()

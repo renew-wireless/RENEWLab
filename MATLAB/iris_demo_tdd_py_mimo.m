@@ -54,7 +54,7 @@ N_ZPAD_POST             = N_ZPAD_PRE -14;                         % Zero-padding
 
 % Rx processing params
 FFT_OFFSET                    = 16;          % Number of CP samples to use in FFT (on average)
-LTS_CORR_THRESH               = 0.8;         % Normalized threshold for LTS correlation
+LTS_CORR_THRESH               = 0.7;         % Normalized threshold for LTS correlation
 DO_APPLY_CFO_CORRECTION       = 0;           % Enable CFO estimation/correction
 DO_APPLY_SFO_CORRECTION       = 0;           % Enable SFO estimation/correction
 DO_APPLY_PHASE_ERR_CORRECTION = 1;           % Enable Residual CFO estimation/correction
@@ -270,16 +270,22 @@ for ibs=1:N_BS_NODE
 
     % Select best candidate correlation peak as LTS-payload boundary
     [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
-    [lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
+    [lts_lst_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
     % Stop if no valid correlation peak was found
-    if(isempty(lts_second_peak_index))
+    if(isempty(lts_lst_peak_index))
         fprintf('No LTS Correlation Peaks Found!\n');
         return;
     end    
     % Set the sample indices of the payload symbols and preamble
-    payload_ind = lts_peaks(max(lts_second_peak_index)) + (2*CP_LEN);
+    payload_ind = lts_peaks(max(lts_lst_peak_index)) + (2*CP_LEN);
     pream_ind_ibs = payload_ind-length(preamble);
     rx_lts_mat(ibs,:) = raw_rx_dec(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 ); 
+end
+
+% Demultiplex the received LTSs:
+Y_lts_sp = zeros(N_BS_NODE,N_UE, length(preamble));
+for ism = 1:length(preamble)
+   Y_lts_sp(:,:, ism) = rx_lts_mat(:,ism)*preamble(ism,:);
 end
 
 rx_cfo_est_lts = zeros(1,N_BS_NODE,1);
