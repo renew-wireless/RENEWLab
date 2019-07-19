@@ -24,8 +24,8 @@ WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_MOD                 = 1;
 DEBUG                   = 1;
-sim_N0                  = 0.01;     
-sim_H_var               = 4;
+sim_SNR_db              = 10;    
+sim_H_var               = 1;
 %Iris params:
 N_BS_NODE = 8;
 N_UE = 2;
@@ -65,7 +65,7 @@ lts_f = [0 1 -1 -1 1 1 -1 1 -1 1 -1 -1 -1 -1 -1 1 1 -1 -1 1 -1 1 -1 1 1 1 1 0 0 
     1 1 -1 -1 1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1].';
 lts_t = ifft(lts_f, N_SC); %time domain
 
-preamble_common = [lts_t(33:64); lts_t; lts_t];
+preamble_common = [lts_t(33:64); repmat(lts_t,N_LTS_SYM,1)];
 pre_z = zeros(size(preamble_common));
 preamble = [ preamble_common pre_z;pre_z preamble_common];
 cor_rng  = length(preamble) +  N_ZPAD_PRE + 100;
@@ -140,7 +140,7 @@ if (SIM_MOD)
     DO_APPLY_CFO_CORRECTION       = 0;       
     DO_APPLY_SFO_CORRECTION       = 0;  
     DO_APPLY_PHASE_ERR_CORRECTION = 1;
-
+    sim_N0 = mean(mean(abs(tx_vecs_iris).^2 )) / 10^(0.1*sim_SNR_db);
     H_ul = sqrt(sim_H_var/2) .* ( randn(N_BS_NODE, N_UE) + 1i*randn(N_BS_NODE, N_UE) );
     W_ul = sqrt(sim_N0/2) * (randn(N_BS_NODE, length(tx_vecs_iris)) + ...
         1i*randn(N_BS_NODE, length(tx_vecs_iris)) );
@@ -234,10 +234,10 @@ else
 
     fprintf('Matlab script: Length of the received vector: \tUE:%d\n', data0_len);
 end
-raw_rx_dec = rx_vec_iris;
-rx_vec_air = raw_rx_dec; %NB: Change this, unecessary assignment!
 
-l_rx_dec=length(raw_rx_dec);
+rx_vec_air = rx_vec_iris; %NB: Change this, unecessary assignment!
+
+l_rx_dec=length(rx_vec_iris);
 
 %% Correlate for LTS
 %NB: start here!
@@ -245,7 +245,7 @@ l_rx_dec=length(raw_rx_dec);
 % Complex cross correlation of Rx waveform with time-domain LTS
 lts_corr = double.empty();
 for ibs=1:N_BS_NODE
-    lts_corr(:,ibs) = abs(conv( conj(flipud(lts_t)), sign(raw_rx_dec(ibs,:))));
+    lts_corr(:,ibs) = abs(conv( conj(flipud(lts_t)), sign(rx_vec_iris(ibs,:))));
 end
 
 % Skip early and late samples - avoids occasional false positives from pre-AGC samples
@@ -265,6 +265,8 @@ end
 
 % Find all correlation peaks
 rx_lts_mat = double.empty();
+payload_ind = int16.empty();
+payload_rx = double.empty();
 for ibs=1:N_BS_NODE
     lts_peaks = find(lts_corr(1:cor_rng) > LTS_CORR_THRESH*max(lts_corr(:,ibs)));
 
@@ -277,30 +279,84 @@ for ibs=1:N_BS_NODE
         return;
     end    
     % Set the sample indices of the payload symbols and preamble
-    payload_ind = lts_peaks(max(lts_lst_peak_index)) + (2*CP_LEN);
-    pream_ind_ibs = payload_ind-length(preamble);
-    rx_lts_mat(ibs,:) = raw_rx_dec(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 ); 
+    payload_ind(ibs) = lts_peaks(max(lts_lst_peak_index)) + (2*CP_LEN);
+    pream_ind_ibs = payload_ind(ibs)-length(preamble);
+    % Put rx-ed ltss and payload in separate arrays 
+    rx_lts_mat(ibs,:) = rx_vec_iris(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 );
+    payload_rx(ibs,:) = rx_vec_iris(ibs, payload_ind(ibs) : payload_ind(ibs)+(N_OFDM_SYM)*(N_SC +CP_LEN)-1);
 end
 
-% Demultiplex the received LTSs:
-Y_lts_sp = zeros(N_BS_NODE,N_UE, length(preamble));
-for ism = 1:length(preamble)
-   Y_lts_sp(:,:, ism) = rx_lts_mat(:,ism)*preamble(ism,:);
+% Construct a matrix from the received pilots
+n_plt_samp = floor(length(preamble)/ N_UE);     % number of samples in a per-UE pilot 
+Y_lts = zeros(N_BS_NODE,N_UE, n_plt_samp);
+for iue = 1:N_UE
+   plt_j_ix = (iue-1) * n_plt_samp +1:iue * n_plt_samp;
+   Y_lts(:,iue,:) = rx_lts_mat(:,plt_j_ix);
+end
+% Take N_SC spamples from each LTS
+rx_lts_idx = CP_LEN +1 : N_LTS_SYM * N_SC +CP_LEN;
+Y_lts = Y_lts(:,:,rx_lts_idx);
+% Reshape the matix to have each lts pilot in a different dimension:
+% N_BS_NODE x N_UE x 64 x 2
+Y_lts = reshape(Y_lts, N_BS_NODE, N_UE, [], N_LTS_SYM); 
+% Take FFT:
+Y_lts_f = fft(Y_lts, N_SC,3);
+% Construct known pilot matrix to use i next step:
+lts_f_mat = repmat(lts_f, N_BS_NODE *N_UE * N_LTS_SYM,1);
+lts_f_mat = reshape(lts_f_mat, [], N_LTS_SYM, N_UE, N_BS_NODE);
+%NB: Check if this works!
+lts_f_mat = permute(lts_f_mat, [4 3 1 2]);
+
+% Get the channel by dividing by the pilots
+G_lts = Y_lts_f ./ lts_f_mat;
+% Estimate the channel by averaging over the two LTS symbols:
+H_hat = mean(G_lts, 4);
+
+% Reshape the payload and take subcarriers without the CP
+payload_rx = reshape(payload_rx,N_BS_NODE, (N_SC + CP_LEN),[]);
+payload_noCP = payload_rx(:,CP_LEN-FFT_OFFSET+(1:N_SC),:);
+% Take FFT
+Y_data = fft(payload_noCP, N_SC, 2);
+
+% Apply ZF by multiplying the pseudo inverse of H_hat[N_BS_NODE x NUE] for each suubcarrier:
+nz_sc = find(lts_f ~= 0); % non-zero subcarriers
+syms_eq = zeros(N_UE,N_SC,N_OFDM_SYM);
+for j=1:length(nz_sc)
+    HH_inv = pinv(squeeze(H_hat(:,:, nz_sc(j) ) )); % (H'*H)^(-1)*H': ZF matrix
+    x = HH_inv*squeeze(Y_data(:,nz_sc(j),:));
+    syms_eq(:,nz_sc(j),:) = x;
 end
 
-rx_cfo_est_lts = zeros(1,N_BS_NODE,1);
-rx_dec_cfo_corr = raw_rx_dec;
+syms_eq = syms_eq(:,SC_IND_DATA,:);
+syms_eq = reshape(syms_eq, N_UE, numel(syms_eq(1,:,:)));
 
-% Reshape pilots to N_BS_NODE x 160 x N_UE
-% NB: Assume orthogonality in time: 1st 160: samples UE1, next 160 UE2,...
-% ulp_st = CP_LEN +1
-% ulp_ed = 
-% ul_pilots_mat = rx_lts_mat(:,[17:80 81:144]);
-%ul_pilots_mat = reshape(rx_lts_mat, N_BS_NODE,ceil(length(rx_lts_mat)/N_UE),N_UE); 
-return;
+
+cf = 1;
+figure(cf); clf;
+subplot(1,2,1)
+plot(syms_eq(1, :),'ro','MarkerSize',1);
+axis square; axis(1.5*[-1 1 -1 1]);
+grid on;
+hold on;
+
+
+subplot(1,2,2)
+plot(syms_eq(2, :),'ro','MarkerSize',1);
+axis square; axis(1.5*[-1 1 -1 1]);
+grid on;
+hold on;
+
+
+% Demudulate
 
 rx_lts_idx1 = -64+-FFT_OFFSET + (97:160);
-rx_lts_idx2 = -FFT_OFFSET + (97:160);
+rx_lts_idx2 = -FFT_OFFSET + (97:160); 
+rx_cfo_est_lts = zeros(1,N_BS_NODE,1);
+rx_dec_cfo_corr = rx_vec_iris;
+
+return;
+
+
 rx_lts_b1 = [rx_lts(rx_lts_idx1,1)  rx_lts(rx_lts_idx2,1)];
 rx_lts_b2 = [rx_lts(rx_lts_idx1,2)  rx_lts(rx_lts_idx2,2)];
 
