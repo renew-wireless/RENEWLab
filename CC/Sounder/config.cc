@@ -62,6 +62,9 @@ Config::Config(std::string jsonfile)
         rxgainA = tddConf.value("rxgainA", 20);
         txgainB = tddConf.value("txgainB", 20);
         rxgainB = tddConf.value("rxgainB", 20);
+        calTxGainA = tddConf.value("calTxGainA", 40);
+        calTxGainB = tddConf.value("calTxGainB", 40);
+        sampleCalEn = tddConf.value("sample_calibrate", true);
         beamsweep = tddConf.value("beamsweep", false);
         beacon_ant = tddConf.value("beacon_antenna", 0);
         max_frame = tddConf.value("max_frame", 0);
@@ -370,6 +373,7 @@ int Config::getDlSFIndex(int frame_id, int symbol_id)
 bool Config::isPilot(int frame_id, int symbol_id) 
 {
     int fid = frame_id % framePeriod;
+    if (symbol_id >= frames[fid].size()) return false;
 #if DEBUG_PRINT
     printf("isPilot(%d, %d) = %c\n",frame_id, symbol_id, frames[fid].at(symbol_id));
 #endif
@@ -379,6 +383,7 @@ bool Config::isPilot(int frame_id, int symbol_id)
 bool Config::isData(int frame_id, int symbol_id) 
 {
     int fid = frame_id % framePeriod;
+    if (symbol_id >= frames[fid].size()) return false;
 #if DEBUG_PRINT
     printf("isData(%d, %d) = %c\n",frame_id, symbol_id, frames[fid].at(symbol_id));
 #endif
