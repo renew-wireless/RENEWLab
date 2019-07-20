@@ -23,21 +23,21 @@ end
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_MOD                 = 1;
-DEBUG                   = 1;
+DEBUG                   = 0;
 sim_SNR_db              = 10;    
 sim_H_var               = 1;
 %Iris params:
-N_BS_NODE = 8;
-N_UE = 2;
+N_BS_NODE               = 8;
+N_UE                    = 2;
 b_ids = string.empty();
 b_scheds = string.empty();
 ue_ids = string.empty();
 ue_scheds = string.empty();
-
+MIMO_ALG                = 'ZF';      % MIMO ALGORITHM: ZF or Conjugate 
 
 % Waveform params
-N_OFDM_SYM              = 32;         % Number of OFDM symbols for burst, it needs to be less than 47
-MOD_ORDER               = 16;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
+N_OFDM_SYM              = 2;         % Number of OFDM symbols for burst, it needs to be less than 47
+MOD_ORDER               = 4;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
 TX_SCALE                = .5;         % Scale for Tx waveform ([0:1])
 
 % OFDM params
@@ -71,7 +71,11 @@ preamble = [ preamble_common pre_z;pre_z preamble_common];
 cor_rng  = length(preamble) +  N_ZPAD_PRE + 100;
 %% Generate a payload of random integers
 tx_data = randi(MOD_ORDER, N_DATA_SYMS, N_UE) - 1;
+tx_data = zeros(N_DATA_SYMS, N_UE)+2;
 
+tx_data(3,:) = 1;
+tx_data(2,:) = 0;
+tx_data(4,:) = 3;
 % Functions for data -> complex symbol mapping (like qammod, avoids comm toolbox requirement)
 % These anonymous functions implement the modulation mapping from IEEE 802.11-2012 Section 18.3.5.8
 modvec_bpsk   =  (1/sqrt(2))  .* [-1 1];
@@ -240,8 +244,6 @@ rx_vec_air = rx_vec_iris; %NB: Change this, unecessary assignment!
 l_rx_dec=length(rx_vec_iris);
 
 %% Correlate for LTS
-%NB: start here!
-
 % Complex cross correlation of Rx waveform with time-domain LTS
 lts_corr = double.empty();
 for ibs=1:N_BS_NODE
@@ -322,32 +324,81 @@ Y_data = fft(payload_noCP, N_SC, 2);
 nz_sc = find(lts_f ~= 0); % non-zero subcarriers
 syms_eq = zeros(N_UE,N_SC,N_OFDM_SYM);
 for j=1:length(nz_sc)
-    HH_inv = pinv(squeeze(H_hat(:,:, nz_sc(j) ) )); % (H'*H)^(-1)*H': ZF matrix
-    x = HH_inv*squeeze(Y_data(:,nz_sc(j),:));
+    
+    if(strcmp(MIMO_ALG,'ZF'))
+        HH_inv = pinv(squeeze(H_hat(:,:, nz_sc(j) ) )); % (H'*H)^(-1)*H': ZF matrix
+        x = HH_inv*squeeze(Y_data(:,nz_sc(j),:));
+    else
+        % Conjugate:
+        H_norm = diag(abs (H_hat(:,:, nz_sc(j) )' * H_hat(:,:, nz_sc(j) ) ));
+        % normalization: 
+        H_nomr = repmat(H_norm, 1, N_BS_NODE);
+        x = (H_hat(:,:, nz_sc(j) )' ./ H_nomr )* squeeze(Y_data(:,nz_sc(j),:));
+    end
     syms_eq(:,nz_sc(j),:) = x;
 end
 
 syms_eq = syms_eq(:,SC_IND_DATA,:);
-syms_eq = reshape(syms_eq, N_UE, numel(syms_eq(1,:,:)));
+syms_eq = reshape(syms_eq, [], N_UE );
 
 
 cf = 1;
 figure(cf); clf;
 subplot(1,2,1)
-plot(syms_eq(1, :),'ro','MarkerSize',1);
+plot(syms_eq(:,1),'ro','MarkerSize',1);
 axis square; axis(1.5*[-1 1 -1 1]);
 grid on;
 hold on;
 
+plot(tx_syms(:, 1),'bo');
+title('Uplink Tx and Rx Constellations')
+legend('Rx','Tx');
 
 subplot(1,2,2)
-plot(syms_eq(2, :),'ro','MarkerSize',1);
+plot(syms_eq(:, 2),'ro','MarkerSize',1);
 axis square; axis(1.5*[-1 1 -1 1]);
 grid on;
 hold on;
+plot(tx_syms(:, 2),'bo');
+title('Uplink Tx and Rx Constellations')
+legend('Rx','Tx');
 
 
-% Demudulate
+%% Demodulate
+
+demod_fcn_bpsk = @(x) double(real(x)>0);
+demod_fcn_qpsk = @(x) double(2*(real(x)>0) + 1*(imag(x)>0));
+demod_fcn_16qam = @(x) (8*(real(x)>0)) + (4*(abs(real(x))<0.6325)) + (2*(imag(x)>0)) + (1*(abs(imag(x))<0.6325));
+demod_fcn_64qam = @(x) (32*(real(x)>0)) + (16*(abs(real(x))<0.6172)) + (8*((abs(real(x))<(0.9258))&&((abs(real(x))>(0.3086))))) + (4*(imag(x)>0)) + (2*(abs(imag(x))<0.6172)) + (1*((abs(imag(x))<(0.9258))&&((abs(imag(x))>(0.3086)))));
+
+rx_data = double.empty();
+switch(MOD_ORDER)
+    case 2         % BPSK
+        rx_data = arrayfun(demod_fcn_bpsk, syms_eq );
+
+
+    case 4         % QPSK
+        rx_data = arrayfun(demod_fcn_qpsk, syms_eq );
+        
+        
+    case 16        % 16-QAM
+        rx_data = arrayfun(demod_fcn_16qam, syms_eq );
+        
+
+    case 64        % 64-QAM
+        rx_data = arrayfun(demod_fcn_64qam, syms_eq );
+end
+
+% FIX THIS:
+sym_errs = sum(tx_data(:,1) ~= rx_data(:,1));
+bit_errs = length(find(dec2bin(bitxor(tx_data, rx_data(1,:)),8) == '1'));
+rx_evm   = sqrt(sum((real(rx_data(1,:)) - real(tx_syms)).^2 + (imag(rx_data(1,:)) - imag(tx_syms)).^2)/(length(SC_IND_DATA) * N_OFDM_SYM));
+
+fprintf('\n MRC Results:\n');
+fprintf('Num Bytes:   %d\n', N_DATA_SYMS * log2(MOD_ORDER) / 8);
+fprintf('Sym Errors:  %d (of %d total symbols)\n', sym_errs, N_DATA_SYMS);
+fprintf('Bit Errors:  %d (of %d total bits)\n', bit_errs, N_DATA_SYMS * log2(MOD_ORDER));
+
 
 rx_lts_idx1 = -64+-FFT_OFFSET + (97:160);
 rx_lts_idx2 = -FFT_OFFSET + (97:160); 
