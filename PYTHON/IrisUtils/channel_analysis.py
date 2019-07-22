@@ -106,6 +106,7 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frm_st_idx
     debug  = False
     test_mf = False
     write_to_file = True
+    legacy = True
     
     # dimensions of pilots_dump
     n_frame = pilots_dump.shape[0]      # no. of captured frames
@@ -123,21 +124,25 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frm_st_idx
         print("Size of iq samples:".format(n_iq))
         raise Exception(' **** The length of iq samples per frames HAS to be an even number! **** ')
 
-    n_cmpx =  n_iq // 2                 # no. of complex samples
+    n_cmpx =  n_iq // 2                 #  no. of complex samples
     n_csamp = n_cmpx - z_padding        # no. of complex samples in a P subframe without pre- and post- fixes
-    idx_e = np.arange(0, n_iq, 2)       # even indices: real part of iq
-    idx_o = np.arange(1, n_iq, 2)       # odd indices: imaginary part of iq 
-
+    if legacy:
+        idx_e = np.arange(1, n_iq, 2)       # even indices: real part of iq      --> ATTENTION: I and Q are flipped at RX for some weird reason! So, even starts from 1! 
+        idx_o = np.arange(0, n_iq, 2)       # odd  indices: imaginary part of iq --> ATTENTION: I and Q are flipped at RX for some weird reason! So, odd starts from 0!
+    else:
+        idx_e = np.arange(0, n_iq, 2)       # even indices: real part of iq 
+        idx_o = np.arange(1, n_iq, 2)       # odd  indices: imaginary part of iq
+        
     # make a new data structure where the iq samples become complex numbers
     cmpx_pilots = (pilots_dump[:,:,:,:,idx_e] + 1j*pilots_dump[:,:,:,:,idx_o])*2**-15
-    #cmpx_pilots = cmpx_pilots[...,::-1]
+
     # take a time-domain lts sequence, concatenate more copies, flip, conjugate
     lts_t, lts_f = generate_training_seq(preamble_type='lts', seq_length=[], cp=32, upsample=1, reps=[])    # TD LTS sequences (x2.5), FD LTS sequences
     lts_tmp = lts_t[-80:]                            # last 80 samps (assume 16 cp)
     n_lts = len(lts_tmp)              
     k_lts = n_csamp // n_lts                         # no. of LTS sequences in a pilot SF
     lts_seq = np.tile(lts_tmp, k_lts)                # concatenate k LTS's to filter/correlate below             
-    #lts_seq = lts_seq[::-1]                         # flip
+    lts_seq = lts_seq[::-1]                         # flip
     lts_seq_conj = np.conjugate(lts_seq)             # conjugate the local LTS sequence
     l_lts_fc = len(lts_seq_conj)                     # length of the local LTS seq.
 

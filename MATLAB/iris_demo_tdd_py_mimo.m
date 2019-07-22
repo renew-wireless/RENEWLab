@@ -23,21 +23,21 @@ end
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_MOD                 = 1;
-DEBUG                   = 1;
-sim_N0                  = 0.01;     
-sim_H_var               = 4;
+DEBUG                   = 0;
+sim_SNR_db              = 10;    
+sim_H_var               = 1;
 %Iris params:
-N_BS_NODE = 8;
-N_UE = 2;
+N_BS_NODE               = 8;
+N_UE                    = 2;
 b_ids = string.empty();
 b_scheds = string.empty();
 ue_ids = string.empty();
 ue_scheds = string.empty();
-
+MIMO_ALG                = 'ZF';      % MIMO ALGORITHM: ZF or Conjugate 
 
 % Waveform params
 N_OFDM_SYM              = 32;         % Number of OFDM symbols for burst, it needs to be less than 47
-MOD_ORDER               = 16;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
+MOD_ORDER               = 4;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
 TX_SCALE                = .5;         % Scale for Tx waveform ([0:1])
 
 % OFDM params
@@ -54,7 +54,7 @@ N_ZPAD_POST             = N_ZPAD_PRE -14;                         % Zero-padding
 
 % Rx processing params
 FFT_OFFSET                    = 16;          % Number of CP samples to use in FFT (on average)
-LTS_CORR_THRESH               = 0.8;         % Normalized threshold for LTS correlation
+LTS_CORR_THRESH               = 0.7;         % Normalized threshold for LTS correlation
 DO_APPLY_CFO_CORRECTION       = 0;           % Enable CFO estimation/correction
 DO_APPLY_SFO_CORRECTION       = 0;           % Enable SFO estimation/correction
 DO_APPLY_PHASE_ERR_CORRECTION = 1;           % Enable Residual CFO estimation/correction
@@ -65,7 +65,7 @@ lts_f = [0 1 -1 -1 1 1 -1 1 -1 1 -1 -1 -1 -1 -1 1 1 -1 -1 1 -1 1 -1 1 1 1 1 0 0 
     1 1 -1 -1 1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1].';
 lts_t = ifft(lts_f, N_SC); %time domain
 
-preamble_common = [lts_t(33:64); lts_t; lts_t];
+preamble_common = [lts_t(33:64); repmat(lts_t,N_LTS_SYM,1)];
 pre_z = zeros(size(preamble_common));
 preamble = [ preamble_common pre_z;pre_z preamble_common];
 cor_rng  = length(preamble) +  N_ZPAD_PRE + 100;
@@ -80,7 +80,7 @@ modvec_64qam  =  (1/sqrt(42)) .* [-7 -5 -1 -3 +7 +5 +1 +3];
 
 mod_fcn_bpsk  = @(x) complex(modvec_bpsk(1+x),0);
 mod_fcn_qpsk  = @(x) complex(modvec_bpsk(1+bitshift(x, -1)), modvec_bpsk(1+mod(x, 2)));
-mod_fcn_16qam = @(x) complex(modvec_16qam(1+bitshift(x, -2)), modvec_16qam(1+mod(x,4)));
+mod_fcn_16qam = @(x) complex(modvec_16qam(1+bitshift(x, -2)), modvec_16qam(1+mod(x,4)));    
 mod_fcn_64qam = @(x) complex(modvec_64qam(1+bitshift(x, -3)), modvec_64qam(1+mod(x,8)));
 
 % Map the data values on to complex symbols
@@ -140,7 +140,7 @@ if (SIM_MOD)
     DO_APPLY_CFO_CORRECTION       = 0;       
     DO_APPLY_SFO_CORRECTION       = 0;  
     DO_APPLY_PHASE_ERR_CORRECTION = 1;
-
+    sim_N0 = mean(mean(abs(tx_vecs_iris).^2 )) / 10^(0.1*sim_SNR_db);
     H_ul = sqrt(sim_H_var/2) .* ( randn(N_BS_NODE, N_UE) + 1i*randn(N_BS_NODE, N_UE) );
     W_ul = sqrt(sim_N0/2) * (randn(N_BS_NODE, length(tx_vecs_iris)) + ...
         1i*randn(N_BS_NODE, length(tx_vecs_iris)) );
@@ -234,18 +234,16 @@ else
 
     fprintf('Matlab script: Length of the received vector: \tUE:%d\n', data0_len);
 end
-raw_rx_dec = rx_vec_iris;
-rx_vec_air = raw_rx_dec; %NB: Change this, unecessary assignment!
 
-l_rx_dec=length(raw_rx_dec);
+rx_vec_air = rx_vec_iris; %NB: Change this, unecessary assignment!
+
+l_rx_dec=length(rx_vec_iris);
 
 %% Correlate for LTS
-%NB: start here!
-
 % Complex cross correlation of Rx waveform with time-domain LTS
 lts_corr = double.empty();
 for ibs=1:N_BS_NODE
-    lts_corr(:,ibs) = abs(conv( conj(flipud(lts_t)), sign(raw_rx_dec(ibs,:))));
+    lts_corr(:,ibs) = abs(conv( conj(flipud(lts_t)), sign(rx_vec_iris(ibs,:))));
 end
 
 % Skip early and late samples - avoids occasional false positives from pre-AGC samples
@@ -265,36 +263,149 @@ end
 
 % Find all correlation peaks
 rx_lts_mat = double.empty();
+payload_ind = int16.empty();
+payload_rx = double.empty();
 for ibs=1:N_BS_NODE
     lts_peaks = find(lts_corr(1:cor_rng) > LTS_CORR_THRESH*max(lts_corr(:,ibs)));
 
     % Select best candidate correlation peak as LTS-payload boundary
     [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
-    [lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
+    [lts_lst_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
     % Stop if no valid correlation peak was found
-    if(isempty(lts_second_peak_index))
+    if(isempty(lts_lst_peak_index))
         fprintf('No LTS Correlation Peaks Found!\n');
         return;
     end    
     % Set the sample indices of the payload symbols and preamble
-    payload_ind = lts_peaks(max(lts_second_peak_index)) + (2*CP_LEN);
-    pream_ind_ibs = payload_ind-length(preamble);
-    rx_lts_mat(ibs,:) = raw_rx_dec(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 ); 
+    payload_ind(ibs) = lts_peaks(max(lts_lst_peak_index)) + (2*CP_LEN);
+    pream_ind_ibs = payload_ind(ibs)-length(preamble);
+    % Put rx-ed ltss and payload in separate arrays 
+    rx_lts_mat(ibs,:) = rx_vec_iris(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 );
+    payload_rx(ibs,:) = rx_vec_iris(ibs, payload_ind(ibs) : payload_ind(ibs)+(N_OFDM_SYM)*(N_SC +CP_LEN)-1);
 end
 
-rx_cfo_est_lts = zeros(1,N_BS_NODE,1);
-rx_dec_cfo_corr = raw_rx_dec;
+% Construct a matrix from the received pilots
+n_plt_samp = floor(length(preamble)/ N_UE);     % number of samples in a per-UE pilot 
+Y_lts = zeros(N_BS_NODE,N_UE, n_plt_samp);
+for iue = 1:N_UE
+   plt_j_ix = (iue-1) * n_plt_samp +1:iue * n_plt_samp;
+   Y_lts(:,iue,:) = rx_lts_mat(:,plt_j_ix);
+end
+% Take N_SC spamples from each LTS
+rx_lts_idx = CP_LEN +1 : N_LTS_SYM * N_SC +CP_LEN;
+Y_lts = Y_lts(:,:,rx_lts_idx);
+% Reshape the matix to have each lts pilot in a different dimension:
+% N_BS_NODE x N_UE x 64 x 2
+Y_lts = reshape(Y_lts, N_BS_NODE, N_UE, [], N_LTS_SYM); 
+% Take FFT:
+Y_lts_f = fft(Y_lts, N_SC,3);
+% Construct known pilot matrix to use i next step:
+lts_f_mat = repmat(lts_f, N_BS_NODE *N_UE * N_LTS_SYM,1);
+lts_f_mat = reshape(lts_f_mat, [], N_LTS_SYM, N_UE, N_BS_NODE);
+%NB: Check if this works!
+lts_f_mat = permute(lts_f_mat, [4 3 1 2]);
 
-% Reshape pilots to N_BS_NODE x 160 x N_UE
-% NB: Assume orthogonality in time: 1st 160: samples UE1, next 160 UE2,...
-% ulp_st = CP_LEN +1
-% ulp_ed = 
-% ul_pilots_mat = rx_lts_mat(:,[17:80 81:144]);
-%ul_pilots_mat = reshape(rx_lts_mat, N_BS_NODE,ceil(length(rx_lts_mat)/N_UE),N_UE); 
-return;
+% Get the channel by dividing by the pilots
+G_lts = Y_lts_f ./ lts_f_mat;
+% Estimate the channel by averaging over the two LTS symbols:
+H_hat = mean(G_lts, 4);
+
+% Reshape the payload and take subcarriers without the CP
+payload_rx = reshape(payload_rx,N_BS_NODE, (N_SC + CP_LEN),[]);
+payload_noCP = payload_rx(:,CP_LEN-FFT_OFFSET+(1:N_SC),:);
+% Take FFT
+Y_data = fft(payload_noCP, N_SC, 2);
+
+% Apply ZF by multiplying the pseudo inverse of H_hat[N_BS_NODE x NUE] for each suubcarrier:
+nz_sc = find(lts_f ~= 0); % non-zero subcarriers
+syms_eq = zeros(N_UE,N_SC,N_OFDM_SYM);
+for j=1:length(nz_sc)
+    
+    if(strcmp(MIMO_ALG,'ZF'))
+        HH_inv = pinv(squeeze(H_hat(:,:, nz_sc(j) ) )); % (H'*H)^(-1)*H': ZF matrix
+        x = HH_inv*squeeze(Y_data(:,nz_sc(j),:));
+    else
+        % Conjugate:
+        H_norm = diag(abs (H_hat(:,:, nz_sc(j) )' * H_hat(:,:, nz_sc(j) ) ));
+        % normalization: 
+        H_nomr = repmat(H_norm, 1, N_BS_NODE);
+        x = (H_hat(:,:, nz_sc(j) )' ./ H_nomr )* squeeze(Y_data(:,nz_sc(j),:));
+    end
+    syms_eq(:,nz_sc(j),:) = x;
+    
+end
+% Take only data SCs
+syms_eq = syms_eq(:,SC_IND_DATA,:);
+% Reshape the 3-D matrix to 2-D:
+syms_eq = reshape(syms_eq, N_UE, [] );
+syms_eq = syms_eq.';
+
+
+cf = 1;
+figure(cf); clf;
+subplot(1,2,1)
+plot(syms_eq(:,1),'ro','MarkerSize',1);
+axis square; axis(1.5*[-1 1 -1 1]);
+grid on;
+hold on;
+
+plot(tx_syms(:, 1),'bo');
+title('Uplink Tx and Rx Constellations')
+legend('Rx','Tx');
+
+subplot(1,2,2)
+plot(syms_eq(:, 2),'ro','MarkerSize',1);
+axis square; axis(1.5*[-1 1 -1 1]);
+grid on;
+hold on;
+plot(tx_syms(:, 2),'bo');
+title('Uplink Tx and Rx Constellations')
+legend('Rx','Tx');
+
+
+%% Demodulate
+
+demod_fcn_bpsk = @(x) double(real(x)>0);
+demod_fcn_qpsk = @(x) double(2*(real(x)>0) + 1*(imag(x)>0));
+demod_fcn_16qam = @(x) (8*(real(x)>0)) + (4*(abs(real(x))<0.6325)) + (2*(imag(x)>0)) + (1*(abs(imag(x))<0.6325));
+demod_fcn_64qam = @(x) (32*(real(x)>0)) + (16*(abs(real(x))<0.6172)) + (8*((abs(real(x))<(0.9258))&&((abs(real(x))>(0.3086))))) + (4*(imag(x)>0)) + (2*(abs(imag(x))<0.6172)) + (1*((abs(imag(x))<(0.9258))&&((abs(imag(x))>(0.3086)))));
+
+rx_data = double.empty();
+switch(MOD_ORDER)
+    case 2         % BPSK
+        rx_data = arrayfun(demod_fcn_bpsk, syms_eq );
+
+    case 4         % QPSK
+        rx_data = arrayfun(demod_fcn_qpsk, syms_eq);
+        
+        
+    case 16        % 16-QAM
+        rx_data = arrayfun(demod_fcn_16qam, syms_eq );  
+
+    case 64        % 64-QAM
+        rx_data = arrayfun(demod_fcn_64qam, syms_eq );
+end
+
+
+sym_errs = sum(tx_data(:) ~= rx_data(:));
+bit_errs = length(find(dec2bin(bitxor(tx_data(:), rx_data(:)),8) == '1'));
+% FIX THIS:
+rx_evm   = sqrt(sum((real(syms_eq(:)) - real(tx_syms(:))).^2 + (imag(syms_eq(:)) - imag(tx_syms(:))).^2)/(length(SC_IND_DATA) * N_OFDM_SYM));
+
+fprintf('\n MIMO Results:\n');
+fprintf('Num Bytes:   %d\n', N_DATA_SYMS * log2(MOD_ORDER) / 8);
+fprintf('Sym Errors:  %d (of %d total symbols)\n', sym_errs, N_DATA_SYMS);
+fprintf('Bit Errors:  %d (of %d total bits)\n', bit_errs, N_DATA_SYMS * log2(MOD_ORDER));
+
 
 rx_lts_idx1 = -64+-FFT_OFFSET + (97:160);
-rx_lts_idx2 = -FFT_OFFSET + (97:160);
+rx_lts_idx2 = -FFT_OFFSET + (97:160); 
+rx_cfo_est_lts = zeros(1,N_BS_NODE,1);
+rx_dec_cfo_corr = rx_vec_iris;
+
+return;
+
+
 rx_lts_b1 = [rx_lts(rx_lts_idx1,1)  rx_lts(rx_lts_idx2,1)];
 rx_lts_b2 = [rx_lts(rx_lts_idx1,2)  rx_lts(rx_lts_idx2,2)];
 

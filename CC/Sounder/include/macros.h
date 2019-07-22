@@ -4,6 +4,7 @@
 #define ENABLE_CPU_ATTACH
 #define DEBUG_PRINT 0
 #define DEBUG_RADIO 0
+#define DEBUG_PLOT 0
 
 #define EVENT_RX_SYMBOL 0
 #define EVENT_CROPPED 1
@@ -11,9 +12,7 @@
 #define EVENT_DEMUL 3
 
 
-#define TASK_CROP 0
-#define TASK_ZF 1
-#define TASK_DEMUL 2
+#define TASK_RECORD 0
 
 // TASK & SOCKET thread number 
 #define TASK_THREAD_NUM 1

@@ -75,6 +75,9 @@ public:
     double rxgainA;
     double txgainB;
     double rxgainB;
+    double calTxGainA;
+    double calTxGainB;
+    bool sampleCalEn;
 
     // Clients features
     int nClSdrs;

@@ -607,13 +607,13 @@ void Recorder::start()
             if(event.event_type == EVENT_RX_SYMBOL)
             {
                 int offset = event.data;
-                Event_data do_crop_task;
-                do_crop_task.event_type = TASK_CROP;
-                do_crop_task.data = offset;
-                if ( !task_queue_.try_enqueue(ptok, do_crop_task ) ) {
-                    printf("need more memory\n");
-                    if ( !task_queue_.enqueue(ptok, do_crop_task ) ) {
-                        printf("crop task enqueue failed\n");
+                Event_data do_record_task;
+                do_record_task.event_type = TASK_RECORD;
+                do_record_task.data = offset;
+                if ( !task_queue_.try_enqueue(ptok, do_record_task ) ) {
+                    printf("queue limit has reached! try to increase queue size.\n");
+                    if ( !task_queue_.enqueue(ptok, do_record_task ) ) {
+                        printf("record task enqueue failed\n");
                         exit(0);
                     }
                 }
@@ -673,7 +673,7 @@ void* Recorder::taskThread(void* context)
         }
 
         // do different tasks according to task type
-        if(event.event_type == TASK_CROP)
+        if(event.event_type == TASK_RECORD)
         {   
             obj_ptr->record(tid, event.data);
         }
@@ -706,16 +706,14 @@ herr_t Recorder::record(int tid, int offset)
                                                            *((short *)cur_ptr_buffer+16)); 
 #endif
     short* cur_ptr_buffer_short = (short*)(cur_ptr_buffer + sizeof(int) * 4);
+    if (cfg->max_frame != 0 && frame_id > cfg->max_frame)
+    {
+        closeHDF5();
+        goto clean_exit;
+    }
     try
     {
 	Exception::dontPrint();
-        if (cfg->max_frame != 0 && frame_id > cfg->max_frame)
-        {
-            closeHDF5();
-            printf("reached max frame %d\n", cfg->max_frame);
-            socket_buffer_[buffer_id].buffer_status[offset] = 0; // now empty
-            return 0;
-        }
         // Update the max frame number.
         // Note that the 'frameid' might be out of order.
         if(frame_id > maxFrameNumber)
@@ -771,7 +769,10 @@ herr_t Recorder::record(int tid, int offset)
             // Are we going to extend the dataset?
             if((size_t)frame_id >= dims_data[0])
             {
-                dims_data[0] = dims_data[0] + config_data_extent_step;
+                //dims_data[0] = dims_data[0] + config_data_extent_step;
+                dims_data[0] = cfg->max_frame != 0
+                                  ? std::min(dims_data[0] + config_data_extent_step, (long long unsigned int)cfg->max_frame+1) // 400 is a threshold.
+                                  : dims_data[0] + config_data_extent_step; 
                 data_dataset->extend(dims_data);
                 printf("(Data) Extent to %llu Frames\n", dims_data[0]);
             }
@@ -815,6 +816,8 @@ herr_t Recorder::record(int tid, int offset)
 	error.printError();
 	return -1;
     }
+
+    clean_exit:
 
     // after finish
     socket_buffer_[buffer_id].buffer_status[offset] = 0; // now empty

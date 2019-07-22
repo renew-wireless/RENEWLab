@@ -73,7 +73,7 @@ def find_lts(iq, thresh=0.8, us=1, cp=32, flip=False):
 		ax1.plot(np.abs(iq))
 		ax2 = fig.add_subplot(2, 1, 2)
 		ax2.grid(True)
-		ax2.plot(np.abs(lts_corr))
+		ax2.stem(np.abs(lts_corr))
 		ax2.scatter(lts_pks, 2 * np.ones(len(lts_pks)))
 		plt.show()
 
