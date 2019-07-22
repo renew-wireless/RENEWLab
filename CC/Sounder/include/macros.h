@@ -12,9 +12,7 @@
 #define EVENT_DEMUL 3
 
 
-#define TASK_CROP 0
-#define TASK_ZF 1
-#define TASK_DEMUL 2
+#define TASK_RECORD 0
 
 // TASK & SOCKET thread number 
 #define TASK_THREAD_NUM 1

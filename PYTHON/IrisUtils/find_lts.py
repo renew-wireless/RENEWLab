@@ -34,7 +34,7 @@ def find_lts(iq, thresh=0.8, us=1, cp=32, flip=False):
 			lts_pks: the list of all detected LTSs, and
 			lts_corr: the correlated signal, multiplied by itself delayed by 1/2 an LTS
 	"""
-	debug = True
+	debug = False
 
 	lts, lts_f = generate_training_seq(preamble_type='lts', cp=cp, upsample=us)
 	# lts contains 2.5 64-sample-LTS sequences, we need only one symbol

@@ -5,9 +5,9 @@
 		 "hub_id" : "files/hub_serials.txt",
 		 "frequency" : 3.6e9,
 		 "channel" : "A",
-		 "rxgainA" : 30,
+		 "rxgainA" : 20,
 		 "txgainA" : 35,
-		 "rxgainB" : 30,
+		 "rxgainB" : 20,
 		 "txgainB" : 35,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
@@ -21,6 +21,7 @@
 		 "postfix" : 68,
 		 "beacon_seq" : "gold_ifft",
 		 "beamsweep" : true,
+                 "sample_calibrate" : true,
 		 "beacon_antenna" : 0,
 		 "pilot_seq" : "lts"
 	}
