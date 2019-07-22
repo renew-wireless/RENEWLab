@@ -228,7 +228,8 @@ class hdfDump:
                             #if previous if Flase, do as usual:
                             print("WARNING: No frames_to_inspect given and/or boundries don't make sense. Will process the whole dataset.") 
                             dataset = np.array(dtst_ptr)
-
+                            self.n_frm_end = self.n_frm_st + dataset.shape[0]
+                    
                         if type(dataset) is np.ndarray:
                             if dataset.size != 0:
                                 if type(dataset[0]) is np.bytes_:
@@ -443,7 +444,6 @@ class hdfDump:
        
         print("********     verify_hdf5(): Calling csi_from_pilots and frame_sanity    *********")
         samples_P = data['Pilot_Samples']['Samples']
-        print(samples_P.shape)
         n_ue = num_cl
         frm_plt = min(default_frame, samples_P.shape[0] + self.n_frm_st)
         csi_from_pilots_start = time.time()

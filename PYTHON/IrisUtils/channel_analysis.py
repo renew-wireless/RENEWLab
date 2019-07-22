@@ -106,6 +106,7 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frm_st_idx
     debug  = False
     test_mf = False
     write_to_file = True
+    legacy = True
     
     # dimensions of pilots_dump
     n_frame = pilots_dump.shape[0]      # no. of captured frames
@@ -125,9 +126,13 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frm_st_idx
 
     n_cmpx =  n_iq // 2                 #  no. of complex samples
     n_csamp = n_cmpx - z_padding        # no. of complex samples in a P subframe without pre- and post- fixes
-    idx_e = np.arange(1, n_iq, 2)       # even indices: real part of iq      --> ATTENTION: I and Q are flipped at RX for some weird reason! So, even starts from 1! 
-    idx_o = np.arange(0, n_iq, 2)       # odd  indices: imaginary part of iq --> ATTENTION: I and Q are flipped at RX for some weird reason! So, odd starts from 0!
-
+    if legacy:
+        idx_e = np.arange(1, n_iq, 2)       # even indices: real part of iq      --> ATTENTION: I and Q are flipped at RX for some weird reason! So, even starts from 1! 
+        idx_o = np.arange(0, n_iq, 2)       # odd  indices: imaginary part of iq --> ATTENTION: I and Q are flipped at RX for some weird reason! So, odd starts from 0!
+    else:
+        idx_e = np.arange(0, n_iq, 2)       # even indices: real part of iq 
+        idx_o = np.arange(1, n_iq, 2)       # odd  indices: imaginary part of iq
+        
     # make a new data structure where the iq samples become complex numbers
     cmpx_pilots = (pilots_dump[:,:,:,:,idx_e] + 1j*pilots_dump[:,:,:,:,idx_o])*2**-15
 
