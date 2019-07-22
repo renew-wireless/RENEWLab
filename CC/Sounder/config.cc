@@ -62,8 +62,8 @@ Config::Config(std::string jsonfile)
         rxgainA = tddConf.value("rxgainA", 20);
         txgainB = tddConf.value("txgainB", 20);
         rxgainB = tddConf.value("rxgainB", 20);
-        calTxGainA = tddConf.value("calTxGainA", 40);
-        calTxGainB = tddConf.value("calTxGainB", 40);
+        calTxGainA = tddConf.value("calTxGainA", 10);
+        calTxGainB = tddConf.value("calTxGainB", 10);
         sampleCalEn = tddConf.value("sample_calibrate", false);
         beamsweep = tddConf.value("beamsweep", false);
         beacon_ant = tddConf.value("beacon_antenna", 0);
