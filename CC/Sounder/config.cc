@@ -64,7 +64,7 @@ Config::Config(std::string jsonfile)
         rxgainB = tddConf.value("rxgainB", 20);
         calTxGainA = tddConf.value("calTxGainA", 40);
         calTxGainB = tddConf.value("calTxGainB", 40);
-        sampleCalEn = tddConf.value("sample_calibrate", true);
+        sampleCalEn = tddConf.value("sample_calibrate", false);
         beamsweep = tddConf.value("beamsweep", false);
         beacon_ant = tddConf.value("beacon_antenna", 0);
         max_frame = tddConf.value("max_frame", 0);
@@ -202,17 +202,14 @@ Config::Config(std::string jsonfile)
         beacon_ci16.insert(beacon_ci16.begin(),pre0.begin(),pre0.end());
         beacon_ci16.insert(beacon_ci16.end(),post0.begin(),post0.end());
 
-        beacon = Utils::cint16_to_uint32(beacon_ci16, false, "IQ"); 
+        beacon = Utils::cint16_to_uint32(beacon_ci16, false, "QI"); 
 
         std::vector<std::complex<int16_t>> pre(prefix, 0);
         std::vector<std::complex<int16_t>> post(postfix, 0);
 
         coeffs_ci16 = Utils::double_to_int16(gold_ifft); 
-#ifdef NEWCORR
-        coeffs = Utils::cint16_to_uint32(coeffs_ci16, true, "IQ");
-#else
         coeffs = Utils::cint16_to_uint32(coeffs_ci16, true, "QI");
-#endif
+
         // compose pilot subframe
         std::vector<std::vector<double>> lts = CommsLib::getSequence(80, CommsLib::LTS_SEQ);
         std::vector<std::complex<int16_t>> lts_ci16 = Utils::double_to_int16(lts); 
@@ -227,7 +224,7 @@ Config::Config(std::string jsonfile)
         pilot_ci16.insert(pilot_ci16.end(), lts_ci16.begin(), lts_ci16.begin()+frac);
         pilot_ci16.insert(pilot_ci16.end(), post.begin(), post.end());
 
-        pilot = Utils::cint16_to_uint32(pilot_ci16, false, "IQ");
+        pilot = Utils::cint16_to_uint32(pilot_ci16, false, "QI");
 #if DEBUG_PRINT
         for (int j = 0; j < pilot.size(); j++)
         {

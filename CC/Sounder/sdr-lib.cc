@@ -382,20 +382,14 @@ void *RadioConfig::initBSRadio(void *in_context)
 void RadioConfig::radioStart()
 {
     int flags = 0;
-    bool enable_samp_cal = true;
     if (_cfg->bsPresent)
     {
 
         if(_cfg->sampleCalEn){
-            //std::cout << "Begin Sample Offset Calibration" << std::endl;
-            //int cal_passed = sampleOffsetCal();
-            //if (cal_passed == -1) {
-            //    printf("Sample Offset Calibration Failed \n");
-            //    exit(0);
-            //}
-            //std::cout << "Sample Offset Calibration Done" << std::endl;
-            collectCSI(true);
-            collectCSI(false);
+            //sampleOffsetCal();
+            collectCSI(true);  // run 1: find offsets and adjust
+            collectCSI(false); // run 2: verify adjustments
+            usleep(100000);
         }
 
         std::vector<std::string> _tddSched;
@@ -483,6 +477,7 @@ void RadioConfig::radioStart()
             }
             bsSdrs[0][i]->activateStream(this->bsRxStreams[0][i], flags, 0);
             bsSdrs[0][i]->activateStream(this->bsTxStreams[0][i]);
+            bsSdrs[0][i]->setHardwareTime(0, "TRIGGER");
         }
     }
 
@@ -519,30 +514,22 @@ void RadioConfig::radioStart()
             for (int k = 0; k < 128; k++)
                 device->writeRegister("ARGCOE", k*4, 0);
             usleep(100000);
-#ifdef NEWCORR
+
             device->writeRegister("IRIS30", 64, 1); // reset faros_corr
             device->writeRegister("IRIS30", 64, 0); // unreset faros_corr
             device->writeRegister("IRIS30", 92, 1); // threshold is left-shifted by this many bits
-#else
-            device->writeRegister("ARGCOR", CORR_THRESHOLD, 128);
-            device->writeRegister("ARGCOR", CORR_RST, 1);
-            device->writeRegister("ARGCOR", CORR_RST, 0);
-#endif
+
             for (int k = 0; k < 128; k++)
                 device->writeRegister("ARGCOE", k*4, _cfg->coeffs[k]);
 
 #ifdef JSON
             json conf;
             conf["tdd_enabled"] = true;
-#ifdef NEWCORR
             conf["frame_mode"] = _cfg->frame_mode;
             int max_frame_ = (int)(2.0 / ((_cfg->sampsPerSymbol * _cfg->symbolsPerFrame) / _cfg->rate));
             conf["max_frame"] = max_frame_; 
             //std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;
-#else
-            conf["trigger_out"] = true; 
-            conf["wait_trigger"] = true; 
-#endif
+
             conf["frames"] = json::array();
             conf["frames"].push_back(tddSched[i]);
             conf["symbol_size"] = _cfg->sampsPerSymbol; 
@@ -579,24 +566,6 @@ void RadioConfig::radioStart()
 
     if (_cfg->bsPresent)
     {
-        //if(enable_samp_cal)
-        //{
-        //    // "Drain" rx buffers before sounding
-        //    int cellIdx = 0;
-        //    int symSamp = _cfg->pilot.size();
-        //    std::vector<uint32_t> buffA(symSamp);
-        //    std::vector<uint32_t> buffB(symSamp);
-        //    std::vector<void *> buffs(2);
-        //    buffs[0] = buffA.data();
-        //    buffs[1] = buffB.data();
-        //    for (int j = _cfg->bsSdrCh; j < nBsAntennas[cellIdx]; j+=_cfg->bsSdrCh)
-        //    {
-        //        std::cout << "SOUNDER: Draining Rx Chain: " << j << std::endl;
-        //        RadioConfig::drain_buffers(bsSdrs[cellIdx][j/_cfg->bsSdrCh], this->bsRxStreams[cellIdx][j/_cfg->bsSdrCh], buffs, symSamp);
-        //    }
-        //    std::cout << "SOUNDER: Done Draining Rx Chains" << std::endl;
-        //}
-
         if (hubs.size() == 0)
         {
             std::cout << "triggering first Iris ..." << std::endl;
@@ -659,7 +628,7 @@ void RadioConfig::radioStop()
         {
             auto device = devs[i];
             device->writeRegister("IRIS30", CORR_CONF, 0);
-            std::cout << "device " << i << " T=" << std::hex << SoapySDR::timeNsToTicks(device->getHardwareTime(""), _cfg->rate) << std::endl;
+            std::cout << "device " << i << " T=" << std::hex << SoapySDR::timeNsToTicks(device->getHardwareTime(""), _cfg->rate) << std::dec << std::endl;
             for (int i = 0; i < _cfg->symbolsPerFrame; i++)
             {
                 device->writeRegister("RFCORE", SCH_ADDR_REG, i);
@@ -770,8 +739,8 @@ void RadioConfig::collectCSI(bool adjust)
 
     //std::vector<std::vector<std::complex<float>>> buff;
     std::vector<std::vector<std::complex<int16_t>>> buff;
-    int ant = _cfg->bsSdrCh;
-    int M = nBsSdrs[0] * ant;
+    //int ant = _cfg->bsSdrCh;
+    //int M = nBsSdrs[0] * ant;
     int R = nBsSdrs[0];
     buff.resize(R * R);
     for (int i = 0; i < R; i++)
@@ -787,8 +756,10 @@ void RadioConfig::collectCSI(bool adjust)
     std::vector<void *> dummybuffs(2);
     dummybuffs[0] = dummyBuff0.data();
     dummybuffs[1] = dummyBuff1.data();
+
     for (int i = 0; i < R; i++)
         RadioConfig::drain_buffers(bsSdrs[0][i], this->bsRxStreams[0][i], dummybuffs, _cfg->sampsPerSymbol);
+
     for (int i = 0; i < R; i++)
     {
         bsSdrs[0][i]->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->calTxGainA);
@@ -796,7 +767,6 @@ void RadioConfig::collectCSI(bool adjust)
         bsSdrs[0][i]->writeSetting("TDD_CONFIG", "{\"tdd_enabled\":false}");
         bsSdrs[0][i]->writeSetting("TDD_MODE", "false");
         bsSdrs[0][i]->activateStream(this->bsTxStreams[0][i]);
-        //bsSdrs[0][i]->activateStream(this->bsRxStreams[0][i], flags, 0);
     }
 
     long long txTime(0);
@@ -838,6 +808,7 @@ void RadioConfig::collectCSI(bool adjust)
     int ref_offset = ref_ant == 0 ? 1 : 0;
     std::vector<int> offset(R);
 
+    bool good_csi = true;
     for (int i = 0; i < R; i++)
     {
         std::vector<std::complex<double>> rx(_cfg->sampsPerSymbol);
@@ -853,8 +824,9 @@ void RadioConfig::collectCSI(bool adjust)
         }
 
         int peak = CommsLib::findLTS(rx, seqLen);
-        offset[i] = peak == 0 ? 0 : peak - 128;
+        offset[i] = peak < 128 ? 0 : peak - 128;
         std::cout << i << " " << offset[i] << std::endl;
+        if (offset[i] == 0) good_csi = false;
 
 #if DEBUG_PLOT
         std::vector<double> rx_I(_cfg->sampsPerSymbol);
@@ -873,11 +845,11 @@ void RadioConfig::collectCSI(bool adjust)
     }
 
     // adjusting trigger delays based on lts peak index
-    if (adjust)
+    if (adjust and good_csi)
     {
         for (int i = 0; i < R; i++)
         {
-            int delta = offset[ref_offset] - offset[i];
+            int delta = (offset[i] == 0) ? 0 : offset[ref_offset] - offset[i];
             std::cout << "adjusting delay of node " << i << " by " << delta << std::endl;
             int iter = delta < 0 ? -delta : delta;
             for (int j = 0; j < iter; j++)
@@ -897,6 +869,9 @@ void RadioConfig::collectCSI(bool adjust)
         bsSdrs[0][i]->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->txgainA);  //[0,30]
         bsSdrs[0][i]->setGain(SOAPY_SDR_TX, 1, "PAD", _cfg->txgainB);  //[0,30]
     }
+
+    for (int i = 0; i < R; i++)
+        RadioConfig::drain_buffers(bsSdrs[0][i], this->bsRxStreams[0][i], dummybuffs, _cfg->sampsPerSymbol);
 
 }
 
@@ -939,44 +914,50 @@ int RadioConfig::sampleOffsetCal()
     pilot_cint16.insert(pilot_cint16.end(), postfix_vec.begin(), postfix_vec.end());
     // Transmitting from only one chain, create a null vector for chainB
     std::vector<std::complex<int16_t>> pilot_dummy(pilot_cint16.size(), 0);
-    pilot_uint32 = Utils::cint16_to_uint32(pilot_cint16, false, "IQ");
-    dummy_uint32 = Utils::cint16_to_uint32(pilot_dummy, false, "IQ");
+    pilot_uint32 = Utils::cint16_to_uint32(pilot_cint16, false, "QI");
+    dummy_uint32 = Utils::cint16_to_uint32(pilot_dummy, false, "QI");
     int symSamp = pilot_cint16.size();
     std::cout << "Number of TX pilot samples: " << pilot[0].size() << std::endl;
     std::cout << "Number of TX total samples: " << symSamp << std::endl;
 
 
     /***********************************************
-     *             Compute Sync Delays             *
-     ***********************************************/
-    // NOTE: MOVED TO RECEIVER.CPP
-    //if (!hubs.empty()) {
-    //    hubs[cellIdx]->writeSetting("SYNC_DELAYS", "");
-    //} else {
-    //    bsSdrs[cellIdx][0]->writeSetting("SYNC_DELAYS", "");
-    //}
-
-
-    /***********************************************
      *   Write pilots to RAM and activate stream   *
      ***********************************************/
+    // For now, we assume reference board is part of the BS and is triggered from hub
+    int refBoardId = 0;
+    bsSdrs[cellIdx][refBoardId]->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->calTxGainA);
+    bsSdrs[cellIdx][refBoardId]->setGain(SOAPY_SDR_TX, 1, "PAD", _cfg->calTxGainB);
+    bsSdrs[cellIdx][refBoardId]->writeRegisters("TX_RAM_A", 0, pilot_uint32);
+
+    // Read buffers
+    //std::vector<std::complex<float>> buffA(symSamp);
+    //std::vector<std::complex<float>> buffB(symSamp);
+    std::vector<uint32_t> buffA(symSamp);
+    std::vector<uint32_t> buffB(symSamp);
+
+    std::vector<void *> buffs(2);
+    buffs[0] = buffA.data();
+    buffs[1] = buffB.data();
+
     int flags = 0;
     for (int i = 0; i < nBsSdrs[cellIdx]; i++)
     {
-        bsSdrs[cellIdx][i]->writeRegisters("TX_RAM_A", 0, pilot_uint32);
-        if (_cfg->bsSdrCh == 2) {
-            // Doesn't matter: for cal, chainB not used
-            bsSdrs[cellIdx][i]->writeRegisters("TX_RAM_B", 2048, dummy_uint32);
-        }
+        if (i == refBoardId) continue;
         bsSdrs[cellIdx][i]->activateStream(this->bsRxStreams[cellIdx][i], flags, 0);
     }
+
+    // "Drain" rx buffers
+    for (int j = _cfg->bsSdrCh; j < nBsAntennas[cellIdx]; j+=_cfg->bsSdrCh)
+    {
+        RadioConfig::drain_buffers(bsSdrs[cellIdx][j/_cfg->bsSdrCh], this->bsRxStreams[cellIdx][j/_cfg->bsSdrCh], buffs, symSamp);
+    }
+    std::cout << "SAMP_CAL: Done Draining Rx Chains" << std::endl;
 
 
     /***********************
      *   Create schedule   *
      ***********************/
-    // For now, we assume reference board is part of the BS and is triggered from hub
-    int refBoardId = 0;
     // write config for reference radio node
     std::vector<std::string> sched = {"PG"};
     //std::string sched = "PG";
@@ -984,13 +965,13 @@ int RadioConfig::sampleOffsetCal()
 #ifdef JSON
     json conf;
     conf["tdd_enabled"] = true;
-    conf["trigger_out"] = false;
+    conf["frame_mode"] = "triggered";
     conf["frames"] = sched;
     conf["symbol_size"] = symSamp;
     conf["max_frame"] = 1;
     std::string confString = conf.dump();
 #else
-    std::string confString ="{\"tdd_enabled\":true,\"trigger_out\":false,";
+    std::string confString ="{\"tdd_enabled\":true,\"frame_mode\":free_running,";
     confString +="\"symbol_size\":"+std::to_string(symSamp);
     confString +=",\"frames\":[\"";
     confString += sched;
@@ -1008,13 +989,13 @@ int RadioConfig::sampleOffsetCal()
         std::cout << "Samp Offset Cal node " << i << " schedule: " << sched[0] << std::endl;
 #ifdef JSON
         conf["tdd_enabled"] = true;
-        conf["trigger_out"] = false;
+        conf["frame_mode"] = "triggered";
         conf["frames"] = sched;
         conf["symbol_size"] = symSamp;
         conf["max_frame"] = 1;
         confString = conf.dump();
 #else
-        confString ="{\"tdd_enabled\":true,\"trigger_out\":false,";
+        confString ="{\"tdd_enabled\":true,\"frame_mode\":free_running,";
         confString +="\"symbol_size\":"+std::to_string(symSamp);
         confString +=",\"frames\":[\"";
         confString += sched;
@@ -1035,23 +1016,6 @@ int RadioConfig::sampleOffsetCal()
     int numVerTx = debug?200:0;
     // Cal-Passing Threshold
     double pass_thresh = 0.6 * numCalTx;
-    // Read buffers
-    //std::vector<std::complex<float>> buffA(symSamp);
-    //std::vector<std::complex<float>> buffB(symSamp);
-    std::vector<uint32_t> buffA(symSamp);
-    std::vector<uint32_t> buffB(symSamp);
-
-    std::vector<void *> buffs(2);
-    buffs[0] = buffA.data();
-    buffs[1] = buffB.data();
-
-    // "Drain" rx buffers
-    for (int j = _cfg->bsSdrCh; j < nBsAntennas[cellIdx]; j+=_cfg->bsSdrCh)
-    {
-	std::cout << "SAMP_CAL: Draining Rx Chain: " << j << std::endl;
-        RadioConfig::drain_buffers(bsSdrs[cellIdx][j/_cfg->bsSdrCh], this->bsRxStreams[cellIdx][j/_cfg->bsSdrCh], buffs, symSamp);
-    }
-    std::cout << "SAMP_CAL: Done Draining Rx Chains" << std::endl;
 
     // Aggregate over iterations (for calibration and for verification)
     std::vector<std::vector<int>> calCorrIdx(nBsSdrs[cellIdx] - 1, std::vector<int>(numCalTx, 0));
@@ -1088,8 +1052,8 @@ int RadioConfig::sampleOffsetCal()
             // cast vectors
             //std::vector<std::complex<double>> buffA_d(buffA.begin(), buffA.end());
             //std::vector<std::complex<double>> buffB_d(buffB.begin(), buffB.end());
-            std::vector<std::complex<double>> buffA_d = Utils::uint32tocdouble(buffA, "IQ");
-            std::vector<std::complex<double>> buffB_d = Utils::uint32tocdouble(buffB, "IQ");
+            std::vector<std::complex<double>> buffA_d = Utils::uint32tocdouble(buffA, "QI");
+            std::vector<std::complex<double>> buffB_d = Utils::uint32tocdouble(buffB, "QI");
             waveRxA[j/_cfg->bsSdrCh - _cfg->bsSdrCh] = buffA_d;
             waveRxB[j/_cfg->bsSdrCh - _cfg->bsSdrCh] = buffB_d;
         }
@@ -1105,7 +1069,7 @@ int RadioConfig::sampleOffsetCal()
                 int seqLen = 160;
                 if (k==0) peak = CommsLib::findLTS(waveRxA[j], seqLen);
                 if (k==1) peak = CommsLib::findLTS(waveRxB[j], seqLen);
-
+                std::cout << j << " " << peak << std::endl;
                 if (peak == -1){
                     // If no LTS found, use value from second channel
                     continue;
@@ -1138,6 +1102,7 @@ int RadioConfig::sampleOffsetCal()
                 }
                 // record sample offset (from a reference board)
                 samp_offset[j] = most_freq[cal_ref_idx] - most_freq[j];
+                std::cout << "adjusting delay of node " << j << " by " << samp_offset[j] << std::endl;
                 for (int k = 0; k < abs(samp_offset[j]); k++) {
                     if (samp_offset[j] > 0) {
 			//std::cout << "Board[" << j << "]: INCREASE" << std::endl;
@@ -1200,6 +1165,11 @@ int RadioConfig::sampleOffsetCal()
         }
         myfile.close();
     }
+
+    bsSdrs[cellIdx][refBoardId]->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->txgainA);  //[0,30]
+    bsSdrs[cellIdx][refBoardId]->setGain(SOAPY_SDR_TX, 1, "PAD", _cfg->txgainB);  //[0,30]
+    //RadioConfig::drain_buffers(bsSdrs[cellIdx][i], this->bsRxStreams[cellIdx][i], buffs, symSamp);
+
     return 0;
 }
 

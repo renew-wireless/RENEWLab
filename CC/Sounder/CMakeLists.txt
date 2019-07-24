@@ -26,7 +26,6 @@ set(directory "logs")
 file(MAKE_DIRECTORY ${directory})
 
 add_definitions(-DJSON)
-add_definitions(-DNEWCORR)
 add_definitions(-DTHREADED_INIT)
 
 message(STATUS "PYTHON_LIBRARIES: ${PYTHON_LIBRARIES}")
