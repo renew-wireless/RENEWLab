@@ -25,7 +25,7 @@ CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_MOD                 = 1;
 DEBUG                   = 0;
 sim_SNR_db              = 10;    
-sim_H_var               = 1;
+sim_H_var               = .5;
 %Iris params:
 N_BS_NODE               = 8;
 N_UE                    = 2;
@@ -37,8 +37,8 @@ MIMO_ALG                = 'ZF';      % MIMO ALGORITHM: ZF or Conjugate
 
 % Waveform params
 N_OFDM_SYM              = 32;         % Number of OFDM symbols for burst, it needs to be less than 47
-MOD_ORDER               = 4;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
-TX_SCALE                = .5;         % Scale for Tx waveform ([0:1])
+MOD_ORDER               = 4;          % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
+TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
 
 % OFDM params
 SC_IND_PILOTS           = [8 22 44 58];                           % Pilot subcarrier indices
@@ -142,6 +142,7 @@ if (SIM_MOD)
     DO_APPLY_PHASE_ERR_CORRECTION = 1;
     sim_N0 = mean(mean(abs(tx_vecs_iris).^2 )) / 10^(0.1*sim_SNR_db);
     H_ul = sqrt(sim_H_var/2) .* ( randn(N_BS_NODE, N_UE) + 1i*randn(N_BS_NODE, N_UE) );
+    %H_ul = H_ul./norm(H_ul);
     W_ul = sqrt(sim_N0/2) * (randn(N_BS_NODE, length(tx_vecs_iris)) + ...
         1i*randn(N_BS_NODE, length(tx_vecs_iris)) );
     rx_vec_iris = H_ul*tx_vecs_iris.' + W_ul;
@@ -151,7 +152,7 @@ else
 
 %% Init Iris nodes
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Set up the Iris experiment
+% Set up the Iris experimenty
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     % Create a two Iris node objects:
@@ -235,8 +236,6 @@ else
     fprintf('Matlab script: Length of the received vector: \tUE:%d\n', data0_len);
 end
 
-rx_vec_air = rx_vec_iris; %NB: Change this, unecessary assignment!
-
 l_rx_dec=length(rx_vec_iris);
 
 %% Correlate for LTS
@@ -319,6 +318,8 @@ Y_data = fft(payload_noCP, N_SC, 2);
 % Apply ZF by multiplying the pseudo inverse of H_hat[N_BS_NODE x NUE] for each suubcarrier:
 nz_sc = find(lts_f ~= 0); % non-zero subcarriers
 syms_eq = zeros(N_UE,N_SC,N_OFDM_SYM);
+channel_condition = double.empty();
+channel_condition_db = double.empty();
 for j=1:length(nz_sc)
     
     if(strcmp(MIMO_ALG,'ZF'))
@@ -328,40 +329,18 @@ for j=1:length(nz_sc)
         % Conjugate:
         H_norm = diag(abs (H_hat(:,:, nz_sc(j) )' * H_hat(:,:, nz_sc(j) ) ));
         % normalization: 
-        H_nomr = repmat(H_norm, 1, N_BS_NODE);
-        x = (H_hat(:,:, nz_sc(j) )' ./ H_nomr )* squeeze(Y_data(:,nz_sc(j),:));
+        H_norm = repmat(H_norm, 1, N_BS_NODE);
+        x = (H_hat(:,:, nz_sc(j) )' ./ H_norm )* squeeze(Y_data(:,nz_sc(j),:));
     end
     syms_eq(:,nz_sc(j),:) = x;
-    
+    channel_condition(nz_sc(j)) = cond(H_hat(:,:,nz_sc(j) ) );
+    channel_condition_db(nz_sc(j)) = 10*log10(channel_condition(nz_sc(j)) );
 end
 % Take only data SCs
 syms_eq = syms_eq(:,SC_IND_DATA,:);
 % Reshape the 3-D matrix to 2-D:
 syms_eq = reshape(syms_eq, N_UE, [] );
 syms_eq = syms_eq.';
-
-
-cf = 1;
-figure(cf); clf;
-subplot(1,2,1)
-plot(syms_eq(:,1),'ro','MarkerSize',1);
-axis square; axis(1.5*[-1 1 -1 1]);
-grid on;
-hold on;
-
-plot(tx_syms(:, 1),'bo');
-title('Uplink Tx and Rx Constellations')
-legend('Rx','Tx');
-
-subplot(1,2,2)
-plot(syms_eq(:, 2),'ro','MarkerSize',1);
-axis square; axis(1.5*[-1 1 -1 1]);
-grid on;
-hold on;
-plot(tx_syms(:, 2),'bo');
-title('Uplink Tx and Rx Constellations')
-legend('Rx','Tx');
-
 
 %% Demodulate
 
@@ -386,6 +365,122 @@ switch(MOD_ORDER)
         rx_data = arrayfun(demod_fcn_64qam, syms_eq );
 end
 
+%% Plot results
+
+cf = 0;
+
+% Tx signal
+cf = cf + 1;
+figure(cf); clf;
+for sp=1:N_UE
+    subplot(N_UE,2,2*(sp -1) + 1);
+    plot(real(tx_vecs_iris(:,sp)), 'b');
+    axis([0 length(tx_vecs_iris(:,sp)) -TX_SCALE TX_SCALE])
+    grid on;
+    title(sprintf('UE %d Tx Waveform (I)', sp));
+
+    subplot(N_UE,2,2*sp);
+    plot(imag(tx_vecs_iris(:,sp)), 'r');
+    axis([0 length(tx_vecs_iris(:,sp)) -TX_SCALE TX_SCALE])
+    grid on;
+    title(sprintf('UE %d Tx Waveform (Q)',sp));
+end
+% Rx signal
+cf = cf + 1;
+figure(cf); clf;
+for sp = 1:N_BS_NODE
+    subplot(N_BS_NODE,2,2*(sp -1) + 1 );
+    plot(real(rx_vec_iris(sp,:)), 'b');
+    axis([0 length(rx_vec_iris(sp,:)) -TX_SCALE TX_SCALE])
+    grid on;
+    title(sprintf('BS antenna %d Rx Waveform (I)', sp));
+
+    subplot(N_BS_NODE,2,2*sp);
+    plot(imag(rx_vec_iris(sp,:)), 'r');
+    axis([0 length(rx_vec_iris(sp,:)) -TX_SCALE TX_SCALE])
+    grid on;
+    title(sprintf('BS antenna %d Rx Waveform (Q)', sp));
+end 
+
+% Rx LTS correlation
+cf = cf+ 1;
+figure(cf); clf;
+for sp = 1:N_BS_NODE
+    subplot(N_BS_NODE,1,sp);
+    plot(lts_corr(:,sp)) 
+    line([1 length(lts_corr)], LTS_CORR_THRESH*max(lts_corr(:,sp))*[1 1], 'LineStyle', '--', 'Color', 'r', 'LineWidth', 2);
+    grid on;
+    xlabel('Samples');
+    y_label = sprintf('Anetnna %d',sp);
+    ylabel(y_label);
+    myAxis = axis();
+    axis([1, 800, myAxis(3), myAxis(4)])
+end
+tb = annotation('textbox', [0 0.87 1 0.1], ...
+    'String', 'LTS Correlation and Threshold', ...
+    'EdgeColor', 'none', ...
+    'HorizontalAlignment', 'center');
+tb.FontWeight = 'bold';
+
+% Constellations
+cf = cf+ 1;
+figure(cf); clf;
+if N_BS_NODE >=4
+    sp_rows = ceil(N_BS_NODE/4)+1;
+else
+    sp_rows = ceil(N_BS_NODE/2)+1;
+end
+sp_cols = ceil(N_BS_NODE/(sp_rows -1));
+for sp=1:N_UE
+    subplot(sp_rows,sp_cols,floor(sp_cols/2) + (sp -1) );
+    plot(syms_eq(:,sp),'ro','MarkerSize',1);
+    axis square; axis(1.5*[-1 1 -1 1]);
+    grid on;
+    hold on;
+    plot(tx_syms(:, sp),'bo');
+    title(sprintf('Equalized Uplink Tx and Rx symbols for stream %d', sp));
+    legend('Rx','Tx');
+end
+
+for sp=1:N_BS_NODE
+    subplot(sp_rows,sp_cols, sp_cols+sp);
+    plot(squeeze(Y_data(sp,:,:)),'co','MarkerSize',1);
+    axis square; axis(max(max(max( abs( Y_data)) ))*[-1 1 -1 1]);
+    title(sprintf('Unequalized received symbols at BS ant. %d', sp));
+    grid on;
+    hold on;
+end
+
+% % Channel Estimates
+cf = cf + 1;
+bw_span = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1)).';
+
+figure(cf); clf;
+sp = 0;
+for ibs = 1:N_BS_NODE
+    for iue = 1:N_UE
+        sp = sp+1;
+        subplot(N_BS_NODE,N_UE,sp); 
+        bh = bar(bw_span, fftshift(abs( squeeze(H_hat(ibs, iue, : ) ) ) ),1,'LineWidth', 1);
+        shading flat
+        set(bh,'FaceColor',[0 0 1])
+        axis([min(bw_span) max(bw_span) 0 1.1*max(abs( squeeze(H_hat(ibs, iue, :) ) ) )])
+        grid on;
+        title(sprintf('UE %d -> BS ant. %d Channel Estimates (Magnitude)', iue, ibs))
+        xlabel('Baseband Frequency (MHz)')
+    end
+end
+
+subplot(N_BS_NODE+1,1,N_BS_NODE+1);
+bh = bar(bw_span, fftshift(channel_condition_db) ,1,'LineWidth', 1);
+shading flat
+set(bh,'FaceColor',[0 1 1])
+axis([min(bw_span) max(bw_span) 0 max(channel_condition_db)+1])
+grid on;
+title('Channel Condition (dB)')
+xlabel('Baseband Frequency (MHz)')
+
+% EVM & SNR
 
 sym_errs = sum(tx_data(:) ~= rx_data(:));
 bit_errs = length(find(dec2bin(bitxor(tx_data(:), rx_data(:)),8) == '1'));
@@ -398,533 +493,55 @@ fprintf('Sym Errors:  %d (of %d total symbols)\n', sym_errs, N_DATA_SYMS);
 fprintf('Bit Errors:  %d (of %d total bits)\n', bit_errs, N_DATA_SYMS * log2(MOD_ORDER));
 
 
-rx_lts_idx1 = -64+-FFT_OFFSET + (97:160);
-rx_lts_idx2 = -FFT_OFFSET + (97:160); 
-rx_cfo_est_lts = zeros(1,N_BS_NODE,1);
-rx_dec_cfo_corr = rx_vec_iris;
-
-return;
-
-
-rx_lts_b1 = [rx_lts(rx_lts_idx1,1)  rx_lts(rx_lts_idx2,1)];
-rx_lts_b2 = [rx_lts(rx_lts_idx1,2)  rx_lts(rx_lts_idx2,2)];
-
-% Received LTSs for each branch.  
-rx_lts_b1_f = fft(rx_lts_b1);
-rx_lts_b2_f = fft(rx_lts_b2);
-
-% Channel Estimates of each branch 
-H0_b1 = rx_lts_b1_f ./ repmat(lts_f',1,N_LTS_SYM);
-H0_b2 = rx_lts_b2_f ./ repmat(lts_f',1,N_LTS_SYM);
-H_b1 = mean(H0_b1,2); 
-H_b2 = mean(H0_b2,2);
-idx_0 = find(lts_f == 0);
-H_b1(idx_0,:) = 0;
-H_b2(idx_0,:) = 0;
-rx_H_est_2d = [H_b1 H_b2];
-
-%% Rx payload processing
-% Extract the payload samples (integer number of OFDM symbols following preamble)
-if( (length(rx_dec_cfo_corr) - payload_ind ) > (N_SYM_SAMP * N_OFDM_SYM) )
-    payload_vec = rx_dec_cfo_corr(payload_ind : payload_ind + (N_SYM_SAMP * N_OFDM_SYM), :);
-else
-    payload_vec = rx_dec_cfo_corr(payload_ind : end,:);
-end
-
-missed_samps = (N_SC+CP_LEN) * N_OFDM_SYM - length(payload_vec); %sometimes it's below .
-
-if (missed_samps > 0) 
-    payload_vec = [payload_vec; zeros( missed_samps, N_BS_NODE)];
-elseif (missed_samps < 0)
-    payload_vec = payload_vec(1:end+missed_samps, :);
-end
-
-% (N_CP + N_SC) x N_OFDM x N_BS_NODE
-payload_mat = reshape(payload_vec, (N_SC+CP_LEN), N_OFDM_SYM, N_BS_NODE);
-
-% Remove the cyclic prefix, keeping FFT_OFFSET samples of CP (on average)
- payload_mat_noCP = payload_mat(CP_LEN-FFT_OFFSET+(1:N_SC), :,:);
-
-% Take the FFT
-syms_f_mat_mrc = fft(payload_mat_noCP, N_SC, 1);
-syms_f_mat_1 = syms_f_mat_mrc(:,:,1);
-syms_f_mat_2 = syms_f_mat_mrc(:,:,2);
-
-% Equalize MRC
-rx_H_est = reshape(rx_H_est_2d,N_SC,1,N_BS_NODE);       % Expand to a 3rd dimension to agree with the dimensions od syms_f_mat
-H_pow = sum(abs(conj(rx_H_est_2d).*rx_H_est_2d),2);
-H_pow = repmat(H_pow,1,N_OFDM_SYM);
-syms_eq_mat_mrc =  sum( (repmat(conj(rx_H_est), 1, N_OFDM_SYM,1).* syms_f_mat_mrc), 3)./H_pow;
-
-%Equalize each branch separately
-syms_eq_mat_1 = syms_f_mat_1 ./ repmat(H_b1, 1, N_OFDM_SYM);
-syms_eq_mat_2 = syms_f_mat_2 ./ repmat(H_b2, 1, N_OFDM_SYM);
-
-if DO_APPLY_SFO_CORRECTION
-    % SFO manifests as a frequency-dependent phase whose slope increases
-    % over time as the Tx and Rx sample streams drift apart from one
-    % another. To correct for this effect, we calculate this phase slope at
-    % each OFDM symbol using the pilot tones and use this slope to
-    % interpolate a phase correction for each data-bearing subcarrier.
-
-	% Extract the pilot tones and "equalize" them by their nominal Tx values
-    pilots_f_mat_mrc = syms_eq_mat_mrc(SC_IND_PILOTS, :,:);
-    pilots_f_mat_comp_mrc = pilots_f_mat_mrc.*pilots_mat;
+cf = cf + 1;
+figure(cf); clf;
+ evm_mat = double.empty();
+ aevms = zeros(N_UE,1);
+ snr_mat = zeros(N_UE,1);
+for sp = 1:N_UE
+    tx_vec = tx_syms_mat(:,:,sp);
+    evm_mat(:,sp)  = abs(tx_vec(:) - syms_eq(:,sp) ).^2;
+    aevms(sp) = mean(evm_mat(sp));
+    snr_mat(sp) = -10*log10(aevms (sp));
     
-    pilots_f_mat_1 = syms_eq_mat_1(SC_IND_PILOTS, :,:);
-    pilots_f_mat_comp_1 = pilots_f_mat_1.*pilots_mat;
+    subplot(2,N_UE,sp)
+    plot(100*evm_mat(:,sp),'o','MarkerSize',1)
+    axis tight
+    hold on
+    plot([1 length(evm_mat(:,sp) )], 100*[aevms(sp), aevms(sp)],'r','LineWidth',4)
+    hold off
+    xlabel('Data Symbol Index')
+    ylabel('EVM (%)');
+    legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
     
-    pilots_f_mat_2 = syms_eq_mat_2(SC_IND_PILOTS, :,:);
-    pilots_f_mat_comp_2 = pilots_f_mat_2.*pilots_mat;
-
-
-	% Calculate the phases of every Rx pilot tone
-    pilot_phases_mrc = unwrap(angle(fftshift(pilots_f_mat_comp_mrc,1)), [], 1);
-    pilot_phases_1 = unwrap(angle(fftshift(pilots_f_mat_comp_1,1)), [], 1);
-    pilot_phases_2 = unwrap(angle(fftshift(pilots_f_mat_comp_2,1)), [], 1);
-
-	% Calculate slope of pilot tone phases vs frequency in each OFDM symbol
-    pilot_spacing_mat_mrc = repmat(mod(diff(fftshift(SC_IND_PILOTS)),64).', 1, N_OFDM_SYM);                        
-	pilot_slope_mat_mrc = mean(diff(pilot_phases_mrc) ./ pilot_spacing_mat_mrc);
-    pilot_spacing_mat_1 = repmat(mod(diff(fftshift(SC_IND_PILOTS)),64).', 1, N_OFDM_SYM);                        
-	pilot_slope_mat_1 = mean(diff(pilot_phases_1) ./ pilot_spacing_mat_1);
-    pilot_spacing_mat_2 = repmat(mod(diff(fftshift(SC_IND_PILOTS)),64).', 1, N_OFDM_SYM);                        
-	pilot_slope_mat_2 = mean(diff(pilot_phases_2) ./ pilot_spacing_mat_2);
-
-	% Calculate the SFO correction phases for each OFDM symbol
-    pilot_phase_sfo_corr_mrc = fftshift((-32:31).' * pilot_slope_mat_mrc, 1);
-    pilot_phase_corr_mrc = exp(-1i*(pilot_phase_sfo_corr_mrc)); 
-    pilot_phase_sfo_corr_1 = fftshift((-32:31).' * pilot_slope_mat_1, 1);
-    pilot_phase_corr_1 = exp(-1i*(pilot_phase_sfo_corr_1));
-    pilot_phase_sfo_corr_2 = fftshift((-32:31).' * pilot_slope_mat_2, 1);
-    pilot_phase_corr_2 = exp(-1i*(pilot_phase_sfo_corr_2));
-
-    % Apply the pilot phase correction per symbol
-    syms_eq_mat_mrc = syms_eq_mat_mrc .* pilot_phase_corr_mrc;
-    syms_eq_mat_1 = syms_eq_mat_1 .* pilot_phase_corr_1;
-    syms_eq_mat_2 = syms_eq_mat_2 .* pilot_phase_corr_2;
-else
-	% Define an empty SFO correction matrix (used by plotting code below)
-    pilot_phase_sfo_corr_mrc = zeros(N_SC, N_OFDM_SYM);
-    pilot_phase_sfo_corr_1 = zeros(N_SC, N_OFDM_SYM);
-    pilot_phase_sfo_corr_2 = zeros(N_SC, N_OFDM_SYM);
-end
-
-
-if DO_APPLY_PHASE_ERR_CORRECTION
-    % Extract the pilots and calculate per-symbol phase error
-    pilots_f_mat_mrc = syms_eq_mat_mrc(SC_IND_PILOTS, :,:);
-    pilots_f_mat_comp_mrc = pilots_f_mat_mrc.*pilots_mat;
-    pilot_phase_err_mrc = angle(mean(pilots_f_mat_comp_mrc));
-    pilots_f_mat_1 = syms_eq_mat_1(SC_IND_PILOTS, :,:);
-    pilots_f_mat_comp_1 = pilots_f_mat_1.*pilots_mat;
-    pilot_phase_err_1 = angle(mean(pilots_f_mat_comp_1));  
-    pilots_f_mat_2 = syms_eq_mat_2(SC_IND_PILOTS, :,:);
-    pilots_f_mat_comp_2 = pilots_f_mat_2.*pilots_mat;
-    pilot_phase_err_2 = angle(mean(pilots_f_mat_comp_2));
+    %Make a text box!
+    h = text(round(.05*length(evm_mat(:,sp))), 100*aevms(sp), sprintf('Effective SINR: %.1f dB', snr_mat(sp)));
+    set(h,'Color',[1 0 0])
+    set(h,'FontWeight','bold')
+    set(h,'FontSize',10)
+    set(h,'EdgeColor',[1 0 0])
+    set(h,'BackgroundColor',[1 1 1])
     
-else
-	% Define an empty phase correction vector (used by plotting code below)
-    pilot_phase_err_mrc = zeros(1, N_OFDM_SYM);
-    pilot_phase_err_1 = zeros(1, N_OFDM_SYM);
-    pilot_phase_err_2 = zeros(1, N_OFDM_SYM);
+    title(sprintf('Stream from UE %d', sp));
+    grid on
     
 end
-pilot_phase_err_corr_mrc = repmat(pilot_phase_err_mrc, N_SC, 1);
-pilot_phase_corr_mrc = exp(-1i*(pilot_phase_err_corr_mrc));
-pilot_phase_err_corr_1 = repmat(pilot_phase_err_1, N_SC, 1);
-pilot_phase_corr_1 = exp(-1i*(pilot_phase_err_corr_1));
-pilot_phase_err_corr_2 = repmat(pilot_phase_err_2, N_SC, 1);
-pilot_phase_corr_2 = exp(-1i*(pilot_phase_err_corr_2));
 
 
-% Apply the pilot phase correction per symbol
-syms_eq_pc_mat_mrc = syms_eq_mat_mrc .* pilot_phase_corr_mrc;
-payload_syms_mat_mrc = syms_eq_pc_mat_mrc(SC_IND_DATA, :);
-
-syms_eq_pc_mat_1 = syms_eq_mat_1 .* pilot_phase_corr_1;
-payload_syms_mat_1 = syms_eq_pc_mat_1(SC_IND_DATA, :);
-
-syms_eq_pc_mat_2 = syms_eq_mat_2 .* pilot_phase_corr_2;
-payload_syms_mat_2 = syms_eq_pc_mat_2(SC_IND_DATA, :);
-%% Demodulate
-rx_syms_mrc = reshape(payload_syms_mat_mrc, 1, N_DATA_SYMS);
-rx_syms_1 = reshape(payload_syms_mat_1, 1, N_DATA_SYMS);
-rx_syms_2 = reshape(payload_syms_mat_2, 1, N_DATA_SYMS);
-
-demod_fcn_bpsk = @(x) double(real(x)>0);
-demod_fcn_qpsk = @(x) double(2*(real(x)>0) + 1*(imag(x)>0));
-demod_fcn_16qam = @(x) (8*(real(x)>0)) + (4*(abs(real(x))<0.6325)) + (2*(imag(x)>0)) + (1*(abs(imag(x))<0.6325));
-demod_fcn_64qam = @(x) (32*(real(x)>0)) + (16*(abs(real(x))<0.6172)) + (8*((abs(real(x))<(0.9258))&&((abs(real(x))>(0.3086))))) + (4*(imag(x)>0)) + (2*(abs(imag(x))<0.6172)) + (1*((abs(imag(x))<(0.9258))&&((abs(imag(x))>(0.3086)))));
-
-switch(MOD_ORDER)
-    case 2         % BPSK
-        rx_data_mrc = arrayfun(demod_fcn_bpsk, rx_syms_mrc);
-        rx_data_1 = arrayfun(demod_fcn_bpsk, rx_syms_1);
-        rx_data_2 = arrayfun(demod_fcn_bpsk, rx_syms_2);
-    case 4         % QPSK
-        rx_data_mrc = arrayfun(demod_fcn_qpsk, rx_syms_mrc);
-        rx_data_1 = arrayfun(demod_fcn_qpsk, rx_syms_1);
-        rx_data_2 = arrayfun(demod_fcn_qpsk, rx_syms_2);
-    case 16        % 16-QAM
-        rx_data_mrc = arrayfun(demod_fcn_16qam, rx_syms_mrc);
-        rx_data_1 = arrayfun(demod_fcn_16qam, rx_syms_1);
-        rx_data_2 = arrayfun(demod_fcn_16qam, rx_syms_2);
-    case 64        % 64-QAM
-        rx_data_mrc = arrayfun(demod_fcn_64qam, rx_syms_mrc);
-        rx_data_1 = arrayfun(demod_fcn_64qam, rx_syms_1);
-        rx_data_2 = arrayfun(demod_fcn_64qam, rx_syms_2);
+for sp=1:N_UE
+   subplot(2,N_UE,N_UE+sp);
+   imagesc(1:N_OFDM_SYM, (SC_IND_DATA - N_SC/2), 100*fftshift(evm_mat(:,sp)));
+    
+    hold on;
+    h = line([1,N_OFDM_SYM],[0,0]);
+    set(h,'Color',[1 0 0]);
+    set(h,'LineStyle',':');
+    hold off;
+    grid on
+    xlabel('OFDM Symbol Index');
+    ylabel('Subcarrier Index');
+    title(sprintf('Stream from UE %d', sp));
+    h = colorbar;
+    set(get(h,'title'),'string','EVM (%)'); 
 end
 
-%% Plot Results
-cf = 0;
-
-% Tx signal
-cf = cf + 1;
-figure(cf);clf;
-
-subplot(2,1,1);
-plot(real(tx_vecs_iris), 'b');
-axis([0 length(tx_vecs_iris) -TX_SCALE TX_SCALE])
-grid on;
-title('Tx Waveform (I)');
-
-subplot(2,1,2);
-plot(imag(tx_vecs_iris), 'r');
-axis([0 length(tx_vecs_iris) -TX_SCALE TX_SCALE])
-grid on;
-title('Tx Waveform (Q)');
-
-if(WRITE_PNG_FILES)
-    print(gcf,sprintf('wl_ofdm_plots_%s_txIQ', example_mode_string), '-dpng', '-r96', '-painters')
-end
-
-% Rx signal
-cf = cf + 1;
-figure(cf);
-subplot(2,2,1);
-plot(real(rx_vec_air(:,1)), 'b');
-axis([0 length(rx_vec_air) -TX_SCALE TX_SCALE])
-grid on;
-title('Rx Waveform (I) 1');
-
-subplot(2,2,2);
-plot(imag(rx_vec_air(:,1)), 'r');
-axis([0 length(rx_vec_air) -TX_SCALE TX_SCALE])
-grid on;
-title('Rx Waveform (Q) 1');
-
-subplot(2,2,3);
-plot(real(rx_vec_air(:,2)), 'b');
-axis([0 length(rx_vec_air) -TX_SCALE TX_SCALE])
-grid on;
-title('Rx Waveform (I) 2');
-
-subplot(2,2,4);
-plot(imag(rx_vec_air(:,2)), 'r');
-axis([0 length(rx_vec_air) -TX_SCALE TX_SCALE])
-grid on;
-title('Rx Waveform (Q) 2');
-
-if(WRITE_PNG_FILES)
-    print(gcf,sprintf('wl_ofdm_plots_%s_rxIQ', example_mode_string), '-dpng', '-r96', '-painters')
-end
-
-% Rx LTS correlation (Both branches)
-cf = cf + 1;
-figure(cf); clf;
-lts_to_plot = lts_corr;
-plot(lts_to_plot, '.-b', 'LineWidth', 1);
-hold on;
-grid on;
-line([1 length(lts_to_plot)], LTS_CORR_THRESH*max(lts_to_plot)*[1 1], 'LineStyle', '--', 'Color', 'r', 'LineWidth', 2);
-title('LTS Correlation and Threshold')
-xlabel('Sample Index')
-myAxis = axis();
-axis([1, 1000, myAxis(3), myAxis(4)])
-
-if(WRITE_PNG_FILES)
-    print(gcf,sprintf('wl_ofdm_plots_%s_ltsCorr', example_mode_string), '-dpng', '-r96', '-painters')
-end
-
-% Channel Estimates (MRC)
-cf = cf + 1;
-
-rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
-rx_H_est_plot(SC_IND_DATA) = rx_H_est(SC_IND_DATA);
-rx_H_est_plot(SC_IND_PILOTS) = rx_H_est(SC_IND_PILOTS);
-
-x = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1));
-
-figure(cf); clf;
-subplot(2,1,1);
-stairs(x - (20/(2*N_SC)), fftshift(real(rx_H_est_plot)), 'b', 'LineWidth', 2);
-hold on
-stairs(x - (20/(2*N_SC)), fftshift(imag(rx_H_est_plot)), 'r', 'LineWidth', 2);
-hold off
-axis([min(x) max(x) -1.1*max(abs(rx_H_est_plot)) 1.1*max(abs(rx_H_est_plot))])
-grid on;
-title('Channel Estimates (I and Q)')
-
-subplot(2,1,2);
-bh = bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
-shading flat
-set(bh,'FaceColor',[0 0 1])
-axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
-grid on;
-title('Channel Estimates (Magnitude)')
-xlabel('Baseband Frequency (MHz)')
-
-cf = cf + 1;
-figure(cf); clf;
-x = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1));
-stairs(x - (20/(2*N_SC)), fftshift(angle(rx_H_est_plot)), 'g', 'LineWidth', 2);
-hold off
-axis([min(x) max(x) -pi pi])
-grid on;
-title('Channel Estimates Phase')
-
-if(WRITE_PNG_FILES)
-    print(gcf,sprintf('wl_ofdm_plots_%s_chanEst', example_mode_string), '-dpng', '-r96', '-painters')
-end
-
-% Pilot phase error estimate
-cf = cf + 1;
-figure(cf); clf;
-subplot(2,1,1)
-plot(pilot_phase_err_mrc, 'b', 'LineWidth', 2);
-title('Phase Error Estimates')
-xlabel('OFDM Symbol Index')
-ylabel('Radians')
-axis([1 N_OFDM_SYM -3.2 3.2])
-grid on
-
-h = colorbar;
-set(h,'Visible','off');
-
-subplot(2,1,2)
-imagesc(1:N_OFDM_SYM, (SC_IND_DATA - N_SC/2), fftshift(pilot_phase_sfo_corr_mrc,1))
-xlabel('OFDM Symbol Index')
-ylabel('Subcarrier Index')
-title('Phase Correction for SFO')
-colorbar
-myAxis = caxis();
-if(myAxis(2)-myAxis(1) < (pi))
-   caxis([-pi/2 pi/2])
-end
-
-
-if(WRITE_PNG_FILES)
-    print(gcf,sprintf('wl_ofdm_plots_%s_phaseError', example_mode_string), '-dpng', '-r96', '-painters')
-end
-
-%% Symbol constellation
-cf = cf + 1;
-figure(cf); clf;
-
-plot(payload_syms_mat_mrc(:),'ro','MarkerSize',1);
-axis square; axis(1.5*[-1 1 -1 1]);
-xlabel('Inphase')
-ylabel('Quadrature')
-grid on;
-hold on;
-
-plot(tx_syms_mat(:),'bo');
-title('Tx and Rx Constellations (MRC)')
-legend('Rx','Tx','Location','EastOutside');
-
-cf = cf + 1;
-figure(cf); clf;
-
-plot(payload_syms_mat_1(:),'ro','MarkerSize',1);
-axis square; axis(1.5*[-1 1 -1 1]);
-xlabel('Inphase')
-ylabel('Quadrature')
-grid on;
-hold on;
-
-plot(tx_syms_mat(:),'bo');
-title('Tx and Rx Constellations (branch 1)')
-legend('Rx','Tx','Location','EastOutside');
-
-cf = cf + 1;
-figure(cf); clf;
-
-plot(payload_syms_mat_2(:),'ro','MarkerSize',1);
-axis square; axis(1.5*[-1 1 -1 1]);
-xlabel('Inphase')
-ylabel('Quadrature')
-grid on;
-hold on;
-
-plot(tx_syms_mat(:),'bo');
-title('Tx and Rx Constellations (branch 2)')
-legend('Rx','Tx','Location','EastOutside');
-
-if(WRITE_PNG_FILES)
-    print(gcf,sprintf('wl_ofdm_plots_%s_constellations', example_mode_string), '-dpng', '-r96', '-painters')
-end
-
-
-% EVM & SNR
-cf = cf + 1;
-figure(cf); clf;
-
-evm_mat_mrc = abs(payload_syms_mat_mrc - tx_syms_mat).^2;
-aevms_mrc = mean(evm_mat_mrc(:));
-snr_mrc = 10*log10(1./aevms_mrc);
-
-subplot(2,1,1)
-plot(100*evm_mat_mrc(:),'o','MarkerSize',1)
-axis tight
-hold on
-plot([1 length(evm_mat_mrc(:))], 100*[aevms_mrc, aevms_mrc],'r','LineWidth',4)
-myAxis = axis;
-h = text(round(.05*length(evm_mat_mrc(:))), 100*aevms_mrc+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', snr_mrc));
-set(h,'Color',[1 0 0])
-set(h,'FontWeight','bold')
-set(h,'FontSize',10)
-set(h,'EdgeColor',[1 0 0])
-set(h,'BackgroundColor',[1 1 1])
-hold off
-xlabel('Data Symbol Index')
-ylabel('EVM (%)');
-legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
-title('EVM vs. Data Symbol Index (MRC)')
-grid on
-
-subplot(2,1,2)
-imagesc(1:N_OFDM_SYM, (SC_IND_DATA - N_SC/2), 100*fftshift(evm_mat_mrc,1))
-
-grid on
-xlabel('OFDM Symbol Index')
-ylabel('Subcarrier Index')
-title('EVM vs. (Subcarrier & OFDM Symbol)')
-h = colorbar;
-set(get(h,'title'),'string','EVM (%)');
-myAxis = caxis();
-if (myAxis(2)-myAxis(1)) < 5
-    caxis([myAxis(1), myAxis(1)+5])
-end
-
-
-cf = cf + 1;
-figure(cf); clf;
-
-evm_mat_1 = abs(payload_syms_mat_1 - tx_syms_mat).^2;
-aevms_1 = mean(evm_mat_1(:));
-snr_1 = 10*log10(1./aevms_1);
-
-subplot(2,1,1)
-plot(100*evm_mat_1(:),'o','MarkerSize',1)
-axis tight
-hold on
-plot([1 length(evm_mat_1(:))], 100*[aevms_1, aevms_1],'r','LineWidth',4)
-myAxis = axis;
-h = text(round(.05*length(evm_mat_1(:))), 100*aevms_1 + .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', snr_1));
-set(h,'Color',[1 0 0])
-set(h,'FontWeight','bold')
-set(h,'FontSize',10)
-set(h,'EdgeColor',[1 0 0])
-set(h,'BackgroundColor',[1 1 1])
-hold off
-xlabel('Data Symbol Index')
-ylabel('EVM (%)');
-legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
-title('EVM vs. Data Symbol Index (branch 1)')
-grid on
-
-subplot(2,1,2)
-imagesc(1:N_OFDM_SYM, (SC_IND_DATA - N_SC/2), 100*fftshift(evm_mat_mrc,1))
-
-grid on
-xlabel('OFDM Symbol Index')
-ylabel('Subcarrier Index')
-title('EVM vs. (Subcarrier & OFDM Symbol)')
-h = colorbar;
-set(get(h,'title'),'string','EVM (%)');
-myAxis = caxis();
-if (myAxis(2)-myAxis(1)) < 5
-    caxis([myAxis(1), myAxis(1)+5])
-end
-
-
-
-cf = cf + 1;
-figure(cf); clf;
-
-evm_mat_2 = abs(payload_syms_mat_2 - tx_syms_mat).^2;
-aevms_2 = mean(evm_mat_2(:));
-snr_2 = 10*log10(1./aevms_2);
-
-subplot(2,1,1)
-plot(100*evm_mat_2(:),'o','MarkerSize',1)
-axis tight
-hold on
-plot([1 length(evm_mat_2(:))], 100*[aevms_2, aevms_2],'r','LineWidth',4)
-myAxis = axis;
-h = text(round(.05*length(evm_mat_2(:))), 100*aevms_2+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', snr_2));
-set(h,'Color',[1 0 0])
-set(h,'FontWeight','bold')
-set(h,'FontSize',10)
-set(h,'EdgeColor',[1 0 0])
-set(h,'BackgroundColor',[1 1 1])
-hold off
-xlabel('Data Symbol Index')
-ylabel('EVM (%)');
-legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
-title('EVM vs. Data Symbol Index (branch 2)')
-grid on
-
-subplot(2,1,2)
-imagesc(1:N_OFDM_SYM, (SC_IND_DATA - N_SC/2), 100*fftshift(evm_mat_mrc,1))
-
-grid on
-xlabel('OFDM Symbol Index')
-ylabel('Subcarrier Index')
-title('EVM vs. (Subcarrier & OFDM Symbol)')
-h = colorbar;
-set(get(h,'title'),'string','EVM (%)');
-myAxis = caxis();
-if (myAxis(2)-myAxis(1)) < 5
-    caxis([myAxis(1), myAxis(1)+5])
-end
-
-
-
-
-if(WRITE_PNG_FILES)
-    print(gcf,sprintf('wl_ofdm_plots_%s_evm', example_mode_string), '-dpng', '-r96', '-painters')
-end
-
-%% Calculate Rx stats
-
-sym_errs = sum(tx_data ~= rx_data_mrc);
-bit_errs = length(find(dec2bin(bitxor(tx_data, rx_data_mrc),8) == '1'));
-rx_evm   = sqrt(sum((real(rx_syms_mrc) - real(tx_syms)).^2 + (imag(rx_syms_mrc) - imag(tx_syms)).^2)/(length(SC_IND_DATA) * N_OFDM_SYM));
-
-fprintf('\n MRC Results:\n');
-fprintf('Num Bytes:   %d\n', N_DATA_SYMS * log2(MOD_ORDER) / 8);
-fprintf('Sym Errors:  %d (of %d total symbols)\n', sym_errs, N_DATA_SYMS);
-fprintf('Bit Errors:  %d (of %d total bits)\n', bit_errs, N_DATA_SYMS * log2(MOD_ORDER));
-
-sc_data_idx = [(2:27)'; (39:64)' ];
-% SNR estimation based on the LTS signals
-n_var_1 = sum( sum( abs(H0_b1(sc_data_idx,:) - repmat(H_b1(sc_data_idx), 1,2) ).^2,2 ))/(52*2);
-n_var_2 = sum( sum( abs(H0_b2(sc_data_idx,:) - repmat(H_b2(sc_data_idx), 1,2) ).^2,2 ))/(52*2);
-h_pow_1 =  TX_SCALE*H_b1(sc_data_idx)'*H_b1(sc_data_idx)/(52);
-h_pow_2 =  TX_SCALE*H_b2(sc_data_idx)'*H_b2(sc_data_idx)/(52);
-h_pow_mrc = TX_SCALE*sum(H_pow(sc_data_idx,1))/52;
-
-n_var_mrc = (n_var_1 + n_var_2)/2;
-fprintf('\n\tEVM-based SNRs:\n');
-fprintf('Branch 1 SNR:%3.2f \tBranch 2 SNR:%3.2f\t MRC SNR:%3.2f\n',...
-    snr_1, snr_2, snr_mrc);
-
-snr_1_hat = 10*log10(h_pow_1/n_var_1);
-snr_2_hat = 10*log10(h_pow_2/n_var_2);
-snr_mrc_hat = 10*log10(h_pow_mrc/n_var_mrc);
-snr_1_plus_snr = 10*log10(h_pow_1/n_var_1 +  h_pow_2/n_var_2);
-fprintf('\tPilot SNR Estimates:\n');
-fprintf('Branch 1 SNR:%3.2f \tBranch 2 SNR:%3.2f\t MRC SNR:%3.2f\n',...
-    snr_1_hat, snr_2_hat, snr_mrc_hat);

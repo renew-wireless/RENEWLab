@@ -106,7 +106,7 @@ def csi_from_pilots(pilots_dump, z_padding = 150, fft_size=64, cp=16, frm_st_idx
     debug  = False
     test_mf = False
     write_to_file = True
-    legacy = True
+    legacy = False
     
     # dimensions of pilots_dump
     n_frame = pilots_dump.shape[0]      # no. of captured frames
