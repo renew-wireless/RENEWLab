@@ -11,7 +11,7 @@
 % ---------------------------------------------------------------------
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 clear
-%close all;
+close all;
 
 [version, executable, isloaded] = pyversion;
 if ~isloaded
@@ -24,19 +24,20 @@ WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_MOD                 = 1;
 DEBUG                   = 0;
-sim_SNR_db              = 10;    
+sim_SNR_db              = 15;    
 sim_H_var               = .5;
-%Iris params:
+
+% Iris params:
 N_BS_NODE               = 8;
 N_UE                    = 2;
-b_ids = string.empty();
-b_scheds = string.empty();
-ue_ids = string.empty();
-ue_scheds = string.empty();
-MIMO_ALG                = 'ZF';      % MIMO ALGORITHM: ZF or Conjugate 
-
+b_ids                   = string.empty();
+b_scheds                = string.empty();
+ue_ids                  = string.empty();
+ue_scheds               = string.empty();
+MIMO_ALG                = 'conj';      % MIMO ALGORITHM: ZF or Conjugate 
+disp(MIMO_ALG)
 % Waveform params
-N_OFDM_SYM              = 32;         % Number of OFDM symbols for burst, it needs to be less than 47
+N_OFDM_SYM              = 800;         % Number of OFDM symbols for burst, it needs to be less than 47
 MOD_ORDER               = 4;          % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
 TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
 
@@ -46,7 +47,7 @@ SC_IND_DATA             = [2:7 9:21 23:27 39:43 45:57 59:64];     % Data subcarr
 SC_IND_DATA_PILOT       = [2:27 39:64]';
 N_SC                    = 64;                                     % Number of subcarriers
 CP_LEN                  = 16;                                     % Cyclic prefix length
-N_DATA_SYMS             = N_OFDM_SYM * length(SC_IND_DATA);       % Number of data symbols (one per data-bearing subcarrier per OFDM symbol)
+N_DATA_SYMS             = N_OFDM_SYM * length(SC_IND_DATA);       % Number of data symbols (one per data-bearing subcarrier per OFDM symbol) per UE
 N_LTS_SYM               = 2;                                      % Number of 
 N_SYM_SAMP              = N_SC + CP_LEN;                          % Number of samples that will go over the air
 N_ZPAD_PRE              = 70;                                     % Zero-padding prefix for Iris
@@ -54,7 +55,7 @@ N_ZPAD_POST             = N_ZPAD_PRE -14;                         % Zero-padding
 
 % Rx processing params
 FFT_OFFSET                    = 16;          % Number of CP samples to use in FFT (on average)
-LTS_CORR_THRESH               = 0.7;         % Normalized threshold for LTS correlation
+LTS_CORR_THRESH               = 0.70;         % Normalized threshold for LTS correlation
 DO_APPLY_CFO_CORRECTION       = 0;           % Enable CFO estimation/correction
 DO_APPLY_SFO_CORRECTION       = 0;           % Enable SFO estimation/correction
 DO_APPLY_PHASE_ERR_CORRECTION = 1;           % Enable Residual CFO estimation/correction
@@ -65,9 +66,16 @@ lts_f = [0 1 -1 -1 1 1 -1 1 -1 1 -1 -1 -1 -1 -1 1 1 -1 -1 1 -1 1 -1 1 1 1 1 0 0 
     1 1 -1 -1 1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1].';
 lts_t = ifft(lts_f, N_SC); %time domain
 
+% Arrange time-orthogonal pilots 
 preamble_common = [lts_t(33:64); repmat(lts_t,N_LTS_SYM,1)];
+l_pre = length(preamble_common);
 pre_z = zeros(size(preamble_common));
-preamble = [ preamble_common pre_z;pre_z preamble_common];
+preamble = zeros(N_UE * l_pre, N_UE);
+for jp = 1:N_UE
+    preamble((jp-1)*l_pre + 1: (jp-1)*l_pre+l_pre,jp) = preamble_common;
+end
+
+%preamble = [ preamble_common pre_z;pre_z preamble_common];
 cor_rng  = length(preamble) +  N_ZPAD_PRE + 100;
 %% Generate a payload of random integers
 tx_data = randi(MOD_ORDER, N_DATA_SYMS, N_UE) - 1;
@@ -136,13 +144,36 @@ tx_vecs_iris = tx_vecs;
 % Scale the Tx vector to +/- 1
 tx_vecs_iris = TX_SCALE .* tx_vecs_iris ./ max(abs(tx_vecs_iris));
 if (SIM_MOD) 
-    
+%% SIMULATION:    
     DO_APPLY_CFO_CORRECTION       = 0;       
     DO_APPLY_SFO_CORRECTION       = 0;  
     DO_APPLY_PHASE_ERR_CORRECTION = 1;
     sim_N0 = mean(mean(abs(tx_vecs_iris).^2 )) / 10^(0.1*sim_SNR_db);
-    H_ul = sqrt(sim_H_var/2) .* ( randn(N_BS_NODE, N_UE) + 1i*randn(N_BS_NODE, N_UE) );
-    %H_ul = H_ul./norm(H_ul);
+    %H_ul = sqrt(sim_H_var/2) .* ( randn(N_BS_NODE, N_UE) + 1i*randn(N_BS_NODE, N_UE) );
+%     H_ul = [0.1357 - 0.4270i  -0.8579 + 0.1455i; ...
+%         0.5117 - 0.4949i   0.2565 + 0.5638i; ...
+%         0.3543 + 0.2862i   0.2098 - 0.4519i; ...
+%         -0.7452 - 0.4200i  -0.7030 - 0.4728i; ...
+%         0.0956 - 0.7165i   0.6607 - 0.1528i; ...
+%         0.4135 + 0.4920i  -0.4509 - 0.0236i; ...
+%         0.3357 + 0.1649i   0.0948 + 0.0475i; ...
+%         0.1551 - 1.7247i  -0.4042 + 0.0980i];
+   % 70% correlated channel
+   H_ul =[...
+  -0.6988 - 0.8835i  -0.7331 - 0.2587i; ...
+  -0.5350 - 0.6210i  -1.4473 + 0.1643i; ...
+  -0.1718 + 0.7137i   1.6116 - 0.5164i; ...
+   0.0856 - 1.1883i  -1.7690 + 0.7228i; ...
+  -0.1596 + 0.8294i   0.4444 + 1.1033i; ...
+  -0.0706 + 0.5130i   0.9947 + 0.4225i; ...
+  -0.9820 - 0.4458i  -0.5283 + 0.1760i; ...
+  -0.6576 + 0.0844i   0.0273 + 0.3475i];
+    
+    
+    for ic=1: N_UE
+        H_ul(:,ic) = H_ul(:,ic)./norm(H_ul(:,ic) );
+    end
+    H_ul = H_ul.* repmat([1,1], N_BS_NODE,1);
     W_ul = sqrt(sim_N0/2) * (randn(N_BS_NODE, length(tx_vecs_iris)) + ...
         1i*randn(N_BS_NODE, length(tx_vecs_iris)) );
     rx_vec_iris = H_ul*tx_vecs_iris.' + W_ul;
@@ -262,7 +293,7 @@ end
 
 % Find all correlation peaks
 rx_lts_mat = double.empty();
-payload_ind = int16.empty();
+payload_ind = int32.empty();
 payload_rx = double.empty();
 for ibs=1:N_BS_NODE
     lts_peaks = find(lts_corr(1:cor_rng) > LTS_CORR_THRESH*max(lts_corr(:,ibs)));
@@ -323,14 +354,15 @@ channel_condition_db = double.empty();
 for j=1:length(nz_sc)
     
     if(strcmp(MIMO_ALG,'ZF'))
-        HH_inv = pinv(squeeze(H_hat(:,:, nz_sc(j) ) )); % (H'*H)^(-1)*H': ZF matrix
+       % Pseudo-inverse:(H'*H)^(-1)*H':
+        HH_inv = inv((squeeze(H_hat(:,:, nz_sc(j) ) )' * squeeze(H_hat(:,:, nz_sc(j) ) ) ) ) * squeeze(H_hat(:,:, nz_sc(j) ) )';
         x = HH_inv*squeeze(Y_data(:,nz_sc(j),:));
     else
         % Conjugate:
         H_norm = diag(abs (H_hat(:,:, nz_sc(j) )' * H_hat(:,:, nz_sc(j) ) ));
         % normalization: 
         H_norm = repmat(H_norm, 1, N_BS_NODE);
-        x = (H_hat(:,:, nz_sc(j) )' ./ H_norm )* squeeze(Y_data(:,nz_sc(j),:));
+        x = (H_hat(:,:, nz_sc(j) )' ./ H_norm) * squeeze(Y_data(:,nz_sc(j),:));
     end
     syms_eq(:,nz_sc(j),:) = x;
     channel_condition(nz_sc(j)) = cond(H_hat(:,:,nz_sc(j) ) );
@@ -408,7 +440,7 @@ figure(cf); clf;
 for sp = 1:N_BS_NODE
     subplot(N_BS_NODE,1,sp);
     plot(lts_corr(:,sp)) 
-    line([1 length(lts_corr)], LTS_CORR_THRESH*max(lts_corr(:,sp))*[1 1], 'LineStyle', '--', 'Color', 'r', 'LineWidth', 2);
+    line([1 length(lts_corr)], LTS_CORR_THRESH*max(lts_corr(:,sp))*[1 1], 'LineStyle', '--', 'Color', 'r', 'LineWidth', 0.5);
     grid on;
     xlabel('Samples');
     y_label = sprintf('Anetnna %d',sp);
@@ -431,8 +463,9 @@ else
     sp_rows = ceil(N_BS_NODE/2)+1;
 end
 sp_cols = ceil(N_BS_NODE/(sp_rows -1));
+
 for sp=1:N_UE
-    subplot(sp_rows,sp_cols,floor(sp_cols/2) + (sp -1) );
+    subplot(sp_rows,sp_cols, sp);
     plot(syms_eq(:,sp),'ro','MarkerSize',1);
     axis square; axis(1.5*[-1 1 -1 1]);
     grid on;
@@ -481,27 +514,18 @@ title('Channel Condition (dB)')
 xlabel('Baseband Frequency (MHz)')
 
 % EVM & SNR
-
 sym_errs = sum(tx_data(:) ~= rx_data(:));
 bit_errs = length(find(dec2bin(bitxor(tx_data(:), rx_data(:)),8) == '1'));
-% FIX THIS:
-rx_evm   = sqrt(sum((real(syms_eq(:)) - real(tx_syms(:))).^2 + (imag(syms_eq(:)) - imag(tx_syms(:))).^2)/(length(SC_IND_DATA) * N_OFDM_SYM));
-
-fprintf('\n MIMO Results:\n');
-fprintf('Num Bytes:   %d\n', N_DATA_SYMS * log2(MOD_ORDER) / 8);
-fprintf('Sym Errors:  %d (of %d total symbols)\n', sym_errs, N_DATA_SYMS);
-fprintf('Bit Errors:  %d (of %d total bits)\n', bit_errs, N_DATA_SYMS * log2(MOD_ORDER));
-
 
 cf = cf + 1;
 figure(cf); clf;
- evm_mat = double.empty();
- aevms = zeros(N_UE,1);
- snr_mat = zeros(N_UE,1);
+evm_mat = double.empty();
+aevms = zeros(N_UE,1);
+snr_mat = zeros(N_UE,1);
 for sp = 1:N_UE
     tx_vec = tx_syms_mat(:,:,sp);
     evm_mat(:,sp)  = abs(tx_vec(:) - syms_eq(:,sp) ).^2;
-    aevms(sp) = mean(evm_mat(sp));
+    aevms(sp) = mean(evm_mat(:,sp));
     snr_mat(sp) = -10*log10(aevms (sp));
     
     subplot(2,N_UE,sp)
@@ -514,7 +538,6 @@ for sp = 1:N_UE
     ylabel('EVM (%)');
     legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
     
-    %Make a text box!
     h = text(round(.05*length(evm_mat(:,sp))), 100*aevms(sp), sprintf('Effective SINR: %.1f dB', snr_mat(sp)));
     set(h,'Color',[1 0 0])
     set(h,'FontWeight','bold')
@@ -545,3 +568,9 @@ for sp=1:N_UE
     set(get(h,'title'),'string','EVM (%)'); 
 end
 
+fprintf('\n MIMO Results:\n');
+fprintf('Num Bytes:   %d\n', N_UE*N_DATA_SYMS * log2(MOD_ORDER) / 8);
+fprintf('Sym Errors:  %d (of %d total symbols)\n', sym_errs, N_UE * N_DATA_SYMS);
+fprintf('Bit Errors:  %d (of %d total bits)\n', bit_errs, N_UE*N_DATA_SYMS * log2(MOD_ORDER));
+
+snr_mat
