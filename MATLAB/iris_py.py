@@ -1,5 +1,5 @@
 #!/usr/bin/python
-
+# -*- coding: UTF-8 -*-
 """ 
 	Author(s): C. Nicolas Barati nicobarati@rice.edu 
 		Rahman Doost-Mohamamdy: doost@rice.edu
@@ -14,7 +14,7 @@
 import sys
 #These are needed in case one needs to run the driver on its own.
 # Make sure it is ran from the Python toolbox folder. 
-sys.path.append('../IrisUtils/')
+sys.path.append('../PYTHON/IrisUtils/')
 sys.path.append('../')
 sys.path.append('../IrisUtils/data_in/')
 
@@ -33,9 +33,8 @@ import matplotlib.pyplot as plt
 
 
 # CORRTHRESHOLDING REGS
-CORR_THRESHOLD = 0x4
-CORR_RST = 0x0
-CORR_SCNT = 0x8
+CORR_THRESHOLD = 92
+CORR_RST = 64
 CORR_CONF = 60
 
 # TDD Register Set
@@ -45,9 +44,16 @@ SCH_ADDR_REG = 136
 SCH_MODE_REG = 140
 TX_GAIN_CTRL = 88
 
+
+# Packet Detect Register Set 
+FPGA_IRIS030_WR_PKT_DET_THRESH = 288
+FPGA_IRIS030_WR_PKT_DET_NUM_SAMPS = 292
+FPGA_IRIS030_WR_PKT_DET_ENABLE = 296
+FPGA_IRIS030_WR_PKT_DET_NEW_FRAME = 300
+
 # Global variables
 tx_advance = 68
-corr_threshold = 128
+corr_threshold = 1
 
 #Beacon:
 beacon = np.array([-0.56463587-0.56463587j ,0.46699509+0.34623110j ,0.87693578-0.35418823j ,0.54079849+0.34757638j ,-0.48144832+0.00891686j ,-0.88476783-0.00866229j,
@@ -152,6 +158,12 @@ class Iris_py:
 		self.both_channels = both_channels
 		self.n_zpad_samp = int(n_zpad_samp)
 
+		# PACKET DETECT SETUP
+		self.sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_THRESH, 0)
+		self.sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NUM_SAMPS, 5)
+		self.sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_ENABLE, 0)
+		self.sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0)
+
 		### Setup channel rates, ports, gains, and filters ###
 		info = self.sdr.getHardwareInfo()
 		for chan in [0, 1]:
@@ -164,10 +176,11 @@ class Iris_py:
 			if tx_gain is not None:
 				self.sdr.setGain(SOAPY_SDR_TX, chan, tx_gain) 
 			if tx_freq is not None:
-				self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'RF', tx_freq)
+				self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'RF', tx_freq - .75*sample_rate)
+				self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'BB', .75*sample_rate)
 			
 			print("Set TX frequency to %f" % self.sdr.getFrequency(SOAPY_SDR_TX, chan))
-			#self.sdr.setAntenna(SOAPY_SDR_TX, chan, "TRX")				#NB: in IrisTDD only Soapy_SDR_RX is set to TRX
+			#self.sdr.setAntenna(SOAPY_SDR_TX, chan, "TRX")
 			self.sdr.setGain(SOAPY_SDR_TX, chan, 'IAMP', 12) #[0,12]
 			self.sdr.setGain(SOAPY_SDR_TX, chan, 'PAD', tx_gain) #[-52,0]
 			
@@ -179,7 +192,8 @@ class Iris_py:
 			if rx_gain is not None:
 				self.sdr.setGain(SOAPY_SDR_RX, chan, rx_gain)
 			if rx_freq is not None:
-				self.sdr.setFrequency(SOAPY_SDR_RX, chan, 'RF', rx_freq)
+				self.sdr.setFrequency(SOAPY_SDR_RX, chan, 'RF', rx_freq - .75*sample_rate)
+				self.sdr.setFrequency(SOAPY_SDR_RX, chan, 'BB', .75*sample_rate)
 			
 			self.sdr.setAntenna(SOAPY_SDR_RX, chan, "TRX")
 
@@ -262,12 +276,12 @@ class Iris_py:
 			for i in range(128):
 				self.sdr.writeRegister("ARGCOE", i*4, 0)
 			time.sleep(0.1)
-			self.sdr.writeRegister("ARGCOR", CORR_THRESHOLD, int(corr_threshold))
-			self.sdr.writeRegister("ARGCOR", CORR_RST, 0x1) # reset corr
-			self.sdr.writeRegister("ARGCOR", CORR_RST, 0x0) # unrst corr 
+			self.sdr.writeRegister("IRIS30", CORR_RST, 0x1) # reset corr
+			self.sdr.writeRegister("IRIS30", CORR_RST, 0x0) # unrst corr
+			self.sdr.writeRegister("IRIS30", CORR_THRESHOLD, int(corr_threshold)) 
 			if coe is not None:
 				for i in range(128):
-					self.sdr.writeRegister( "ARGCOE", i*4, int(coe[i])) # NB: Need to get coe!
+					self.sdr.writeRegister( "ARGCOE", i*4, int(coe[i]))
 			else:
 				print("No coe was passed into config_sdr_tdd() \n")
 
@@ -290,8 +304,8 @@ class Iris_py:
 		'''Synchronise delays. If is_bs = True, the BS sets the trigger off, else the UE resets the correlator.'''
 		if bool(is_bs):
 			self.sdr.writeSetting("SYNC_DELAYS", "")		#NB: This should be called for the BS
-		else:
-			self.sdr.writeRegister("ARGCOR", CORR_RST, 0x1) #NB: In UL, this should be called for the UE
+		#else:
+			#self.sdr.writeRegister("ARGCOR", CORR_RST, 0x1) #NB: In UL, this should be called for the UE
 
 
     # Setup and activate RX streams
@@ -373,7 +387,10 @@ class Iris_py:
 				self.sdr.writeRegister("RFCORE", SCH_ADDR_REG, i) # subframe 0
 				self.sdr.writeRegister("RFCORE", SCH_MODE_REG, 0) # 01 replay
 				self.sdr.writeRegister("RFCORE", TDD_CONF_REG, 0)
-				
+			self.sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_THRESH, 0)
+			self.sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NUM_SAMPS, 5)
+			self.sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_ENABLE, 0)
+			self.sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0)
 			self.sdr = None #still doesn't release handle... you have to kill python.
 				
 
@@ -387,14 +404,14 @@ if __name__ == '__main__':
 	parser = ArgumentParser()
 	parser.add_argument("--serial_id", type=str, dest="serial_id", help="TX SDR Serial Number, e.g., 00001", default=None)
 	parser.add_argument("--rate", type=float, dest="rate", help="Sample rate", default= 5e6)
-	parser.add_argument("--txGain", type=float, dest="txGain", help="Optional Tx gain (dB)", default=30)
-	parser.add_argument("--rxGain", type=float, dest="rxGain", help="Optional Rx gain (dB)", default=27)
-	parser.add_argument("--freq", type=float, dest="freq", help="Optional Tx freq (Hz)", default=2.6e9)
+	parser.add_argument("--txGain", type=float, dest="txGain", help="Optional Tx gain (dB)", default=40)
+	parser.add_argument("--rxGain", type=float, dest="rxGain", help="Optional Rx gain (dB)", default=20)
+	parser.add_argument("--freq", type=float, dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
 	parser.add_argument("--bw", type=float, dest="bw", help="Optional filter bw (Hz)", default=None)
 	args = parser.parse_args()
 	
 	siso_bs = Iris_py(
-		serial_id = "RF3C000007",
+		serial_id = "0328",
 		sample_rate = args.rate,
 		tx_freq = args.freq,
 		rx_freq = args.freq,
@@ -405,7 +422,7 @@ if __name__ == '__main__':
 	)
 
 	siso_ue = Iris_py(
-		serial_id = "RF3C000028",
+		serial_id = "RF3C000045",
 		sample_rate = args.rate,
 		tx_freq = args.freq,
 		rx_freq = args.freq,
@@ -465,7 +482,7 @@ if __name__ == '__main__':
 
 	wave_rx_a_bs_mn =  siso_bs.recv_stream_tdd()
 
-	freq = 2.6e9
+	freq = 3.6e9
 	print("printing number of frames")
 	print("BS 0x%X" % SoapySDR.timeNsToTicks(siso_bs.sdr.getHardwareTime(""), freq))
 	print("UE 0x%X" % SoapySDR.timeNsToTicks(siso_ue.sdr.getHardwareTime(""), freq))
