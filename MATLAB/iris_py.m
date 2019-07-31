@@ -87,19 +87,19 @@ classdef iris_py < handle
          end
         
 
-         function set_config(obj, chained_tx_rx, is_bs, trigger_out)
+         function set_config(obj, chained_tx_rx, is_bs)
              if chained_tx_rx
                 sched  = convertStringsToChars((obj.tdd_sched));
                 obj.py_obj_array{1}.config_sdr_tdd_chained(pyargs('tdd_sched', sched));        
              else
                 sched  = convertStringsToChars(obj.tdd_sched(1));
                 obj.py_obj_array{1}.config_sdr_tdd( pyargs('tdd_sched', sched, ...
-                    'is_bs', is_bs, 'trigger_out', trigger_out));
+                    'is_bs', is_bs));
                 if (obj.n_chain > 1)
                    sched2  = convertStringsToChars(obj.tdd_sched(2));
                    for ipy = 2:obj.n_chain
                        obj.py_obj_array{ipy}.config_sdr_tdd( pyargs('tdd_sched',sched2, ...
-                           'is_bs', is_bs, 'trigger_out', trigger_out));
+                           'is_bs', is_bs));
                    end
                 end
              end

@@ -56,6 +56,9 @@ FPGA_IRIS030_WR_PKT_DET_NEW_FRAME = 300
 tx_advance = 68
 corr_threshold = 1
 
+preambles_bs = generate_training_seq(preamble_type='gold_ifft', seq_length=128, cp=0, upsample=1)
+beacon = preambles_bs[0, :]*.5
+
 #######################################				
 #######	SDR Class:		#######
 #######################################
@@ -251,8 +254,9 @@ class Iris_py:
 		if r1<0: print("Problem activating stream\n")
 	
 
-	def config_beacon(self, beacon, prefix_len = 0):
+	def config_beacon(self, prefix_len = 0):
 		'''Zero-pad beacon to aling with the frame length'''
+		global beacon
 		len_beacon = len(beacon)
 		n_bz = self.n_samp - prefix_len - len_beacon
 		pad1 = np.zeros( (prefix_len), np.complex64)
@@ -387,9 +391,7 @@ if __name__ == '__main__':
 
 	#beacon1 = siso_bs.config_beacon(nsamps_pad)
 	#if mimo: beacon2 = wbz #beacon1 if both_channels else wbz
-	preambles_bs = generate_training_seq(preamble_type='gold_ifft', seq_length=128, cp=0, upsample=1)
-	beacon = preambles_bs[0, :]*.5
-	beacon1 = siso_bs.config_beacon(beacon, nsamps_pad)
+	beacon1 = siso_bs.config_beacon(nsamps_pad)
 	beacon1_r = np.real(beacon1)
 	beacon1_i = np.imag(beacon1)
 	

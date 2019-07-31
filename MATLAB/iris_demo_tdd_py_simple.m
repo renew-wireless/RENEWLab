@@ -92,8 +92,8 @@ node_ue.sdrsync(0); %is_bs = 0
 node_ue.sdrrxsetup();
 node_bs.sdrrxsetup();
 chained_mode = 0;
-node_bs.set_config(chained_mode,1,0); % chained_tx_rx =0 is_bs = 1, trigger_out =0
-node_ue.set_config(chained_mode,0,0); % chained_tx_rx =0 is_bs = 0, trigger_out =0
+node_bs.set_config(chained_mode,1); % chained_tx_rx =0 is_bs = 1
+node_ue.set_config(chained_mode,0); % chained_tx_rx =0 is_bs = 0
 
 
 node_bs.sdr_txbeacon(N_ZPAD_PRE);

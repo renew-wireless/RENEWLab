@@ -22,9 +22,10 @@ end
 % Params:
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
-SIM_MOD                 = 1;
+SIM_MOD                 = 0;
 sim_N0                  = 0.01;     
 sim_H_var               = 4;
+
 %Iris params:
 N_BS_NODE = 2;
 N_UE = 1;
@@ -37,7 +38,7 @@ ue_scheds = string.empty();
 % Waveform params
 N_OFDM_SYM              = 46;         % Number of OFDM symbols for burst, it needs to be less than 47
 MOD_ORDER               = 16;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
-TX_SCALE                = .5;         % Scale for Tx waveform ([0:1])
+TX_SCALE                = .20;         % Scale for Tx waveform ([0:1])
 
 % OFDM params
 SC_IND_PILOTS           = [8 22 44 58];                           % Pilot subcarrier indices
@@ -160,8 +161,8 @@ else
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     % Create a two Iris node objects:
-    b_ids = ["RF3C000007", "RF3C000028"];
-    ue_ids= "RF3C000053";
+    b_ids = ["0328", "0339"];
+    ue_ids= "RF3C000045";
 
     b_prim_sched = "PGGGGGRG";           % BS primary noede's schedule: Send Beacon only from one Iris board
     b_sec_sched = "GGGGGGRG"; 
@@ -182,10 +183,10 @@ else
     sdr_params = struct(...
         'id', b_ids, ...
         'n_chain',N_BS_NODE, ...
-        'txfreq', 2.6e9, ...
-        'rxfreq', 2.6e9, ...
-        'txgain', 46, ...
-        'rxgain', 30, ...
+        'txfreq', 3.6e9, ...
+        'rxfreq', 3.6e9, ...
+        'txgain', 40, ...
+        'rxgain', 20, ...
         'sample_rate', 5e6, ...
         'n_samp', n_samp, ...          % number of samples per frame time.
         'tdd_sched', b_scheds, ...     % number of zero-paddes samples
@@ -195,8 +196,8 @@ else
     sdr_params(2) = sdr_params(1);
     sdr_params(2).id =  ue_ids(1);
     sdr_params(2).n_chain = 1;
-    sdr_params(2).rxfreq = 2.6e9;
-    sdr_params(2).txfreq = 2.6e9;
+    sdr_params(2).rxfreq = 3.6e9;
+    sdr_params(2).txfreq = 3.6e9;
     sdr_params(2).tdd_sched = ue_scheds(1);
     % Iris nodes objects
     node_bs = iris_py(sdr_params(1));
@@ -216,8 +217,8 @@ else
     node_ue.sdrrxsetup();
     node_bs.sdrrxsetup();
     chained_mode = 0;
-    node_bs.set_config(chained_mode,1,0);
-    node_ue.set_config(chained_mode,0,0);
+    node_bs.set_config(chained_mode,1);
+    node_ue.set_config(chained_mode,0);
 
 
     node_bs.sdr_txbeacon(N_ZPAD_PRE);
@@ -306,7 +307,7 @@ rx_lts_idx1 = -64+-FFT_OFFSET + (97:160);
 rx_lts_idx2 = -FFT_OFFSET + (97:160);
 rx_lts_b1 = [rx_lts(rx_lts_idx1,1)  rx_lts(rx_lts_idx2,1)];
 rx_lts_b2 = [rx_lts(rx_lts_idx1,2)  rx_lts(rx_lts_idx2,2)];
-return;
+
 % Received LTSs for each branch.  
 rx_lts_b1_f = fft(rx_lts_b1);
 rx_lts_b2_f = fft(rx_lts_b2);
