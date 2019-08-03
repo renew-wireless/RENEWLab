@@ -33,7 +33,7 @@ ue_scheds = string.empty();
 
 
 % Waveform params
-N_OFDM_SYM              = 36;         % Number of OFDM symbols for burst, it needs to be less than 47
+N_OFDM_SYM              = 46;         % Number of OFDM symbols for burst, it needs to be less than 47
 MOD_ORDER               = 4;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
 TX_SCALE                = .5;         % Scale for Tx waveform ([0:1])
 
@@ -45,7 +45,7 @@ CP_LEN                  = 16;                                     % Cyclic prefi
 N_DATA_SYMS             = N_OFDM_SYM * length(SC_IND_DATA);       % Number of data symbols (one per data-bearing subcarrier per OFDM symbol)
 N_LTS_SYM               = 2;                                      % Number of 
 N_SYM_SAMP              = N_SC + CP_LEN;                          % Number of samples that will go over the air
-N_ZPAD_PRE              = 70;                                     % Zero-padding prefix for Iris
+N_ZPAD_PRE              = 90;                                     % Zero-padding prefix for Iris
 N_ZPAD_POST             = N_ZPAD_PRE -14;                         % Zero-padding postfix for Iris
 
 % Rx processing params
@@ -148,7 +148,7 @@ tx_vec_iris = TX_SCALE .* tx_vec_iris ./ max(abs(tx_vec_iris));
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
  % Create a two Iris node objects:
-    b_ids(end+1) = "0328";
+    b_ids(end+1) = "0268";
     ue_ids(end+1) = "RF3C000045";
     
     b_prim_sched = "PGGGGGRG";           % BS primary noede's schedule: Send Beacon only from one Iris board
@@ -168,8 +168,8 @@ tx_vec_iris = TX_SCALE .* tx_vec_iris ./ max(abs(tx_vec_iris));
         'n_chain',N_BS_NODE, ...
         'txfreq', 3.6e9, ...
         'rxfreq', 3.6e9, ...
-        'txgain', 30, ...
-        'rxgain', 30, ...
+        'txgain', 40, ...
+        'rxgain', 20, ...
         'sample_rate', 5e6, ...
         'n_samp', n_samp, ...          % number of samples per frame time.
         'tdd_sched', b_scheds, ...     % number of zero-paddes samples

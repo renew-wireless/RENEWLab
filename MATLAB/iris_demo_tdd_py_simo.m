@@ -11,7 +11,7 @@
 % ---------------------------------------------------------------------
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 clear
-%close all;
+close all;
 
 [version, executable, isloaded] = pyversion;
 if ~isloaded
@@ -49,7 +49,7 @@ CP_LEN                  = 16;                                     % Cyclic prefi
 N_DATA_SYMS             = N_OFDM_SYM * length(SC_IND_DATA);       % Number of data symbols (one per data-bearing subcarrier per OFDM symbol)
 N_LTS_SYM               = 2;                                      % Number of 
 N_SYM_SAMP              = N_SC + CP_LEN;                          % Number of samples that will go over the air
-N_ZPAD_PRE              = 70;                                     % Zero-padding prefix for Iris
+N_ZPAD_PRE              = 90;                                     % Zero-padding prefix for Iris
 N_ZPAD_POST             = N_ZPAD_PRE -14;                         % Zero-padding postfix for Iris
 
 % Rx processing params
@@ -346,6 +346,7 @@ payload_mat = reshape(payload_vec, (N_SC+CP_LEN), N_OFDM_SYM, N_BS_NODE);
 
 % Take the FFT
 syms_f_mat_mrc = fft(payload_mat_noCP, N_SC, 1);
+size(syms_f_mat_mrc)
 syms_f_mat_1 = syms_f_mat_mrc(:,:,1);
 syms_f_mat_2 = syms_f_mat_mrc(:,:,2);
 
@@ -354,7 +355,7 @@ rx_H_est = reshape(rx_H_est_2d,N_SC,1,N_BS_NODE);       % Expand to a 3rd dimens
 H_pow = sum(abs(conj(rx_H_est_2d).*rx_H_est_2d),2);
 H_pow = repmat(H_pow,1,N_OFDM_SYM);
 syms_eq_mat_mrc =  sum( (repmat(conj(rx_H_est), 1, N_OFDM_SYM,1).* syms_f_mat_mrc), 3)./H_pow;
-
+size(syms_eq_mat_mrc)
 %Equalize each branch separately
 syms_eq_mat_1 = syms_f_mat_1 ./ repmat(H_b1, 1, N_OFDM_SYM);
 syms_eq_mat_2 = syms_f_mat_2 ./ repmat(H_b2, 1, N_OFDM_SYM);

@@ -48,7 +48,7 @@ classdef iris_py < handle
                 obj.tx_gain = sdr_params.txgain;
                 obj.rx_gain = sdr_params.rxgain;
                 obj.n_samp = sdr_params.n_samp;
-                obj.tdd_sched = sdr_params.tdd_sched; %NB: This is an array now!
+                obj.tdd_sched = sdr_params.tdd_sched; % This is an array
                 obj.n_zpad_samp = sdr_params.n_zpad_samp;
                 
                 for ipy=1:obj.n_chain
@@ -86,7 +86,7 @@ classdef iris_py < handle
              obj.py_obj_array{1}.burn_beacon( pyargs('prefix_len', prefix_len) );
          end
         
-
+         
          function set_config(obj, chained_tx_rx, is_bs)
              if chained_tx_rx
                 sched  = convertStringsToChars((obj.tdd_sched));

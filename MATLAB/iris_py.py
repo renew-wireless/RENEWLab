@@ -115,7 +115,7 @@ class Iris_py:
 				self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'RF', tx_freq - .75*sample_rate)
 				self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'BB', .75*sample_rate)
 			
-			print("Set TX frequency to %f" % self.sdr.getFrequency(SOAPY_SDR_TX, chan))
+			#print("Set TX frequency to %f" % self.sdr.getFrequency(SOAPY_SDR_TX, chan))
 			#self.sdr.setAntenna(SOAPY_SDR_TX, chan, "TRX")
 			self.sdr.setGain(SOAPY_SDR_TX, chan, 'IAMP', 0) #[0,12]
 			self.sdr.setGain(SOAPY_SDR_TX, chan, 'PAD', tx_gain) #[-52,0]
@@ -358,7 +358,7 @@ if __name__ == '__main__':
 	)
 
 	siso_ue = Iris_py(
-		serial_id = "RF3C000045",
+		serial_id = "RF3C000025",
 		sample_rate = args.rate,
 		tx_freq = args.freq,
 		rx_freq = args.freq,
