@@ -39,7 +39,7 @@ struct Event_data
     int data;
 };
 
-struct SocketBuffer
+struct SampleBuffer
 {
     std::vector<char> buffer;
     std::vector<int> buffer_status;
@@ -79,11 +79,11 @@ public:
     };
 
 public:
-    Receiver(int N_THREAD, Config *cfg);
-    Receiver(int N_THREAD, Config *cfg, moodycamel::ConcurrentQueue<Event_data> * in_queue);
+    Receiver(int n_rx_threads, Config *cfg, moodycamel::ConcurrentQueue<Event_data> * in_queue);
     ~Receiver();
     
-    std::vector<pthread_t> startRecv(void** in_buffer, int** in_buffer_status, int in_buffer_frame_num, int in_buffer_length, int in_core_id=0);
+    std::vector<pthread_t> startRecvThreads(void** in_buffer, int** in_buffer_status, int in_buffer_frame_num, int in_buffer_length, int in_core_id=0);
+    std::vector<pthread_t> startClientThreads();
     static void* loopRecv(void *context);
     static void* clientTxRx(void *context);
 private:
@@ -92,6 +92,9 @@ private:
     int* socket_;
 
     RadioConfig *radioconfig_;
+
+    pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;                                                                              
+    pthread_cond_t cond = PTHREAD_COND_INITIALIZER;  
 
     void** buffer_;
     int** buffer_status_;

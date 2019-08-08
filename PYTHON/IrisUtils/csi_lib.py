@@ -105,7 +105,7 @@ class CSI:
         replay_addr = 0
         for i, sdr in enumerate(self.bsdrs):
             sdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(self.beacon, order='IQ').tolist())
-            if self.beacon_weights.any():
+            if self.beacon_weights is not None:
                 sdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(self.beacon, order='IQ').tolist())
                 sdr.writeRegisters("TX_RAM_WGT_A", replay_addr, self.beacon_weights[self.sdr_ant*i].tolist())
                 if self.sdr_ant == 2:

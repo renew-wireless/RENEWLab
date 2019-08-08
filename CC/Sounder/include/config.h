@@ -78,6 +78,7 @@ public:
     double calTxGainA;
     double calTxGainB;
     bool sampleCalEn;
+    std::string trace_file;
 
     // Clients features
     int nClSdrs;
@@ -113,14 +114,18 @@ public:
     // header 4 int for: frame_id, subframe_id, cell_id, ant_id
     // ushort for: I/Q samples
     size_t getPackageLength() { return sizeof(int) * 4 + sizeof(ushort) * (size_t)sampsPerSymbol * 2; }
-    size_t getNumAntennas(); //{ return nRadios*nChannels; }
+    size_t getNumAntennas();
     int getClientId(int, int);
     int getUlSFIndex(int, int);
     int getDlSFIndex(int, int);
     bool isPilot(int, int);
     bool isData(int, int);
+    unsigned getCoreCount();
 
     std::atomic<bool> running;
+    bool core_alloc;
+    int rx_thread_num;
+    int task_thread_num;
 
     Config(std::string);
     ~Config();

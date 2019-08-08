@@ -379,7 +379,7 @@ void *RadioConfig::initBSRadio(void *in_context)
 
 }
 
-void RadioConfig::radioStart()
+void RadioConfig::radioConfigure()
 {
     int flags = 0;
     if (_cfg->bsPresent)
@@ -562,8 +562,11 @@ void RadioConfig::radioStart()
                 device->writeRegister("IRIS30", CORR_CONF, 0x31);
         }
     }
+    std::cout << "Done with radio configuration!" << std::endl;
+}
 
-
+void RadioConfig::radioStart()
+{
     if (_cfg->bsPresent)
     {
         if (hubs.size() == 0)
@@ -579,7 +582,6 @@ void RadioConfig::radioStart()
             hubs[0]->writeSetting("TRIGGER_GEN", "");
         }
     }
-    std::cout << "radio start done!" << std::endl;
 }
 
 void RadioConfig::readSensors()
