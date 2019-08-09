@@ -35,8 +35,8 @@ using namespace H5;
 class Recorder
 {
 public:
-    // buffer length of each socket thread
-    static const int SOCKET_BUFFER_FRAME_NUM = 80;
+    // buffer length of each rx thread
+    static const int SAMPLE_BUFFER_FRAME_NUM = 80;
     // buffer length of recording part 
     static const int TASK_BUFFER_FRAME_NUM = 60;
     // dequeue bulk size, used to reduce the overhead of dequeue in main thread
@@ -61,9 +61,9 @@ public:
 
 private:
     Config *cfg;
+    bool core_alloc;
     std::unique_ptr<Receiver> receiver_;
-    SocketBuffer *socket_buffer_;
-    //SocketBuffer socket_buffer_[SOCKET_THREAD_NUM];
+    SampleBuffer *rx_buffer_;
 
     H5std_string hdf5name;
     H5std_string hdf5group;
@@ -93,6 +93,7 @@ private:
     int config_dump_data_size;
     int maxFrameNumber;
     int rx_thread_num;
+    int task_thread_num;
     moodycamel::ConcurrentQueue<Event_data> task_queue_;
     moodycamel::ConcurrentQueue<Event_data> message_queue_;
     pthread_t *task_threads; //[TASK_THREAD_NUM];
