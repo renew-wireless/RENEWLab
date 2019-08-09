@@ -84,6 +84,7 @@ public:
     
     std::vector<pthread_t> startRecvThreads(void** in_buffer, int** in_buffer_status, int in_buffer_frame_num, int in_buffer_length, int in_core_id=0);
     std::vector<pthread_t> startClientThreads();
+    void go();
     static void* loopRecv(void *context);
     static void* clientTxRx(void *context);
 private:

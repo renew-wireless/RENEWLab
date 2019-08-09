@@ -95,7 +95,6 @@ Config::Config(std::string jsonfile)
                     pilotSymbols[f].push_back(g);
             }
         }
-        nPilotSyms = pilotSymbols[0].size();
         ULSymbols.resize(framePeriod);
         for(int f = 0; f < framePeriod; f++)
         {
@@ -329,11 +328,11 @@ Config::Config(std::string jsonfile)
     unsigned nCores = this->getCoreCount();
     core_alloc = true;
     if (nCores <= RX_THREAD_NUM) core_alloc = false; 
-    if (bsPresent)
+    if (bsPresent && (pilotSymsPerFrame+ulSymsPerFrame > 0))
     {
         rx_thread_num = (nCores >= 2*RX_THREAD_NUM && nBsSdrs[0] >= RX_THREAD_NUM) ? RX_THREAD_NUM : 1;
         task_thread_num = TASK_THREAD_NUM;
-        if (clPresent && nCores < 1+task_thread_num+rx_thread_num+nClSdrs) core_alloc = false; 
+        if (clPresent && nCores < 1+task_thread_num+rx_thread_num+nClSdrs) core_alloc = false;
     }
     else
     {

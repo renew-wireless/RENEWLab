@@ -61,11 +61,11 @@ herr_t Recorder::initHDF5(std::string hdf5)
     // dataset dimension    
     dims_pilot[0] = MAX_FRAME_INC; //cfg->maxFrame; 
     dims_pilot[1] = cfg->nCells; 
-    dims_pilot[2] = cfg->nPilotSyms; //cfg->nClSdrs;
+    dims_pilot[2] = cfg->pilotSymsPerFrame; //cfg->nClSdrs;
     dims_pilot[3] = cfg->getNumAntennas();
     dims_pilot[4] = 2 * cfg->sampsPerSymbol; // IQ
     hsize_t cdims[5] = {1, 1, 1, 1, 2 * cfg->sampsPerSymbol}; // pilot chunk size, TODO: optimize size
-    hsize_t max_dims_pilot[5] = {H5S_UNLIMITED, cfg->nCells, cfg->nPilotSyms, cfg->getNumAntennas(), 2 * cfg->sampsPerSymbol};
+    hsize_t max_dims_pilot[5] = {H5S_UNLIMITED, cfg->nCells, cfg->pilotSymsPerFrame, cfg->getNumAntennas(), 2 * cfg->sampsPerSymbol};
 
     dims_data[0] = MAX_FRAME_INC; //cfg->maxFrame; 
     dims_data[1] = cfg->nCells; 
@@ -343,7 +343,7 @@ herr_t Recorder::initHDF5(std::string hdf5)
 	att.write(PredType::NATIVE_DOUBLE, &re_im_split_vec_pilot[0]);      
 
 	// Number of Clients
-        attr_data = cfg->nPilotSyms;
+        attr_data = cfg->pilotSymsPerFrame;
         att = mainGroup.createAttribute("PILOT_NUM", PredType::STD_I32BE, attr_ds);
         att.write(PredType::NATIVE_INT, &attr_data); 
 
@@ -555,7 +555,7 @@ void Recorder::stop()
 {
     cfg->running = false;
     receiver_.reset();
-    if (cfg->bsPresent) this->closeHDF5();
+    if (cfg->bsPresent && rx_thread_num > 0) this->closeHDF5();
 }
 
 void Recorder::start()
@@ -587,6 +587,8 @@ void Recorder::start()
         std::vector<pthread_t> recv_thread = receiver_->startRecvThreads(rx_buffer_ptrs, 
             rx_buffer_status_ptrs, rx_buffer_[0].buffer_status.size(), rx_buffer_[0].buffer.size(), 1);
     }
+    else
+        receiver_->go(); // only beamsweeping
 
     moodycamel::ProducerToken ptok(task_queue_);
     moodycamel::ConsumerToken ctok(message_queue_);

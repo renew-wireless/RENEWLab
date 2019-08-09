@@ -67,7 +67,6 @@ public:
     std::vector<std::string> frames;
     std::string frame_mode;
     int max_frame;
-    int nPilotSyms;
     std::vector<std::vector<size_t>> pilotSymbols;
     std::vector<std::vector<size_t>> ULSymbols;
     std::vector<std::vector<size_t>> DLSymbols;

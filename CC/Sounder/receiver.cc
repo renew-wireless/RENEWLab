@@ -101,9 +101,14 @@ std::vector<pthread_t> Receiver::startRecvThreads(void** in_buffer, int** in_buf
     }
 
     sleep(1);
-    pthread_cond_broadcast(&cond);    
-    radioconfig_->radioStart(); // trigger
+    pthread_cond_broadcast(&cond);
+    go(); 
     return created_threads;
+}
+
+void Receiver::go()
+{
+    radioconfig_->radioStart(); // hardware trigger
 }
 
 void* Receiver::loopRecv(void *in_context)

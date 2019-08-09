@@ -562,7 +562,7 @@ void RadioConfig::radioConfigure()
                 device->writeRegister("IRIS30", CORR_CONF, 0x31);
         }
     }
-    std::cout << "Done with radio configuration!" << std::endl;
+    std::cout << "Done with frame configuration!" << std::endl;
 }
 
 void RadioConfig::radioStart()
