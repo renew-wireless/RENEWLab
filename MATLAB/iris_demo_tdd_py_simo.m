@@ -22,13 +22,32 @@ end
 % Params:
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
-SIM_MOD                 = 0;
-sim_N0                  = 0.01;     
-sim_H_var               = 4;
+SIM_MOD                 = 1;    
+
+
+if SIM_MOD
+    chan_type               = "mpc";
+    nt                      = 100;
+    sim_SNR_db              = 1:20;
+    nsnr                    = length(sim_SNR_db);
+    snr_plot                = 20;
+else
+    nt                      = 1;
+    nsnr                    = 1;
+end
+ber_SIM = zeros(nt,nsnr);           % BER
+berr_th = zeros(nsnr,1);            % Theoretical BER
 
 %Iris params:
 N_BS_NODE = 2;
 N_UE = 1;
+TX_FRQ                  = 3.6e9;
+RX_FRQ                  = TX_FRQ;
+TX_GN                   = 40;
+RX_GN                   = 20;
+SMPL_RT                 = 5e6;
+
+
 b_ids = string.empty();
 b_scheds = string.empty();
 ue_ids = string.empty();
@@ -38,7 +57,7 @@ ue_scheds = string.empty();
 % Waveform params
 N_OFDM_SYM              = 46;         % Number of OFDM symbols for burst, it needs to be less than 47
 MOD_ORDER               = 16;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
-TX_SCALE                = .20;         % Scale for Tx waveform ([0:1])
+TX_SCALE                =  1;         % Scale for Tx waveform ([0:1])
 
 % OFDM params
 SC_IND_PILOTS           = [8 22 44 58];                           % Pilot subcarrier indices
@@ -54,9 +73,7 @@ N_ZPAD_POST             = N_ZPAD_PRE -14;                         % Zero-padding
 
 % Rx processing params
 FFT_OFFSET                    = 16;          % Number of CP samples to use in FFT (on average)
-LTS_CORR_THRESH               = 0.8;         % Normalized threshold for LTS correlation
-DO_APPLY_CFO_CORRECTION       = 0;           % Enable CFO estimation/correction
-DO_APPLY_SFO_CORRECTION       = 0;           % Enable SFO estimation/correction
+LTS_CORR_THRESH               = 0.6;         % Normalized threshold for LTS correlation
 DO_APPLY_PHASE_ERR_CORRECTION = 1;           % Enable Residual CFO estimation/correction
 
 %% Define the preamble
@@ -64,14 +81,7 @@ DO_APPLY_PHASE_ERR_CORRECTION = 1;           % Enable Residual CFO estimation/co
 lts_f = [0 1 -1 -1 1 1 -1 1 -1 1 -1 -1 -1 -1 -1 1 1 -1 -1 1 -1 1 -1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 ...
     1 1 -1 -1 1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1];
 lts_t = ifft(lts_f, 64); %time domain
-
-sts_f = zeros(1,64);
-sts_f(1:27) = [0 0 0 0 -1-1i 0 0 0 -1-1i 0 0 0 1+1i 0 0 0 1+1i 0 0 0 1+1i 0 0 0 1+1i 0 0];
-sts_f(39:64) = [0 0 1+1i 0 0 0 -1-1i 0 0 0 1+1i 0 0 0 -1-1i 0 0 0 -1-1i 0 0 0 1+1i 0 0 0];
-sts_t = ifft(sqrt(13/6).*sts_f, 64);
-sts_t = sts_t(1:16);
-
-preamble = [repmat(sts_t, 1, 2) lts_t(33:64) lts_t lts_t];
+preamble = [lts_t(33:64) lts_t lts_t];
 
 %% Generate a payload of random integers
 tx_data = randi(MOD_ORDER, 1, N_DATA_SYMS) - 1;
@@ -142,17 +152,13 @@ tx_vec_iris = tx_vec.';
 % Scale the Tx vector to +/- 1
 tx_vec_iris = TX_SCALE .* tx_vec_iris ./ max(abs(tx_vec_iris));
 
-if (SIM_MOD) 
+for isnr = 1:nsnr
+    for it = 1:nt
+if (SIM_MOD)        
+    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db(isnr));
+    rx_vec_iris = rx_vec_iris.'; % just to agree with what the hardware spits out.
+    SAMP_FREQ = SMPL_RT;
     
-    DO_APPLY_CFO_CORRECTION       = 0;       
-    DO_APPLY_SFO_CORRECTION       = 0;  
-    DO_APPLY_PHASE_ERR_CORRECTION = 1;
-
-    H = sqrt(sim_H_var/2) .* ( randn(N_BS_NODE, 1) + 1i*randn(N_BS_NODE, 1) );
-    rx_vec_iris = repmat(H,1, length(tx_vec_iris)).* repmat(tx_vec_iris.',N_BS_NODE,1) + ...
-        sqrt(sim_N0/2) * (randn(N_BS_NODE, length(tx_vec_iris)) + ...
-        1i*randn(N_BS_NODE, length(tx_vec_iris)));
-        SAMP_FREQ = 5e6;
 else
 
 %% Init Iris nodes
@@ -179,15 +185,16 @@ else
     end
 
     n_samp = length(tx_vec_iris);
+    
     % Iris nodes' parameters
     sdr_params = struct(...
         'id', b_ids, ...
         'n_chain',N_BS_NODE, ...
-        'txfreq', 3.6e9, ...
-        'rxfreq', 3.6e9, ...
-        'txgain', 40, ...
-        'rxgain', 20, ...
-        'sample_rate', 5e6, ...
+        'txfreq', TX_FRQ, ...
+        'rxfreq', RX_FRQ, ...
+        'txgain', TX_GN, ...
+        'rxgain', RX_GN, ...
+        'sample_rate', SMPL_RT, ...
         'n_samp', n_samp, ...          % number of samples per frame time.
         'tdd_sched', b_scheds, ...     % number of zero-paddes samples
         'n_zpad_samp', (N_ZPAD_PRE + N_ZPAD_POST) ...
@@ -196,113 +203,42 @@ else
     sdr_params(2) = sdr_params(1);
     sdr_params(2).id =  ue_ids(1);
     sdr_params(2).n_chain = 1;
-    sdr_params(2).rxfreq = 3.6e9;
-    sdr_params(2).txfreq = 3.6e9;
+    sdr_params(2).txfreq = TX_FRQ;
+    sdr_params(2).rxfreq = RX_FRQ;   
     sdr_params(2).tdd_sched = ue_scheds(1);
+   
     % Iris nodes objects
     node_bs = iris_py(sdr_params(1));
     node_ue = iris_py(sdr_params(2));
-
     SAMP_FREQ = sdr_params(1).sample_rate;
+    
+    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, "iris", [], sdr_params(1), sdr_params(2));
 
-    %% Iris Tx UL
-    % Need to be done once for burst! Just burn the data onto the FPGAs RAM
-
-    trig = 1;
-
-    node_ue.sdr_txgainctrl();
-    node_bs.sdrsync(1);
-    node_ue.sdrsync(0);
-
-    node_ue.sdrrxsetup();
-    node_bs.sdrrxsetup();
-    chained_mode = 0;
-    node_bs.set_config(chained_mode,1);
-    node_ue.set_config(chained_mode,0);
-
-
-    node_bs.sdr_txbeacon(N_ZPAD_PRE);
-    node_ue.sdrtx(tx_vec_iris);
-
-    node_bs.sdr_activate_rx();
-
-    node_ue.sdr_setcorr()
-
-    node_bs.sdrtrigger(trig);
-
-    %% Iris Rx 
-    % Only UL data:
-
-    [rx_vec_iris, data0_len] = node_bs.sdrrx(n_samp);
-
-    node_bs.sdr_close();
-    node_ue.sdr_close();
-
-    fprintf('Matlab script: Length of the received vector: \tUE:%d\n', data0_len);
 end
 rx_vec_iris = rx_vec_iris.';
-%rx_vec_iris(:,2) = rx_vec_iris(:,1);
-raw_rx_dec = rx_vec_iris;
-rx_vec_air = raw_rx_dec; %NB: Change this, unecessary assignment!
-
-l_rx_dec=length(raw_rx_dec);
+l_rx_dec=length(rx_vec_iris);
 
 %% Correlate for LTS
 
-% Complex cross correlation of Rx waveform with time-domain LTS
-lts_corr = double.empty();
-for ibs=1:N_BS_NODE
-    lts_corr(:,ibs) = abs(conv( conj(fliplr(lts_t)), sign(raw_rx_dec(:,ibs))));
+a = 1;
+unos = ones(size(preamble.'))';
+m_filt = zeros(length(rx_vec_iris),N_BS_NODE);
+for ibs =1:N_BS_NODE
+        v0 = filter(flipud(preamble'),a,rx_vec_iris(:,ibs));
+        v1 = filter(unos,a,abs(rx_vec_iris(:,ibs)).^2);
+        m_filt(:,ibs) = (abs(v0).^2)./v1; % normalized correlation
 end
 
-lts_corr = sum(lts_corr,2);
-% Skip early and late samples - avoids occasional false positives from pre-AGC samples
-lts_corr = lts_corr(32:end-32);
+lts_corr = sum(m_filt,2);
+[rho_max, ipos] = max(lts_corr);
+
 % Find all correlation peaks
 lts_peaks = find(lts_corr(1:800) > LTS_CORR_THRESH*max(lts_corr));
+payload_ind = ipos +1;
+lts_ind = payload_ind - N_LTS_SYM*(N_SC + CP_LEN);
 
-% Select best candidate correlation peak as LTS-payload boundary
-[LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
-[lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
-
-% Stop if no valid correlation peak was found
-if(isempty(lts_second_peak_index))
-    fprintf('No LTS Correlation Peaks Found!\n');
-    return;
-end
-
-% Set the sample indices of the payload symbols and preamble
-% The "+32" corresponds to the 32-sample cyclic prefix on the preamble LTS
-% The "-160" corresponds to the length of the preamble LTS (2.5 copies of 64-sample LTS)
-payload_ind = lts_peaks(max(lts_second_peak_index)) + 32;
-lts_ind = payload_ind-160;
-
-
-% NB: Do it for ALL BS antennas!!
-rx_cfo_est_sts = zeros(1,N_BS_NODE);
-rx_cfo_est_lts = zeros(1,N_BS_NODE,1);
-
-if(DO_APPLY_CFO_CORRECTION)
-    %Extract LTS (not yet CFO corrected)
-    for ibs=1:N_BS_NODE
-        rx_lts = raw_rx_dec(lts_ind : lts_ind+159,ibs);
-        rx_lts1 = rx_lts(-64+-FFT_OFFSET + (97:160) );
-        rx_lts2 = rx_lts(-FFT_OFFSET + (97:160) );
-
-        %Calculate coarse CFO est
-        rx_cfo_est_lts(ibs) = mean(unwrap(angle(rx_lts2 .* conj(rx_lts1))));
-        rx_cfo_est_lts(ibs) = rx_cfo_est_lts(ibs)/(2*pi*64);
-    end
-end
-
-
-% Apply CFO correction to raw Rx waveform
-rx_cfo_corr_t = exp(-1i*2*pi* repmat(rx_cfo_est_lts, length(raw_rx_dec), 1).*...
-    repmat((0:l_rx_dec-1)',1,N_BS_NODE) );
-rx_dec_cfo_corr = raw_rx_dec .* rx_cfo_corr_t;
-
-% Re-extract LTS for channel estimate
-rx_lts = rx_dec_cfo_corr(lts_ind : lts_ind+159,:);
+% Extract LTS for channel estimate
+rx_lts = rx_vec_iris(lts_ind : lts_ind+159,:);
 rx_lts_idx1 = -64+-FFT_OFFSET + (97:160);
 rx_lts_idx2 = -FFT_OFFSET + (97:160);
 rx_lts_b1 = [rx_lts(rx_lts_idx1,1)  rx_lts(rx_lts_idx2,1)];
@@ -324,10 +260,10 @@ rx_H_est_2d = [H_b1 H_b2];
 
 %% Rx payload processing
 % Extract the payload samples (integer number of OFDM symbols following preamble)
-if( (length(rx_dec_cfo_corr) - payload_ind ) > (N_SYM_SAMP * N_OFDM_SYM) )
-    payload_vec = rx_dec_cfo_corr(payload_ind : payload_ind + (N_SYM_SAMP * N_OFDM_SYM), :);
+if( (length(rx_vec_iris) - payload_ind ) > (N_SYM_SAMP * N_OFDM_SYM) )
+    payload_vec = rx_vec_iris(payload_ind : payload_ind + (N_SYM_SAMP * N_OFDM_SYM), :);
 else
-    payload_vec = rx_dec_cfo_corr(payload_ind : end,:);
+    payload_vec = rx_vec_iris(payload_ind : end,:);
 end
 
 missed_samps = (N_SC+CP_LEN) * N_OFDM_SYM - length(payload_vec); %sometimes it's below .
@@ -338,7 +274,6 @@ elseif (missed_samps < 0)
     payload_vec = payload_vec(1:end+missed_samps, :);
 end
 
-% (N_CP + N_SC) x N_OFDM x N_BS_NODE
 payload_mat = reshape(payload_vec, (N_SC+CP_LEN), N_OFDM_SYM, N_BS_NODE);
 
 % Remove the cyclic prefix, keeping FFT_OFFSET samples of CP (on average)
@@ -346,7 +281,6 @@ payload_mat = reshape(payload_vec, (N_SC+CP_LEN), N_OFDM_SYM, N_BS_NODE);
 
 % Take the FFT
 syms_f_mat_mrc = fft(payload_mat_noCP, N_SC, 1);
-size(syms_f_mat_mrc)
 syms_f_mat_1 = syms_f_mat_mrc(:,:,1);
 syms_f_mat_2 = syms_f_mat_mrc(:,:,2);
 
@@ -355,60 +289,9 @@ rx_H_est = reshape(rx_H_est_2d,N_SC,1,N_BS_NODE);       % Expand to a 3rd dimens
 H_pow = sum(abs(conj(rx_H_est_2d).*rx_H_est_2d),2);
 H_pow = repmat(H_pow,1,N_OFDM_SYM);
 syms_eq_mat_mrc =  sum( (repmat(conj(rx_H_est), 1, N_OFDM_SYM,1).* syms_f_mat_mrc), 3)./H_pow;
-size(syms_eq_mat_mrc)
 %Equalize each branch separately
 syms_eq_mat_1 = syms_f_mat_1 ./ repmat(H_b1, 1, N_OFDM_SYM);
 syms_eq_mat_2 = syms_f_mat_2 ./ repmat(H_b2, 1, N_OFDM_SYM);
-
-if DO_APPLY_SFO_CORRECTION
-    % SFO manifests as a frequency-dependent phase whose slope increases
-    % over time as the Tx and Rx sample streams drift apart from one
-    % another. To correct for this effect, we calculate this phase slope at
-    % each OFDM symbol using the pilot tones and use this slope to
-    % interpolate a phase correction for each data-bearing subcarrier.
-
-	% Extract the pilot tones and "equalize" them by their nominal Tx values
-    pilots_f_mat_mrc = syms_eq_mat_mrc(SC_IND_PILOTS, :,:);
-    pilots_f_mat_comp_mrc = pilots_f_mat_mrc.*pilots_mat;
-    
-    pilots_f_mat_1 = syms_eq_mat_1(SC_IND_PILOTS, :,:);
-    pilots_f_mat_comp_1 = pilots_f_mat_1.*pilots_mat;
-    
-    pilots_f_mat_2 = syms_eq_mat_2(SC_IND_PILOTS, :,:);
-    pilots_f_mat_comp_2 = pilots_f_mat_2.*pilots_mat;
-
-
-	% Calculate the phases of every Rx pilot tone
-    pilot_phases_mrc = unwrap(angle(fftshift(pilots_f_mat_comp_mrc,1)), [], 1);
-    pilot_phases_1 = unwrap(angle(fftshift(pilots_f_mat_comp_1,1)), [], 1);
-    pilot_phases_2 = unwrap(angle(fftshift(pilots_f_mat_comp_2,1)), [], 1);
-
-	% Calculate slope of pilot tone phases vs frequency in each OFDM symbol
-    pilot_spacing_mat_mrc = repmat(mod(diff(fftshift(SC_IND_PILOTS)),64).', 1, N_OFDM_SYM);                        
-	pilot_slope_mat_mrc = mean(diff(pilot_phases_mrc) ./ pilot_spacing_mat_mrc);
-    pilot_spacing_mat_1 = repmat(mod(diff(fftshift(SC_IND_PILOTS)),64).', 1, N_OFDM_SYM);                        
-	pilot_slope_mat_1 = mean(diff(pilot_phases_1) ./ pilot_spacing_mat_1);
-    pilot_spacing_mat_2 = repmat(mod(diff(fftshift(SC_IND_PILOTS)),64).', 1, N_OFDM_SYM);                        
-	pilot_slope_mat_2 = mean(diff(pilot_phases_2) ./ pilot_spacing_mat_2);
-
-	% Calculate the SFO correction phases for each OFDM symbol
-    pilot_phase_sfo_corr_mrc = fftshift((-32:31).' * pilot_slope_mat_mrc, 1);
-    pilot_phase_corr_mrc = exp(-1i*(pilot_phase_sfo_corr_mrc)); 
-    pilot_phase_sfo_corr_1 = fftshift((-32:31).' * pilot_slope_mat_1, 1);
-    pilot_phase_corr_1 = exp(-1i*(pilot_phase_sfo_corr_1));
-    pilot_phase_sfo_corr_2 = fftshift((-32:31).' * pilot_slope_mat_2, 1);
-    pilot_phase_corr_2 = exp(-1i*(pilot_phase_sfo_corr_2));
-
-    % Apply the pilot phase correction per symbol
-    syms_eq_mat_mrc = syms_eq_mat_mrc .* pilot_phase_corr_mrc;
-    syms_eq_mat_1 = syms_eq_mat_1 .* pilot_phase_corr_1;
-    syms_eq_mat_2 = syms_eq_mat_2 .* pilot_phase_corr_2;
-else
-	% Define an empty SFO correction matrix (used by plotting code below)
-    pilot_phase_sfo_corr_mrc = zeros(N_SC, N_OFDM_SYM);
-    pilot_phase_sfo_corr_1 = zeros(N_SC, N_OFDM_SYM);
-    pilot_phase_sfo_corr_2 = zeros(N_SC, N_OFDM_SYM);
-end
 
 
 if DO_APPLY_PHASE_ERR_CORRECTION
@@ -447,6 +330,7 @@ payload_syms_mat_1 = syms_eq_pc_mat_1(SC_IND_DATA, :);
 
 syms_eq_pc_mat_2 = syms_eq_mat_2 .* pilot_phase_corr_2;
 payload_syms_mat_2 = syms_eq_pc_mat_2(SC_IND_DATA, :);
+
 %% Demodulate
 rx_syms_mrc = reshape(payload_syms_mat_mrc, 1, N_DATA_SYMS);
 rx_syms_1 = reshape(payload_syms_mat_1, 1, N_DATA_SYMS);
@@ -476,7 +360,68 @@ switch(MOD_ORDER)
         rx_data_2 = arrayfun(demod_fcn_64qam, rx_syms_2);
 end
 
-%% Plot Results
+bit_errs = length(find(dec2bin(bitxor(tx_data, rx_data_mrc),8) == '1'));
+
+
+ber_SIM(it, isnr) = bit_errs/(N_DATA_SYMS * log2(MOD_ORDER));
+    
+if (SIM_MOD) && (it == 1) && (sim_SNR_db(isnr) == snr_plot)
+    rx_vec_iris_plot = rx_vec_iris;
+    rx_data_mrc_plot = rx_data_mrc;
+    rx_data_1_plot = rx_data_1; 
+    rx_data_2_plot = rx_data_2;
+    lts_corr_plot = lts_corr;
+
+    pilot_phase_err_mrc_plot = pilot_phase_err_mrc;
+    payload_syms_mat_mrc_plot = payload_syms_mat_mrc;
+    payload_syms_mat_1_plot = payload_syms_mat_1;
+    payload_syms_mat_2_plot = payload_syms_mat_2;
+
+    rx_H_est_plot = rx_H_est;
+    H0_b1_plot = H0_b1; 
+    H_b1_plot = H_b1;
+    H0_b2_plot = H0_b2; 
+    H_b2_plot = H_b2;
+    
+end
+
+%% end of loop
+    end
+    
+    if (SIM_MOD)
+        if chan_type == "awgn"
+            awgn = 1;
+        else
+            awgn  = 0;
+        end
+        berr_th(isnr) = berr_perfect(sim_SNR_db(isnr), N_BS_NODE, MOD_ORDER, awgn);
+    % Display progress
+        fprintf(1,'SNR = %f BER = %12.4e BER_no_err = %12.4e \n', sim_SNR_db(isnr), mean(ber_SIM(:,isnr)),  berr_th(isnr));
+    end
+    
+end
+
+
+%% Plot results
+if SIM_MOD
+    rx_vec_iris = rx_vec_iris_plot;
+    rx_data_mrc = rx_data_mrc_plot;
+    rx_data_1 = rx_data_1_plot; 
+    rx_data_2 = rx_data_2_plot;
+    lts_corr = lts_corr_plot;
+
+    pilot_phase_err_mrc = pilot_phase_err_mrc_plot;
+    payload_syms_mat_mrc = payload_syms_mat_mrc_plot;
+    payload_syms_mat_1 = payload_syms_mat_1_plot;
+    payload_syms_mat_2 = payload_syms_mat_2_plot;
+
+    rx_H_est = rx_H_est_plot;
+    H0_b1 = H0_b1_plot; 
+    H_b1 = H_b1_plot;
+    H0_b2 = H0_b2_plot; 
+    H_b2 = H_b2_plot;
+end
+
 cf = 0;
 
 % Tx signal
@@ -503,26 +448,26 @@ end
 cf = cf + 1;
 figure(cf);
 subplot(2,2,1);
-plot(real(rx_vec_air(:,1)), 'b');
-axis([0 length(rx_vec_air) -TX_SCALE TX_SCALE])
+plot(real(rx_vec_iris(:,1)), 'b');
+axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
 grid on;
 title('Rx Waveform (I) 1');
 
 subplot(2,2,2);
-plot(imag(rx_vec_air(:,1)), 'r');
-axis([0 length(rx_vec_air) -TX_SCALE TX_SCALE])
+plot(imag(rx_vec_iris(:,1)), 'r');
+axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
 grid on;
 title('Rx Waveform (Q) 1');
 
 subplot(2,2,3);
-plot(real(rx_vec_air(:,2)), 'b');
-axis([0 length(rx_vec_air) -TX_SCALE TX_SCALE])
+plot(real(rx_vec_iris(:,2)), 'b');
+axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
 grid on;
 title('Rx Waveform (I) 2');
 
 subplot(2,2,4);
-plot(imag(rx_vec_air(:,2)), 'r');
-axis([0 length(rx_vec_air) -TX_SCALE TX_SCALE])
+plot(imag(rx_vec_iris(:,2)), 'r');
+axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
 grid on;
 title('Rx Waveform (Q) 2');
 
@@ -564,7 +509,7 @@ stairs(x - (20/(2*N_SC)), fftshift(imag(rx_H_est_plot)), 'r', 'LineWidth', 2);
 hold off
 axis([min(x) max(x) -1.1*max(abs(rx_H_est_plot)) 1.1*max(abs(rx_H_est_plot))])
 grid on;
-title('Channel Estimates (I and Q)')
+title('SIMO Channel Estimates (I and Q)')
 
 subplot(2,1,2);
 bh = bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
@@ -572,7 +517,7 @@ shading flat
 set(bh,'FaceColor',[0 0 1])
 axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
 grid on;
-title('Channel Estimates (Magnitude)')
+title('SIMO Channel Estimates (Magnitude)')
 xlabel('Baseband Frequency (MHz)')
 
 cf = cf + 1;
@@ -582,7 +527,7 @@ stairs(x - (20/(2*N_SC)), fftshift(angle(rx_H_est_plot)), 'g', 'LineWidth', 2);
 hold off
 axis([min(x) max(x) -pi pi])
 grid on;
-title('Channel Estimates Phase')
+title('SIMO Channel Estimates Phase')
 
 if(WRITE_PNG_FILES)
     print(gcf,sprintf('wl_ofdm_plots_%s_chanEst', example_mode_string), '-dpng', '-r96', '-painters')
@@ -591,7 +536,6 @@ end
 % Pilot phase error estimate
 cf = cf + 1;
 figure(cf); clf;
-subplot(2,1,1)
 plot(pilot_phase_err_mrc, 'b', 'LineWidth', 2);
 title('Phase Error Estimates')
 xlabel('OFDM Symbol Index')
@@ -601,18 +545,6 @@ grid on
 
 h = colorbar;
 set(h,'Visible','off');
-
-subplot(2,1,2)
-imagesc(1:N_OFDM_SYM, (SC_IND_DATA - N_SC/2), fftshift(pilot_phase_sfo_corr_mrc,1))
-xlabel('OFDM Symbol Index')
-ylabel('Subcarrier Index')
-title('Phase Correction for SFO')
-colorbar
-myAxis = caxis();
-if(myAxis(2)-myAxis(1) < (pi))
-   caxis([-pi/2 pi/2])
-end
-
 
 if(WRITE_PNG_FILES)
     print(gcf,sprintf('wl_ofdm_plots_%s_phaseError', example_mode_string), '-dpng', '-r96', '-painters')
@@ -797,6 +729,23 @@ if(WRITE_PNG_FILES)
     print(gcf,sprintf('wl_ofdm_plots_%s_evm', example_mode_string), '-dpng', '-r96', '-painters')
 end
 
+%% BER SIM MOD
+if SIM_MOD
+    
+    cf = cf+1;
+    figure(cf);
+    ber_avg = mean(ber_SIM)';
+    semilogy(sim_SNR_db, [ber_avg berr_th], 'o-', 'LineWidth', 2);
+    axis([0 sim_SNR_db(end) 1e-3 1]);
+    legend('Simulation', 'No Eq. Error');
+    grid on;
+    set(gca,'FontSize',16);
+    xlabel('SNR (dB)');
+    ylabel('BER');
+
+title('Bit Error rate vs SNR');
+end
+
 %% Calculate Rx stats
 
 sym_errs = sum(tx_data ~= rx_data_mrc);
@@ -808,21 +757,6 @@ fprintf('Num Bytes:   %d\n', N_DATA_SYMS * log2(MOD_ORDER) / 8);
 fprintf('Sym Errors:  %d (of %d total symbols)\n', sym_errs, N_DATA_SYMS);
 fprintf('Bit Errors:  %d (of %d total bits)\n', bit_errs, N_DATA_SYMS * log2(MOD_ORDER));
 
-cfo_est_lts = rx_cfo_est_lts*(SAMP_FREQ);
-cfo_est_phaseErr = mean(diff(unwrap(pilot_phase_err_mrc)))/(4e-6*2*pi);
-cfo_total_ppm = ((cfo_est_lts + cfo_est_phaseErr) /  ((3.6+(.005*(CHANNEL-1)))*1e9)) * 1e6;
-
-fprintf('CFO Est:     %3.2f kHz (%3.2f ppm)\n', (cfo_est_lts + cfo_est_phaseErr)*1e-3, cfo_total_ppm);
-fprintf('     LTS CFO Est:                  %3.2f kHz\n', cfo_est_lts*1e-3);
-fprintf('     Phase Error Residual CFO Est: %3.2f kHz\n', cfo_est_phaseErr*1e-3);
-
-if DO_APPLY_SFO_CORRECTION
-    drift_sec = pilot_slope_mat_mrc / (2*pi*312500);
-    sfo_est_ppm =  1e6*mean((diff(drift_sec) / 4e-6));
-    sfo_est = sfo_est_ppm*20;
-    fprintf('SFO Est:     %3.2f Hz (%3.2f ppm)\n', sfo_est, sfo_est_ppm);
-
-end
 sc_data_idx = [(2:27)'; (39:64)' ];
 % SNR estimation based on the LTS signals
 n_var_1 = sum( sum( abs(H0_b1(sc_data_idx,:) - repmat(H_b1(sc_data_idx), 1,2) ).^2,2 ))/(52*2);
@@ -831,7 +765,7 @@ h_pow_1 =  TX_SCALE*H_b1(sc_data_idx)'*H_b1(sc_data_idx)/(52);
 h_pow_2 =  TX_SCALE*H_b2(sc_data_idx)'*H_b2(sc_data_idx)/(52);
 h_pow_mrc = TX_SCALE*sum(H_pow(sc_data_idx,1))/52;
 
-n_var_mrc = (n_var_1 + n_var_2)/2;
+n_var_mrc = (n_var_1 + n_var_2)/2;  
 fprintf('\n\tEVM-based SNRs:\n');
 fprintf('Branch 1 SNR:%3.2f \tBranch 2 SNR:%3.2f\t MRC SNR:%3.2f\n',...
     snr_1, snr_2, snr_mrc);

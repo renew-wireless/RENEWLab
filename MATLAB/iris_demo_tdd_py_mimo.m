@@ -22,7 +22,7 @@ end
 % Params:
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
-SIM_MOD                 = 0;
+SIM_MOD                 = 1;
 DEBUG                   = 1;
 sim_SNR_db              = 15;    
 
@@ -45,7 +45,7 @@ MIMO_ALG                = 'ZF';      % MIMO ALGORITHM: ZF or Conjugate
 disp(MIMO_ALG)
 % Waveform params
 N_OFDM_SYM              = 46;         % Number of OFDM symbols for burst, it needs to be less than 47
-MOD_ORDER               = 4;          % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
+MOD_ORDER               = 16;          % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
 TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
 
 % OFDM params
@@ -63,8 +63,6 @@ N_ZPAD_POST             = N_ZPAD_PRE -14;                         % Zero-padding
 % Rx processing params
 FFT_OFFSET                    = 16;          % Number of CP samples to use in FFT (on average)
 LTS_CORR_THRESH               = 0.60;         % Normalized threshold for LTS correlation
-DO_APPLY_CFO_CORRECTION       = 0;           % Enable CFO estimation/correction
-DO_APPLY_SFO_CORRECTION       = 0;           % Enable SFO estimation/correction
 DO_APPLY_PHASE_ERR_CORRECTION = 1;           % Enable Residual CFO estimation/correction
 
 %% Define the preamble
@@ -150,59 +148,13 @@ tx_vecs = [zeros(N_ZPAD_PRE, N_UE); preamble; tx_payload_vecs; zeros(N_ZPAD_POST
 tx_vecs_iris = tx_vecs;
 % Scale the Tx vector to +/- 1
 tx_vecs_iris = TX_SCALE .* tx_vecs_iris ./ max(abs(tx_vecs_iris));
+
+%% SIMULATION:
 if (SIM_MOD) 
-%% SIMULATION:    
-    DO_APPLY_CFO_CORRECTION       = 0;       
-    DO_APPLY_SFO_CORRECTION       = 0;  
-    DO_APPLY_PHASE_ERR_CORRECTION = 0;
-    sim_N0 = mean(mean(abs(tx_vecs_iris).^2 )) / 10^(0.1*sim_SNR_db);
-    H_ul = randn(N_BS_NODE, N_UE) + 1i*randn(N_BS_NODE, N_UE);
-
-   % 50% correlated channel
-%    H_ul = [...
-%    -1.2571 + 0.6106i  -3.0485 + 0.3713i;...
-%    0.3648 - 0.2516i   0.7660 + 1.5122i;...
-%   -0.9848 - 1.0233i  -1.1972 - 1.0073i;...
-%    0.5814 + 0.0111i  -0.9883 + 0.8492i;...
-%    0.3947 + 0.6314i   0.0198 + 0.8837i;...
-%   -1.1111 - 0.6217i  -0.0682 + 0.0905i;...
-%    0.6703 - 0.8990i   0.6708 - 0.9521i;...
-%   -0.0465 + 0.3210i  -2.2392 + 0.2231i;...
-%   -0.5419 - 0.1885i   1.2878 - 0.6539i;...
-%    0.7255 - 1.4918i   0.2036 - 0.6061i;...
-%    2.4754 + 0.8300i  -0.6986 + 1.5285i;...
-%   -0.3030 + 0.6795i  -1.6028 - 0.3255i;...
-%    1.0739 + 1.2817i   1.7384 + 0.4465i;...
-%    1.1238 + 1.8314i   0.7935 + 1.0389i;...
-%    0.3415 + 0.5924i  -0.3330 + 0.0433i;...
-%    1.1382 + 0.2611i   0.2025 + 1.2733i];
     
-   % uncorrelated channel:
-%    H_ul = [...
-%     0.0552 - 0.0428i  0.1761 + 0.0668i;...
-%    0.2217 - 0.0530i  -0.2435 - 0.2195i;...
-%   -0.2889 + 0.0280i  -0.2978 - 0.1816i;...
-%   -0.0894 + 0.2699i   0.1233 - 0.1293i;...
-%    0.0111 - 0.1995i  -0.1506 + 0.3468i;...
-%    0.0523 + 0.0267i   0.1464 - 0.1046i;...
-%   -0.0076 - 0.3131i  -0.1041 + 0.1941i;...
-%    0.2214 + 0.3001i  -0.0142 + 0.1399i;...
-%   -0.3049 + 0.0248i  -0.0432 + 0.2414i;...
-%    0.1961 + 0.1475i  -0.1352 + 0.3732i;...
-%    0.0671 - 0.3845i   0.0371 + 0.0968i;...
-%   -0.0642 + 0.0182i  -0.1682 + 0.0059i;...
-%   -0.2003 - 0.0772i   0.0688 - 0.0339i;...
-%   -0.0967 - 0.1080i   0.1847 + 0.1880i;...
-%    0.1071 + 0.2488i   0.0445 + 0.2558i;...
-%   -0.1581 - 0.1467i  -0.2420 - 0.0437i];
-
-    for ic=1: N_UE
-        H_ul(:,ic) = H_ul(:,ic)./norm(H_ul(:,ic) );
-    end
-    H_ul = H_ul.* repmat([sqrt(N_BS_NODE),sqrt(N_BS_NODE)], N_BS_NODE,1);
-    W_ul = sqrt(sim_N0/2) * (randn(N_BS_NODE, length(tx_vecs_iris)) + ...
-        1i*randn(N_BS_NODE, length(tx_vecs_iris)) );
-    rx_vec_iris = H_ul*tx_vecs_iris.' + W_ul;
+    rx_vec_iris = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, "rayleigh", sim_SNR_db);
+    rx_vec_iris = rx_vec_iris.'; % just to agree with what the hardware spits out.
+    
 %% Init Iris nodes
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Set up the Iris experimenty
@@ -262,53 +214,9 @@ else
     node_ue2 = iris_py(sdr_params(3));
     
     SAMP_FREQ = sdr_params(1).sample_rate;
-
-    %% Iris Tx UL
-    % Need to be done once for burst! Just burn the data onto the FPGAs RAM
-
-    trig = 1;
-
-    node_ue1.sdr_txgainctrl();
-    node_ue2.sdr_txgainctrl();
     
-    node_bs.sdrsync(1);
-    
-    node_ue1.sdrsync(0);
-    node_ue2.sdrsync(0);
+    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, "iris", [], sdr_params(1), sdr_params(2:3));
 
-    node_ue1.sdrrxsetup();
-    node_ue2.sdrrxsetup();
-    
-    node_bs.sdrrxsetup();
-    
-    chained_mode = 0;
-    node_bs.set_config(chained_mode,1);
-   
-    node_ue1.set_config(chained_mode,0);
-    node_ue2.set_config(chained_mode,0);
-
-
-    node_bs.sdr_txbeacon(N_ZPAD_PRE);
-    
-    node_ue1.sdrtx(tx_vecs_iris(:,1));
-    node_ue2.sdrtx(tx_vecs_iris(:,2));
-    
-    node_bs.sdr_activate_rx();
-
-    node_ue1.sdr_setcorr()
-    node_ue2.sdr_setcorr()
-
-    node_bs.sdrtrigger(trig);
-
-    %% Iris Rx 
-    % Only UL data:
-
-    [rx_vec_iris, data0_len] = node_bs.sdrrx(n_samp);
-
-    node_bs.sdr_close();
-    node_ue1.sdr_close();
-
-    fprintf('Matlab script: Length of the received vector: \tUE:%d\n', data0_len);
 end
 
 %load 'rx_mimo_data_08_02.mat';
