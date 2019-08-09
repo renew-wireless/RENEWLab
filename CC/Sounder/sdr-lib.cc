@@ -94,7 +94,7 @@ RadioConfig::RadioConfig(Config *cfg):
         //load channels
         std::vector<size_t> channels;
         if (_cfg->clChannel == "A") channels = {0};
-        else if (_cfg->clChannel == "B") channels = {1};
+        else if (cfg->bsChannel == "B") {channels = {1}; std::cout << "selecting channel " << cfg->bsChannel << "(" << std::to_string(channels[0]) << ")" << std::endl;}
         else if (_cfg->clSdrCh == 2) channels = {0, 1};
         else
         {
@@ -167,8 +167,10 @@ RadioConfig::RadioConfig(Config *cfg):
 
             if (_cfg->clSdrCh == 1)
             {
-                device->writeSetting(SOAPY_SDR_RX, 1, "ENABLE_CHANNEL", "false");
-                device->writeSetting(SOAPY_SDR_TX, 1, "ENABLE_CHANNEL", "false");
+                int ch = 1;
+                if (channels[0] == 1) ch = 0;
+                device->writeSetting(SOAPY_SDR_RX, ch, "ENABLE_CHANNEL", "false");
+                device->writeSetting(SOAPY_SDR_TX, ch, "ENABLE_CHANNEL", "false");
             }
 
             device->writeRegister("IRIS30", RF_RST_REG, (1<<29) | 1);
@@ -194,7 +196,7 @@ void *RadioConfig::initBSRadio(void *in_context)
     //load channels
     std::vector<size_t> channels;
     if (cfg->bsChannel == "A") channels = {0};
-    else if (cfg->bsChannel == "B") channels = {1};
+    else if (cfg->bsChannel == "B") channels = {1}; 
     else if (cfg->bsSdrCh == 2) channels = {0, 1};
     else
     {
@@ -288,7 +290,7 @@ void *RadioConfig::initBSRadio(void *in_context)
         rc->bsSdrs[c][i]->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
     }
 
-    if (cfg->bsSdrCh == 1)
+    if (cfg->bsSdrCh == 1 && cfg->bsChannel == "A")
     {
         // we setup SPI TDD mode to bypass the internal LDO issue in revision D and prior
         if (cfg->freq > 3e9 and cfg->bs_sdr_ids[c][i].find("RF3E") == std::string::npos)
@@ -324,8 +326,11 @@ void *RadioConfig::initBSRadio(void *in_context)
 
             //bsSdrs[i]->writeSetting("SPI_TDD_MODE", "SISO"); // a FPGA hack that bypasses the LDO issue
         }
-        rc->bsSdrs[c][i]->writeSetting(SOAPY_SDR_RX, 1, "ENABLE_CHANNEL", "false");
-        rc->bsSdrs[c][i]->writeSetting(SOAPY_SDR_TX, 1, "ENABLE_CHANNEL", "false");
+
+        int ch = 1;
+        if (channels[0] == 1) ch = 0;
+        rc->bsSdrs[c][i]->writeSetting(SOAPY_SDR_RX, ch, "ENABLE_CHANNEL", "false");
+        rc->bsSdrs[c][i]->writeSetting(SOAPY_SDR_TX, ch, "ENABLE_CHANNEL", "false");
     } 
     else if (cfg->bsSdrCh == 2)
     {
