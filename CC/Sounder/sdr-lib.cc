@@ -708,7 +708,6 @@ int RadioConfig::radioRx(int r /*radio id*/, void ** buffs, long long & frameTim
 
 void RadioConfig::collectCSI(bool adjust)
 {
-
     std::vector<std::vector<double>> pilot;
     //std::vector<std::complex<float>> pilot_cf32;
     std::vector<std::complex<int16_t>> pilot_cint16;
@@ -767,10 +766,10 @@ void RadioConfig::collectCSI(bool adjust)
     for (int i = 0; i < R; i++)
         RadioConfig::drain_buffers(bsSdrs[0][i], this->bsRxStreams[0][i], dummybuffs, _cfg->sampsPerSymbol);
 
+    int ch = (_cfg->bsChannel == "B") ? 1 : 0;
     for (int i = 0; i < R; i++)
     {
-        bsSdrs[0][i]->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->calTxGainA);
-        bsSdrs[0][i]->setGain(SOAPY_SDR_TX, 1, "PAD", _cfg->calTxGainB);
+        bsSdrs[0][i]->setGain(SOAPY_SDR_TX, ch, "PAD", ch ? _cfg->calTxGainB : _cfg->calTxGainA);
         bsSdrs[0][i]->writeSetting("TDD_CONFIG", "{\"tdd_enabled\":false}");
         bsSdrs[0][i]->writeSetting("TDD_MODE", "false");
         bsSdrs[0][i]->activateStream(this->bsTxStreams[0][i]);
@@ -783,7 +782,7 @@ void RadioConfig::collectCSI(bool adjust)
 
         auto ref_sdr = bsSdrs[0][i];
         int tx_flags = SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST;
-        int ret = ref_sdr->writeStream(this->bsTxStreams[0][i], txbuff0.data(), _cfg->sampsPerSymbol, tx_flags, txTime, 1000000); 
+        int ret = ref_sdr->writeStream(this->bsTxStreams[0][i], ch ? txbuff1.data() : txbuff0.data(), _cfg->sampsPerSymbol, tx_flags, txTime, 1000000); 
         if (ret < 0) std::cout << "bad write\n";
         for (int j = 0; j < R; j++)
         {
@@ -873,8 +872,7 @@ void RadioConfig::collectCSI(bool adjust)
     {
         bsSdrs[0][i]->deactivateStream(this->bsTxStreams[0][i]);
         bsSdrs[0][i]->deactivateStream(this->bsRxStreams[0][i]);
-        bsSdrs[0][i]->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->txgainA);  //[0,30]
-        bsSdrs[0][i]->setGain(SOAPY_SDR_TX, 1, "PAD", _cfg->txgainB);  //[0,30]
+        bsSdrs[0][i]->setGain(SOAPY_SDR_TX, ch, "PAD", ch ? _cfg->txgainB : _cfg->txgainA);  //[0,30]
     }
 
     for (int i = 0; i < R; i++)
