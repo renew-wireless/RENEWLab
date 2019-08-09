@@ -452,7 +452,7 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
 
     # Float to fixed point
     signal1_ui32 = cfloat2uint32(txSignal, order='IQ')
-    signal2_ui32 = cfloat2uint32(wbz, order='IQ')       # Currently unused
+    signal2_ui32 = cfloat2uint32(wbz)       # Currently unused
 
     if ota:
         # Over-the-air Mode
@@ -496,13 +496,13 @@ def main():
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
     parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=30.0) # with CBRS 20
-    parser.add_option("--LNA", type="float", dest="LNA", help="LNA gain (dB) [0:1:30]", default=25.0) # with CBRS 15
+    parser.add_option("--LNA", type="float", dest="LNA", help="LNA gain (dB) [0:1:30]", default=20.0) # with CBRS 15
     parser.add_option("--TIA", type="float", dest="TIA", help="TIA gain (dB) [0, 3, 9, 12]", default=0.0) # with CBRS 0
-    parser.add_option("--PGA", type="float", dest="PGA", help="PGA gain (dB) [-12:1:19]", default=-12.0) # with CBRS -12
+    parser.add_option("--PGA", type="float", dest="PGA", help="PGA gain (dB) [-12:1:19]", default=0.0) # with CBRS -12
     parser.add_option("--LNA1", type="float", dest="LNA1", help="BRS/CBRS Front-end LNA1 gain stage [0:33] (dB)", default=0.0)
     parser.add_option("--LNA2", type="float", dest="LNA2", help="BRS/CBRS Front-end LNA2 gain [0:17] (dB)", default=0.0)
     parser.add_option("--ATTN", type="float", dest="ATTN", help="BRS/CBRS Front-end ATTN gain stage [-18:6:0] (dB)", default=0.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=3.5e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=3.6e9)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
     parser.add_option("--nOFDMsym", type="int", dest="nOFDMsym", help="Number of OFDM symbols", default=20)
     parser.add_option("--ltsCpLen", type="int", dest="ltsCpLen", help="Length of Cyclic Prefix - LTS", default=32)

@@ -141,8 +141,8 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
     print("Node 1 schedule %s " % bsched)
     print("Node 2 schedule %s " % msched)
     # Send one frame (set mamx_frame to 1)
-    bconf = {"tdd_enabled": True, "trigger_out": False, "symbol_size": symSamp, "frames": [bsched], "max_frame": 1}
-    mconf = {"tdd_enabled": True, "trigger_out": False, "dual_pilot": False, "symbol_size": symSamp, "frames": [msched], "max_frame": 1}
+    bconf = {"tdd_enabled": True, "frame_mode": "free_running", "symbol_size": symSamp, "frames": [bsched], "max_frame": 1}
+    mconf = {"tdd_enabled": True, "frame_mode": "free_running", "dual_pilot": False, "symbol_size": symSamp, "frames": [msched], "max_frame": 1}
     bsdr.writeSetting("TDD_CONFIG", json.dumps(bconf))
     msdr.writeSetting("TDD_CONFIG", json.dumps(mconf))
 
@@ -155,8 +155,8 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
 
     replay_addr = 0
     for sdr in [bsdr, msdr]:
-        sdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(pilot1, order='IQ').tolist())
-        sdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(pilot2, order='IQ').tolist())
+        sdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(pilot1, order='QI').tolist())
+        sdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(pilot2, order='QI').tolist())
 
     flags = 0
     r1 = bsdr.activateStream(rxStreamB, flags, 0)
