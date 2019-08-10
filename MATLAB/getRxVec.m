@@ -24,15 +24,15 @@ elseif chan_type == "rayleigh"
     % noise vector
     W_ul = sqrt(nvar/2) * (randn(n_bs, length(tx_data)) + ...
         1i*randn(n_bs, length(tx_data)) );
-    hvar = n_bs;
+    hvar = 1;
     if n_ue == 1
         H_ul = sqrt(hvar/2).*randn(n_bs, length(tx_data)) + 1i*randn(n_bs, length(tx_data));
         H_ul = sqrt(abs(H_ul).^2);
-        H_ul = smoothdata(H_ul, 2, 'movmean',5);
+        H_ul = smoothdata(H_ul, 2, 'movmean',15);
         % output vector
         y0 = H_ul.*tx_data.';
     else
-        H_ul = sqrt(1/(2*hvar)).*randn(n_bs, n_ue) + 1i*randn(n_bs, n_ue);
+        H_ul = sqrt(hvar/2).*randn(n_bs, n_ue) + 1i*randn(n_bs, n_ue);
         y0 = H_ul*tx_data.';
         
     end
@@ -187,7 +187,8 @@ elseif chan_type == "mpc"
 
 elseif chan_type == "iris"
 % Real HW:
-    
+    N_ZPAD_PRE = 90;
+    n_samp = bs_param.n_samp;
     node_bs = iris_py(bs_param);
     node_ue1 = iris_py(ue_param(1));
     if n_ue  >1

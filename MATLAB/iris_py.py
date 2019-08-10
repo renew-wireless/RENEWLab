@@ -347,7 +347,7 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 	
 	siso_bs = Iris_py(
-		serial_id = "0328",
+		serial_id = "0339",
 		sample_rate = args.rate,
 		tx_freq = args.freq,
 		rx_freq = args.freq,
@@ -358,7 +358,7 @@ if __name__ == '__main__':
 	)
 
 	siso_ue = Iris_py(
-		serial_id = "RF3C000025",
+		serial_id = "RF3C000045",
 		sample_rate = args.rate,
 		tx_freq = args.freq,
 		rx_freq = args.freq,

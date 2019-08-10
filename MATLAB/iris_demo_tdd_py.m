@@ -24,7 +24,7 @@ WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 
 
-SIM_MOD                 =1;
+SIM_MOD                 =0;
 
 if SIM_MOD
     chan_type               = "rayleigh";
@@ -32,12 +32,17 @@ if SIM_MOD
     sim_SNR_db              = 1:20;
     nsnr                    = length(sim_SNR_db);
     snr_plot                = 20;
+    TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
+
 else
     nt                      = 1;
     nsnr                    = 1;
+    TX_SCALE                = 0.5;         % Scale for Tx waveform ([0:1])
+    chan_type               = "iris";
 end
 ber_SIM = zeros(nt,nsnr);           % BER
 berr_th = zeros(nsnr,1);            % Theoretical BER
+fprintf("Channel type: %s \n",chan_type);
 
 %Iris params:
 N_BS_NODE = 1;
@@ -57,7 +62,6 @@ ue_scheds = string.empty();
 % Waveform params
 N_OFDM_SYM              = 46;         % Number of OFDM symbols for burst, it needs to be less than 47
 MOD_ORDER               = 16;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
-TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
 
 % OFDM params
 SC_IND_PILOTS           = [8 22 44 58];                           % Pilot subcarrier indices
@@ -166,7 +170,7 @@ else
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
  % Create a two Iris node objects:
-    b_ids(end+1) = "0268";
+    b_ids(end+1) = "0339";
     ue_ids(end+1) = "RF3C000045";
     
     b_prim_sched = "PGGGGGRG";           % BS primary noede's schedule: Send Beacon only from one Iris board
@@ -202,7 +206,7 @@ else
     sdr_params(2).rxfreq = RX_FRQ;
     sdr_params(2).tdd_sched = ue_scheds(1);
     
-    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, "iris", [], sdr_params(1), sdr_params(2:3));
+    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, "iris", [], sdr_params(1), sdr_params(2));
 
     SAMP_FREQ = sdr_params(1).sample_rate;
 end
@@ -479,7 +483,7 @@ if(WRITE_PNG_FILES)
 end
 
 
-% EVM & SNR
+%% EVM & SNR
 cf = cf + 1;
 figure(cf); clf;
 

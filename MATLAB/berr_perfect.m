@@ -35,6 +35,7 @@ if awgn == 0
     hvar = 1;
     h = sqrt(hvar/2).*(randn(N_DATA_SYMS, N_ANT) + 1i*randn(N_DATA_SYMS, N_ANT));
     h = sqrt( sum(abs(h).^2, 2) );
+    h = smoothdata(h, 'movmean', 15);
 else
     h = ones(N_DATA_SYMS,1)*sqrt(N_ANT);
 end

@@ -22,7 +22,7 @@ end
 % Params:
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
-SIM_MOD                 = 1;
+SIM_MOD                 = 0;
 DEBUG                   = 1;
 sim_SNR_db              = 15;    
 
@@ -206,16 +206,10 @@ else
     
     sdr_params(3)= sdr_params(2);
     sdr_params(3).id =  ue_ids(2);
-    % Iris nodes objects
-    node_bs = iris_py(sdr_params(1));
-   
-    %NB: Need for loop?
-    node_ue1 = iris_py(sdr_params(2));
-    node_ue2 = iris_py(sdr_params(3));
     
     SAMP_FREQ = sdr_params(1).sample_rate;
     
-    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, "iris", [], sdr_params(1), sdr_params(2:3));
+    rx_vec_iris = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, "iris", [], sdr_params(1), sdr_params(2:3));
 
 end
 
@@ -224,19 +218,52 @@ l_rx_dec=length(rx_vec_iris);
 
 %% Correlate for LTS
 % Complex cross correlation of Rx waveform with time-domain LTS
-lts_corr = double.empty();
-for ibs=1:N_BS_NODE
-    lts_corr(:,ibs) = abs(conv( conj(flipud(lts_t)), sign(rx_vec_iris(ibs,:))));
-end
 
-% Skip early and late samples - avoids occasional false positives from pre-AGC samples
-lts_corr = lts_corr(32:end-32,:);
+a = 1;
+unos = ones(size(preamble_common'));
+lts_corr = zeros(N_BS_NODE, length(rx_vec_iris));
+rx_lts_mat = double.empty();
+payload_ind = int32.empty();
+payload_rx = double.empty();
+for ibs =1:N_BS_NODE
+        v0 = filter(fliplr(preamble_common'),a,rx_vec_iris(ibs,:));
+        v1 = filter(unos,a,abs(rx_vec_iris(ibs,:)).^2);
+        lts_corr(ibs,:) = (abs(v0).^2)./v1; % normalized correlation
+        sort_corr = sort(lts_corr(ibs,:), 'descend');
+        rho_max = sort_corr(1:N_UE);
+        lts_peaks = find(lts_corr(ibs,:) >= min(rho_max));
+        
+%         if lts_peaks(2) - lts_peaks(1) == length(preamble_common)
+            ipos = max(lts_peaks);
+%         else
+%             fprintf('No LTS Correlation Peaks Found! at antenna %d\n', ibs);
+            
+            if DEBUG
+                figure,
+                for sp = 1:N_BS_NODE
+                    subplot(N_BS_NODE,1,sp);
+                    plot(lts_corr(sp,:)) 
+                    xlabel('Samples');
+                    y_label = sprintf('Anetnna %d',sp);
+                    ylabel(y_label);
+                end
+                sgtitle('LTS correlations accross antennas')
+            end
+%         return;
+%         end
+        
+        payload_ind(ibs) = ipos +1;
+        pream_ind_ibs = payload_ind(ibs) - length(preamble);
+        
+        rx_lts_mat(ibs,:) = rx_vec_iris(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 );
+        payload_rx(ibs,:) = rx_vec_iris(ibs, payload_ind(ibs) : payload_ind(ibs)+(N_OFDM_SYM)*(N_SC +CP_LEN)-1);
+end
 
 if DEBUG
     figure,
     for sp = 1:N_BS_NODE
         subplot(N_BS_NODE,1,sp);
-        plot(lts_corr(:,sp)) 
+        plot(lts_corr(sp,:)) 
         xlabel('Samples');
         y_label = sprintf('Anetnna %d',sp);
         ylabel(y_label);
@@ -244,30 +271,53 @@ if DEBUG
     sgtitle('LTS correlations accross antennas')
 end
 
-% Find all correlation peaks
-rx_lts_mat = double.empty();
-payload_ind = int32.empty();
-payload_rx = double.empty();
-for ibs=1:N_BS_NODE
-    lts_peaks = find(lts_corr(1:cor_rng) > LTS_CORR_THRESH*max(lts_corr(:,ibs)));
 
-    % Select best candidate correlation peak as LTS-payload boundary
-    [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
-    [lts_lst_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
-    % Stop if no valid correlation peak was found
-    if(isempty(lts_lst_peak_index))
-        fprintf('No LTS Correlation Peaks Found!\n');
-        return;
-    end    
-    % Set the sample indices of the payload symbols and preamble
-    payload_ind(ibs) = lts_peaks(max(lts_lst_peak_index)) + (2*CP_LEN);
-    %payload_ind(ibs) = 391;
-    pream_ind_ibs = payload_ind(ibs)-length(preamble);
-    % Put rx-ed ltss and payload in separate arrays 
-    rx_lts_mat(ibs,:) = rx_vec_iris(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 );
-    payload_rx(ibs,:) = rx_vec_iris(ibs, payload_ind(ibs) : payload_ind(ibs)+(N_OFDM_SYM)*(N_SC +CP_LEN)-1);
-end
+%% old Correlator
+% lts_corr = double.empty();
+% for ibs=1:N_BS_NODE
+%     lts_corr(:,ibs) = abs(conv( conj(flipud(lts_t)), sign(rx_vec_iris(ibs,:))));
+% end
+% 
+% % Skip early and late samples - avoids occasional false positives from pre-AGC samples
+% lts_corr = lts_corr(32:end-32,:);
+% 
+% if DEBUG
+%     figure,
+%     for sp = 1:N_BS_NODE
+%         subplot(N_BS_NODE,1,sp);
+%         plot(lts_corr(sp,:)) 
+%         xlabel('Samples');
+%         y_label = sprintf('Anetnna %d',sp);
+%         ylabel(y_label);
+%     end
+%     sgtitle('LTS correlations accross antennas')
+% end
+% 
+% % Find all correlation peaks
+% rx_lts_mat = double.empty();
+% payload_ind = int32.empty();
+% payload_rx = double.empty();
+% for ibs=1:N_BS_NODE
+%     lts_peaks = find(lts_corr(1:cor_rng) > LTS_CORR_THRESH*max(lts_corr(:,ibs)));
+% 
+%     % Select best candidate correlation peak as LTS-payload boundary
+%     [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
+%     [lts_lst_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
+%     % Stop if no valid correlation peak was found
+%     if(isempty(lts_lst_peak_index))
+%         fprintf('No LTS Correlation Peaks Found!\n');
+%         return;
+%     end    
+%     % Set the sample indices of the payload symbols and preamble
+%     payload_ind(ibs) = lts_peaks(max(lts_lst_peak_index)) + (2*CP_LEN);
+%     %payload_ind(ibs) = 391;
+%     pream_ind_ibs = payload_ind(ibs)-length(preamble);
+%     % Put rx-ed ltss and payload in separate arrays 
+%     rx_lts_mat(ibs,:) = rx_vec_iris(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 );
+%     payload_rx(ibs,:) = rx_vec_iris(ibs, payload_ind(ibs) : payload_ind(ibs)+(N_OFDM_SYM)*(N_SC +CP_LEN)-1);
+% end
 
+%% Rx processing
 % Construct a matrix from the received pilots
 n_plt_samp = floor(length(preamble)/ N_UE);     % number of samples in a per-UE pilot 
 Y_lts = zeros(N_BS_NODE,N_UE, n_plt_samp);
@@ -348,15 +398,6 @@ syms_eq_pc = reshape(syms_eq_pc, N_UE, [] );
 syms_eq_pc = syms_eq_pc.';
 
 
-% % Take only data SCs
-% syms_eq = syms_eq(:,SC_IND_DATA,:);
-% % Reshape the 3-D matrix to 2-D:
-% syms_eq = reshape(syms_eq, N_UE, [] );
-% syms_eq = syms_eq.';
-% % Apply the pilot phase correction per symbol
-% syms_eq_pc = syms_eq;%.* pilot_phase_corr;
-
-
 %% Demodulate
 
 demod_fcn_bpsk = @(x) double(real(x)>0);
@@ -412,24 +453,24 @@ for sp = 1:N_BS_NODE
 
     subplot(N_BS_NODE,2,2*sp);
     plot(imag(rx_vec_iris(sp,:)), 'r');
-    axis([0 length(rx_vec_iris(sp,:)) -TX_SCALE TX_SCALE])
+    axis([0 length(rx_vec_iris(sp,:)) -TX_SCALE TX_SCALE]);
     grid on;
     title(sprintf('BS antenna %d Rx Waveform (Q)', sp));
 end 
 
-% Rx LTS correlation
+%% Rx LTS correlation
 cf = cf+ 1;
 figure(cf); clf;
 for sp = 1:N_BS_NODE
     subplot(N_BS_NODE,1,sp);
-    plot(lts_corr(:,sp)) 
-    line([1 length(lts_corr)], LTS_CORR_THRESH*max(lts_corr(:,sp))*[1 1], 'LineStyle', '--', 'Color', 'r', 'LineWidth', 0.5);
+    plot(lts_corr(sp,:)) 
+    line([1 length(lts_corr)], LTS_CORR_THRESH*max(lts_corr(sp,:))*[1 1], 'LineStyle', '--', 'Color', 'r', 'LineWidth', 0.5);
     grid on;
     xlabel('Samples');
     y_label = sprintf('Anetnna %d',sp);
     ylabel(y_label);
     myAxis = axis();
-    axis([1, 800, myAxis(3), myAxis(4)])
+    axis([1, 1000, myAxis(3), myAxis(4)])
 end
 tb = annotation('textbox', [0 0.87 1 0.1], ...
     'String', 'LTS Correlation and Threshold', ...
@@ -437,7 +478,7 @@ tb = annotation('textbox', [0 0.87 1 0.1], ...
     'HorizontalAlignment', 'center');
 tb.FontWeight = 'bold';
 
-% Constellations
+%% Constellations
 cf = cf+ 1;
 figure(cf); clf;
 if N_BS_NODE >=4
@@ -467,7 +508,7 @@ for sp=1:N_BS_NODE
     hold on;
 end
 
-% % Channel Estimates
+%% Channel Estimates
 cf = cf + 1;
 bw_span = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1)).';
 
@@ -496,7 +537,7 @@ grid on;
 title('Channel Condition (dB)')
 xlabel('Baseband Frequency (MHz)')
 
-% EVM & SNR
+%% EVM & SNR
 sym_errs = sum(tx_data(:) ~= rx_data(:));
 bit_errs = length(find(dec2bin(bitxor(tx_data(:), rx_data(:)),8) == '1'));
 
