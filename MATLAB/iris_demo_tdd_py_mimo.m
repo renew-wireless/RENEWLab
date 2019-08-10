@@ -232,26 +232,7 @@ for ibs =1:N_BS_NODE
         sort_corr = sort(lts_corr(ibs,:), 'descend');
         rho_max = sort_corr(1:N_UE);
         lts_peaks = find(lts_corr(ibs,:) >= min(rho_max));
-        
-%         if lts_peaks(2) - lts_peaks(1) == length(preamble_common)
-            ipos = max(lts_peaks);
-%         else
-%             fprintf('No LTS Correlation Peaks Found! at antenna %d\n', ibs);
-            
-            if DEBUG
-                figure,
-                for sp = 1:N_BS_NODE
-                    subplot(N_BS_NODE,1,sp);
-                    plot(lts_corr(sp,:)) 
-                    xlabel('Samples');
-                    y_label = sprintf('Anetnna %d',sp);
-                    ylabel(y_label);
-                end
-                sgtitle('LTS correlations accross antennas')
-            end
-%         return;
-%         end
-        
+                
         payload_ind(ibs) = ipos +1;
         pream_ind_ibs = payload_ind(ibs) - length(preamble);
         
