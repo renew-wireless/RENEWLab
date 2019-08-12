@@ -23,6 +23,9 @@
 
 import pickle
 import sys
+
+sys.path.append('../DEMOS/data_out/')
+
 import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
