@@ -18,6 +18,7 @@ class RadioConfig
 public:
     RadioConfig(Config *cfg);
     static void *initBSRadio(void * context);
+    void radioConfigure();
     void radioStart();
     void radioStop();
     void readSensors();

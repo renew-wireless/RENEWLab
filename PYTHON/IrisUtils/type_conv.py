@@ -1,3 +1,5 @@
+# -*- coding: UTF-8 -*-
+
 """
  type-conv.py
 
@@ -68,3 +70,4 @@ def int_to_bin(val, nbits):
     s = bin(val & int("1"*nbits, 2))[2:]
     binstr = ("{0:0>%s}" % nbits).format(s)
     return binstr
+
