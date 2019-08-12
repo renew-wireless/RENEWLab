@@ -225,14 +225,17 @@ lts_corr = zeros(N_BS_NODE, length(rx_vec_iris));
 rx_lts_mat = double.empty();
 payload_ind = int32.empty();
 payload_rx = double.empty();
+lts_peaks = zeros(N_BS_NODE, N_UE);
 for ibs =1:N_BS_NODE
         v0 = filter(fliplr(preamble_common'),a,rx_vec_iris(ibs,:));
         v1 = filter(unos,a,abs(rx_vec_iris(ibs,:)).^2);
         lts_corr(ibs,:) = (abs(v0).^2)./v1; % normalized correlation
         sort_corr = sort(lts_corr(ibs,:), 'descend');
         rho_max = sort_corr(1:N_UE);
-        lts_peaks = find(lts_corr(ibs,:) >= min(rho_max));
-                
+        lts_peaks(ibs, : ) = find(lts_corr(ibs,:) >= min(rho_max));
+        
+        ipos = max(lts_peaks(ibs,:));
+        
         payload_ind(ibs) = ipos +1;
         pream_ind_ibs = payload_ind(ibs) - length(preamble);
         
