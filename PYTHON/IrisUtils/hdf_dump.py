@@ -684,8 +684,8 @@ if __name__ == '__main__':
         samples = hdf5.samples
         
         if no_corr:
-            x = hdf5.verify_hdf5(frame_to_plot, ref_ant);
-            sys.exit(0);
+            x = hdf5.verify_hdf5(frame_to_plot, ref_ant)
+            sys.exit(0)
             
         if frame_to_plot is not None and ref_ant is not None:
             csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots, f_st = hdf5.verify_hdf5(frame_to_plot, ref_ant)
@@ -755,8 +755,8 @@ if __name__ == '__main__':
             axes[n_u, n_c].set_ylabel('Antenna #')
             axes[n_u, n_c].set_xlabel('Frame #')
             # Minor ticks
-            axes[n_u, n_c].set_xticks(np.arange(hdf5.n_frm_st, hdf5.n_frm_end, 1), minor=True);
-            axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True);
+            axes[n_u, n_c].set_xticks(np.arange(hdf5.n_frm_st, hdf5.n_frm_end, 1), minor=True)
+            axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
             # Gridlines based on minor ticks
             axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
     
