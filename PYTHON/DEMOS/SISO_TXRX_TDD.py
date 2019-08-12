@@ -88,7 +88,6 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'BB', .75*rate)
             if "CBRS" in info["frontend"]:
                 sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', 0)  # {-18,-12,-6,0}
-            sdr.setGain(SOAPY_SDR_TX, ch, 'IAMP', 0)     # [-12,12]
             sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)  # [0,52]
 
             if "CBRS" in info["frontend"]:

@@ -385,7 +385,6 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
             if "CBRS" in infoTx["frontend"]:
                 print("set CBRS front-end gains")
                 sdrTx.setGain(SOAPY_SDR_TX, c, 'ATTN', 0)   # {-18,-12,-6,0}
-            sdrTx.setGain(SOAPY_SDR_TX, c, 'IAMP', 12)      # [-12,12]
             sdrTx.setGain(SOAPY_SDR_TX, c, "PAD", txgain)
 
             sdrRx.setFrequency(SOAPY_SDR_RX, c, freq)
