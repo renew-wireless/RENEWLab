@@ -155,6 +155,7 @@ def tx_thread(sdr, rate, txStream, rxStream, waveTx, numSamps, numSyms, txSymNum
         if txSymNum == 0:
             continue
         sr = sdr.readStream(rxStream, [waveRxA, waveRxB], numSamps)
+        print("CL: readStream returned %d" % sr.ret)
         if sr.ret > 0:
             txTime = sr.timeNs & 0xFFFFFFFF00000000
             txTime += (0x000000000 + (startSymbol << 16))
@@ -178,11 +179,12 @@ def tx_thread(sdr, rate, txStream, rxStream, waveTx, numSamps, numSyms, txSymNum
 
 def rx_thread(sdr, rxStream, numSamps, txSymNum, both_channels):
     global running
-    fip = open('data_out/rxpilot_sounder.bin', 'wb')
-    fid = open('data_out/rxdata_sounder.bin', 'wb')
+    cwd = os.getcwd()
+    fip = open(cwd + '/data_out/rxpilot_sounder.bin', 'wb')
+    fid = open(cwd + '/data_out/rxdata_sounder.bin', 'wb')
     if both_channels:
-        fip2 = open('data_out/rxpilotB_sounder.bin', 'wb')
-        fid2 = open('data_out/rxdataB_sounder.bin', 'wb')
+        fip2 = open(cwd + '/data_out/rxpilotB_sounder.bin', 'wb')
+        fid2 = open(cwd + '/data_out/rxdataB_sounder.bin', 'wb')
     rxFrNum = 0
     pilotSymNum = 2 if both_channels else 1
     waveRxA = np.array([0]*numSamps, np.uint32)
@@ -198,15 +200,16 @@ def rx_thread(sdr, rxStream, numSamps, txSymNum, both_channels):
         # print("LNA: {}, \t TIA:{}, \t PGA:{}".format(readLNA, readTIA, readPGA))
         for j in range(pilotSymNum):
             sr = sdr.readStream(rxStream, [waveRxA, waveRxB], numSamps)
+            print("BS: readStream returned %d" % sr.ret)
             if sr.ret < 0 or sr.ret > numSamps:
-                print("readStream returned %d"%sr.ret)
+                print("BS - BAD: readStream returned %d"%sr.ret)
             for i, a in enumerate(waveRxA):
                 pickle.dump(a, fip)
                 if both_channels: pickle.dump(waveRxB[i], fip2)
         for j in range(txSymNum):
             sr = sdr.readStream(rxStream, [waveRxA, waveRxB], numSamps)
             if sr.ret < 0 or sr.ret > numSamps:
-                print("readStream returned %d"%sr.ret)
+                print("BS: readStream returned %d"%sr.ret)
             for i, a in enumerate(waveRxA):
                 pickle.dump(a, fid)
                 if both_channels: pickle.dump(waveRxB[i], fid2)
@@ -512,8 +515,8 @@ def main():
     parser.add_option("--serial1", type="string", dest="serial1", help="serial number of the master device", default="RF3C000042")
     parser.add_option("--serial2", type="string", dest="serial2", help="serial number of the slave device", default="RF3C000025")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=20.0)
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) - only used if agc disabled", default=28.0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=25.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) - only used if agc disabled", default=30.0)
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)     # to comprensate for front-end group delay
@@ -524,7 +527,7 @@ def main():
     parser.add_option("--ue-tx-advance", type="int", dest="tx_advance", help="sample advance for tx vs rx", default=68)
     parser.add_option("--both-channels", action="store_true", dest="both_channels", help="transmit from both channels", default=False)
     parser.add_option("--calibrate", action="store_true", dest="calibrate", help="transmit from both channels", default=False)
-    parser.add_option("--use-trig", action="store_true", dest="use_trig", help="uses chain triggers for synchronization", default=False)
+    parser.add_option("--use-trig", action="store_true", dest="use_trig", help="uses chain triggers for synchronization", default=True)
     parser.add_option("--wait-trigger", action="store_true", dest="wait_trigger", help="wait for a trigger to start a frame", default=False)
     parser.add_option("--auto-tx-gain", action="store_true", dest="auto_tx_gain", help="automatically go over tx gains", default=False)
     parser.add_option("--record", action="store_true", dest="record", help="record received pilots and data", default=True)
