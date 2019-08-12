@@ -428,6 +428,7 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
         print("%d new triggers, %d total" % (t - num_trig, t))
         num_trig = t
 
+
 def signal_handler(rate, numSyms, txSymNum, signal, frame):
     global bsdr, msdr, running, txStreamM, rxStreamB, exit_plot
     msdr.writeRegister("IRIS30", CORR_CONF, 0)  # stop mobile correlator first, to prevent from the tdd manager going
@@ -508,8 +509,8 @@ def main():
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) - only used if agc disabled", default=20.0)
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
-    parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)     # to comprensate for front-end group delay
-    parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)  # to comprensate for rf path delay
+    parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)     # to compensate for front-end group delay
+    parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)  # to compensate for rf path delay
     parser.add_option("--numSyms", type="int", dest="numSyms", help="Number of symbols in one sub-frame", default=20)
     parser.add_option("--txSymNum", type="int", dest="txSymNum", help="Number of tx sub-frames in one frame", default=0)
     parser.add_option("--corr-threshold", type="int", dest="threshold", help="Correlator Threshold Value", default=2)

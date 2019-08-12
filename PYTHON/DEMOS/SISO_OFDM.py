@@ -222,32 +222,14 @@ def animate(i, num_samps_rd, rxStream, sdr, ofdm_params, tx_struct, ota, ofdm_ob
         sampsRx[0] = txSignal + 0.01 * (np.random.randn(len(txSignal)) + np.random.randn(len(txSignal)) * 1j)
         sampsRx[1] = txSignal + 0.01 * (np.random.randn(len(txSignal)) + np.random.randn(len(txSignal)) * 1j)
 
-    # DEBUGGING
-    '''
-    # Load binary file
-    sampsRx[0] = uint32tocfloat(read_from_file(name='./data_out/rxsamps_SISO_OFDM', leng=num_samps_rd, offset=0))
-    sampsRx[1] = uint32tocfloat(read_from_file(name='./data_out/rxsamps_SISO_OFDM', leng=num_samps_rd, offset=0))
-    # Load MAT file
-    # mat = spio.loadmat('matlabTx.mat', squeeze_me=True)
-    # sampsRx[0] = mat['tx_vec_air']
-    # sampsRx[1] = mat['tx_vec_air']
-
-    # Store received samples in binary file (second method of storage)
-    # Binary file
-    write_to_file('./data_out/rxsamps_SISO_OFDM', cfloat2uint32(sampsRx[0]))
-    # TXT or MAT file
-    # scipy.io.savemat('test', mdict={'arr': sampsRx[0]})
-    # np.savetxt('test.txt', sampsRx[0], delimiter=',')
-    '''
-
     # DC removal
     for i in [0, 1]:
         sampsRx[i] -= np.mean(sampsRx[i])
 
     # Find LTS peaks (in case LTSs were sent)
     lts_thresh = 0.8
-    a, b, peaks0 = find_lts(sampsRx[0], thresh=lts_thresh)
-    a, b, peaks1 = find_lts(sampsRx[1], thresh=lts_thresh)
+    a, b, peaks0 = find_lts(sampsRx[0], thresh=lts_thresh, flip=True)
+    a, b, peaks1 = find_lts(sampsRx[1], thresh=lts_thresh, flip=True)
 
     # Check if LTS found
     if not a:
@@ -402,8 +384,7 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
                 sdrTx.setFrequency(SOAPY_SDR_TX, c, "BB", bbfreq)
             if "CBRS" in infoTx["frontend"]:
                 print("set CBRS front-end gains")
-                sdrTx.setGain(SOAPY_SDR_TX, c, 'ATTN', 0) # {-18,-12,-6,0}
-                sdrTx.setGain(SOAPY_SDR_TX, c, 'PA2', 0)   # LO: [0|17], HI:[0|14]
+                sdrTx.setGain(SOAPY_SDR_TX, c, 'ATTN', 0)   # {-18,-12,-6,0}
             sdrTx.setGain(SOAPY_SDR_TX, c, 'IAMP', 12)      # [-12,12]
             sdrTx.setGain(SOAPY_SDR_TX, c, "PAD", txgain)
 
@@ -451,7 +432,7 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
     tx_struct = [sig_t, data_const, sc_idx_all, tx_data, txSignal, lts_sym, lts_freq, preamble, pilots_matrix]
 
     # Float to fixed point
-    signal1_ui32 = cfloat2uint32(txSignal, order='IQ')
+    signal1_ui32 = cfloat2uint32(txSignal, order='QI')
     signal2_ui32 = cfloat2uint32(wbz)       # Currently unused
 
     if ota:
@@ -495,10 +476,10 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx and Rx sample rate", default=5e6)
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
-    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=30.0) # with CBRS 20
-    parser.add_option("--LNA", type="float", dest="LNA", help="LNA gain (dB) [0:1:30]", default=20.0) # with CBRS 15
-    parser.add_option("--TIA", type="float", dest="TIA", help="TIA gain (dB) [0, 3, 9, 12]", default=0.0) # with CBRS 0
-    parser.add_option("--PGA", type="float", dest="PGA", help="PGA gain (dB) [-12:1:19]", default=0.0) # with CBRS -12
+    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=30.0)
+    parser.add_option("--LNA", type="float", dest="LNA", help="LNA gain (dB) [0:1:30]", default=20.0)
+    parser.add_option("--TIA", type="float", dest="TIA", help="TIA gain (dB) [0, 3, 9, 12]", default=0.0)
+    parser.add_option("--PGA", type="float", dest="PGA", help="PGA gain (dB) [-12:1:19]", default=0.0)
     parser.add_option("--LNA1", type="float", dest="LNA1", help="BRS/CBRS Front-end LNA1 gain stage [0:33] (dB)", default=0.0)
     parser.add_option("--LNA2", type="float", dest="LNA2", help="BRS/CBRS Front-end LNA2 gain [0:17] (dB)", default=0.0)
     parser.add_option("--ATTN", type="float", dest="ATTN", help="BRS/CBRS Front-end ATTN gain stage [-18:6:0] (dB)", default=0.0)
