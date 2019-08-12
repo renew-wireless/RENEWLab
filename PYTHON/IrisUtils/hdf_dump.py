@@ -525,17 +525,17 @@ class hdfDump:
             ant_plt = ant_i
             # Plotter
             # Samps Dimensions: (Frame, Cell, User, Pilot Rep, Antenna, Sample)
-            axes[0, idx].set_ylabel('Frame %d ant 0 (Re)' %(frame_to_plot + self.n_frm_st))
+            axes[0, idx].set_ylabel('Frame %d ant %d (Re)' %( (frame_to_plot + self.n_frm_st), ant_plt) )
             axes[0, idx].plot(np.real(samps[frame_to_plot, 0, 0, 0, ant_plt, :]))
 
-            axes[1, idx].set_ylabel('Frame %d ant 1 (Re)' %(frame_to_plot + self.n_frm_st))
-            axes[1, idx].plot(np.real(samps[frame_to_plot, 0, 0, 0, ant_plt, :]))
+            axes[1, idx].set_ylabel('Frame %d ant %d (Im)' %( (frame_to_plot + self.n_frm_st), ant_plt) )
+            axes[1, idx].plot(np.imag(samps[frame_to_plot, 0, 0, 0, ant_plt, :]))
 
-            axes[2, idx].set_ylabel('All Frames ant 0 (Re)')
-            axes[2, idx].plot(np.real(samps[:, 0, 0, 0, 0, :]).flatten())
+            axes[2, idx].set_ylabel('All Frames ant %d (Re)' %ant_plt )
+            axes[2, idx].plot(np.real(samps[:, 0, 0, 0, ant_plt, :]).flatten())
 
-            axes[3, idx].set_ylabel('All Frames ant 1 (Re)')
-            axes[3, idx].plot(np.real(samps[:, 0, 0, 0, 1, :]).flatten())
+            axes[3, idx].set_ylabel('All Frames ant %d (Im)' %ant_plt)
+            axes[3, idx].plot(np.imag(samps[:, 0, 0, 0, ant_plt, :]).flatten())
 
             axes[4, idx].set_ylabel('Amplitude')
             for i in range(samps.shape[4]):
@@ -575,6 +575,7 @@ if __name__ == '__main__':
         filename = sys.argv[1]
         frame_to_plot = None
         ref_ant = None
+        
         if len(sys.argv) == 3:
             if sys.argv[2] == "-nocorr": 
                 no_corr = True
@@ -584,6 +585,7 @@ if __name__ == '__main__':
                 frame_to_plot = int(sys.argv[2])
                 n_frames_to_inspect = 0
                 n_f_st = 0
+                ref_ant = 0
                 if n_frames_to_inspect == 0:
                     print("WARNING: No frames_to_inspect given. Will process the whole dataset.") 
         if len(sys.argv) == 4:
@@ -696,6 +698,7 @@ if __name__ == '__main__':
         else:
             csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots, f_st = hdf5.verify_hdf5()
             frame_to_plot = 0
+            ref_ant = 0
             
     
     else:
