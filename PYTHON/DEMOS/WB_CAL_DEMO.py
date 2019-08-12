@@ -74,8 +74,6 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plo
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'BB', .75*rate)
             if "CBRS" in info["frontend"]:
                 sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', -6)  # {-18,-12,-6,0}
-                sdr.setGain(SOAPY_SDR_TX, ch, 'PA2', 0)    # LO: [0|17], HI:[0|14]
-            sdr.setGain(SOAPY_SDR_TX, ch, 'IAMP', 12)       # [-12,12]
             sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)   # [0,52]
 
             if "CBRS" in info["frontend"]:
@@ -104,11 +102,6 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plo
         sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 0x1)
         sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29))
         sdr.writeRegister("IRIS30", RF_RST_REG, 0)
-        if info["serial"].find("RF3E") < 0:
-            print("SPI TDD MODE")
-            sdr.writeSetting("SPI_TDD_MODE", "SISO")
-            sdr.writeSetting(SOAPY_SDR_RX, 1, 'ENABLE_CHANNEL', 'false')
-            sdr.writeSetting(SOAPY_SDR_TX, 1, 'ENABLE_CHANNEL', 'false')
 
     trig_dev.writeSetting("SYNC_DELAYS", "")
 
@@ -225,20 +218,20 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plo
 
     replay_addr = 0
     for i, sdr in enumerate(bsdrs):
-        sdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(beacon1, order='IQ').tolist())
-        sdr.writeRegisters("TX_RAM_A", replay_addr+2048, cfloat2uint32(np.concatenate((wb_pilot1,np.array([0]*(2048-len(wb_pilot1))))), order='IQ').tolist())
-        sdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(beacon2, order='IQ').tolist())
+        sdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(beacon1, order='QI').tolist())
+        sdr.writeRegisters("TX_RAM_A", replay_addr+2048, cfloat2uint32(np.concatenate((wb_pilot1,np.array([0]*(2048-len(wb_pilot1))))), order='QI').tolist())
+        sdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(beacon2, order='QI').tolist())
         #sdr.writeRegisters("TX_RAM_WGT_A", replay_addr, beacon_weights[i].tolist())
 
         #sdr.writeRegister("RFCORE", 156, int(nRadios))
         #sdr.writeRegister("RFCORE", 160, 1) # enable beamsweeping
 
     for sdr in csdrs:
-        sdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(wb_pilot1, order='IQ').tolist())
-        sdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(wbz, order='IQ').tolist())
+        sdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(wb_pilot1, order='QI').tolist())
+        sdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(wbz, order='QI').tolist())
 
-    ref_sdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(wb_pilot1, order='IQ').tolist())
-    ref_sdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(wbz, order='IQ').tolist())
+    ref_sdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(wb_pilot1, order='QI').tolist())
+    ref_sdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(wbz, order='QI').tolist())
     # Create streams
     bsdrs = bsdrs[:ref_ant]+[ref_sdr]+bsdrs[ref_ant:]
     rxStream_ul = [sdr.setupStream(SOAPY_SDR_RX, SOAPY_SDR_CF32, [0, 1]) for sdr in bsdrs]

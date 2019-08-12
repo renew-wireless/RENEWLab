@@ -84,9 +84,7 @@ def txrx_app(serials, ref_node_idx, hub_serial, rate, freq, txgain, rxgain, numS
             if "CBRS" in info["frontend"]:
                 sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', 0)  # [-18,0] by 3
                 sdr.setGain(SOAPY_SDR_TX, ch, 'PA1', 15)  # [0|15]
-                sdr.setGain(SOAPY_SDR_TX, ch, 'PA2', 0)   # [0|15]
                 sdr.setGain(SOAPY_SDR_TX, ch, 'PA3', 30)  # [0|30]
-            sdr.setGain(SOAPY_SDR_TX, ch, 'IAMP', 12)     # [0,12]
             sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)  # [-52,0]
 
             if "CBRS" in info["frontend"]:

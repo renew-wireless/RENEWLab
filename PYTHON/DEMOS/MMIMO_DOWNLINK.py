@@ -81,14 +81,11 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, wai
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'BB', .75*rate)
             if "CBRS" in info["frontend"]:
                 sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', -6)  # {-18,-12,-6,0}
-                sdr.setGain(SOAPY_SDR_TX, ch, 'PA2', 0)    # LO: [0|17], HI:[0|14]
-            sdr.setGain(SOAPY_SDR_TX, ch, 'IAMP', 12)       # [-12,12]
             sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)   # [0,52]
 
             if "CBRS" in info["frontend"]:
                 if freq < 3e9: sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', -18)   # {-18,-12,-6,0}
                 else: sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', 0)   # {-18,-12,-6,0}
-                sdr.setGain(SOAPY_SDR_RX, ch, 'LNA1', 30)  # [0,33]
                 sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 17)  # LO: [0|17], HI:[0|14]
 
             sdr.setGain(SOAPY_SDR_RX, ch, 'LNA', rxgain)   # [0,30]
@@ -112,9 +109,10 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, wai
         sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 0x1)
         sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29))
         sdr.writeRegister("IRIS30", RF_RST_REG, 0)
-        if not both_channels and info["serial"].find("RF3E") < 0:
-            print("SPI TDD MODE")
-            sdr.writeSetting("SPI_TDD_MODE", "SISO")
+        if not both_channels:
+            if info["serial"].find("RF3E") < 0:
+                print("SPI TDD MODE")
+                sdr.writeSetting("SPI_TDD_MODE", "SISO")
             sdr.writeSetting(SOAPY_SDR_RX, 1, 'ENABLE_CHANNEL', 'false')
             sdr.writeSetting(SOAPY_SDR_TX, 1, 'ENABLE_CHANNEL', 'false')
 
