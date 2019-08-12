@@ -48,7 +48,7 @@ classdef iris_py < handle
                 obj.tx_gain = sdr_params.txgain;
                 obj.rx_gain = sdr_params.rxgain;
                 obj.n_samp = sdr_params.n_samp;
-                obj.tdd_sched = sdr_params.tdd_sched; %NB: This is an array now!
+                obj.tdd_sched = sdr_params.tdd_sched; % This is an array
                 obj.n_zpad_samp = sdr_params.n_zpad_samp;
                 
                 for ipy=1:obj.n_chain
@@ -86,20 +86,20 @@ classdef iris_py < handle
              obj.py_obj_array{1}.burn_beacon( pyargs('prefix_len', prefix_len) );
          end
         
-
-         function set_config(obj, chained_tx_rx, is_bs, trigger_out)
+         
+         function set_config(obj, chained_tx_rx, is_bs)
              if chained_tx_rx
                 sched  = convertStringsToChars((obj.tdd_sched));
                 obj.py_obj_array{1}.config_sdr_tdd_chained(pyargs('tdd_sched', sched));        
              else
                 sched  = convertStringsToChars(obj.tdd_sched(1));
                 obj.py_obj_array{1}.config_sdr_tdd( pyargs('tdd_sched', sched, ...
-                    'is_bs', is_bs, 'trigger_out', trigger_out));
+                    'is_bs', is_bs));
                 if (obj.n_chain > 1)
                    sched2  = convertStringsToChars(obj.tdd_sched(2));
                    for ipy = 2:obj.n_chain
                        obj.py_obj_array{ipy}.config_sdr_tdd( pyargs('tdd_sched',sched2, ...
-                           'is_bs', is_bs, 'trigger_out', trigger_out));
+                           'is_bs', is_bs));
                    end
                 end
              end

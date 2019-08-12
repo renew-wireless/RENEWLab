@@ -13,37 +13,41 @@
 Recorder::Recorder(Config *cfg)
 {
     this->cfg = cfg;
-    unsigned nCores = std::thread::hardware_concurrency();
-    printf("number of CPU cores %d\n", nCores);
-    if (cfg->bsPresent) rx_thread_num = nCores >= 2*SOCKET_THREAD_NUM and cfg->nBsSdrs[0] >= SOCKET_THREAD_NUM ? SOCKET_THREAD_NUM : 1; // TODO: read number of cores and assign accordingly
-    else rx_thread_num = 0; 
-    printf("allocating %d cores to receive threads ... \n", rx_thread_num);
-    size_t buffer_chunk_size = SOCKET_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas();
+    size_t buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas();
+    printf("buffer_chunk_size %d\n", buffer_chunk_size);
     task_queue_ = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
     message_queue_ = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
-    
-    // initialize socket buffer
-    socket_buffer_ = new SocketBuffer[SOCKET_THREAD_NUM];
-    for(int i = 0; i < rx_thread_num; i++)
+    rx_thread_num = cfg->rx_thread_num;
+    task_thread_num = cfg->task_thread_num;
+
+    if (rx_thread_num > 0)
     {
-        socket_buffer_[i].buffer.resize(buffer_chunk_size * cfg->getPackageLength());
-        socket_buffer_[i].buffer_status.resize(buffer_chunk_size);
+        // initialize rx buffers
+        rx_buffer_ = new SampleBuffer[rx_thread_num];
+        for(int i = 0; i < rx_thread_num; i++)
+        {
+            rx_buffer_[i].buffer.resize(buffer_chunk_size * cfg->getPackageLength());
+            rx_buffer_[i].buffer_status.resize(buffer_chunk_size);
+        }
     }
-    cfg->running = true;
+
     receiver_.reset(new Receiver(rx_thread_num, cfg, &message_queue_));
 
-    // task threads
-    task_ptok.resize(TASK_THREAD_NUM); 
-    task_threads = new pthread_t[TASK_THREAD_NUM];
-    context = new EventHandlerContext[TASK_THREAD_NUM];
-    for(int i = 0; i < TASK_THREAD_NUM; i++)
+    if (task_thread_num > 0)
     {
-        context[i].obj_ptr = this;
-        context[i].id = i;
-        if(pthread_create( &task_threads[i], NULL, Recorder::taskThread, &context[i]) != 0)
+        // task threads
+        task_ptok.resize(task_thread_num); 
+        task_threads = new pthread_t[task_thread_num];
+        context = new EventHandlerContext[task_thread_num];
+        for(int i = 0; i < task_thread_num; i++)
         {
-            perror("task thread create failed");
-            exit(0);
+            context[i].obj_ptr = this;
+            context[i].id = i;
+            if(pthread_create( &task_threads[i], NULL, Recorder::taskThread, &context[i]) != 0)
+            {
+                perror("task thread create failed");
+                exit(0);
+            }
         }
     }
 }
@@ -57,11 +61,11 @@ herr_t Recorder::initHDF5(std::string hdf5)
     // dataset dimension    
     dims_pilot[0] = MAX_FRAME_INC; //cfg->maxFrame; 
     dims_pilot[1] = cfg->nCells; 
-    dims_pilot[2] = cfg->nPilotSyms; //cfg->nClSdrs;
+    dims_pilot[2] = cfg->pilotSymsPerFrame; //cfg->nClSdrs;
     dims_pilot[3] = cfg->getNumAntennas();
     dims_pilot[4] = 2 * cfg->sampsPerSymbol; // IQ
     hsize_t cdims[5] = {1, 1, 1, 1, 2 * cfg->sampsPerSymbol}; // pilot chunk size, TODO: optimize size
-    hsize_t max_dims_pilot[5] = {H5S_UNLIMITED, cfg->nCells, cfg->nPilotSyms, cfg->getNumAntennas(), 2 * cfg->sampsPerSymbol};
+    hsize_t max_dims_pilot[5] = {H5S_UNLIMITED, cfg->nCells, cfg->pilotSymsPerFrame, cfg->getNumAntennas(), 2 * cfg->sampsPerSymbol};
 
     dims_data[0] = MAX_FRAME_INC; //cfg->maxFrame; 
     dims_data[1] = cfg->nCells; 
@@ -339,7 +343,7 @@ herr_t Recorder::initHDF5(std::string hdf5)
 	att.write(PredType::NATIVE_DOUBLE, &re_im_split_vec_pilot[0]);      
 
 	// Number of Clients
-        attr_data = cfg->nPilotSyms;
+        attr_data = cfg->pilotSymsPerFrame;
         att = mainGroup.createAttribute("PILOT_NUM", PredType::STD_I32BE, attr_ds);
         att.write(PredType::NATIVE_INT, &attr_data); 
 
@@ -542,7 +546,7 @@ void Recorder::closeHDF5()
 
 Recorder::~Recorder()
 {
-    delete [] socket_buffer_;
+    delete [] rx_buffer_;
     delete [] task_threads;
     delete [] context;
 }
@@ -551,35 +555,43 @@ void Recorder::stop()
 {
     cfg->running = false;
     receiver_.reset();
-    if (cfg->bsPresent) this->closeHDF5();
+    if (cfg->bsPresent && rx_thread_num > 0) this->closeHDF5();
 }
 
 void Recorder::start()
 {
-    // if ENABLE_CPU_ATTACH, attach main thread to core 0
-#ifdef ENABLE_CPU_ATTACH
-    if(pin_to_core(0) != 0)
+    if(cfg->core_alloc && pin_to_core(0) != 0)
     {
         perror("pinning main thread to core 0 failed");
         exit(0);
     }
-#endif
-    // creare socket buffer and socket threads
-    void* socket_buffer_ptrs[rx_thread_num];
-    int* socket_buffer_status_ptrs[rx_thread_num];
-    for(int i = 0; i < rx_thread_num; i++)
+
+    if (cfg->clPresent)
     {
-        socket_buffer_ptrs[i] = socket_buffer_[i].buffer.data();
-        socket_buffer_status_ptrs[i] = socket_buffer_[i].buffer_status.data();
+        std::vector<pthread_t> client_threads = receiver_->startClientThreads();
     }
-    std::vector<pthread_t> recv_thread = receiver_->startRecv(socket_buffer_ptrs, 
-        socket_buffer_status_ptrs, socket_buffer_[0].buffer_status.size(), socket_buffer_[0].buffer.size(), 1);
+
+    if (rx_thread_num > 0)
+    {
+        if (initHDF5(cfg->trace_file) < 0) exit(1);
+        openHDF5();
+
+        // creare socket buffer and socket threads
+        void* rx_buffer_ptrs[rx_thread_num];
+        int* rx_buffer_status_ptrs[rx_thread_num];
+        for(int i = 0; i < rx_thread_num; i++)
+        {
+            rx_buffer_ptrs[i] = rx_buffer_[i].buffer.data();
+            rx_buffer_status_ptrs[i] = rx_buffer_[i].buffer_status.data();
+        }
+        std::vector<pthread_t> recv_thread = receiver_->startRecvThreads(rx_buffer_ptrs, 
+            rx_buffer_status_ptrs, rx_buffer_[0].buffer_status.size(), rx_buffer_[0].buffer.size(), 1);
+    }
+    else
+        receiver_->go(); // only beamsweeping
+
     moodycamel::ProducerToken ptok(task_queue_);
     moodycamel::ConsumerToken ctok(message_queue_);
-
-    // counter for print log
-    int miss_count = 0;
-    int total_count = 0;
 
     Event_data events_list[dequeue_bulk_size];
     int ret = 0;
@@ -587,17 +599,6 @@ void Recorder::start()
     {
         // get a bulk of events
         ret = message_queue_.try_dequeue_bulk(ctok, events_list, dequeue_bulk_size);
-        total_count++;
-        if(total_count == 1e7)
-        {
-            total_count = 0;
-            miss_count = 0;
-        }
-        if(ret == 0)
-        {
-            miss_count++;
-            continue;
-        }
         // handle each event
         for(int bulk_count = 0; bulk_count < ret; bulk_count ++)
         {
@@ -634,43 +635,15 @@ void* Recorder::taskThread(void* context)
     int tid = ((EventHandlerContext *)context)->id;
     printf("task thread %d starts\n", tid);
     
-    // attach task threads to specific cores
-#ifdef ENABLE_CPU_ATTACH
-    int offset_id = obj_ptr->rx_thread_num + 1;
-    int tar_core_id = tid + offset_id;
-    if(tar_core_id >= 18)
-        tar_core_id = (tar_core_id - 18) + 36;
-    if(pin_to_core(tar_core_id) != 0)
-    {
-        printf("pinning thread %d to core %d failed\n", tid, tar_core_id);
-        exit(0);
-    }
-#endif
-
     obj_ptr->task_ptok[tid].reset(new moodycamel::ProducerToken(obj_ptr->message_queue_));
 
-    int total_count = 0;
-    int miss_count = 0;
     Event_data event;
     bool ret = false;
     while(cfg->running)
     {
         ret = task_queue_->try_dequeue(event);
-        if(tid == 0)
-            total_count++;
-        if(tid == 0 && total_count == 1e6)
-        {
-            // print the task queue miss rate if required
-            //printf("thread 0 task dequeue miss rate %f, queue length %d\n", (float)miss_count / total_count, task_queue_->size_approx());
-            total_count = 0;
-            miss_count = 0;
-        }
         if(!ret)
-        {
-            if(tid == 0)
-                miss_count++;
             continue;
-        }
 
         // do different tasks according to task type
         if(event.event_type == TASK_RECORD)
@@ -684,11 +657,11 @@ void* Recorder::taskThread(void* context)
 // do Crop
 herr_t Recorder::record(int tid, int offset)
 {
-    int buffer_frame_num = cfg->symbolsPerFrame * SOCKET_BUFFER_FRAME_NUM * cfg->getNumAntennas();
+    int buffer_frame_num = cfg->symbolsPerFrame * SAMPLE_BUFFER_FRAME_NUM * cfg->getNumAntennas();
     int buffer_id = offset / buffer_frame_num;
     offset = offset - buffer_id * buffer_frame_num;
     // read info
-    char* cur_ptr_buffer = socket_buffer_[buffer_id].buffer.data() + offset * cfg->getPackageLength();
+    char* cur_ptr_buffer = rx_buffer_[buffer_id].buffer.data() + offset * cfg->getPackageLength();
     int ant_id, frame_id, symbol_id;
     frame_id = *((int *)cur_ptr_buffer);
     symbol_id = *((int *)cur_ptr_buffer + 1);
@@ -820,7 +793,7 @@ herr_t Recorder::record(int tid, int offset)
     clean_exit:
 
     // after finish
-    socket_buffer_[buffer_id].buffer_status[offset] = 0; // now empty
+    rx_buffer_[buffer_id].buffer_status[offset] = 0; // now empty
     return 0;
 }
 

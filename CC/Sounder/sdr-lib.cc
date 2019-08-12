@@ -94,7 +94,7 @@ RadioConfig::RadioConfig(Config *cfg):
         //load channels
         std::vector<size_t> channels;
         if (_cfg->clChannel == "A") channels = {0};
-        else if (_cfg->clChannel == "B") channels = {1};
+        else if (cfg->bsChannel == "B") {channels = {1}; std::cout << "selecting channel " << cfg->bsChannel << "(" << std::to_string(channels[0]) << ")" << std::endl;}
         else if (_cfg->clSdrCh == 2) channels = {0, 1};
         else
         {
@@ -167,8 +167,10 @@ RadioConfig::RadioConfig(Config *cfg):
 
             if (_cfg->clSdrCh == 1)
             {
-                device->writeSetting(SOAPY_SDR_RX, 1, "ENABLE_CHANNEL", "false");
-                device->writeSetting(SOAPY_SDR_TX, 1, "ENABLE_CHANNEL", "false");
+                int ch = 1;
+                if (channels[0] == 1) ch = 0;
+                device->writeSetting(SOAPY_SDR_RX, ch, "ENABLE_CHANNEL", "false");
+                device->writeSetting(SOAPY_SDR_TX, ch, "ENABLE_CHANNEL", "false");
             }
 
             device->writeRegister("IRIS30", RF_RST_REG, (1<<29) | 1);
@@ -194,7 +196,7 @@ void *RadioConfig::initBSRadio(void *in_context)
     //load channels
     std::vector<size_t> channels;
     if (cfg->bsChannel == "A") channels = {0};
-    else if (cfg->bsChannel == "B") channels = {1};
+    else if (cfg->bsChannel == "B") channels = {1}; 
     else if (cfg->bsSdrCh == 2) channels = {0, 1};
     else
     {
@@ -288,7 +290,7 @@ void *RadioConfig::initBSRadio(void *in_context)
         rc->bsSdrs[c][i]->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
     }
 
-    if (cfg->bsSdrCh == 1)
+    if (cfg->bsSdrCh == 1 && cfg->bsChannel == "A")
     {
         // we setup SPI TDD mode to bypass the internal LDO issue in revision D and prior
         if (cfg->freq > 3e9 and cfg->bs_sdr_ids[c][i].find("RF3E") == std::string::npos)
@@ -324,8 +326,11 @@ void *RadioConfig::initBSRadio(void *in_context)
 
             //bsSdrs[i]->writeSetting("SPI_TDD_MODE", "SISO"); // a FPGA hack that bypasses the LDO issue
         }
-        rc->bsSdrs[c][i]->writeSetting(SOAPY_SDR_RX, 1, "ENABLE_CHANNEL", "false");
-        rc->bsSdrs[c][i]->writeSetting(SOAPY_SDR_TX, 1, "ENABLE_CHANNEL", "false");
+
+        int ch = 1;
+        if (channels[0] == 1) ch = 0;
+        rc->bsSdrs[c][i]->writeSetting(SOAPY_SDR_RX, ch, "ENABLE_CHANNEL", "false");
+        rc->bsSdrs[c][i]->writeSetting(SOAPY_SDR_TX, ch, "ENABLE_CHANNEL", "false");
     } 
     else if (cfg->bsSdrCh == 2)
     {
@@ -379,7 +384,7 @@ void *RadioConfig::initBSRadio(void *in_context)
 
 }
 
-void RadioConfig::radioStart()
+void RadioConfig::radioConfigure()
 {
     int flags = 0;
     if (_cfg->bsPresent)
@@ -562,8 +567,11 @@ void RadioConfig::radioStart()
                 device->writeRegister("IRIS30", CORR_CONF, 0x31);
         }
     }
+    std::cout << "Done with frame configuration!" << std::endl;
+}
 
-
+void RadioConfig::radioStart()
+{
     if (_cfg->bsPresent)
     {
         if (hubs.size() == 0)
@@ -579,7 +587,6 @@ void RadioConfig::radioStart()
             hubs[0]->writeSetting("TRIGGER_GEN", "");
         }
     }
-    std::cout << "radio start done!" << std::endl;
 }
 
 void RadioConfig::readSensors()
@@ -701,7 +708,6 @@ int RadioConfig::radioRx(int r /*radio id*/, void ** buffs, long long & frameTim
 
 void RadioConfig::collectCSI(bool adjust)
 {
-
     std::vector<std::vector<double>> pilot;
     //std::vector<std::complex<float>> pilot_cf32;
     std::vector<std::complex<int16_t>> pilot_cint16;
@@ -760,10 +766,10 @@ void RadioConfig::collectCSI(bool adjust)
     for (int i = 0; i < R; i++)
         RadioConfig::drain_buffers(bsSdrs[0][i], this->bsRxStreams[0][i], dummybuffs, _cfg->sampsPerSymbol);
 
+    int ch = (_cfg->bsChannel == "B") ? 1 : 0;
     for (int i = 0; i < R; i++)
     {
-        bsSdrs[0][i]->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->calTxGainA);
-        bsSdrs[0][i]->setGain(SOAPY_SDR_TX, 1, "PAD", _cfg->calTxGainB);
+        bsSdrs[0][i]->setGain(SOAPY_SDR_TX, ch, "PAD", ch ? _cfg->calTxGainB : _cfg->calTxGainA);
         bsSdrs[0][i]->writeSetting("TDD_CONFIG", "{\"tdd_enabled\":false}");
         bsSdrs[0][i]->writeSetting("TDD_MODE", "false");
         bsSdrs[0][i]->activateStream(this->bsTxStreams[0][i]);
@@ -776,7 +782,7 @@ void RadioConfig::collectCSI(bool adjust)
 
         auto ref_sdr = bsSdrs[0][i];
         int tx_flags = SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST;
-        int ret = ref_sdr->writeStream(this->bsTxStreams[0][i], txbuff0.data(), _cfg->sampsPerSymbol, tx_flags, txTime, 1000000); 
+        int ret = ref_sdr->writeStream(this->bsTxStreams[0][i], ch ? txbuff1.data() : txbuff0.data(), _cfg->sampsPerSymbol, tx_flags, txTime, 1000000); 
         if (ret < 0) std::cout << "bad write\n";
         for (int j = 0; j < R; j++)
         {
@@ -866,8 +872,7 @@ void RadioConfig::collectCSI(bool adjust)
     {
         bsSdrs[0][i]->deactivateStream(this->bsTxStreams[0][i]);
         bsSdrs[0][i]->deactivateStream(this->bsRxStreams[0][i]);
-        bsSdrs[0][i]->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->txgainA);  //[0,30]
-        bsSdrs[0][i]->setGain(SOAPY_SDR_TX, 1, "PAD", _cfg->txgainB);  //[0,30]
+        bsSdrs[0][i]->setGain(SOAPY_SDR_TX, ch, "PAD", ch ? _cfg->txgainB : _cfg->txgainA);  //[0,30]
     }
 
     for (int i = 0; i < R; i++)

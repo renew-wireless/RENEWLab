@@ -1,16 +1,19 @@
 #!/usr/bin/python
+import sys
+sys.path.append('../IrisUtils/')
+
 import SoapySDR
 from SoapySDR import * #SOAPY_SDR_ constants
 from optparse import OptionParser
 import numpy as np
 import time
 import os
-import sys
 import math
 import json
 import signal
 import matplotlib.pyplot as plt
 from matplotlib import animation
+from type_conv import *
 
 # TDD Register Set
 RF_RST_REG = 48
@@ -23,22 +26,6 @@ running = True
 def signal_handler(signum, frame):
     global running
     running = False
-
-def cfloat2uint32(arr, order='IQ'):
-        arr_i = (np.real(arr) * 32767).astype(np.uint16)
-        arr_q = (np.imag(arr) * 32767).astype(np.uint16)
-        if order == 'IQ':
-            return np.bitwise_or(arr_q ,np.left_shift(arr_i.astype(np.uint32), 16))
-        else:
-            return np.bitwise_or(arr_i ,np.left_shift(arr_q.astype(np.uint32), 16))
-
-def uint32tocfloat(arr, order='IQ'):
-    arr_hi = ((np.right_shift(arr, 16).astype(np.int16))/32768.0)
-    arr_lo = (np.bitwise_and(arr, 0xFFFF).astype(np.int16))/32768.0
-    if order == 'IQ':
-        return (arr_hi + 1j*arr_lo).astype(np.complex64)
-    else:
-        return (arr_lo + 1j*arr_hi).astype(np.complex64)
 
 def calibrate_array(hub_serial, serials, ref_serial, rate, freq, txgain, rxgain, numSamps, prefix_pad, postfix_pad, second_channel):
     global running
@@ -58,15 +45,10 @@ def calibrate_array(hub_serial, serials, ref_serial, rate, freq, txgain, rxgain,
             sdr.setSampleRate(SOAPY_SDR_RX, ch, rate)
             if ("CBRS" in info["frontend"]):
                 sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', -6) #[-18,0] by 3
-                sdr.setGain(SOAPY_SDR_TX, ch, 'PA1', 15) #[0|15]
-                sdr.setGain(SOAPY_SDR_TX, ch, 'PA2', 0) #[0|15]
-                sdr.setGain(SOAPY_SDR_TX, ch, 'PA3', 30) #[0|30]
-            sdr.setGain(SOAPY_SDR_TX, ch, 'IAMP', 0) #[0,12]
             sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain) #[-52,0]
 
             if ("CBRS" in info["frontend"]):
                 sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', 0) #[-18,0]
-                sdr.setGain(SOAPY_SDR_RX, ch, 'LNA1', 30) #[0,33]
                 sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 17) #[0,17]
             sdr.setGain(SOAPY_SDR_RX, ch, 'LNA', rxgain) #[0,30]
             sdr.setGain(SOAPY_SDR_RX, ch, 'TIA', 0) #[0,12]
@@ -83,9 +65,6 @@ def calibrate_array(hub_serial, serials, ref_serial, rate, freq, txgain, rxgain,
             sdr.writeSetting(SOAPY_SDR_RX, 1, 'ENABLE_CHANNEL', 'false')
             sdr.writeSetting(SOAPY_SDR_TX, 1, 'ENABLE_CHANNEL', 'false')
 
-        if info["serial"].find("RF3E") < 0:
-            print("SPI TDD MODE")
-            sdr.writeSetting("SPI_TDD_MODE", "SISO")
         sdr.writeRegister("IRIS30", RF_RST_REG, (1<<29) | 0x1)
         sdr.writeRegister("IRIS30", RF_RST_REG, (1<<29))
         sdr.writeRegister("IRIS30", RF_RST_REG, 0)
@@ -147,8 +126,8 @@ def calibrate_array(hub_serial, serials, ref_serial, rate, freq, txgain, rxgain,
 
     replay_addr = 0
     for sdr in sdrs:
-        sdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(pilot1).tolist())
-        sdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(pilot2).tolist())
+        sdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(pilot1, order='QI').tolist())
+        sdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(pilot2, order='QI').tolist())
 
     flags = 0
     [sdr.activateStream(rxStreamB[i], flags, 0) for i,sdr in enumerate(bsdr)]

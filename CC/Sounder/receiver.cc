@@ -11,23 +11,20 @@
 
 #include "include/receiver.h"
 
-Receiver::Receiver(int N_THREAD, Config *cfg)
+Receiver::Receiver(int n_rx_threads, Config *config, moodycamel::ConcurrentQueue<Event_data> * in_queue)
 {
+    this->config_ = config;
+    radioconfig_ = new RadioConfig(this->config_);
 
-    config_ = cfg;
-    radioconfig_ = new RadioConfig(config_);
+    thread_num_ = n_rx_threads;
 
-    thread_num_ = N_THREAD;
     /* initialize random seed: */
     srand (time(NULL));
+
     if (thread_num_ > 0) context = new ReceiverContext[thread_num_];
-
-}
-
-Receiver::Receiver(int N_THREAD, Config *config, moodycamel::ConcurrentQueue<Event_data> * in_queue):
-Receiver(N_THREAD, config)
-{
     message_queue_ = in_queue;
+    radioconfig_->radioConfigure();
+
 }
 
 Receiver::~Receiver()
@@ -36,19 +33,8 @@ Receiver::~Receiver()
     delete radioconfig_;
 }
 
-std::vector<pthread_t> Receiver::startRecv(void** in_buffer, int** in_buffer_status, int in_buffer_frame_num, int in_buffer_length, int in_core_id)
+std::vector<pthread_t> Receiver::startClientThreads()
 {
-    // check length
-    buffer_frame_num_ = in_buffer_frame_num;
-    assert(in_buffer_length == config_->getPackageLength() * buffer_frame_num_); // should be integre
-    buffer_length_ = in_buffer_length;
-    buffer_ = in_buffer;  // for save data
-    buffer_status_ = in_buffer_status; // for save status
-
-    core_id_ = in_core_id;
-
-    radioconfig_->radioStart();
-
     std::vector<pthread_t> client_threads;
     if (config_->clPresent)
     {
@@ -71,7 +57,7 @@ std::vector<pthread_t> Receiver::startRecv(void** in_buffer, int** in_buffer_sta
             profile->device = radioconfig_->devs[i];
             profile->rxs = radioconfig_->rxss[i];
             profile->txs = radioconfig_->txss[i];
-            profile->core = 1+i+1+SOCKET_THREAD_NUM+TASK_THREAD_NUM;
+            profile->core = i+1+config_->rx_thread_num+config_->task_thread_num;
             profile->ptr = this;
             // start socket thread
             if(pthread_create( &cl_thread_, NULL, Receiver::clientTxRx, (void *)(profile) ) != 0)
@@ -81,52 +67,76 @@ std::vector<pthread_t> Receiver::startRecv(void** in_buffer, int** in_buffer_sta
             }
             client_threads.push_back(cl_thread_);
         }
-    } 
-
-    printf("start Recv thread\n");
-    // new thread
-     
-    std::vector<pthread_t> created_threads;
-    if (config_->bsPresent)
-    {
-        for(int i = 0; i < thread_num_; i++)
-        {
-            pthread_t recv_thread_;
-            // record the thread id 
-            context[i].ptr = this;
-            context[i].tid = i;
-            // start socket thread
-            if(pthread_create( &recv_thread_, NULL, Receiver::loopRecv, (void *)(&context[i])) != 0)
-            {
-                perror("socket recv thread create failed");
-                exit(0);
-            }
-            created_threads.push_back(recv_thread_);
-        }
     }
-    
+ 
+    return client_threads;
+}
+
+std::vector<pthread_t> Receiver::startRecvThreads(void** in_buffer, int** in_buffer_status, int in_buffer_frame_num, int in_buffer_length, int in_core_id)
+{
+    buffer_frame_num_ = in_buffer_frame_num;
+    assert(in_buffer_length == config_->getPackageLength() * buffer_frame_num_);
+    assert(in_buffer_frame_num != 0); 
+    assert(in_buffer_length != 0);
+    buffer_length_ = in_buffer_length;
+    buffer_ = in_buffer;  
+    buffer_status_ = in_buffer_status; 
+
+    core_id_ = in_core_id;
+
+    std::vector<pthread_t> created_threads;
+    for(int i = 0; i < thread_num_; i++)
+    {
+        pthread_t recv_thread_;
+        // record the thread id 
+        context[i].ptr = this;
+        context[i].tid = i;
+        // start socket thread
+        if(pthread_create( &recv_thread_, NULL, Receiver::loopRecv, (void *)(&context[i])) != 0)
+        {
+            perror("socket recv thread create failed");
+            exit(0);
+        }
+        created_threads.push_back(recv_thread_);
+    }
+
+    sleep(1);
+    pthread_cond_broadcast(&cond);
+    go(); 
     return created_threads;
+}
+
+void Receiver::go()
+{
+    radioconfig_->radioStart(); // hardware trigger
 }
 
 void* Receiver::loopRecv(void *in_context)
 {
-    // get the pointer of class & tid
+
     Receiver* obj_ptr = ((ReceiverContext *)in_context)->ptr;
     Config *cfg = obj_ptr->config_;
     int tid = ((ReceiverContext *)in_context)->tid;
-    printf("package receiver thread %d start\n", tid);
-    // get pointer of message queue
     moodycamel::ConcurrentQueue<Event_data> *message_queue_ = obj_ptr->message_queue_;
-    int core_id = obj_ptr->core_id_;
-    // if ENABLE_CPU_ATTACH is enabled, attach threads to specific cores
-#ifdef ENABLE_CPU_ATTACH
-    printf("pinning thread %d to core %d\n", tid, core_id + tid);
-    if(pin_to_core(core_id + tid) != 0)
+
+    if (cfg->core_alloc)
     {
-        printf("pin thread %d to core %d failed\n", tid, core_id + tid);
-        exit(0);
+        int core_id = obj_ptr->core_id_;
+        printf("pinning thread %d to core %d\n", tid, core_id + tid);
+        if(pin_to_core(core_id + tid) != 0)
+        {
+            printf("pin thread %d to core %d failed\n", tid, core_id + tid);
+            exit(0);
+        }
     }
-#endif
+
+    // Use mutex to sychronize data receiving across threads
+    pthread_mutex_lock(&obj_ptr->mutex);
+    printf("Recv Thread %d: waiting for release\n", tid);
+
+    pthread_cond_wait(&obj_ptr->cond, &obj_ptr->mutex);
+    pthread_mutex_unlock(&obj_ptr->mutex); // unlocking for all other threads
+
     // use token to speed up
     moodycamel::ProducerToken local_ptok(*message_queue_);
 
@@ -158,6 +168,7 @@ void* Receiver::loopRecv(void *in_context)
     }
     else
         cur_ptr_buffer2 = malloc(cfg->getPackageLength()); 
+
     int offset = 0;
     int package_num = 0;
     long long frameTime;
@@ -218,7 +229,7 @@ void* Receiver::loopRecv(void *in_context)
             Event_data package_message;
             package_message.event_type = EVENT_RX_SYMBOL;
             // data records the position of this packet in the buffer & tid of this socket (so that task thread could know which buffer it should visit) 
-            package_message.data = offset + tid * buffer_frame_num; // when we multi-thread radio read, this probably would not be correct 
+            package_message.data = offset + tid * buffer_frame_num;
             if ( !message_queue_->enqueue(local_ptok, package_message ) ) {
                 printf("socket message enqueue failed\n");
                 exit(0);
@@ -239,7 +250,6 @@ void* Receiver::loopRecv(void *in_context)
                     exit(0);
                 }
             }
-            //printf("enqueue offset %d\n", offset);
             int cur_queue_len = message_queue_->size_approx();
             maxQueueLength = maxQueueLength > cur_queue_len ? maxQueueLength : cur_queue_len;
 
@@ -257,7 +267,6 @@ void* Receiver::loopRecv(void *in_context)
             maxQueueLength = 0;
             begin = std::chrono::system_clock::now();
             package_num = 0;
-            //radio->readSensors();
         }
 #endif
     }
@@ -280,14 +289,15 @@ void* Receiver::clientTxRx(void * context)
     Receiver* obj_ptr = profile->ptr;
     Config *cfg = obj_ptr->config_;
 
-#ifdef ENABLE_CPU_ATTACH
-    printf("pinning client thread %d to core %d\n", tid, profile->core);
-    if(pin_to_core(profile->core) != 0)
+    if (cfg->core_alloc)
     {
-        printf("pin client thread %d to core %d failed\n", tid, profile->core);
-        exit(0);
+        printf("pinning client thread %d to core %d\n", tid, profile->core);
+        if(pin_to_core(profile->core) != 0)
+        {
+            printf("pin client thread %d to core %d failed\n", tid, profile->core);
+            exit(0);
+        }
     }
-#endif
 
     //while(!d_mutex.try_lock()){}
     //thread_count++;

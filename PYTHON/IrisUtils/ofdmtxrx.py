@@ -159,7 +159,7 @@ class ofdmTxRx:
               (1 * ((abs(np.imag(iq)) < 0.9258) and (abs(np.imag(iq)) > 0.3086)))
         return val
 
-    def generate_data(self, n_ofdm_syms=100, mod_order=4, cp_length=16):
+    def generate_data(self, n_ofdm_syms=100, mod_order=4, cp_length=16, datastream=[]):
         """
         Generate random data stream of n_ofdm_syms number of symbols,
         and modulate according to mod_order.
@@ -187,7 +187,14 @@ class ofdmTxRx:
                            list(range(38, 43)) + list(range(44, 57)) + list(range(58, 64))
         pilot_subcarriers = [7, 21, 43, 57]
         n_data_syms = n_ofdm_syms * len(data_subcarriers)  # One data sym per data-subcarrier per ofdm symbol
-        data_i = [random.randint(0, mod_order-1) for i in range(n_data_syms)]  # includes end-points
+
+        if not datastream:
+            data_i = [random.randint(0, mod_order-1) for i in range(n_data_syms)]  # includes end-points
+        else:
+            # Prepend datastream to rest of randomly generated data symbols
+            data_i_tmp = [random.randint(0, mod_order-1) for i in range(n_data_syms-len(datastream))]
+            data_i = np.concatenate((datastream, data_i_tmp))
+
         data = np.zeros(len(data_i), dtype=complex)
 
         for x in range(len(data_i)):
