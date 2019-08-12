@@ -22,9 +22,9 @@ end
 % Params:
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
-SIM_MOD                 = 0;
+SIM_MOD                 = 1;
 DEBUG                   = 1;
-sim_SNR_db              = 15;    
+sim_SNR_db              = 10;    
 
 % Iris params:
 N_BS_NODE               = 8;
@@ -62,7 +62,7 @@ N_ZPAD_POST             = N_ZPAD_PRE -14;                         % Zero-padding
 
 % Rx processing params
 FFT_OFFSET                    = 16;          % Number of CP samples to use in FFT (on average)
-LTS_CORR_THRESH               = 0.60;         % Normalized threshold for LTS correlation
+LTS_CORR_THRESH               = 0.50;         % Normalized threshold for LTS correlation
 DO_APPLY_PHASE_ERR_CORRECTION = 1;           % Enable Residual CFO estimation/correction
 
 %% Define the preamble
@@ -232,22 +232,40 @@ for ibs =1:N_BS_NODE
         lts_corr(ibs,:) = (abs(v0).^2)./v1; % normalized correlation
         sort_corr = sort(lts_corr(ibs,:), 'descend');
         rho_max = sort_corr(1:N_UE);
-        lts_peaks(ibs, : ) = find(lts_corr(ibs,:) >= min(rho_max));
+        lts_peaks(ibs,:) = find(lts_corr(ibs,:) >= min(rho_max));
         
+        % position of the last peak
         ipos = max(lts_peaks(ibs,:));
         
         payload_ind(ibs) = ipos +1;
         pream_ind_ibs = payload_ind(ibs) - length(preamble);
-        
-        rx_lts_mat(ibs,:) = rx_vec_iris(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 );
-        payload_rx(ibs,:) = rx_vec_iris(ibs, payload_ind(ibs) : payload_ind(ibs)+(N_OFDM_SYM)*(N_SC +CP_LEN)-1);
+        % minimum sanity check of the correlator's output
+        if pream_ind_ibs < 1
+            fprintf("Bad correlator output!\n");
+            figure,
+            for sp = 1:N_BS_NODE
+                subplot(N_BS_NODE,1,sp);
+                plot(lts_corr(sp,:));
+                grid on;
+                xlabel('Samples');
+                y_label = sprintf('Anetnna %d',sp);
+                ylabel(y_label);
+            end
+            sgtitle('LTS correlations accross antennas')
+            
+            return; 
+        else
+            rx_lts_mat(ibs,:) = rx_vec_iris(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 );
+            payload_rx(ibs,:) = rx_vec_iris(ibs, payload_ind(ibs) : payload_ind(ibs)+(N_OFDM_SYM)*(N_SC +CP_LEN)-1);
+        end
 end
 
 if DEBUG
     figure,
     for sp = 1:N_BS_NODE
         subplot(N_BS_NODE,1,sp);
-        plot(lts_corr(sp,:)) 
+        plot(lts_corr(sp,:));
+        grid on;
         xlabel('Samples');
         y_label = sprintf('Anetnna %d',sp);
         ylabel(y_label);
