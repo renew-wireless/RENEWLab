@@ -155,6 +155,7 @@ def tx_thread(sdr, rate, txStream, rxStream, waveTx, numSamps, numSyms, txSymNum
         if txSymNum == 0:
             continue
         sr = sdr.readStream(rxStream, [waveRxA, waveRxB], numSamps)
+        print("CL: readStream returned %d" % sr.ret)
         if sr.ret > 0:
             txTime = sr.timeNs & 0xFFFFFFFF00000000
             txTime += (0x000000000 + (startSymbol << 16))
@@ -178,11 +179,12 @@ def tx_thread(sdr, rate, txStream, rxStream, waveTx, numSamps, numSyms, txSymNum
 
 def rx_thread(sdr, rxStream, numSamps, txSymNum, both_channels):
     global running
-    fip = open('data_out/rxpilot_sounder.bin', 'wb')
-    fid = open('data_out/rxdata_sounder.bin', 'wb')
+    cwd = os.getcwd()
+    fip = open(cwd + '/data_out/rxpilot_sounder.bin', 'wb')
+    fid = open(cwd + '/data_out/rxdata_sounder.bin', 'wb')
     if both_channels:
-        fip2 = open('data_out/rxpilotB_sounder.bin', 'wb')
-        fid2 = open('data_out/rxdataB_sounder.bin', 'wb')
+        fip2 = open(cwd + '/data_out/rxpilotB_sounder.bin', 'wb')
+        fid2 = open(cwd + '/data_out/rxdataB_sounder.bin', 'wb')
     rxFrNum = 0
     pilotSymNum = 2 if both_channels else 1
     waveRxA = np.array([0]*numSamps, np.uint32)
@@ -198,15 +200,16 @@ def rx_thread(sdr, rxStream, numSamps, txSymNum, both_channels):
         # print("LNA: {}, \t TIA:{}, \t PGA:{}".format(readLNA, readTIA, readPGA))
         for j in range(pilotSymNum):
             sr = sdr.readStream(rxStream, [waveRxA, waveRxB], numSamps)
+            print("BS: readStream returned %d" % sr.ret)
             if sr.ret < 0 or sr.ret > numSamps:
-                print("readStream returned %d"%sr.ret)
+                print("BS - BAD: readStream returned %d"%sr.ret)
             for i, a in enumerate(waveRxA):
                 pickle.dump(a, fip)
                 if both_channels: pickle.dump(waveRxB[i], fip2)
         for j in range(txSymNum):
             sr = sdr.readStream(rxStream, [waveRxA, waveRxB], numSamps)
             if sr.ret < 0 or sr.ret > numSamps:
-                print("readStream returned %d"%sr.ret)
+                print("BS: readStream returned %d"%sr.ret)
             for i, a in enumerate(waveRxA):
                 pickle.dump(a, fid)
                 if both_channels: pickle.dump(waveRxB[i], fid2)
@@ -264,13 +267,10 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'BB', .75*rate)
             if "CBRS" in info["frontend"]:
                 sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', -6)  # {-18,-12,-6,0}
-                sdr.setGain(SOAPY_SDR_TX, ch, 'PA2', 0)    # LO: [0|17], HI:[0|14]
-            sdr.setGain(SOAPY_SDR_TX, ch, 'IAMP', 0)       # [-12,12]
             sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)   # [0,52]
 
             if "CBRS" in info["frontend"]:
                 sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', -6)   # {-18,-12,-6,0}
-                sdr.setGain(SOAPY_SDR_RX, ch, 'LNA1', 30)  # [0,33]
                 sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 14)  # LO: [0|17], HI:[0|14]
 
             # LMS gains
@@ -301,9 +301,7 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
         sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 0x1)
         sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29))
         sdr.writeRegister("IRIS30", RF_RST_REG, 0)
-        if not both_channels:
-            sdr.writeSetting(SOAPY_SDR_RX, 1, 'ENABLE_CHANNEL', 'false')
-            sdr.writeSetting(SOAPY_SDR_TX, 1, 'ENABLE_CHANNEL', 'false')
+
     # pdb.set_trace()
     msdr.writeRegister("IRIS30", TX_GAIN_CTRL, 0)  
     if use_trig:
@@ -339,9 +337,9 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
     # the correlators can run at lower rates, so we only need the downsampled signal.
     preambles = preambles_bs[:, ::upsample]
 
-    ampl = 1
-    beacon = preambles[0, :]*ampl
-    coe = cfloat2uint32(np.conj(beacon), order='IQ')     # FPGA correlator takes coefficients in QI order
+    ampl = 0.5
+    beacon = preambles[0, :]
+    coe = cfloat2uint32(np.conj(beacon), order='QI')     # FPGA correlator takes coefficients in QI order
     ltsSym, lts_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
     # ltsSym = lts.genLTS(upsample=1, cp=0)
     pad1 = np.array([0]*(prefix_length), np.complex64)   # to comprensate for front-end group delay
@@ -351,7 +349,7 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
     wb_pilot1 = np.concatenate([pad1, wb_pilot, pad2])
     wb_pilot2 = wbz  # wb_pilot1 if both_channels else wbz
     bcnz = np.array([0]*(symSamp-prefix_length-len(beacon)), np.complex64)  
-    beacon1 = np.concatenate([pad1, beacon, bcnz])
+    beacon1 = np.concatenate([pad1, beacon*ampl, bcnz])
     beacon2 = wbz  # beacon1 if both_channels else wbz
 
     bsched = "PGR"+''.join("G"*(numSyms-txSymNum-4))+''.join("R"*txSymNum)+"G" 
@@ -361,11 +359,8 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
         msched = "GGPP"+''.join("G"*(numSyms-txSymNum-5))+''.join("T"*txSymNum)+"G"
     print("Node 1 schedule %s " % bsched) 
     print("Node 2 schedule %s " % msched)
-    #bconf = {"tdd_enabled": True, "trigger_out": False, "symbol_size": symSamp, "frames": [bsched]}
     bconf = {"tdd_enabled": True, "frame_mode": "free_running", "symbol_size": symSamp, "frames": [bsched]}
-    #mconf = {"tdd_enabled": True, "trigger_out": not use_trig, "wait_trigger": wait_trigger, "dual_pilot": both_channels, "symbol_size" : symSamp, "frames": [msched]}
     mconf = {"tdd_enabled": True, "frame_mode": "free_running" if use_trig else "triggered" if wait_trigger else "continuous_resync", "dual_pilot": both_channels, "symbol_size" : symSamp, "frames": [msched]}
-    # mconf = {"tdd_enabled": True, "trigger_out": not use_trig, "wait_trigger": True, "symbol_size" : symSamp, "frames": [msched]}
     bsdr.writeSetting("TDD_CONFIG", json.dumps(bconf))
     msdr.writeSetting("TDD_CONFIG", json.dumps(mconf))
 
@@ -406,14 +401,14 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
     bsdr.writeSetting("TDD_MODE", "true")
 
     replay_addr = 0
-    bsdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(beacon1, order='IQ').tolist())
-    bsdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(beacon2, order='IQ').tolist())
+    bsdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(beacon1, order='QI').tolist())
+    bsdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(beacon2, order='QI').tolist())
 
-    msdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(wb_pilot1, order='IQ').tolist())
-    msdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(wbz, order='IQ').tolist())
+    msdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(wb_pilot1, order='QI').tolist())
+    msdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(wbz, order='QI').tolist())
     if both_channels:
-        msdr.writeRegisters("TX_RAM_A", replay_addr+2048, cfloat2uint32(wbz, order='IQ').tolist())
-        msdr.writeRegisters("TX_RAM_B", replay_addr+2048, cfloat2uint32(wb_pilot2, order='IQ').tolist())
+        msdr.writeRegisters("TX_RAM_A", replay_addr+2048, cfloat2uint32(wbz, order='QI').tolist())
+        msdr.writeRegisters("TX_RAM_B", replay_addr+2048, cfloat2uint32(wb_pilot2, order='QI').tolist())
 
     if not use_trig:    
         msdr.writeRegister("IRIS30", CORR_CONF, int("00004011", 16))  # enable the correlator, with inputs from adc
@@ -432,6 +427,7 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
         t = SoapySDR.timeNsToTicks(msdr.getHardwareTime(""),rate) >> 32 #trigger count is top 32 bits.
         print("%d new triggers, %d total" % (t - num_trig, t))
         num_trig = t
+
 
 def signal_handler(rate, numSyms, txSymNum, signal, frame):
     global bsdr, msdr, running, txStreamM, rxStreamB, exit_plot
@@ -509,19 +505,19 @@ def main():
     parser.add_option("--serial1", type="string", dest="serial1", help="serial number of the master device", default="RF3C000042")
     parser.add_option("--serial2", type="string", dest="serial2", help="serial number of the slave device", default="RF3C000025")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=20.0)
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) - only used if agc disabled", default=28.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=30.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) - only used if agc disabled", default=20.0)
+    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=2.5e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
-    parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)     # to comprensate for front-end group delay
-    parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)  # to comprensate for rf path delay
+    parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)     # to compensate for front-end group delay
+    parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)  # to compensate for rf path delay
     parser.add_option("--numSyms", type="int", dest="numSyms", help="Number of symbols in one sub-frame", default=20)
     parser.add_option("--txSymNum", type="int", dest="txSymNum", help="Number of tx sub-frames in one frame", default=0)
     parser.add_option("--corr-threshold", type="int", dest="threshold", help="Correlator Threshold Value", default=2)
     parser.add_option("--ue-tx-advance", type="int", dest="tx_advance", help="sample advance for tx vs rx", default=68)
     parser.add_option("--both-channels", action="store_true", dest="both_channels", help="transmit from both channels", default=False)
     parser.add_option("--calibrate", action="store_true", dest="calibrate", help="transmit from both channels", default=False)
-    parser.add_option("--use-trig", action="store_true", dest="use_trig", help="uses chain triggers for synchronization", default=False)
+    parser.add_option("--use-trig", action="store_true", dest="use_trig", help="uses chain triggers for synchronization", default=True)
     parser.add_option("--wait-trigger", action="store_true", dest="wait_trigger", help="wait for a trigger to start a frame", default=False)
     parser.add_option("--auto-tx-gain", action="store_true", dest="auto_tx_gain", help="automatically go over tx gains", default=False)
     parser.add_option("--record", action="store_true", dest="record", help="record received pilots and data", default=True)

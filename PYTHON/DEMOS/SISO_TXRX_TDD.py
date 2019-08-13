@@ -4,6 +4,8 @@
 
     NOTE: IRIS BOARDS MUST BE CHAINED FOR THIS SCRIPT TO WORK.
     ORDER MATTERS; FIRST BOARD (SERIAL1) IS THE ONE SENDING THE TRIGGER.
+    TESTED WITH BOTH BOARDS USING BASE STATION ROOTFS IMAGE (NOT UE) AND
+    ONLY FIRST BOARD CONNECTED TO HOST VIA ETHERNET
 
     This script is useful for testing the TDD operation.
     It programs two Irises in TDD mode with the following framing
@@ -85,9 +87,7 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
             sdr.setFrequency(SOAPY_SDR_TX, ch, 'BB', .75*rate)
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'BB', .75*rate)
             if "CBRS" in info["frontend"]:
-                sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', -6)  # {-18,-12,-6,0}
-                sdr.setGain(SOAPY_SDR_TX, ch, 'PA2', 0)   # [0|1]
-            sdr.setGain(SOAPY_SDR_TX, ch, 'IAMP', 0)     # [-12,12]
+                sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', 0)  # {-18,-12,-6,0}
             sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)  # [0,52]
 
             if "CBRS" in info["frontend"]:
@@ -137,8 +137,8 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
     print("Node 1 schedule %s " % bsched)
     print("Node 2 schedule %s " % msched)
     # Send one frame (set mamx_frame to 1)
-    bconf = {"tdd_enabled": True, "trigger_out": False, "symbol_size": symSamp, "frames": [bsched], "max_frame": 1}
-    mconf = {"tdd_enabled": True, "trigger_out": False, "dual_pilot": False, "symbol_size": symSamp, "frames": [msched], "max_frame": 1}
+    bconf = {"tdd_enabled": True, "frame_mode": "free_running", "symbol_size": symSamp, "frames": [bsched], "max_frame": 1}
+    mconf = {"tdd_enabled": True, "frame_mode": "free_running", "dual_pilot": False, "symbol_size": symSamp, "frames": [msched], "max_frame": 1}
     bsdr.writeSetting("TDD_CONFIG", json.dumps(bconf))
     msdr.writeSetting("TDD_CONFIG", json.dumps(mconf))
 
@@ -151,15 +151,15 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
 
     replay_addr = 0
     for sdr in [bsdr, msdr]:
-        sdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(pilot1, order='IQ').tolist())
-        sdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(pilot2, order='IQ').tolist())
+        sdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(pilot1, order='QI').tolist())
+        sdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(pilot2, order='QI').tolist())
 
     flags = 0
     r1 = bsdr.activateStream(rxStreamB, flags, 0)
     r2 = msdr.activateStream(rxStreamM, flags, 0)
-    if r1<0:
+    if r1 < 0:
         print("Problem activating stream #1")
-    if r2<0:
+    if r2 < 0:
         print("Problem activating stream #2")
 
     bsdr.writeSetting("TRIGGER_GEN", "")
@@ -229,7 +229,7 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=25.0)
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Tx gain (dB)", default=20.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.5e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=2.6e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-pad", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)
     parser.add_option("--postfix-pad", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)

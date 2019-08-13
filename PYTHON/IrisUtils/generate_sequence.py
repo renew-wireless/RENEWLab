@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+# -*- coding: UTF-8 -*-
 """
  generate_sequence.py
 

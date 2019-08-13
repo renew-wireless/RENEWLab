@@ -53,6 +53,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import collections
 import logging
+import pdb
 from SoapySDR import *              # SOAPY_SDR_ constants
 from optparse import OptionParser
 from matplotlib import animation
@@ -249,7 +250,7 @@ def register_setup():
     sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0)       # Finished last frame? (set to 0 initially)
 
 
-def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en):
+def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
     """
     Initialize IRIS parameters and animation kick-off
     """
@@ -290,12 +291,12 @@ def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en):
     # RSSI read setup
     setUpDigitalRssiMode(sdr)
 
-    anim = animation.FuncAnimation(fig, animate, init_func=init, fargs=(num_samps, recorder, agc_en), frames=100,
+    anim = animation.FuncAnimation(fig, animate, init_func=init, fargs=(num_samps, recorder, agc_en, wait_trigger), frames=100,
                                    interval=100, blit=True)
     plt.show()
 
 
-def animate(i, num_samps, recorder, agc_en):
+def animate(i, num_samps, recorder, agc_en, wait_trigger):
     global sdr, rxStream, freqScale, sampsRx, frameCounter, fft_size, Rate
 
     # Trigger AGC
@@ -317,8 +318,10 @@ def animate(i, num_samps, recorder, agc_en):
     buff0 = sampsRx[0]  # RF Chain 1
     buff1 = sampsRx[1]  # RF Chain 2
 
+    flags = SOAPY_SDR_END_BURST
+    if wait_trigger: flags |= SOAPY_SDR_WAIT_TRIGGER
     sdr.activateStream(rxStream,
-        SOAPY_SDR_END_BURST,    # flags
+        flags,    # flags
         0,                      # timeNs (dont care unless using SOAPY_SDR_HAS_TIME)
         buff0.size)             # numElems - this is the burst size
     sr = sdr.readStream(rxStream, [buff0, buff1], buff0.size)
@@ -443,11 +446,12 @@ def main():
     parser.add_option("--latitude", type="float", dest="latitude", help="Latitude", default=0.0)
     parser.add_option("--longitude", type="float", dest="longitude", help="Longitude", default=0.0)
     parser.add_option("--elevation", type="float", dest="elevation", help="Elevation", default=0.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Rx freq (Hz)", default=3.6e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Optional Rx freq (Hz)", default=2.5e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=16384)
     parser.add_option("--serial", type="string", dest="serial", help="Serial number of the device", default="")
     parser.add_option("--rxMode", type="string", dest="rxMode", help="RX Mode, Options:BASIC/REC/REPLAY", default="REC")
     parser.add_option("--AGCen", type="int", dest="AGCen", help="Enable AGC Flag. Options:0/1", default=0)
+    parser.add_option("--wait-trigger", action="store_true", dest="wait_trigger", help="wait for a trigger to start a frame",default=False)
     (options, args) = parser.parse_args()
 
     # Verify RX Mode
@@ -508,7 +512,8 @@ def main():
             gain=[options.pga, options.tia, options.lna, options.rxattn, options.lna1, options.lna2],
             num_samps=options.numSamps,
             recorder=recorder,
-            agc_en=options.AGCen
+            agc_en=options.AGCen,
+            wait_trigger=options.wait_trigger
         )
 
 

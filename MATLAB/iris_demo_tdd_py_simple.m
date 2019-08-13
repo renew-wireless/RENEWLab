@@ -23,7 +23,7 @@ end
 
 % Waveform params
 N_OFDM_SYM              = 0;         % Number of OFDM symbols for burst, it needs to be less than 47
-TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
+TX_SCALE                = .5;         % Scale for Tx waveform ([0:1])
 
 CP_LEN                  = 16;                                     % Cyclic prefix length
 N_LTS_SYM               = 20;                                      % Number of 
@@ -63,12 +63,12 @@ tx_vec_iris = TX_SCALE .* tx_vec_iris ./ max(abs(tx_vec_iris));
     n_samp = length(tx_vec_iris);
     % Create a vector of node objects
     sdr_params = struct(...
-        'id', "RF3C000007", ...
+        'id', "0328", ...
         'n_chain',1, ...
-        'txfreq', 2.6e9, ...
-        'rxfreq', 2.6e9, ...
-        'txgain', 42, ...
-        'rxgain', 30, ...
+        'txfreq', 2.5e9, ...
+        'rxfreq', 2.5e9, ...
+        'txgain', 40, ...
+        'rxgain', 20, ...
         'sample_rate', 5e6, ...
         'n_samp', n_samp, ...     % number of samples per frame time.
         'tdd_sched', b_sched, ...     % number of zero-paddes samples
@@ -76,9 +76,9 @@ tx_vec_iris = TX_SCALE .* tx_vec_iris ./ max(abs(tx_vec_iris));
         );
     
     sdr_params(2) = sdr_params(1);
-    sdr_params(2).id =  "RF3C000053";
-    sdr_params(2).rxfreq = 2.6e9;
-    sdr_params(2).txfreq = 2.6e9;
+    sdr_params(2).id =  "RF3C000045";
+    sdr_params(2).rxfreq = 2.5e9;
+    sdr_params(2).txfreq = 2.5e9;
     sdr_params(2).tdd_sched = u_sched;
     node_bs = iris_py(sdr_params(1));
     node_ue = iris_py(sdr_params(2));
@@ -87,13 +87,13 @@ tx_vec_iris = TX_SCALE .* tx_vec_iris ./ max(abs(tx_vec_iris));
 
 trig = 1;
 
-node_ue.sdrsync(0);
+node_ue.sdrsync(0); %is_bs = 0
 
 node_ue.sdrrxsetup();
 node_bs.sdrrxsetup();
 chained_mode = 0;
-node_bs.set_config(chained_mode,1,0);
-node_ue.set_config(chained_mode,0,0);
+node_bs.set_config(chained_mode,1); % chained_tx_rx =0 is_bs = 1
+node_ue.set_config(chained_mode,0); % chained_tx_rx =0 is_bs = 0
 
 
 node_bs.sdr_txbeacon(N_ZPAD_PRE);
