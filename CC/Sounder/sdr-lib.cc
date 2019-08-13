@@ -488,7 +488,7 @@ void RadioConfig::radioConfigure()
 
     if (_cfg->clPresent)
     {
-        int ueTrigOffset = _cfg->prefix + 256 + _cfg->postfix + 17 + _cfg->prefix;
+        int ueTrigOffset = 505; //_cfg->prefix + 256 + _cfg->postfix + 17 + _cfg->prefix;
         int sf_start = ueTrigOffset/_cfg->sampsPerSymbol;
         int sp_start = ueTrigOffset%_cfg->sampsPerSymbol;
 
@@ -708,6 +708,12 @@ int RadioConfig::radioRx(int r /*radio id*/, void ** buffs, long long & frameTim
 
 void RadioConfig::collectCSI(bool adjust)
 {
+    int R = nBsSdrs[0];
+    if (R < 2)
+    {
+        std::cout << "No need to sample calibrate with one Iris! skipping ..." << std::endl;
+        return;
+    }
     std::vector<std::vector<double>> pilot;
     //std::vector<std::complex<float>> pilot_cf32;
     std::vector<std::complex<int16_t>> pilot_cint16;
@@ -747,7 +753,6 @@ void RadioConfig::collectCSI(bool adjust)
     std::vector<std::vector<std::complex<int16_t>>> buff;
     //int ant = _cfg->bsSdrCh;
     //int M = nBsSdrs[0] * ant;
-    int R = nBsSdrs[0];
     buff.resize(R * R);
     for (int i = 0; i < R; i++)
     {
