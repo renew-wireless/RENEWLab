@@ -265,6 +265,8 @@ def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
 
     # Set params on both channels (both RF chains)
     for ch in [0, 1]:
+        #sdr.setBandwidth(SOAPY_SDR_RX, ch, 3*Rate)
+        #sdr.setBandwidth(SOAPY_SDR_TX, ch, 3*Rate)
         sdr.setFrequency(SOAPY_SDR_RX, ch, freq)
         sdr.setSampleRate(SOAPY_SDR_RX, ch, Rate)
         sdr.setFrequency(SOAPY_SDR_TX, ch, freq)
