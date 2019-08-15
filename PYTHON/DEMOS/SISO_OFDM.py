@@ -388,6 +388,7 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
             if "CBRS" in infoTx["frontend"]:
                 print("set CBRS front-end gains")
                 sdrTx.setGain(SOAPY_SDR_TX, c, 'ATTN', 0)   # {-18,-12,-6,0}
+            sdrTx.setGain(SOAPY_SDR_TX, c, "IAMP", 0)
             sdrTx.setGain(SOAPY_SDR_TX, c, "PAD", txgain)
 
             sdrRx.setBandwidth(SOAPY_SDR_RX, c, 3*rate)
@@ -397,7 +398,7 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
             sdrRx.setSampleRate(SOAPY_SDR_RX, c, rate)
             if "CBRS" in infoRx["frontend"]:
                 sdrRx.setGain(SOAPY_SDR_RX, c, 'LNA2', rx_gains[5])  # LO: [0|17], HI:[0|14]
-                sdrRx.setGain(SOAPY_SDR_RX, c, 'LNA1', 30)           # [0,33]
+                sdrRx.setGain(SOAPY_SDR_RX, c, 'LNA1', rx_gains[4])  # [0,33]
                 sdrRx.setGain(SOAPY_SDR_RX, c, 'ATTN', rx_gains[3])  # {-18,-12,-6,0}
             sdrRx.setGain(SOAPY_SDR_RX, c, 'LNA', rx_gains[2])       # [0,30]
             sdrRx.setGain(SOAPY_SDR_RX, c, 'TIA', rx_gains[1])       # [0,12]
@@ -500,7 +501,7 @@ def main():
     parser.add_option("--fftOfset", type="int", dest="fftOffset", help="FFT Offset: # of CP samples for FFT", default=6)
     parser.add_option("--modOrder", type="int", dest="modOrder", help="Modulation Order 2=BPSK/4=QPSK/16=16QAM/64=64QAM", default=16)
     parser.add_option("--serialTx", type="string", dest="serialTx", help="Serial # of TX device", default="RF3E000060")
-    parser.add_option("--serialRx", type="string", dest="serialRx", help="Serial # of RX device", default="RF3E000034")
+    parser.add_option("--serialRx", type="string", dest="serialRx", help="Serial # of RX device", default="RF3E000171")
     parser.add_option("--nSampsRead", type="int", dest="nSampsRead", help="# Samples to read", default=FIG_LEN)
     parser.add_option("--mode", type="string", dest="mode", help="Simulation vs Over-the-Air (i.e., SIM/OTA)", default="OTA")
     (options, args) = parser.parse_args()
