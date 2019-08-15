@@ -128,7 +128,7 @@ ax4.set_xlabel('Sample index')
 ax4.set_ylabel('')
 line5, = ax4.plot([], [], label='RFA', animated=True)
 line11, = ax4.plot([], [], '--r', label='Thresh', animated=True)  # markers
-ax4.set_ylim(0, 5)
+ax4.set_ylim(0, 8)
 ax4.set_xlim(0, FIG_LEN)
 ax4.legend(fontsize=10)
 
@@ -378,16 +378,22 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
         # RF Parameters
         for c in txChannel:
             print("Writing settings for channel {}".format(c))
+            sdrTx.setBandwidth(SOAPY_SDR_TX, c, 3*rate)
             sdrTx.setFrequency(SOAPY_SDR_TX, c, freq+bbfreq)
+            #sdrTx.setFrequency(SOAPY_SDR_TX, c, "RF", freq-.75*rate)
+            #sdrTx.setFrequency(SOAPY_SDR_TX, c, "BB", .75*rate)
             sdrTx.setSampleRate(SOAPY_SDR_TX, c, rate)
-            if bbfreq > 0:
-                sdrTx.setFrequency(SOAPY_SDR_TX, c, "BB", bbfreq)
+            #if bbfreq > 0:
+            #    sdrTx.setFrequency(SOAPY_SDR_TX, c, "BB", bbfreq)
             if "CBRS" in infoTx["frontend"]:
                 print("set CBRS front-end gains")
                 sdrTx.setGain(SOAPY_SDR_TX, c, 'ATTN', 0)   # {-18,-12,-6,0}
             sdrTx.setGain(SOAPY_SDR_TX, c, "PAD", txgain)
 
+            sdrRx.setBandwidth(SOAPY_SDR_RX, c, 3*rate)
             sdrRx.setFrequency(SOAPY_SDR_RX, c, freq)
+            #sdrRx.setFrequency(SOAPY_SDR_RX, c, "RF", freq-.75*rate)
+            #sdrRx.setFrequency(SOAPY_SDR_RX, c, "BB", .75*rate)
             sdrRx.setSampleRate(SOAPY_SDR_RX, c, rate)
             if "CBRS" in infoRx["frontend"]:
                 sdrRx.setGain(SOAPY_SDR_RX, c, 'LNA2', rx_gains[5])  # LO: [0|17], HI:[0|14]
@@ -398,6 +404,9 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
             sdrRx.setGain(SOAPY_SDR_RX, c, 'PGA', rx_gains[0])       # [-12,19]
             sdrRx.setAntenna(SOAPY_SDR_RX, c, "TRX")
             sdrRx.setDCOffsetMode(SOAPY_SDR_RX, c, True)
+
+            sdrTx.writeSetting(SOAPY_SDR_TX, c, "CALIBRATE", 'SKLK')
+            sdrRx.writeSetting(SOAPY_SDR_RX, c, "CALIBRATE", 'SKLK')
     else:
         # Simulation Mode
         sdrRx = []
@@ -475,12 +484,12 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx and Rx sample rate", default=5e6)
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
-    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=30.0)
-    parser.add_option("--LNA", type="float", dest="LNA", help="LNA gain (dB) [0:1:30]", default=20.0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=52.0)
+    parser.add_option("--LNA", type="float", dest="LNA", help="LNA gain (dB) [0:1:30]", default=14.0)
     parser.add_option("--TIA", type="float", dest="TIA", help="TIA gain (dB) [0, 3, 9, 12]", default=0.0)
     parser.add_option("--PGA", type="float", dest="PGA", help="PGA gain (dB) [-12:1:19]", default=0.0)
-    parser.add_option("--LNA1", type="float", dest="LNA1", help="BRS/CBRS Front-end LNA1 gain stage [0:33] (dB)", default=0.0)
-    parser.add_option("--LNA2", type="float", dest="LNA2", help="BRS/CBRS Front-end LNA2 gain [0:17] (dB)", default=0.0)
+    parser.add_option("--LNA1", type="float", dest="LNA1", help="BRS/CBRS Front-end LNA1 gain stage [0:33] (dB)", default=33.0)
+    parser.add_option("--LNA2", type="float", dest="LNA2", help="BRS/CBRS Front-end LNA2 gain [0:17] (dB)", default=17.0)
     parser.add_option("--ATTN", type="float", dest="ATTN", help="BRS/CBRS Front-end ATTN gain stage [-18:6:0] (dB)", default=0.0)
     parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=2.5e9)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
@@ -490,8 +499,8 @@ def main():
     parser.add_option("--nSC", type="int", dest="nSC", help="# of subcarriers. Only supports 64 sc at the moment", default=64)
     parser.add_option("--fftOfset", type="int", dest="fftOffset", help="FFT Offset: # of CP samples for FFT", default=6)
     parser.add_option("--modOrder", type="int", dest="modOrder", help="Modulation Order 2=BPSK/4=QPSK/16=16QAM/64=64QAM", default=16)
-    parser.add_option("--serialTx", type="string", dest="serialTx", help="Serial # of TX device", default="RF3C000025")
-    parser.add_option("--serialRx", type="string", dest="serialRx", help="Serial # of RX device", default="RF3C000042")
+    parser.add_option("--serialTx", type="string", dest="serialTx", help="Serial # of TX device", default="RF3E000060")
+    parser.add_option("--serialRx", type="string", dest="serialRx", help="Serial # of RX device", default="RF3E000034")
     parser.add_option("--nSampsRead", type="int", dest="nSampsRead", help="# Samples to read", default=FIG_LEN)
     parser.add_option("--mode", type="string", dest="mode", help="Simulation vs Over-the-Air (i.e., SIM/OTA)", default="OTA")
     (options, args) = parser.parse_args()
