@@ -1,3 +1,5 @@
+# -*- coding: UTF-8 -*-
+
 """
  type-conv.py
 
@@ -47,3 +49,25 @@ def cfloat2uint32(arr, order='IQ'):
         return np.bitwise_or(arr_q, np.left_shift(arr_i.astype(np.uint32), 16))
     else:
         return np.bitwise_or(arr_i, np.left_shift(arr_q.astype(np.uint32), 16))
+
+
+def bin_to_int(val, nbits):
+    """
+    Compute the two's complement of integer value
+    """
+    # If sign bit is 1 => negative value
+    if (val & (1 << (nbits - 1))) != 0:
+        val = val - (1 << nbits)
+    # If positive, do nothing
+    return val
+
+
+def int_to_bin(val, nbits):
+    """
+    Convert int to a binary string
+    """
+    # Mask value to 'nbits' number of bits and remove '0b' prefix
+    s = bin(val & int("1"*nbits, 2))[2:]
+    binstr = ("{0:0>%s}" % nbits).format(s)
+    return binstr
+

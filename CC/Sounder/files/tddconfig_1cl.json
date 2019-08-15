@@ -13,7 +13,7 @@
 		 "frame_schedule" : [
 		     "BGPGUGGGGGGGGGGGGGGG"
 		 ],
-		 "max_frame" : 0,
+		 "max_frame" : 4000,
 		 "subframe_size" : 400,
 		 "fft_size" : 64,
 		 "cp_size" : 16,
@@ -21,6 +21,7 @@
 		 "postfix" : 68,
 		 "beacon_seq" : "gold_ifft",
 		 "beamsweep" : true,
+                 "sample_calibrate" : true,
 		 "beacon_antenna" : 0,
 		 "pilot_seq" : "lts"
 	},
@@ -33,9 +34,9 @@
 		 "channel" : "A",
 		 "agc_en" : false,
 		 "rxgainA" : [20],
-		 "txgainA" : [45],
+		 "txgainA" : [35],
 		 "rxgainB" : [20],
-		 "txgainB" : [45],
+		 "txgainB" : [35],
 		 "rate" : 5e6,
 		 "frame_schedule" : [
 		     "GDPGUGGGGGGGGGGGGGGG"

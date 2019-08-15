@@ -18,6 +18,7 @@ class RadioConfig
 public:
     RadioConfig(Config *cfg);
     static void *initBSRadio(void * context);
+    void radioConfigure();
     void radioStart();
     void radioStop();
     void readSensors();
@@ -26,6 +27,7 @@ public:
     int radioTx(int, void ** buffs, int flags, long long & frameTime);
     int radioRx(int, void ** buffs, long long & frameTime);
     int sampleOffsetCal();
+    void collectCSI(bool);
     static void drain_buffers(SoapySDR::Device * ibsSdrs, SoapySDR::Stream * istream, std::vector<void *> buffs, int symSamp);
     void sync_delays(int cellIdx);
 

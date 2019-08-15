@@ -5,6 +5,7 @@ set(CMAKE_C_FLAGS "-std=c99 -Wall")
 set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -O3 -mavx2 -mavx")
 
 find_package(nlohmann_json 3.2.0 REQUIRED)
+find_package(PythonLibs REQUIRED)
 
 ########################################################################
 # SoapySDR dependency
@@ -25,15 +26,15 @@ set(directory "logs")
 file(MAKE_DIRECTORY ${directory})
 
 add_definitions(-DJSON)
-add_definitions(-DNEWCORR)
 add_definitions(-DTHREADED_INIT)
 
+message(STATUS "PYTHON_LIBRARIES: ${PYTHON_LIBRARIES}")
 message(STATUS "SoapySDR_INCLUDE_DIRS: ${SoapySDR_INCLUDE_DIRS}")
 message(STATUS "SoapySDR_LIBRARIES: ${SoapySDR_LIBRARIES}")
 message(STATUS "HDF5_INCLUDE_DIRS: ${HDF5_INCLUDE_DIRS}")
 message(STATUS "HDF5_LIBRARIES: ${HDF5_LIBRARIES}")
-include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS})
+include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS} ${PYTHON_INCLUDE_DIRS})
 
 add_executable(sounder main.cc config.cc receiver.cc recorder.cc sdr-lib.cc comms-lib.cc utils.cc signalHandler.cpp)
-target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe ${SoapySDR_LIBRARIES} ${HDF5_LIBRARIES} ${CMAKE_SOURCE_DIR}/lib/libmuFFT.a ${CMAKE_SOURCE_DIR}/lib/libmuFFT-sse.a ${CMAKE_SOURCE_DIR}/lib/libmuFFT-sse3.a ${CMAKE_SOURCE_DIR}/lib/libmuFFT-avx.a)
+target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe ${SoapySDR_LIBRARIES} ${HDF5_LIBRARIES} ${CMAKE_SOURCE_DIR}/lib/libmuFFT.a ${CMAKE_SOURCE_DIR}/lib/libmuFFT-sse.a ${CMAKE_SOURCE_DIR}/lib/libmuFFT-sse3.a ${CMAKE_SOURCE_DIR}/lib/libmuFFT-avx.a ${PYTHON_LIBRARIES})
 

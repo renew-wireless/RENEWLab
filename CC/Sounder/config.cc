@@ -50,26 +50,29 @@ Config::Config(std::string jsonfile)
         hub_file = tddConf.value("hub_id", "hub_serials.txt");
         json sdr_id_files = tddConf.value("sdr_id", json::array());
         nCells = sdr_id_files.size();
-        for (int i = 0; i < nCells; i++) bs_sdr_file.push_back(sdr_id_files.at(i).get<std::string>());
+        for (size_t i = 0; i < nCells; i++) bs_sdr_file.push_back(sdr_id_files.at(i).get<std::string>());
         bsChannel = tddConf.value("channel", "A");
 	if (bsChannel != "A" && bsChannel != "B" && bsChannel != "AB")
 	    throw std::invalid_argument( "error channel config: not any of A/B/AB!\n");
         bsSdrCh = (bsChannel == "AB") ? 2 : 1;
         auto jBsFrames = tddConf.value("frame_schedule", json::array());
         framePeriod = jBsFrames.size();
-        for(int f = 0; f < framePeriod; f++) frames.push_back(jBsFrames.at(f).get<std::string>());
+        for(size_t f = 0; f < framePeriod; f++) frames.push_back(jBsFrames.at(f).get<std::string>());
         txgainA = tddConf.value("txgainA", 20);
         rxgainA = tddConf.value("rxgainA", 20);
         txgainB = tddConf.value("txgainB", 20);
         rxgainB = tddConf.value("rxgainB", 20);
+        calTxGainA = tddConf.value("calTxGainA", 40);
+        calTxGainB = tddConf.value("calTxGainB", 40);
+        sampleCalEn = tddConf.value("sample_calibrate", false);
         beamsweep = tddConf.value("beamsweep", false);
         beacon_ant = tddConf.value("beacon_antenna", 0);
         max_frame = tddConf.value("max_frame", 0);
-    
+
         bs_sdr_ids.resize(nCells);
         nBsSdrs.resize(nCells);
         nBsAntennas.resize(nCells);
-        for (int i = 0; i < nCells; i++)
+        for (size_t i = 0; i < nCells; i++)
         {
             Utils::loadDevices(bs_sdr_file[i], bs_sdr_ids[i]);
             nBsSdrs[i] = bs_sdr_ids[i].size();
@@ -92,7 +95,6 @@ Config::Config(std::string jsonfile)
                     pilotSymbols[f].push_back(g);
             }
         }
-        nPilotSyms = pilotSymbols[0].size();
         ULSymbols.resize(framePeriod);
         for(int f = 0; f < framePeriod; f++)
         {
@@ -122,6 +124,7 @@ Config::Config(std::string jsonfile)
             nClSdrs = std::count(frames.at(0).begin(), frames.at(0).end(), 'P');
 	    clDataMod = tddConf.value("modulation", "QPSK");
         }
+
     }
 
     // Clients
@@ -173,9 +176,9 @@ Config::Config(std::string jsonfile)
         }
     }
 
+    // Signal Generation
     if (bsPresent or clPresent)
     {
-        /**** Signal Generation ****/
 	if (fftSize != 64) fftSize = 64;
 	data_ind = CommsLib::getDataSc(fftSize);
         pilot_sc = CommsLib::getPilotSc(fftSize);
@@ -199,23 +202,20 @@ Config::Config(std::string jsonfile)
         beacon_ci16.insert(beacon_ci16.begin(),pre0.begin(),pre0.end());
         beacon_ci16.insert(beacon_ci16.end(),post0.begin(),post0.end());
 
-        beacon = Utils::cint16_to_uint32(beacon_ci16, false, "IQ"); 
+        beacon = Utils::cint16_to_uint32(beacon_ci16, false, "QI"); 
 
         std::vector<std::complex<int16_t>> pre(prefix, 0);
         std::vector<std::complex<int16_t>> post(postfix, 0);
 
         coeffs_ci16 = Utils::double_to_int16(gold_ifft); 
-#ifdef NEWCORR
-        coeffs = Utils::cint16_to_uint32(coeffs_ci16, true, "IQ");
-#else
         coeffs = Utils::cint16_to_uint32(coeffs_ci16, true, "QI");
-#endif
+
         // compose pilot subframe
-        std::vector<std::vector<double>> lts = CommsLib::getSequence(160, CommsLib::LTS_SEQ);
+        std::vector<std::vector<double>> lts = CommsLib::getSequence(80, CommsLib::LTS_SEQ);
         std::vector<std::complex<int16_t>> lts_ci16 = Utils::double_to_int16(lts); 
         int nSamps = sampsPerSymbol - prefix - postfix;
-        int rep = nSamps / 160;
-        int frac = nSamps % 160;
+        int rep = nSamps / 80;
+        int frac = nSamps % 80;
         pilot_ci16.insert(pilot_ci16.begin(), pre.begin(), pre.end());
 
         for (int i = 0 ; i < rep; i++)
@@ -224,11 +224,11 @@ Config::Config(std::string jsonfile)
         pilot_ci16.insert(pilot_ci16.end(), lts_ci16.begin(), lts_ci16.begin()+frac);
         pilot_ci16.insert(pilot_ci16.end(), post.begin(), post.end());
 
-        pilot = Utils::cint16_to_uint32(pilot_ci16, false, "IQ");
+        pilot = Utils::cint16_to_uint32(pilot_ci16, false, "QI");
 #if DEBUG_PRINT
         for (int j = 0; j < pilot.size(); j++)
         {
-            std::cout << "Pilot[" << j << "]: \t " << pilot_ci16[j] << std::endl;
+           std::cout << "Pilot[" << j << "]: \t " << pilot_ci16[j] << std::endl;
         }
 #endif
 
@@ -310,8 +310,47 @@ Config::Config(std::string jsonfile)
             }
 #endif
         }
-        /**** End Signal Generation ****/
     }
+
+    if (bsPresent)
+    {
+        // set trace file path 
+        time_t now = time(0);
+        tm *ltm = localtime(&now);
+        int cell_num = nCells; 
+        int ant_num = getNumAntennas(); 
+        int ue_num = nClSdrs;
+        std::string filename = "logs/Argos-"+std::to_string(1900 + ltm->tm_year)+"-"+std::to_string(1+ltm->tm_mon)+"-"+std::to_string(ltm->tm_mday)+"-"+std::to_string(ltm->tm_hour)+"-"+std::to_string(ltm->tm_min)+"-"+std::to_string(ltm->tm_sec)+"_"+std::to_string(cell_num)+"x"+std::to_string(ant_num)+"x"+std::to_string(ue_num)+".hdf5";
+        trace_file = tddConf.value("trace_file", filename);
+    }
+    
+    // Multi-threading settings
+    unsigned nCores = this->getCoreCount();
+    core_alloc = true;
+    if (nCores <= RX_THREAD_NUM) core_alloc = false; 
+    if (bsPresent && (pilotSymsPerFrame+ulSymsPerFrame > 0))
+    {
+        rx_thread_num = (nCores >= 2*RX_THREAD_NUM && nBsSdrs[0] >= RX_THREAD_NUM) ? RX_THREAD_NUM : 1;
+        task_thread_num = TASK_THREAD_NUM;
+        if (clPresent && nCores < 1+task_thread_num+rx_thread_num+nClSdrs) core_alloc = false;
+    }
+    else
+    {
+        rx_thread_num = 0;
+        task_thread_num = 0;
+        if (clPresent && nCores <= 1+nClSdrs) core_alloc = false;
+    }
+
+    if (bsPresent && core_alloc)
+    {
+        printf("allocating %d cores to receive threads ... \n", rx_thread_num);
+        printf("allocating %d cores to record threads ... \n", task_thread_num);
+    }
+
+    if (clPresent && core_alloc) 
+        printf("allocating %d cores to client threads ... \n", nClSdrs);
+
+    running = true;
 
     std::cout << "Configuration file was successfully parsed!" << std::endl;
 }
@@ -370,6 +409,7 @@ int Config::getDlSFIndex(int frame_id, int symbol_id)
 bool Config::isPilot(int frame_id, int symbol_id) 
 {
     int fid = frame_id % framePeriod;
+    if (symbol_id >= frames[fid].size()) return false;
 #if DEBUG_PRINT
     printf("isPilot(%d, %d) = %c\n",frame_id, symbol_id, frames[fid].at(symbol_id));
 #endif
@@ -379,10 +419,18 @@ bool Config::isPilot(int frame_id, int symbol_id)
 bool Config::isData(int frame_id, int symbol_id) 
 {
     int fid = frame_id % framePeriod;
+    if (symbol_id >= frames[fid].size()) return false;
 #if DEBUG_PRINT
     printf("isData(%d, %d) = %c\n",frame_id, symbol_id, frames[fid].at(symbol_id));
 #endif
     return frames[fid].at(symbol_id) == 'U' ? true : false;
 } 
 
-
+unsigned Config::getCoreCount()
+{
+    unsigned nCores = std::thread::hardware_concurrency();
+#if DEBUG_PRINT
+    std::cout << "number of CPU cores " << std::to_string(nCores) << std::endl;
+#endif
+    return nCores;
+}
