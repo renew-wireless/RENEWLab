@@ -23,12 +23,12 @@
 		 "beamsweep" : true,
                  "sample_calibrate" : true,
 		 "beacon_antenna" : 0,
-		 "pilot_seq" : "lts"
+		 "pilot_seq" : "lts-full"
 	},
 
 	"Clients" : {
 		 "sdr_id" : [
-		     "RF3C000037"
+		     "RF3C000045"
 		 ],
 		 "frequency" : 3.6e9,
 		 "channel" : "A",
@@ -48,7 +48,7 @@
 		 "prefix" : 82,
 		 "postfix" : 68,
 		 "beacon_seq" : "gold_ifft",
-		 "pilot_seq" : "lts",
+		 "pilot_seq" : "lts-full",
 		 "modulation" : "16QAM"
 	}
 }

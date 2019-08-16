@@ -22,7 +22,7 @@
 		 "beacon_seq" : "gold_ifft",
 		 "beamsweep" : true,
 		 "beacon_antenna" : 0,
-		 "pilot_seq" : "lts"
+		 "pilot_seq" : "lts-half"
 	},
 
 	"Clients" : {
@@ -49,7 +49,7 @@
 		 "prefix" : 82,
 		 "postfix" : 68,
 		 "beacon_seq" : "gold_ifft",
-		 "pilot_seq" : "lts",
+		 "pilot_seq" : "lts-half",
 		 "modulation" : "16QAM"
 	}
 }
