@@ -23,7 +23,7 @@
 		 "beamsweep" : true,
                  "sample_calibrate" : false,
 		 "beacon_antenna" : 0,
-		 "pilot_seq" : "lts"
+		 "pilot_seq" : "lts-half"
 	}
 
 }
