@@ -32,6 +32,17 @@ std::vector<std::complex<int16_t>> Utils::double_to_int16(std::vector<std::vecto
     return out;
 }
 
+std::vector<std::complex<float>> Utils::doubletocfloat(std::vector<std::vector<double>> in)
+{
+    // Convert two dimensional double array to one dimensional complex double vector
+    int len = in[0].size();
+    std::vector<std::complex<float>> out(len, 0);
+    for (int i = 0; i < len; i++)
+        out[i] = std::complex<float>( (float)in[0][i], (float)in[1][i] );
+    return out;
+}
+
+
 std::vector<std::complex<double>> Utils::uint32tocdouble(std::vector<uint32_t> in, std::string order)
 {
     int len = in.size();

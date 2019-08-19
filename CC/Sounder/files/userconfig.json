@@ -19,7 +19,7 @@
 		 "frame_mode" : "continuous_resync",
 		 "beacon_type" : "gold_ifft",
 		 "modulation" : "QPSK",
-		 "pilot_seq" : "lts",
+		 "pilot_seq" : "lts-half",
 		 "sdr_id" : [
 		     "RF3E000145"
 		 ]

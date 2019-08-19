@@ -125,7 +125,7 @@ def read_rx_samples(rx_mode, filename):
     return metadata, samples
 
 
-def pilot_finder(samples, pilot_type, flip=False):
+def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[]):
     """
     Find pilots from clients to each of the base station antennas
 
@@ -140,17 +140,21 @@ def pilot_finder(samples, pilot_type, flip=False):
         tx_pilot  - Transmitted pilot (same pilot sent by all clients)
     """
 
-    if pilot_type == 'lts':
+    if pilot_type == 'lts-half' or pilot_type == 'lts-full':
         lts_thresh = 0.8
-        best_pk, lts_pks, lts_corr = find_lts(samples, thresh=lts_thresh, flip=flip)
+        best_pk, lts_pks, lts_corr = find_lts(samples, thresh=lts_thresh, flip=flip, lts_seq=pilot_seq)
+
+        # full lts contains 2.5 64-sample-LTS sequences, we need only one symbol
         lts, lts_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
+
+        if not (pilot_seq.size == 0):
+            # pilot provided, overwrite the one returned above
+            lts = pilot_seq
+
         lts_syms_len = len(lts)
-
         pilot_thresh = lts_thresh * np.max(lts_corr)
-
         # We'll need the transmitted version of the pilot (for channel estimation, for example)
         tx_pilot = [lts, lts_f]
-
         lts_start = 0
 
         # Check if LTS found
@@ -217,20 +221,35 @@ def estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params):
 
     # Channel estimation
     # Get LTS again (after CFO correction)
-    lts = pilot_cfo[lts_start: lts_start + lts_syms_len]
-    lts_1 = lts[-64 + -fft_offset + np.array(range(97, 161))]
-    lts_2 = lts[-fft_offset + np.array(range(97, 161))]
+    if lts_syms_len == 160:
+        # Two LTS symbols
+        lts = pilot_cfo[lts_start: lts_start + lts_syms_len]
+        lts_1 = lts[-64 + -fft_offset + np.array(range(97, 161))]
+        lts_2 = lts[-fft_offset + np.array(range(97, 161))]
 
-    # Average 2 LTS symbols to compute channel estimate
-    chan_est = np.fft.ifftshift(pilot_freq) * (np.fft.fft(lts_1) + np.fft.fft(lts_2)) / 2
+        # Average 2 LTS symbols to compute channel estimate
+        chan_est = np.fft.ifftshift(pilot_freq) * (np.fft.fft(lts_1) + np.fft.fft(lts_2)) / 2
 
-    # Compute an estimate of EVM based on TX/RX LTS samples
-    lts1_f = np.fft.fft(lts_1)
-    lts2_f = np.fft.fft(lts_2)
-    lts_tx = np.fft.ifftshift(pilot_freq)
-    evm_tmp1 = abs(lts1_f - lts_tx) ** 2
-    evm_tmp2 = abs(lts2_f - lts_tx) ** 2
-    lts_evm = np.mean((evm_tmp1 + evm_tmp2) / 2)
+        # Compute an estimate of EVM based on TX/RX LTS samples
+        lts1_f = np.fft.fft(lts_1)
+        lts2_f = np.fft.fft(lts_2)
+        lts_tx = np.fft.ifftshift(pilot_freq)
+        evm_tmp1 = abs(lts1_f - lts_tx) ** 2
+        evm_tmp2 = abs(lts2_f - lts_tx) ** 2
+        lts_evm = np.mean((evm_tmp1 + evm_tmp2) / 2)
+    else:
+        # Half sequence (80-sample long LTS)
+        lts = pilot_cfo[lts_start: lts_start + lts_syms_len]
+        lts_1 = lts[-64 + -fft_offset + np.array(range(97-17, 161-17))]
+
+        # Average 2 LTS symbols to compute channel estimate
+        chan_est = np.fft.ifftshift(pilot_freq) * np.fft.fft(lts_1)
+
+        # Compute an estimate of EVM based on TX/RX LTS samples
+        lts1_f = np.fft.fft(lts_1)
+        lts_tx = np.fft.ifftshift(pilot_freq)
+        evm_tmp1 = abs(lts1_f - lts_tx) ** 2
+        lts_evm = np.mean(evm_tmp1)
 
     return chan_est, cfo_est, lts_evm
 
@@ -357,7 +376,7 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est, lts_start)
                                                            order="F")
 
     # Remove cyclic prefix
-    payload_samples_mat = payload_samples_mat_cp[:, data_cp_len - fft_offset + 1 + np.array(range(0, num_sc)), :]
+    payload_samples_mat = payload_samples_mat_cp[:, data_cp_len - fft_offset + 0 + np.array(range(0, num_sc)), :]  # FIXME: 0? 1?
 
     # FFT
     rxSig_freq = np.zeros((payload_samples_mat.shape[0], payload_samples_mat.shape[1], payload_samples_mat.shape[2]),
@@ -712,7 +731,7 @@ def rx_app(filename, user_params, this_plotter):
                     for clIdx in range(num_cl):
                         this_pilot = ofdm_rx_syms_awgn[antIdx, clIdx*len(full_pilot):(clIdx+1)*len(full_pilot)]
                         # Flip needed for AWGN data (due to the way we are writing the HDF5 files)
-                        this_pilot, tx_pilot, lts_corr_tmp, pilot_thresh[clIdx, antIdx], best_pk, lts_start[clIdx, antIdx] = pilot_finder(this_pilot, pilot_type, flip=True)
+                        this_pilot, tx_pilot, lts_corr_tmp, pilot_thresh[clIdx, antIdx], best_pk, lts_start[clIdx, antIdx] = pilot_finder(this_pilot, pilot_type, flip=True, pilot_seq=ofdm_pilot)
                         lts_corr[clIdx, antIdx, :] = lts_corr_tmp
                         if this_pilot.size == 0:
                             continue
@@ -794,7 +813,7 @@ def rx_app(filename, user_params, this_plotter):
 
                         # Find potential pilots. tx_pilot is a "struct" with dims:  [lts_time seq, lts_freq seq]
                         # No need to flip for OTA captures
-                        this_pilot, tx_pilot, lts_corr_tmp, pilot_thresh[clIdx, antIdx], best_pk, lts_start[clIdx, antIdx] = pilot_finder(IQ, pilot_type, flip=False)
+                        this_pilot, tx_pilot, lts_corr_tmp, pilot_thresh[clIdx, antIdx], best_pk, lts_start[clIdx, antIdx] = pilot_finder(IQ, pilot_type, flip=True, pilot_seq=ofdm_pilot)
                         if this_pilot.size == 0:
                             continue
 
@@ -958,8 +977,9 @@ if __name__ == '__main__':
 
     parser = OptionParser()
     # Params
-    parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-5-19-9-1-18_1x8x1_BEST.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
-    parser.add_option("--mode",       type="string",       dest="mode",       default="REPLAY", help="Options: REPLAY/AWGN/OTA [default: %default]")
+    #parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-8-16-15-35-59_1x8x1_FULL_LTS.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
+    parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-8-16-13-13-16_1x8x1_HALF_LTS.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
+    parser.add_option("--mode",       type="string",       dest="mode",       default="AWGN", help="Options: REPLAY/AWGN/OTA [default: %default]")
     parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
     parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=False,  help="Apply CFO correction [default: %default]")
     parser.add_option("--sfoCorr",    action="store_true", dest="sfo_corr",   default=True,  help="Apply SFO correction [default: %default]")
