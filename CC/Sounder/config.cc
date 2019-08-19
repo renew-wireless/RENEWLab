@@ -44,6 +44,7 @@ Config::Config(std::string jsonfile)
         sampsPerSymbol = samps + prefix + postfix;
         fftSize = tddConf.value("fft_size", 0);
         cpSize = tddConf.value("cp_size", 0);
+        tx_scale = tddConf.value("tx_scale", 0.5);
         beacon_seq = tddConf.value("beacon_seq", "gold_ifft");
         pilot_seq = tddConf.value("pilot_seq", "lts-full");
 
@@ -171,11 +172,13 @@ Config::Config(std::string jsonfile)
             sampsPerSymbol = samps + prefix + postfix;
             fftSize = tddConfCl.value("fft_size", 0);
             cpSize = tddConfCl.value("cp_size", 0);
+            tx_scale = tddConf.value("tx_scale", 0.5);
             beacon_seq = tddConfCl.value("beacon_seq", "gold_ifft");
             pilot_seq = tddConfCl.value("pilot_seq", "lts-full");
             symbolsPerFrame = clFrames.at(0).size();
         }
     }
+    bbf_ratio = 0.75;
 
     // Signal Generation
     if (bsPresent or clPresent)
@@ -289,6 +292,7 @@ Config::Config(std::string jsonfile)
                     std::cout << "Pilot symbol: " << ofdmSym[pilot_sc[0][0]] << " " << ofdmSym[pilot_sc[0][1]] << std::endl;
 #endif
                     std::vector<std::complex<float>> txSym = CommsLib::IFFT(ofdmSym, fftSize);
+                    for (int p = 0; p < txSym.size(); p++) txSym[p] *= tx_scale;
                     txSym.insert(txSym.begin(), txSym.end()-cpSize, txSym.end()); // add CP
 #if DEBUG_PRINT
                     std::cout << "IFFT output: " << txSym[0] << " " << txSym[64] << std::endl;

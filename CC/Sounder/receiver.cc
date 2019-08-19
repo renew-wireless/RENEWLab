@@ -102,6 +102,7 @@ std::vector<pthread_t> Receiver::startRecvThreads(void** in_buffer, int** in_buf
 
     sleep(1);
     pthread_cond_broadcast(&cond);
+    //sleep(.01);
     go(); 
     return created_threads;
 }
@@ -170,11 +171,7 @@ void* Receiver::loopRecv(void *in_context)
         cur_ptr_buffer2 = malloc(cfg->getPackageLength()); 
 
     int offset = 0;
-    int package_num = 0;
     long long frameTime;
-    auto begin = std::chrono::system_clock::now();
-
-    int maxQueueLength = 0;
     int ret = 0;
     while(cfg->running)
     {
@@ -192,7 +189,11 @@ void* Receiver::loopRecv(void *in_context)
             void * samp1 = cur_ptr_buffer + 4*sizeof(int);
             void * samp2 = cur_ptr_buffer2 + 4*sizeof(int);
             void *samp[2] = {samp1, samp2};
-            if (radio->radioRx(rid, samp, frameTime) < 0) cfg->running = false;;
+            if (radio->radioRx(rid, samp, frameTime) < 0)
+            {
+                cfg->running = false;
+                break;
+            }
 
             frame_id = (int)(frameTime>>32);
             symbol_id = (int)((frameTime>>16)&0xFFFF);
@@ -250,25 +251,8 @@ void* Receiver::loopRecv(void *in_context)
                     exit(0);
                 }
             }
-            int cur_queue_len = message_queue_->size_approx();
-            maxQueueLength = maxQueueLength > cur_queue_len ? maxQueueLength : cur_queue_len;
 
         }
-#if DEBUG_PRINT
-        package_num++;
-        // print some information
-        if(package_num >= 1e4)
-        {
-            auto end = std::chrono::system_clock::now();
-            double byte_len = sizeof(ushort) * cfg->sampsPerSymbol * 2 * 1e5;
-            std::chrono::duration<double> diff = end - begin;
-            // print network throughput & maximum message queue length during this period
-            printf("thread %d receive %f bytes in %f secs, throughput %f MB/s, max Message Queue Length %d\n", tid, byte_len, diff.count(), byte_len / diff.count() / 1024 / 1024, maxQueueLength);
-            maxQueueLength = 0;
-            begin = std::chrono::system_clock::now();
-            package_num = 0;
-        }
-#endif
     }
     return 0;
 }
@@ -314,6 +298,7 @@ void* Receiver::clientTxRx(void * context)
     {
         txbuff[0] = cfg->txdata[tid].data();
         txbuff[1] = cfg->txdata[tid].data();
+        std::cout << txSyms << " uplink symbols will be sent per frame..." << std::endl;
     }
 
     int all_trigs = 0;
@@ -364,7 +349,8 @@ void* Receiver::clientTxRx(void * context)
         bool transmitErrors = false;
         for (int i = 0; i < txSyms; i++)
         {
-            if (i == txSyms - 1)  flags |= SOAPY_SDR_END_BURST;
+            //if (i == txSyms - 1)  
+                flags |= SOAPY_SDR_END_BURST;
             int r = device->writeStream(txStream, txbuff.data(), NUM_SAMPS, flags, txTime, 1000000);
             if (r == NUM_SAMPS)
             {

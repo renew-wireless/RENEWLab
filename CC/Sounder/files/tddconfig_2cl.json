@@ -11,7 +11,7 @@
 		 "txgainB" : 35,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "BGPPGUGGGGGGGGGGGGGG"
+		     "BGPPGGGGGGGGGGGGGGGG"
 		 ],
 		 "max_frame" : 0,
 		 "subframe_size" : 400,
@@ -21,6 +21,7 @@
 		 "postfix" : 68,
 		 "beacon_seq" : "gold_ifft",
 		 "beamsweep" : true,
+                 "sample_calibrate" : true,
 		 "beacon_antenna" : 0,
 		 "pilot_seq" : "lts-half"
 	},
@@ -28,7 +29,7 @@
 	"Clients" : {
 		 "sdr_id" : [
 		     "RF3C000045",
-		     "RF3C000023"
+		     "RF3C000025"
 		 ],
 		 "frequency" : 3.6e9,
 		 "channel" : "A",
@@ -39,8 +40,8 @@
 		 "txgainB" : [35, 35],
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "GDPGGUGGGGGGGGGGGGGG",
-                     "GDGPGUGGGGGGGGGGGGGG"
+		     "GGPGGGGGGGGGGGGGGGGG",
+                     "GGGPGGGGGGGGGGGGGGGG"
 		 ],
 		 "frame_mode" : "continuous_resync",
 		 "subframe_size" : 400,

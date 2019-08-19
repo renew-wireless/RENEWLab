@@ -37,6 +37,7 @@ public:
     // common features
 
     double freq;
+    double bbf_ratio;
     double rate;
     int sampsPerSymbol;
     int prefix;
@@ -47,6 +48,7 @@ public:
     int dlSymsPerFrame;
     int fftSize;
     int cpSize;
+    double tx_scale;
     std::string pilot_seq;
     std::string beacon_seq;
     
@@ -95,6 +97,7 @@ public:
     std::vector<uint32_t> pilot;
     std::vector<std::vector<int>> pilot_sc;
     std::vector<std::vector<double>> pilot_double;
+    //std::vector<std::vector<std::vector<std::complex<float>>>> txdata;
     std::vector<std::vector<std::complex<float>>> txdata;
     std::vector<std::vector<std::complex<float>>> txdata_freq_dom;
     std::vector<std::vector<std::complex<float>>> txdata_time_dom;
