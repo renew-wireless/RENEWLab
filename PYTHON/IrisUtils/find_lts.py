@@ -38,9 +38,11 @@ def find_lts(iq, thresh=0.8, us=1, cp=32, flip=False, lts_seq=[]):
 	debug = False
 
 	# If original signal not provided, generate LTS
+	lts_seq = np.asarray(lts_seq)
 	if lts_seq.size == 0:
 		# full lts contains 2.5 64-sample-LTS sequences, we need only one symbol
 		lts, lts_f = generate_training_seq(preamble_type='lts', cp=cp, upsample=us)
+		peak_spacing = 64
 	else:
 		# If provided...
 		lts = lts_seq
