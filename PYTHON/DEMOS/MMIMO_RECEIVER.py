@@ -402,7 +402,7 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est, lts_start)
         x = np.zeros((num_cl, num_sc, n_ofdm_syms), dtype=complex)
         chan_est_tmp = np.squeeze(chan_est)
         for symIdx in range(n_ofdm_syms):
-            antIdx = 2  # 6 is best
+            antIdx = 2
             x[0, :, symIdx] = rxSig_freq[antIdx, :, symIdx] / chan_est_tmp[antIdx, :]
 
     streams = x
@@ -838,7 +838,7 @@ def rx_app(filename, user_params, this_plotter):
                 for ulSymIdx in range(num_ul_syms):
                     Q = data_samples[frameIdx, num_cells-1, ulSymIdx, :, 0:sym_len*2:2] / 2 ** 15   # 32768
                     I = data_samples[frameIdx, num_cells-1, ulSymIdx, :, 1:sym_len*2:2] / 2 ** 15   # 32768
-                    IQ = I + (Q * 1j)
+                    IQ = Q + (I * 1j)   # QI, not IQ
 
                     # Remove DC
                     IQ -= np.mean(IQ)
@@ -978,8 +978,8 @@ if __name__ == '__main__':
     parser = OptionParser()
     # Params
     #parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-8-16-15-35-59_1x8x1_FULL_LTS.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
-    parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-8-16-13-13-16_1x8x1_HALF_LTS.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
-    parser.add_option("--mode",       type="string",       dest="mode",       default="AWGN", help="Options: REPLAY/AWGN/OTA [default: %default]")
+    parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-8-20-9-24-49_1x64x1.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
+    parser.add_option("--mode",       type="string",       dest="mode",       default="REPLAY", help="Options: REPLAY/AWGN/OTA [default: %default]")
     parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
     parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=False,  help="Apply CFO correction [default: %default]")
     parser.add_option("--sfoCorr",    action="store_true", dest="sfo_corr",   default=True,  help="Apply SFO correction [default: %default]")
