@@ -48,7 +48,7 @@ public:
     int dlSymsPerFrame;
     int fftSize;
     int cpSize;
-    double tx_scale;
+    float tx_scale;
     std::string pilot_seq;
     std::string beacon_seq;
     

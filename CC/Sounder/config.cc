@@ -172,7 +172,7 @@ Config::Config(std::string jsonfile)
             sampsPerSymbol = samps + prefix + postfix;
             fftSize = tddConfCl.value("fft_size", 0);
             cpSize = tddConfCl.value("cp_size", 0);
-            tx_scale = tddConf.value("tx_scale", 0.5);
+            tx_scale = tddConfCl.value("tx_scale", 0.5);
             beacon_seq = tddConfCl.value("beacon_seq", "gold_ifft");
             pilot_seq = tddConfCl.value("pilot_seq", "lts-full");
             symbolsPerFrame = clFrames.at(0).size();
