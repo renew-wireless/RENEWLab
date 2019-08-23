@@ -479,7 +479,7 @@ class hdfDump:
 
                 axes[0, idx].set_title('UPLINK DATA - Cell 0')
                 samples = data['UplinkData']['Samples']
-                num_cl_tmp = 1  # number of UEs to plot data for
+                num_cl_tmp = samples.shape[2]  # number of UEs to plot data for
             
 
             # Compute CSI from IQ samples
@@ -581,6 +581,8 @@ if __name__ == '__main__':
                 no_corr = True
                 frame_to_plot = 0
                 ref_ant = 0
+                n_frames_to_inspect = 0
+                n_f_st = 0
             else:
                 frame_to_plot = int(sys.argv[2])
                 n_frames_to_inspect = 0
@@ -609,6 +611,7 @@ if __name__ == '__main__':
                 no_corr = True
                 frame_to_plot = int(sys.argv[3])
                 ref_ant = int(sys.argv[4])
+                n_frames_to_inspect = 0
             else:
                 frame_to_plot = int(sys.argv[2])
                 ref_ant = int(sys.argv[3])

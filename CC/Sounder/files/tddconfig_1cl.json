@@ -11,7 +11,7 @@
 		 "txgainB" : 35,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "BGPGGGGGGGGGGGGGGGGG"
+		     "BGPGUGGGGGGGGGGGGGGG"
 		 ],
 		 "max_frame" : 4000,
 		 "subframe_size" : 400,
@@ -23,7 +23,7 @@
 		 "beamsweep" : true,
                  "sample_calibrate" : true,
 		 "beacon_antenna" : 0,
-		 "pilot_seq" : "lts"
+		 "pilot_seq" : "lts-full"
 	},
 
 	"Clients" : {
@@ -39,7 +39,7 @@
 		 "txgainB" : [35],
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "GGPGGGGGGGGGGGGGGGGG"
+		     "GDPGUGGGGGGGGGGGGGGG"
 		 ],
 		 "frame_mode" : "continuous_resync",
 		 "subframe_size" : 400,
@@ -48,7 +48,7 @@
 		 "prefix" : 82,
 		 "postfix" : 68,
 		 "beacon_seq" : "gold_ifft",
-		 "pilot_seq" : "lts",
-		 "modulation" : "QPSK"
+		 "pilot_seq" : "lts-full",
+		 "modulation" : "16QAM"
 	}
 }

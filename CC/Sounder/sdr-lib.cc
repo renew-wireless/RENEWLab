@@ -113,17 +113,20 @@ RadioConfig::RadioConfig(Config *cfg):
             devs.push_back(device);
             SoapySDR::Kwargs info = device->getHardwareInfo();
 
-            for (auto ch : channels)
+            for (auto ch : {0, 1}) //channels)
             {
+                device->setBandwidth(SOAPY_SDR_RX, ch, (1+2*_cfg->bbf_ratio)*cfg->rate);
+                device->setBandwidth(SOAPY_SDR_TX, ch, (1+2*_cfg->bbf_ratio)*cfg->rate);
+
                 device->setSampleRate(SOAPY_SDR_RX, ch, _cfg->rate);
                 device->setSampleRate(SOAPY_SDR_TX, ch, _cfg->rate);
 
                 //device->setFrequency(SOAPY_SDR_RX, ch, freq);  
                 //device->setFrequency(SOAPY_SDR_TX, ch, freq); 
-                device->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->freq-.75*_cfg->rate);
-                device->setFrequency(SOAPY_SDR_RX, ch, "BB", .75*_cfg->rate);
-                device->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->freq-.75*_cfg->rate);
-                device->setFrequency(SOAPY_SDR_TX, ch, "BB", .75*_cfg->rate);
+                device->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->freq-_cfg->bbf_ratio*_cfg->rate);
+                device->setFrequency(SOAPY_SDR_RX, ch, "BB", _cfg->bbf_ratio*_cfg->rate);
+                device->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->freq-_cfg->bbf_ratio*_cfg->rate);
+                device->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->bbf_ratio*_cfg->rate);
  
                 // receive gains
 
@@ -215,18 +218,18 @@ void *RadioConfig::initBSRadio(void *in_context)
     for (auto ch : channels) rc->bsSdrs[c][i]->setAntenna(SOAPY_SDR_RX, ch, "TRX");
 
     SoapySDR::Kwargs info = rc->bsSdrs[c][i]->getHardwareInfo();
-    for (auto ch : channels)
+    for (auto ch : {0, 1}) //channels)
     {
-        //bsSdrs[c][i]->setBandwidth(SOAPY_SDR_RX, ch, 30e6);
-        //bsSdrs[c][i]->setBandwidth(SOAPY_SDR_TX, ch, 30e6);
+        rc->bsSdrs[c][i]->setBandwidth(SOAPY_SDR_RX, ch, (1+2*cfg->bbf_ratio)*cfg->rate);
+        rc->bsSdrs[c][i]->setBandwidth(SOAPY_SDR_TX, ch, (1+2*cfg->bbf_ratio)*cfg->rate);
 
         rc->bsSdrs[c][i]->setSampleRate(SOAPY_SDR_RX, ch, cfg->rate);
         rc->bsSdrs[c][i]->setSampleRate(SOAPY_SDR_TX, ch, cfg->rate);
 
-        rc->bsSdrs[c][i]->setFrequency(SOAPY_SDR_RX, ch, "RF", cfg->freq-.75*cfg->rate);
-        rc->bsSdrs[c][i]->setFrequency(SOAPY_SDR_RX, ch, "BB", .75*cfg->rate);
-        rc->bsSdrs[c][i]->setFrequency(SOAPY_SDR_TX, ch, "RF", cfg->freq-.75*cfg->rate);
-        rc->bsSdrs[c][i]->setFrequency(SOAPY_SDR_TX, ch, "BB", .75*cfg->rate);
+        rc->bsSdrs[c][i]->setFrequency(SOAPY_SDR_RX, ch, "RF", cfg->freq-cfg->bbf_ratio*cfg->rate);
+        rc->bsSdrs[c][i]->setFrequency(SOAPY_SDR_RX, ch, "BB", cfg->bbf_ratio*cfg->rate);
+        rc->bsSdrs[c][i]->setFrequency(SOAPY_SDR_TX, ch, "RF", cfg->freq-cfg->bbf_ratio*cfg->rate);
+        rc->bsSdrs[c][i]->setFrequency(SOAPY_SDR_TX, ch, "BB", cfg->bbf_ratio*cfg->rate);
 
 
         // receive gains
@@ -392,8 +395,19 @@ void RadioConfig::radioConfigure()
 
         if(_cfg->sampleCalEn){
             //sampleOffsetCal();
-            collectCSI(true);  // run 1: find offsets and adjust
-            collectCSI(false); // run 2: verify adjustments
+            bool adjust = false;
+            int cal_cnt = 0;
+            while(!adjust)
+            {
+                if (++cal_cnt > 10)
+                {
+                    std::cout << "10 attemps of sample offset calibration, stopping..." << std::endl;
+                    break;
+                }
+                adjust = true;
+                collectCSI(adjust);  // run 1: find offsets and adjust
+            }
+            collectCSI(adjust); // run 2: verify adjustments
             usleep(100000);
         }
 
@@ -488,7 +502,7 @@ void RadioConfig::radioConfigure()
 
     if (_cfg->clPresent)
     {
-        int ueTrigOffset = _cfg->prefix + 256 + _cfg->postfix + 17 + _cfg->prefix;
+        int ueTrigOffset = 505; //_cfg->prefix + 256 + _cfg->postfix + 17 + _cfg->prefix;
         int sf_start = ueTrigOffset/_cfg->sampsPerSymbol;
         int sp_start = ueTrigOffset%_cfg->sampsPerSymbol;
 
@@ -576,14 +590,10 @@ void RadioConfig::radioStart()
     {
         if (hubs.size() == 0)
         {
-            std::cout << "triggering first Iris ..." << std::endl;
-            //bsSdrs[0][0]->writeSetting("SYNC_DELAYS", "");   // Already doing this before sample offset cal
             bsSdrs[0][0]->writeSetting("TRIGGER_GEN", "");
         }
         else
         {
-            std::cout << "triggering Hub ..." << std::endl;
-            //hubs[0]->writeSetting("SYNC_DELAYS", "");       // Already doing this before sample offset cal
             hubs[0]->writeSetting("TRIGGER_GEN", "");
         }
     }
@@ -706,8 +716,14 @@ int RadioConfig::radioRx(int r /*radio id*/, void ** buffs, long long & frameTim
     return 0;
 }
 
-void RadioConfig::collectCSI(bool adjust)
+void RadioConfig::collectCSI(bool &adjust)
 {
+    int R = nBsSdrs[0];
+    if (R < 2)
+    {
+        std::cout << "No need to sample calibrate with one Iris! skipping ..." << std::endl;
+        return;
+    }
     std::vector<std::vector<double>> pilot;
     //std::vector<std::complex<float>> pilot_cf32;
     std::vector<std::complex<int16_t>> pilot_cint16;
@@ -747,7 +763,6 @@ void RadioConfig::collectCSI(bool adjust)
     std::vector<std::vector<std::complex<int16_t>>> buff;
     //int ant = _cfg->bsSdrCh;
     //int M = nBsSdrs[0] * ant;
-    int R = nBsSdrs[0];
     buff.resize(R * R);
     for (int i = 0; i < R; i++)
     {
@@ -851,21 +866,26 @@ void RadioConfig::collectCSI(bool adjust)
     }
 
     // adjusting trigger delays based on lts peak index
-    if (adjust and good_csi)
+    if (adjust)
     {
-        for (int i = 0; i < R; i++)
+        if (good_csi)
         {
-            int delta = (offset[i] == 0) ? 0 : offset[ref_offset] - offset[i];
-            std::cout << "adjusting delay of node " << i << " by " << delta << std::endl;
-            int iter = delta < 0 ? -delta : delta;
-            for (int j = 0; j < iter; j++)
+            for (int i = 0; i < R; i++)
             {
-                if (delta < 0)
-                    bsSdrs[0][i]->writeSetting("ADJUST_DELAYS", "-1");
-                else
-                    bsSdrs[0][i]->writeSetting("ADJUST_DELAYS", "1");
+                int delta = (offset[i] == 0) ? 0 : offset[ref_offset] - offset[i];
+                std::cout << "adjusting delay of node " << i << " by " << delta << std::endl;
+                int iter = delta < 0 ? -delta : delta;
+                for (int j = 0; j < iter; j++)
+                {
+                    if (delta < 0)
+                        bsSdrs[0][i]->writeSetting("ADJUST_DELAYS", "-1");
+                    else
+                        bsSdrs[0][i]->writeSetting("ADJUST_DELAYS", "1");
+                }
             }
         }
+        else
+            adjust = false;
     }
 
     for (int i = 0; i < R; i++)
