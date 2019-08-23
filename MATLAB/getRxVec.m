@@ -3,14 +3,13 @@ function y = getRxVec(tx_data, n_bs, n_ue, chan_type, snr, bs_param, ue_param, p
 %%% list.
 
 if chan_type == "awgn"
-% IID Rayleigh fading 
+% AWGN
     tx_var = mean(mean(abs(tx_data).^2 )) * (64/48);
     nvar =  tx_var / 10^(0.1*snr); % noise variance per data sample
         
-    H_ul = ones(size(tx_data.'))*sqrt(n_bs);
-    
+    H_ul = ones(size(tx_data.'));
     % noise vector
-    W_ul = sqrt(nvar/2) * (randn(n_bs, length(tx_data)) + ...
+    W_ul = sqrt(nvar/2).* (randn(n_bs, length(tx_data)) + ...
         1i*randn(n_bs, length(tx_data)) );
     
     % output vector
@@ -181,9 +180,6 @@ elseif chan_type == "mpc"
    ny = size(y0,1);
    w = sqrt(nvar/2)*(randn(ny,nantRx) + 1i*randn(ny,nantRx));
    y = y0 + w;
-            
-            
-       
 
 elseif chan_type == "iris"
 % Real HW:
@@ -256,4 +252,5 @@ else
     y = Nan;
     fprintf("No valid channel type was given!");
 end
+%license('inuse')
 end

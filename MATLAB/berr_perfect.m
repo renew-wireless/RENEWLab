@@ -1,7 +1,7 @@
 function berr_th = berr_perfect(snr, N_ANT,MOD_ORDER, awgn)
 % Theoretical BER with no chan. est error.
 
-N_DATA_SYMS = 1e4;
+N_DATA_SYMS = 1e5;
 tx_data = randi(MOD_ORDER, N_DATA_SYMS, 1) - 1;
 
 % Functions for data -> complex symbol mapping (like qammod, avoids comm toolbox requirement)
@@ -37,12 +37,11 @@ if awgn == 0
     h = sqrt( sum(abs(h).^2, 2) );
     h = smoothdata(h, 'movmean', 15);
 else
-    h = ones(N_DATA_SYMS,1)*sqrt(N_ANT);
+    h = ones(N_DATA_SYMS,1).*sqrt(N_ANT);
 end
 
 % Add noise
-%tx_var = mean( abs(tx_syms).^2 );
-nvar =  1 / 10^(0.1*snr);
+nvar =  1/ 10^(0.1*snr);
 w = sqrt(nvar/2).*(randn(N_DATA_SYMS,1) + 1i*randn(N_DATA_SYMS,1)); % CN(0,nvar);
 rx_syms = h.*tx_syms + w;
 
@@ -71,3 +70,5 @@ nbits = N_DATA_SYMS * log2(MOD_ORDER);
 bit_errs = length(find(dec2bin(bitxor(tx_data, rx_data),8) == '1'));
 
 berr_th = bit_errs/ nbits;
+%license('inuse')
+end

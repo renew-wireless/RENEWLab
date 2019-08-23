@@ -22,11 +22,11 @@ end
 % Params:
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
-SIM_MOD                 = 0;    
+SIM_MOD                 = 1;    
 
 
 if SIM_MOD
-    chan_type               = "rayleigh";
+    chan_type               = "awgn";
     nt                      = 100;
     sim_SNR_db              = 1:20;
     nsnr                    = length(sim_SNR_db);
