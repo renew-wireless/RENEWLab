@@ -40,6 +40,15 @@ elseif chan_type == "rayleigh"
     y = y.';
     
 elseif chan_type == "mpc"
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%---------------------------------------------------------------------
+% Based on a lab assignment from EL6023--Wireless Comm. class taught by
+% Prof. Sundeep Rangan in Fall 2015 at NYU Tandon Sccool of Engineering.
+% ---------------------------------------------------------------------
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 %Simplified MIMO MPC: SIMO only!
 
         nsub = 20;      % number of subpaths per cluster
