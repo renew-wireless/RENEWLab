@@ -15,7 +15,6 @@ if chan_type == "awgn"
     % output vector
     y = H_ul.*tx_data.' + W_ul;
     y = y.';
-
 elseif chan_type == "rayleigh"
     % Rayleigh fading (slower than iid!)
     tx_var = mean(mean(abs(tx_data).^2 )) * (64/48);
