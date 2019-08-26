@@ -12,7 +12,7 @@
 
 
 function [syms, data] = bits2syms(bitstream, MOD_ORDER)
-% Theoretical BER with no chan. est error.
+% Returns modulated complex symbols and symbols in form of integer numbers
 
 nbits = length(bitstream);
 sym_bits = log2(MOD_ORDER);

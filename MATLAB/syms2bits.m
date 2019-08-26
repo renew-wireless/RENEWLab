@@ -13,6 +13,9 @@
 
 function [syms_eq, rx_data, bits] = syms2bits(syms,snr, n_ant,MOD_ORDER, awgn)
 
+% Returns demodulated complex symbols, symbols in form of integer numbers
+% and bits.
+
 n_syms = length(syms);
 
 % Create channel

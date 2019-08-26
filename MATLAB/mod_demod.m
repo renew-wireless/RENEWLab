@@ -11,15 +11,17 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
+
 close all;
 clear;
 
-MOD_ORDER = 16; 
-N = 1000;
-nbits = N * log2(MOD_ORDER);
+
+MOD_ORDER = 16;                         % Modulation order 
+N = 1000;       
+nbits = N * log2(MOD_ORDER);            % number of bits
 snr = 15;
-n_ant =  1;
-awgn = 1;
+n_ant =  1;                             % number of antennas
+awgn = 1;                               % AWGN channel(1) or fading(0)
 
 % Do yourselves: Create a random column vector my_bits with ones and zeros;
 mybits = randi(2, nbits,1) - 1;
