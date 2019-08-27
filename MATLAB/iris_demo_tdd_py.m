@@ -10,7 +10,7 @@
 % RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
 % ---------------------------------------------------------------------
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-clear
+clear;
 close all;
 
 [version, executable, isloaded] = pyversion;
@@ -349,21 +349,21 @@ if SIM_MOD
     rx_H_est = rx_H_est_plot;
 end
 
-
 cf = 0;
-
+fst_clr = [0, 0.4470, 0.7410];
+sec_clr = [0.8500, 0.3250, 0.0980];
 % Tx signal
 cf = cf + 1;
 figure(cf); clf;
 
 subplot(2,1,1);
-plot(real(tx_vec_iris), 'b');
+plot(real(tx_vec_iris));
 axis([0 length(tx_vec_iris) -TX_SCALE TX_SCALE])
 grid on;
 title('Tx Waveform (I)');
 
 subplot(2,1,2);
-plot(imag(tx_vec_iris), 'r');
+plot(imag(tx_vec_iris), 'color' , sec_clr );
 axis([0 length(tx_vec_iris) -TX_SCALE TX_SCALE])
 grid on;
 title('Tx Waveform (Q)');
@@ -376,13 +376,13 @@ end
 cf = cf + 1;
 figure(cf); clf;
 subplot(2,1,1);
-plot(real(rx_vec_iris), 'b');
+plot(real(rx_vec_iris));
 axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
 grid on;
 title('Rx Waveform (I)');
 
 subplot(2,1,2);
-plot(imag(rx_vec_iris), 'r');
+plot(imag(rx_vec_iris), 'color', sec_clr);
 axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
 grid on;
 title('Rx Waveform (Q)');
@@ -398,8 +398,7 @@ lts_to_plot = lts_corr;
 plot(lts_to_plot, '.-b', 'LineWidth', 1);
 hold on;
 grid on;
-line([1 length(lts_to_plot)], LTS_CORR_THRESH*max(lts_to_plot)*[1 1], 'LineStyle', '--', 'Color', 'r', 'LineWidth', 2);
-title('LTS Correlation and Threshold')
+title('LTS Correlation')
 xlabel('Sample Index')
 myAxis = axis();
 axis([1, 1000, myAxis(3), myAxis(4)])
@@ -418,65 +417,30 @@ rx_H_est_plot(SC_IND_PILOTS) = rx_H_est(SC_IND_PILOTS);
 x = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1));
 
 figure(cf); clf;
-subplot(2,1,1);
-stairs(x - (20/(2*N_SC)), fftshift(real(rx_H_est_plot)), 'b', 'LineWidth', 2);
-hold on
-stairs(x - (20/(2*N_SC)), fftshift(imag(rx_H_est_plot)), 'r', 'LineWidth', 2);
-hold off
-axis([min(x) max(x) -1.1*max(abs(rx_H_est_plot)) 1.1*max(abs(rx_H_est_plot))])
-grid on;
-title('Channel Estimates (I and Q)')
-
-subplot(2,1,2);
-bh = bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
-shading flat
-set(bh,'FaceColor',[0 0 1])
+bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
 axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
 grid on;
 title('Channel Estimates (Magnitude)')
 xlabel('Baseband Frequency (MHz)')
 
-cf = cf + 1;
-figure(cf); clf;
-x = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1));
-stairs(x - (20/(2*N_SC)), fftshift(angle(rx_H_est_plot)), 'g', 'LineWidth', 2);
-hold off
-axis([min(x) max(x) -pi pi])
-grid on;
-title('Channel Estimates Phase')
-
 if(WRITE_PNG_FILES)
     print(gcf,sprintf('wl_ofdm_plots_%s_chanEst', example_mode_string), '-dpng', '-r96', '-painters')
-end
-
-%% Pilot phase error estimate
-cf = cf + 1;
-figure(cf); clf;
-plot(pilot_phase_err, 'b', 'LineWidth', 2);
-title('Phase Error Estimates')
-xlabel('OFDM Symbol Index')
-ylabel('Radians')
-axis([1 N_OFDM_SYM -3.2 3.2])
-grid on
-
-if(WRITE_PNG_FILES)
-    print(gcf,sprintf('wl_ofdm_plots_%s_phaseError', example_mode_string), '-dpng', '-r96', '-painters')
 end
 
 %% Symbol constellation
 cf = cf + 1;
 figure(cf); clf;
 
-plot(payload_syms_mat(:),'ro','MarkerSize',1);
+plot(payload_syms_mat(:),'o','MarkerSize',2, 'color', sec_clr);
 axis square; axis(1.5*[-1 1 -1 1]);
 xlabel('Inphase')
 ylabel('Quadrature')
 grid on;
 hold on;
 
-plot(tx_syms_mat(:),'bo');
+plot(tx_syms_mat(:),'*', 'MarkerSize',16, 'LineWidth',2, 'color', fst_clr);
 title('Tx and Rx Constellations')
-legend('Rx','Tx','Location','EastOutside');
+legend('Rx','Tx','Location','EastOutside', 'fontsize', 16);
 
 if(WRITE_PNG_FILES)
     print(gcf,sprintf('wl_ofdm_plots_%s_constellations', example_mode_string), '-dpng', '-r96', '-painters')
@@ -495,7 +459,7 @@ subplot(2,1,1)
 plot(100*evm_mat(:),'o','MarkerSize',1)
 axis tight
 hold on
-plot([1 length(evm_mat(:))], 100*[aevms, aevms],'r','LineWidth',4)
+plot([1 length(evm_mat(:))], 100*[aevms, aevms],'color', sec_clr,'LineWidth',4)
 myAxis = axis;
 h = text(round(.05*length(evm_mat(:))), 100*aevms+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', snr));
 set(h,'Color',[1 0 0])

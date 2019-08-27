@@ -25,7 +25,12 @@ WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_MOD                 = 1;
 DEBUG                   = 1;
-sim_SNR_db              = 10;    
+
+if SIM_MOD
+    chan_type               = "rayleigh";
+    sim_SNR_db              = 15;    
+end
+fprintf("Channel type: %s \n",chan_type);
 
 % Iris params:
 N_BS_NODE               = 8;
@@ -43,7 +48,8 @@ ue_ids                  = string.empty();
 ue_scheds               = string.empty();
 
 MIMO_ALG                = 'ZF';      % MIMO ALGORITHM: ZF or Conjugate 
-disp(MIMO_ALG)
+fprintf("MIMO algorithm: %s \n",MIMO_ALG);
+
 % Waveform params
 N_OFDM_SYM              = 46;         % Number of OFDM symbols for burst, it needs to be less than 47
 MOD_ORDER               = 16;          % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
@@ -153,7 +159,7 @@ tx_vecs_iris = TX_SCALE .* tx_vecs_iris ./ max(abs(tx_vecs_iris));
 %% SIMULATION:
 if (SIM_MOD) 
     
-    rx_vec_iris = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, "rayleigh", sim_SNR_db);
+    rx_vec_iris = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db);
     rx_vec_iris = rx_vec_iris.'; % just to agree with what the hardware spits out.
     
 %% Init Iris nodes
@@ -275,50 +281,6 @@ if DEBUG
 end
 
 
-%% old Correlator
-% lts_corr = double.empty();
-% for ibs=1:N_BS_NODE
-%     lts_corr(:,ibs) = abs(conv( conj(flipud(lts_t)), sign(rx_vec_iris(ibs,:))));
-% end
-% 
-% % Skip early and late samples - avoids occasional false positives from pre-AGC samples
-% lts_corr = lts_corr(32:end-32,:);
-% 
-% if DEBUG
-%     figure,
-%     for sp = 1:N_BS_NODE
-%         subplot(N_BS_NODE,1,sp);
-%         plot(lts_corr(sp,:)) 
-%         xlabel('Samples');
-%         y_label = sprintf('Anetnna %d',sp);
-%         ylabel(y_label);
-%     end
-%     sgtitle('LTS correlations accross antennas')
-% end
-% 
-% % Find all correlation peaks
-% rx_lts_mat = double.empty();
-% payload_ind = int32.empty();
-% payload_rx = double.empty();
-% for ibs=1:N_BS_NODE
-%     lts_peaks = find(lts_corr(1:cor_rng) > LTS_CORR_THRESH*max(lts_corr(:,ibs)));
-% 
-%     % Select best candidate correlation peak as LTS-payload boundary
-%     [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
-%     [lts_lst_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
-%     % Stop if no valid correlation peak was found
-%     if(isempty(lts_lst_peak_index))
-%         fprintf('No LTS Correlation Peaks Found!\n');
-%         return;
-%     end    
-%     % Set the sample indices of the payload symbols and preamble
-%     payload_ind(ibs) = lts_peaks(max(lts_lst_peak_index)) + (2*CP_LEN);
-%     %payload_ind(ibs) = 391;
-%     pream_ind_ibs = payload_ind(ibs)-length(preamble);
-%     % Put rx-ed ltss and payload in separate arrays 
-%     rx_lts_mat(ibs,:) = rx_vec_iris(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 );
-%     payload_rx(ibs,:) = rx_vec_iris(ibs, payload_ind(ibs) : payload_ind(ibs)+(N_OFDM_SYM)*(N_SC +CP_LEN)-1);
-% end
 
 %% Rx processing
 % Construct a matrix from the received pilots
@@ -427,19 +389,21 @@ end
 %% Plot results
 
 cf = 0;
+fst_clr = [0, 0.4470, 0.7410];
+sec_clr = [0.8500, 0.3250, 0.0980];
 
 % Tx signal
 cf = cf + 1;
 figure(cf); clf;
 for sp=1:N_UE
     subplot(N_UE,2,2*(sp -1) + 1);
-    plot(real(tx_vecs_iris(:,sp)), 'b');
+    plot(real(tx_vecs_iris(:,sp)));
     axis([0 length(tx_vecs_iris(:,sp)) -TX_SCALE TX_SCALE])
     grid on;
     title(sprintf('UE %d Tx Waveform (I)', sp));
 
     subplot(N_UE,2,2*sp);
-    plot(imag(tx_vecs_iris(:,sp)), 'r');
+    plot(imag(tx_vecs_iris(:,sp)), 'color' , sec_clr);
     axis([0 length(tx_vecs_iris(:,sp)) -TX_SCALE TX_SCALE])
     grid on;
     title(sprintf('UE %d Tx Waveform (Q)',sp));
@@ -449,13 +413,13 @@ cf = cf + 1;
 figure(cf); clf;
 for sp = 1:N_BS_NODE
     subplot(N_BS_NODE,2,2*(sp -1) + 1 );
-    plot(real(rx_vec_iris(sp,:)), 'b');
+    plot(real(rx_vec_iris(sp,:)));
     axis([0 length(rx_vec_iris(sp,:)) -TX_SCALE TX_SCALE])
     grid on;
     title(sprintf('BS antenna %d Rx Waveform (I)', sp));
 
     subplot(N_BS_NODE,2,2*sp);
-    plot(imag(rx_vec_iris(sp,:)), 'r');
+    plot(imag(rx_vec_iris(sp,:)), 'color' , sec_clr);
     axis([0 length(rx_vec_iris(sp,:)) -TX_SCALE TX_SCALE]);
     grid on;
     title(sprintf('BS antenna %d Rx Waveform (Q)', sp));
@@ -467,7 +431,6 @@ figure(cf); clf;
 for sp = 1:N_BS_NODE
     subplot(N_BS_NODE,1,sp);
     plot(lts_corr(sp,:)) 
-    line([1 length(lts_corr)], LTS_CORR_THRESH*max(lts_corr(sp,:))*[1 1], 'LineStyle', '--', 'Color', 'r', 'LineWidth', 0.5);
     grid on;
     xlabel('Samples');
     y_label = sprintf('Anetnna %d',sp);
@@ -476,7 +439,7 @@ for sp = 1:N_BS_NODE
     axis([1, 1000, myAxis(3), myAxis(4)])
 end
 tb = annotation('textbox', [0 0.87 1 0.1], ...
-    'String', 'LTS Correlation and Threshold', ...
+    'String', 'LTS Correlations', ...
     'EdgeColor', 'none', ...
     'HorizontalAlignment', 'center');
 tb.FontWeight = 'bold';
@@ -493,13 +456,13 @@ sp_cols = ceil(N_BS_NODE/(sp_rows -1));
 
 for sp=1:N_UE
     subplot(sp_rows,sp_cols, sp);
-    plot(syms_eq_pc(:,sp),'ro','MarkerSize',1);
+    plot(syms_eq_pc(:,sp),'o','MarkerSize',1, 'color', sec_clr);
     axis square; axis(1.5*[-1 1 -1 1]);
     grid on;
     hold on;
-    plot(tx_syms(:, sp),'bo');
+    plot(tx_syms(:, sp),'*', 'MarkerSize',10, 'LineWidth',2, 'color', fst_clr);
     title(sprintf('Equalized Uplink Tx and Rx symbols for stream %d', sp));
-    legend('Rx','Tx');
+    legend('Rx','Tx','Location','EastOutside', 'fontsize', 12);
 end
 
 for sp=1:N_BS_NODE
@@ -521,9 +484,7 @@ for ibs = 1:N_BS_NODE
     for iue = 1:N_UE
         sp = sp+1;
         subplot(N_BS_NODE,N_UE,sp); 
-        bh = bar(bw_span, fftshift(abs( squeeze(H_hat(ibs, iue, : ) ) ) ),1,'LineWidth', 1);
-        shading flat
-        set(bh,'FaceColor',[0 0 1])
+        bar(bw_span, fftshift(abs( squeeze(H_hat(ibs, iue, : ) ) ) ),1,'LineWidth', 1);
         axis([min(bw_span) max(bw_span) 0 1.1*max(abs( squeeze(H_hat(ibs, iue, :) ) ) )])
         grid on;
         title(sprintf('UE %d -> BS ant. %d Channel Estimates (Magnitude)', iue, ibs))
@@ -532,9 +493,7 @@ for ibs = 1:N_BS_NODE
 end
 
 subplot(N_BS_NODE+1,1,N_BS_NODE+1);
-bh = bar(bw_span, fftshift(channel_condition_db) ,1,'LineWidth', 1);
-shading flat
-set(bh,'FaceColor',[0 1 1])
+bar(bw_span, fftshift(channel_condition_db) ,1,'LineWidth', 1);
 axis([min(bw_span) max(bw_span) 0 max(channel_condition_db)+1])
 grid on;
 title('Channel Condition (dB)')
@@ -560,7 +519,7 @@ for sp = 1:N_UE
     plot(100*evm_mat(:,sp),'o','MarkerSize',1)
     axis tight
     hold on
-    plot([1 length(evm_mat(:,sp) )], 100*[aevms(sp), aevms(sp)],'r','LineWidth',4)
+    plot([1 length(evm_mat(:,sp) )], 100*[aevms(sp), aevms(sp)],'color', sec_clr,'LineWidth',4)
     hold off
     xlabel('Data Symbol Index')
     ylabel('EVM (%)');

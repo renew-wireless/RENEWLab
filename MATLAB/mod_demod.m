@@ -60,18 +60,19 @@ grid on;
 hold on;
 line([0 0], [-1.5, 1.5], 'LineStyle', '-', 'Color', ln_clr, 'LineWidth', 1);
 if MOD_ORDER ~= 2
-    plot(rx_syms(:),'o','MarkerSize',3,  'Color', rx_clr);
-    plot(syms(:),'*','MarkerSize',16, 'LineWidth',2, 'Color', tx_clr);
+    hleg1 = plot(rx_syms(:),'o','MarkerSize',3,  'Color', rx_clr);
+    hleg2 = plot(syms(:),'*','MarkerSize',16, 'LineWidth',2, 'Color', tx_clr);
     
 else
-    plot(rx_syms(:), 0,'o','MarkerSize',3, 'Color', rx_clr);
-    plot(syms(:), 0,'*','MarkerSize',16, 'LineWidth',2,  'Color', tx_clr);
+    hleg1 = plot(rx_syms(:), 0,'o','MarkerSize',3, 'Color', rx_clr);
+    hleg2 = plot(syms(:), 0,'*','MarkerSize',16, 'LineWidth',2,  'Color', tx_clr);
     
 end
+hlegs = [hleg1 hleg2];
 axis square; axis(1.5*[-1 1 -1 1]);
 xlabel('Inphase');
 ylabel('Quadrature');
-legend('Tx','Rx');
+legend(hlegs, 'Tx','Rx', 'Fontsize', 16);
 title('Constellation');
 hold off;
 

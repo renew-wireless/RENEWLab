@@ -45,14 +45,17 @@ nvar =  1/ 10^(0.1*snr);
 w = sqrt(nvar/2).*(randn(N_DATA_SYMS,1) + 1i*randn(N_DATA_SYMS,1)); % CN(0,nvar);
 rx_syms = h.*tx_syms + w;
 
-% Equalize with known channel:
+% Equalize with *known* channel:
 syms_eq = rx_syms ./ h;
 
 % Demodulate
 demod_fcn_bpsk = @(x) double(real(x)>0);
 demod_fcn_qpsk = @(x) double(2*(real(x)>0) + 1*(imag(x)>0));
 demod_fcn_16qam = @(x) (8*(real(x)>0)) + (4*(abs(real(x))<0.6325)) + (2*(imag(x)>0)) + (1*(abs(imag(x))<0.6325));
-demod_fcn_64qam = @(x) (32*(real(x)>0)) + (16*(abs(real(x))<0.6172)) + (8*((abs(real(x))<(0.9258))&&((abs(real(x))>(0.3086))))) + (4*(imag(x)>0)) + (2*(abs(imag(x))<0.6172)) + (1*((abs(imag(x))<(0.9258))&&((abs(imag(x))>(0.3086)))));
+demod_fcn_64qam = @(x) (32*(real(x)>0)) + (16*(abs(real(x))<0.6172)) + ... 
+    (8*((abs(real(x))<(0.9258))&&((abs(real(x))>(0.3086))))) + ...
+    (4*(imag(x)>0)) + (2*(abs(imag(x))<0.6172)) + ...
+    (1*((abs(imag(x))<(0.9258))&&((abs(imag(x))>(0.3086)))));
 
 switch(MOD_ORDER)
     case 2         % BPSK
@@ -70,5 +73,5 @@ nbits = N_DATA_SYMS * log2(MOD_ORDER);
 bit_errs = length(find(dec2bin(bitxor(tx_data, rx_data),8) == '1'));
 
 berr_th = bit_errs/ nbits;
-%license('inuse')
+
 end
