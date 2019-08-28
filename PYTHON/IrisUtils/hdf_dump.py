@@ -31,7 +31,7 @@ import time
 from optparse import OptionParser
 from channel_analysis import *
 
-no_corr = False
+do_corr = False
 
  # add frame_start for plot indexing!
 def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_ant=0, cp=16):
@@ -415,7 +415,7 @@ class hdfDump:
         Input:
             default_frame: Index of frame to be plotted. Default to frame #100
         """
-        global no_corr 
+        global do_corr 
         plt.close("all")
 
         data = self.data
@@ -454,7 +454,7 @@ class hdfDump:
         n_ue = num_cl
         frm_plt = min(default_frame, samples_P.shape[0] + self.n_frm_st)
         
-        if not no_corr:
+        if do_corr:
             csi_from_pilots_start = time.time()
             csi_mat, match_filt, sub_fr_strt, cmpx_pilots, k_lts, n_lts = csi_from_pilots(
                 samples_P, z_padding, frm_st_idx = self.n_frm_st, frame_to_plot = frm_plt, ref_ant =ant_i)
@@ -550,7 +550,7 @@ class hdfDump:
                 axes[5, idx].plot(corr_total[pilot_frames, u])
             axes[5, idx].set_xlabel('Frame')
         
-        if not no_corr:
+        if do_corr:
             return csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots, f_st
         else:
             plt.show()
@@ -558,18 +558,18 @@ class hdfDump:
         
     
 def main():
-    global no_corr
+    global do_corr
     # Tested with inputs: ./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5 300  (for two users)
     #                     ./data_in/Argos-2019-3-30-12-20-50_1x8x1.hdf5 300  (for one user) 
     parser = OptionParser()
-    parser.add_option("--no_corr", action="store_false", dest="no_corr", help="Run script without analysis", default=True)
+    parser.add_option("--do_corr", action="store_true", dest="do_corr", help="Run script without analysis", default= False)
     parser.add_option("--frame_to_plot", type="int", dest="frame_to_plot", help="Frame number to plot", default=0)
     parser.add_option("--ref_ant", type="int", dest="ref_ant", help="Reference antenna", default=0)
     parser.add_option("--n_frames_to_inspect", type="int", dest="n_frames_to_inspect", help="Number of frames to inspect", default=0)
     parser.add_option("--n_f_st", type="int", dest="n_f_st", help="Starting frame", default=0)
     (options, args) = parser.parse_args()
     
-    no_corr = options.no_corr 
+    do_corr = options.do_corr 
     n_frames_to_inspect = options.n_frames_to_inspect
     ref_ant = options.ref_ant
     frame_to_plot = options.frame_to_plot
@@ -642,7 +642,7 @@ def main():
     metadata = hdf5.metadata
     samples = hdf5.samples
         
-    if no_corr:
+    if not do_corr:
         x = hdf5.verify_hdf5(frame_to_plot, ref_ant)
         sys.exit(0)
     else:
