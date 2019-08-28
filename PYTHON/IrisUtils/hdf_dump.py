@@ -566,14 +566,14 @@ def main():
     parser.add_option("--frame_to_plot", type="int", dest="frame_to_plot", help="Frame number to plot", default=0)
     parser.add_option("--ref_ant", type="int", dest="ref_ant", help="Reference antenna", default=0)
     parser.add_option("--n_frames_to_inspect", type="int", dest="n_frames_to_inspect", help="Number of frames to inspect", default=0)
-    parser.add_option("--n_f_st", type="int", dest="n_f_st", help="Starting frame", default=0)
+    parser.add_option("--fr_strt", type="int", dest="fr_strt", help="Starting frame. Must have set n_frames_to_inspect first and make sure fr_strt is within boundaries ", default=0)
     (options, args) = parser.parse_args()
     
     do_corr = options.do_corr 
     n_frames_to_inspect = options.n_frames_to_inspect
     ref_ant = options.ref_ant
     frame_to_plot = options.frame_to_plot
-    n_f_st = options.n_f_st
+    fr_strt = options.fr_strt
     
     
     filename = sys.argv[1]
@@ -602,20 +602,20 @@ def main():
                 frame_to_plot, n_frames_to_inspect))
         print("Setting the frame to inspect to 0")
         frame_to_plot = 0
-    if n_f_st < 0:
-        n_f_st = 0
-        print("WARNING: Gave negative value for start_of_frames, set it to {}.".format(n_f_st))
+    if fr_strt < 0:
+        fr_strt = 0
+        print("WARNING: Gave negative value for start_of_frames, set it to {}.".format(fr_strt))
                                
-    if (frame_to_plot > n_f_st + n_frames_to_inspect) or (frame_to_plot < n_f_st) :
-        print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames +  or at an index smaller than the required start of the frames: frame_to_plot:{} > n_frames_to_inspect:{} or frame_to_plot:{} <  n_f_st:{}. ".format(
-                frame_to_plot, n_frames_to_inspect, frame_to_plot, n_f_st))
-        print("Setting the frame to inspect/plot to {}".format(n_f_st))
-        frame_to_plot = n_f_st
+    if (frame_to_plot > fr_strt + n_frames_to_inspect) or (frame_to_plot < fr_strt) :
+        print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames +  or at an index smaller than the required start of the frames: frame_to_plot:{} > n_frames_to_inspect:{} or frame_to_plot:{} <  fr_strt:{}. ".format(
+                frame_to_plot, n_frames_to_inspect, frame_to_plot, fr_strt))
+        print("Setting the frame to inspect/plot to {}".format(fr_strt))
+        frame_to_plot = fr_strt
             
-    print(">> frame to plot = {}, ref. ant = {}, no. of frames to inspect = {}, starting frame = {} <<".format(frame_to_plot,ref_ant,n_frames_to_inspect, n_f_st))
+    print(">> frame to plot = {}, ref. ant = {}, no. of frames to inspect = {}, starting frame = {} <<".format(frame_to_plot,ref_ant,n_frames_to_inspect, fr_strt))
         
     # Instantiate
-    hdf5 = hdfDump(filename, n_frames_to_inspect, n_f_st)
+    hdf5 = hdfDump(filename, n_frames_to_inspect, fr_strt)
     hdf5.get_hdf5()
     hdf5.parse_hdf5()
 
