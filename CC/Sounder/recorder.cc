@@ -14,7 +14,7 @@ Recorder::Recorder(Config *cfg)
 {
     this->cfg = cfg;
     size_t buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas();
-    printf("buffer_chunk_size %d\n", buffer_chunk_size);
+    std::cout << "buffer_chunk_size " << buffer_chunk_size << std::endl;
     task_queue_ = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
     message_queue_ = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
     rx_thread_num = cfg->rx_thread_num;
@@ -64,15 +64,14 @@ herr_t Recorder::initHDF5(std::string hdf5)
     dims_pilot[2] = cfg->pilotSymsPerFrame; //cfg->nClSdrs;
     dims_pilot[3] = cfg->getNumAntennas();
     dims_pilot[4] = 2 * cfg->sampsPerSymbol; // IQ
-    hsize_t cdims[5] = {1, 1, 1, 1, 2 * cfg->sampsPerSymbol}; // pilot chunk size, TODO: optimize size
-    hsize_t max_dims_pilot[5] = {H5S_UNLIMITED, cfg->nCells, cfg->pilotSymsPerFrame, cfg->getNumAntennas(), 2 * cfg->sampsPerSymbol};
+    hsize_t cdims[5] = {1, 1, 1, 1, 2 * (hsize_t)cfg->sampsPerSymbol}; // pilot chunk size, TODO: optimize size
+    hsize_t max_dims_pilot[5] = {H5S_UNLIMITED, cfg->nCells, (hsize_t)cfg->pilotSymsPerFrame, cfg->getNumAntennas(), 2 * (hsize_t)cfg->sampsPerSymbol};
 
     dims_data[0] = MAX_FRAME_INC; //cfg->maxFrame; 
     dims_data[1] = cfg->nCells; 
     dims_data[2] = cfg->ulSymsPerFrame;
     dims_data[3] = cfg->getNumAntennas();
     dims_data[4] = 2 * cfg->sampsPerSymbol; // IQ
-    hsize_t cdims_data[5] = {1, 1, 1, 1, 2 * (hsize_t)cfg->sampsPerSymbol}; // data chunk size, TODO: optimize size
     hsize_t max_dims_data[5] = {H5S_UNLIMITED, (hsize_t)cfg->nCells, (hsize_t)cfg->ulSymsPerFrame, cfg->getNumAntennas(), 2 * (hsize_t)cfg->sampsPerSymbol};
 
     // Used to create variable strings
@@ -486,12 +485,12 @@ void Recorder::openHDF5()
 
     // Get information to obtain memory dataspace.
     ndims = pilot_filespace->getSimpleExtentNdims();
-    herr_t status_n = pilot_filespace->getSimpleExtentDims(dims_pilot);
+    // herr_t status_n = pilot_filespace->getSimpleExtentDims(dims_pilot);
 
+#if DEBUG_PRINT
     int cndims_pilot = 0;
     if (H5D_CHUNKED == pilot_prop.getLayout())
         cndims_pilot = pilot_prop.getChunk(ndims, cdims_pilot);
-#if DEBUG_PRINT
     cout << "dim pilot chunk = " << cndims_pilot << endl;
     cout << "New Pilot Dataset Dimension " << ndims << "," << dims_pilot[0] << "," << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << "," << dims_pilot[4] << endl;
 #endif
@@ -504,12 +503,13 @@ void Recorder::openHDF5()
         data_filespace = new DataSpace(data_dataset->getSpace());
         data_prop = data_dataset->getCreatePlist();
         ndims = data_filespace->getSimpleExtentNdims();
-        status_n = data_filespace->getSimpleExtentDims(dims_data);
+        // status_n = data_filespace->getSimpleExtentDims(dims_data);
 
+#if DEBUG_PRINT
         int cndims_data = 0;
+	hsize_t cdims_data[5] = {1, 1, 1, 1, 2 * (hsize_t)cfg->sampsPerSymbol}; // data chunk size, TODO: optimize size
         if (H5D_CHUNKED == data_prop.getLayout())
             cndims_data = data_prop.getChunk(ndims, cdims_data);
-#if DEBUG_PRINT
         cout << "dim data chunk = " << cndims_data << endl;;
         cout << "New Data Dataset Dimension " << ndims << "," << dims_data[0] << "," << dims_data[1] << "," << dims_data[2] << ","<< dims_data[3] << "," << dims_data[4] << endl;
 #endif
@@ -577,7 +577,7 @@ void Recorder::start()
         openHDF5();
 
         // creare socket buffer and socket threads
-        void* rx_buffer_ptrs[rx_thread_num];
+        char* rx_buffer_ptrs[rx_thread_num];
         int* rx_buffer_status_ptrs[rx_thread_num];
         for(int i = 0; i < rx_thread_num; i++)
         {
@@ -655,7 +655,7 @@ void* Recorder::taskThread(void* context)
 }
 
 // do Crop
-herr_t Recorder::record(int tid, int offset)
+herr_t Recorder::record(int, int offset)
 {
     int buffer_frame_num = cfg->symbolsPerFrame * SAMPLE_BUFFER_FRAME_NUM * cfg->getNumAntennas();
     int buffer_id = offset / buffer_frame_num;
@@ -668,7 +668,7 @@ herr_t Recorder::record(int tid, int offset)
     ant_id = *((int *)cur_ptr_buffer + 3);
 #if DEBUG_PRINT
     int cell_id = *((int *)cur_ptr_buffer + 2);
-    printf("record thread %d process frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n", tid, frame_id, symbol_id, cell_id, ant_id);
+    printf("record process frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n", frame_id, symbol_id, cell_id, ant_id);
             printf("record samples: %d %d %d %d %d %d %d %d ....\n",*((short *)cur_ptr_buffer+9), 
 							   *((short *)cur_ptr_buffer+10),
                                                            *((short *)cur_ptr_buffer+11),

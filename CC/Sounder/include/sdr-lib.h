@@ -22,10 +22,10 @@ public:
     void radioStart();
     void radioStop();
     void readSensors();
-    void radioTx(void ** buffs);
-    void radioRx(void ** buffs);
-    int radioTx(int, void ** buffs, int flags, long long & frameTime);
-    int radioRx(int, void ** buffs, long long & frameTime);
+    void radioTx(const void *const *buffs);
+    void radioRx(void *const *buffs);
+    int radioTx(int, const void *const *buffs, int flags, long long & frameTime);
+    int radioRx(int, void *const *buffs, long long & frameTime);
     void collectCSI(bool&);
     static void drain_buffers(SoapySDR::Device * ibsSdrs, SoapySDR::Stream * istream, std::vector<void *> buffs, int symSamp);
     void sync_delays(int cellIdx);

@@ -42,11 +42,11 @@ std::vector<pthread_t> Receiver::startClientThreads()
         unsigned frameTimeDelta = (unsigned)(std::ceil(TIME_DELTA/frameTime)); 
         std::cout << "Frame time delta " << frameTimeDelta << std::endl;
 
-        for(int i = 0; i < config_->nClSdrs; i++)
+        for (unsigned int i = 0; i < config_->nClSdrs; i++)
         {
             pthread_t cl_thread_;
             // record the thread id 
-            dev_profile *profile = (dev_profile *)malloc(sizeof(dev_profile));
+            dev_profile *profile = new dev_profile;
             profile->tid = i;
             profile->rate = config_->rate;
             profile->nsamps = config_->sampsPerSymbol;
@@ -72,7 +72,7 @@ std::vector<pthread_t> Receiver::startClientThreads()
     return client_threads;
 }
 
-std::vector<pthread_t> Receiver::startRecvThreads(void** in_buffer, int** in_buffer_status, int in_buffer_frame_num, int in_buffer_length, int in_core_id)
+std::vector<pthread_t> Receiver::startRecvThreads(char** in_buffer, int** in_buffer_status, int in_buffer_frame_num, int in_buffer_length, int in_core_id)
 {
     buffer_frame_num_ = in_buffer_frame_num;
     assert(in_buffer_length == config_->getPackageLength() * buffer_frame_num_);
@@ -141,12 +141,12 @@ void* Receiver::loopRecv(void *in_context)
     // use token to speed up
     moodycamel::ProducerToken local_ptok(*message_queue_);
 
-    void* buffer = obj_ptr->buffer_[tid];
+    char* buffer = obj_ptr->buffer_[tid];
     int* buffer_status = obj_ptr->buffer_status_[tid];
     int buffer_length = obj_ptr->buffer_length_;
     int buffer_frame_num = obj_ptr->buffer_frame_num_;
 
-    void* cur_ptr_buffer = buffer;
+    char* cur_ptr_buffer = buffer;
     int* cur_ptr_buffer_status = buffer_status;
 
     int nradio_per_thread = cfg->nBsSdrs[0]/obj_ptr->thread_num_;
@@ -158,21 +158,22 @@ void* Receiver::loopRecv(void *in_context)
 
     // to handle second channel at each radio
     // this is assuming buffer_frame_num is at least 2 
-    void* cur_ptr_buffer2;
+    char* cur_ptr_buffer2;
     int* cur_ptr_buffer_status2;
-    void* buffer2 = obj_ptr->buffer_[tid] + cfg->getPackageLength(); 
+    char* buffer2 = obj_ptr->buffer_[tid] + cfg->getPackageLength(); 
     int* buffer_status2 = obj_ptr->buffer_status_[tid] + 1;
     if (cfg->bsSdrCh == 2)
     {
         cur_ptr_buffer2 = buffer2;
         cur_ptr_buffer_status2 = buffer_status2;
     }
-    else
-        cur_ptr_buffer2 = malloc(cfg->getPackageLength()); 
+    else {
+        cur_ptr_buffer2 = new char[cfg->getPackageLength()]; 
+	cur_ptr_buffer_status2 = NULL;
+    }
 
     int offset = 0;
     long long frameTime;
-    int ret = 0;
     while(cfg->running)
     {
         // if buffer is full, exit
@@ -181,7 +182,7 @@ void* Receiver::loopRecv(void *in_context)
             printf("thread %d buffer full\n", tid);
             exit(0);
         }
-        int ant_id, frame_id, symbol_id, cell_id;
+        int ant_id, frame_id, symbol_id; // cell_id;
         // receive data
         for (int it = 0 ; it < nradio_cur_thread; it++) 
         {
@@ -267,7 +268,6 @@ void* Receiver::clientTxRx(void * context)
     int txSyms = profile->txSyms; 
     int rxSyms = profile->rxSyms; 
     int txStartSym = profile->txStartSym;
-    double rate = profile->rate;
     unsigned txFrameDelta = profile->txFrameDelta; 
     int NUM_SAMPS = profile->nsamps;
     Receiver* obj_ptr = profile->ptr;
@@ -285,7 +285,7 @@ void* Receiver::clientTxRx(void * context)
 
     //while(!d_mutex.try_lock()){}
     //thread_count++;
-    //std::cout << "Thread " << tid << ", txSyms " << txSyms << ", rxSyms " << rxSyms << ", txStartSym " << txStartSym << ", rate " << rate << ", txFrameDelta " << txFrameDelta << ", nsamps " << NUM_SAMPS << std::endl;
+    //std::cout << "Thread " << tid << ", txSyms " << txSyms << ", rxSyms " << rxSyms << ", txStartSym " << txStartSym << ", rate " << profile->rate << ", txFrameDelta " << txFrameDelta << ", nsamps " << NUM_SAMPS << std::endl;
     //d_mutex.unlock();
  
     std::vector<std::complex<float>> buffs(NUM_SAMPS, 0);
@@ -302,7 +302,6 @@ void* Receiver::clientTxRx(void * context)
     }
 
     int all_trigs = 0;
-    int new_trigs = 0;
     struct timespec tv, tv2;
     clock_gettime(CLOCK_MONOTONIC, &tv);
 
@@ -346,7 +345,6 @@ void* Receiver::clientTxRx(void * context)
         txTime += ((long long)txStartSym << 16);
         //printf("rxTime %llx, txTime %llx \n", firstRxTime, txTime);
         if (!cfg->running) flags |= SOAPY_SDR_END_BURST; //end burst on last iter
-        bool transmitErrors = false;
         for (int i = 0; i < txSyms; i++)
         {
             //if (i == txSyms - 1)  
@@ -359,7 +357,6 @@ void* Receiver::clientTxRx(void * context)
             else
             {
                 std::cerr << "unexpected writeStream error " << SoapySDR::errToStr(r) << std::endl;
-                transmitErrors = true;
                 //goto cleanup;
             }
         }

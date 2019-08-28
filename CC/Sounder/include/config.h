@@ -65,7 +65,6 @@ public:
     std::vector<size_t> nBsAntennas;
     size_t bsSdrCh;
     std::string bsChannel;
-    int framePeriod;
     std::vector<std::string> frames;
     std::string frame_mode;
     int max_frame;
@@ -82,7 +81,7 @@ public:
     std::string trace_file;
 
     // Clients features
-    int nClSdrs;
+    unsigned int nClSdrs;
     std::vector<std::string> cl_sdr_ids;
     int clSdrCh;
     std::string clChannel;
@@ -126,8 +125,8 @@ public:
 
     std::atomic<bool> running;
     bool core_alloc;
-    int rx_thread_num;
-    int task_thread_num;
+    unsigned int rx_thread_num;
+    unsigned int task_thread_num;
 
     Config(std::string);
     ~Config();

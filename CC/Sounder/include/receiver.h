@@ -82,7 +82,7 @@ public:
     Receiver(int n_rx_threads, Config *cfg, moodycamel::ConcurrentQueue<Event_data> * in_queue);
     ~Receiver();
     
-    std::vector<pthread_t> startRecvThreads(void** in_buffer, int** in_buffer_status, int in_buffer_frame_num, int in_buffer_length, int in_core_id=0);
+    std::vector<pthread_t> startRecvThreads(char** in_buffer, int** in_buffer_status, int in_buffer_frame_num, int in_buffer_length, int in_core_id=0);
     std::vector<pthread_t> startClientThreads();
     void go();
     static void* loopRecv(void *context);
@@ -97,7 +97,7 @@ private:
     pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;                                                                              
     pthread_cond_t cond = PTHREAD_COND_INITIALIZER;  
 
-    void** buffer_;
+    char** buffer_;
     int** buffer_status_;
     int buffer_length_;
     int buffer_frame_num_;

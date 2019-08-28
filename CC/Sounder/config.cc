@@ -52,14 +52,13 @@ Config::Config(std::string jsonfile)
         hub_file = tddConf.value("hub_id", "hub_serials.txt");
         json sdr_id_files = tddConf.value("sdr_id", json::array());
         nCells = sdr_id_files.size();
-        for (size_t i = 0; i < nCells; i++) bs_sdr_file.push_back(sdr_id_files.at(i).get<std::string>());
+	bs_sdr_file.assign(sdr_id_files.begin(), sdr_id_files.end());
         bsChannel = tddConf.value("channel", "A");
 	if (bsChannel != "A" && bsChannel != "B" && bsChannel != "AB")
 	    throw std::invalid_argument( "error channel config: not any of A/B/AB!\n");
         bsSdrCh = (bsChannel == "AB") ? 2 : 1;
         auto jBsFrames = tddConf.value("frame_schedule", json::array());
-        framePeriod = jBsFrames.size();
-        for(size_t f = 0; f < framePeriod; f++) frames.push_back(jBsFrames.at(f).get<std::string>());
+	frames.assign(jBsFrames.begin(), jBsFrames.end());
         txgainA = tddConf.value("txgainA", 20);
         rxgainA = tddConf.value("rxgainA", 20);
         txgainB = tddConf.value("txgainB", 20);
@@ -87,35 +86,28 @@ Config::Config(std::string jsonfile)
         //std::vector<std::vector<size_t>> ULSymbols = Utils::loadSymbols(frames, 'T');
         //std::vector<std::vector<size_t>> DLSymbols = Utils::loadSymbols(frames, 'R');
 
-        pilotSymbols.resize(framePeriod);
-        for(int f = 0; f < framePeriod; f++)
+        pilotSymbols.resize(frames.size());
+        ULSymbols.resize(frames.size());
+        DLSymbols.resize(frames.size());
+        for (auto fr = frames.begin(); fr != frames.end(); ++fr)
         {
-            std::string fr = frames[f]; 
+	    size_t f = fr - frames.begin();
             for (int g = 0; g < symbolsPerFrame; g++)
             {
-                if (fr[g] == 'P')
+	      switch ((*fr)[g]) {
+	      case 'P':
                     pilotSymbols[f].push_back(g);
-            }
-        }
-        ULSymbols.resize(framePeriod);
-        for(int f = 0; f < framePeriod; f++)
-        {
-            std::string fr = frames[f]; 
-            for (int g = 0; g < symbolsPerFrame; g++)
-            {
-                if (fr[g] == 'U')
+		    break;
+	      case 'U':
                     ULSymbols[f].push_back(g);
-            }
-        }
-        DLSymbols.resize(framePeriod);
-        for(int f = 0; f < framePeriod; f++)
-        {
-            std::string fr = frames[f]; 
-            for (int g = 0; g < symbolsPerFrame; g++)
-            {
-                if (fr[g] == 'D')
+		    break;
+              case 'D':
                     DLSymbols[f].push_back(g);
-            }
+		    break;
+	      default:
+		    break;
+	      }
+	    }
         }
         pilotSymsPerFrame = pilotSymbols[0].size();
         ulSymsPerFrame = ULSymbols[0].size();
@@ -134,7 +126,7 @@ Config::Config(std::string jsonfile)
     {
         auto jClSdrs = tddConfCl.value("sdr_id", json::array());
         nClSdrs = jClSdrs.size();
-        for (int i = 0; i < nClSdrs; i++) cl_sdr_ids.push_back(jClSdrs.at(i).get<std::string>());
+	cl_sdr_ids.assign(jClSdrs.begin(), jClSdrs.end());
         clChannel = tddConfCl.value("channel", "A");
 	if (clChannel != "A" && clChannel != "B" && clChannel != "AB")
 	    throw std::invalid_argument( "error channel config: not any of A/B/AB!\n");
@@ -144,19 +136,17 @@ Config::Config(std::string jsonfile)
         frame_mode = tddConfCl.value("frame_mode", "continuous_resync");
 
 	auto jClTxgainA_vec = tddConfCl.value("txgainA", json::array());
+	clTxgainA_vec.assign(jClTxgainA_vec.begin(), jClTxgainA_vec.end()); 
 	auto jClRxgainA_vec = tddConfCl.value("rxgainA", json::array());
+	clRxgainA_vec.assign(jClRxgainA_vec.begin(), jClRxgainA_vec.end()); 
 	auto jClTxgainB_vec = tddConfCl.value("txgainB", json::array());
+	clTxgainB_vec.assign(jClTxgainB_vec.begin(), jClTxgainB_vec.end()); 
 	auto jClRxgainB_vec = tddConfCl.value("rxgainB", json::array());
-        for(int f = 0; f < nClSdrs; f++) {
-	    clTxgainA_vec.push_back(jClTxgainA_vec.at(f).get<double>());
-	    clRxgainA_vec.push_back(jClRxgainA_vec.at(f).get<double>());
-	    clTxgainB_vec.push_back(jClTxgainB_vec.at(f).get<double>());
-	    clRxgainB_vec.push_back(jClRxgainB_vec.at(f).get<double>());
-	}
+	clRxgainB_vec.assign(jClRxgainB_vec.begin(), jClRxgainB_vec.end()); 
 
         auto jClFrames = tddConfCl.value("frame_schedule", json::array());
-        assert((size_t)nClSdrs == jClFrames.size());
-        for(int f = 0; f < nClSdrs; f++) clFrames.push_back(jClFrames.at(f).get<std::string>());
+        assert(jClSdrs.size() == jClFrames.size());
+	clFrames.assign(jClFrames.begin(), jClFrames.end());
         clPilotSymbols = Utils::loadSymbols(clFrames, 'P');
         clULSymbols = Utils::loadSymbols(clFrames, 'U');
         clDLSymbols = Utils::loadSymbols(clFrames, 'D');
@@ -259,7 +249,7 @@ Config::Config(std::string jsonfile)
             int syms = nSamps / ofdmSize;
             std::vector<std::complex<float>> pre1(prefix, 0);
             std::vector<std::complex<float>> post1(nSamps % ofdmSize + postfix, 0);
-            for (int i = 0; i < nClSdrs; i++)
+            for (unsigned int i = 0; i < nClSdrs; i++)
             {
                 std::vector<std::complex<float>> data_cf;
 		std::vector<std::complex<float>> data_freq_dom;
@@ -292,7 +282,8 @@ Config::Config(std::string jsonfile)
                     std::cout << "Pilot symbol: " << ofdmSym[pilot_sc[0][0]] << " " << ofdmSym[pilot_sc[0][1]] << std::endl;
 #endif
                     std::vector<std::complex<float>> txSym = CommsLib::IFFT(ofdmSym, fftSize);
-                    for (int p = 0; p < txSym.size(); p++) txSym[p] *= tx_scale;
+		    for (auto p = txSym.begin(); p != txSym.end(); ++p)
+		      *p *= tx_scale;
                     txSym.insert(txSym.begin(), txSym.end()-cpSize, txSym.end()); // add CP
 #if DEBUG_PRINT
                     std::cout << "IFFT output: " << txSym[0] << " " << txSym[64] << std::endl;
@@ -378,7 +369,7 @@ Config::~Config(){}
 int Config::getClientId(int frame_id, int symbol_id)
 {
     std::vector<size_t>::iterator it;
-    int fid = frame_id % framePeriod;
+    int fid = frame_id % frames.size();
     it = find(pilotSymbols[fid].begin(), pilotSymbols[fid].end(), symbol_id);
     if (it != pilotSymbols[fid].end()) 
     {
@@ -393,7 +384,7 @@ int Config::getClientId(int frame_id, int symbol_id)
 int Config::getUlSFIndex(int frame_id, int symbol_id)
 {
     std::vector<size_t>::iterator it;
-    int fid = frame_id % framePeriod;
+    int fid = frame_id % frames.size();
     it = find(ULSymbols[fid].begin(), ULSymbols[fid].end(), symbol_id);
     if (it != ULSymbols[fid].end()) 
     {
@@ -408,7 +399,7 @@ int Config::getUlSFIndex(int frame_id, int symbol_id)
 int Config::getDlSFIndex(int frame_id, int symbol_id)
 {
     std::vector<size_t>::iterator it;
-    int fid = frame_id % framePeriod;
+    int fid = frame_id % frames.size();
     it = find(DLSymbols[fid].begin(), DLSymbols[fid].end(), symbol_id);
     if (it != DLSymbols[fid].end()) 
         return it-DLSymbols[fid].begin();
@@ -418,22 +409,22 @@ int Config::getDlSFIndex(int frame_id, int symbol_id)
 
 bool Config::isPilot(int frame_id, int symbol_id) 
 {
-    int fid = frame_id % framePeriod;
-    if (symbol_id >= frames[fid].size()) return false;
-#if DEBUG_PRINT
-    printf("isPilot(%d, %d) = %c\n",frame_id, symbol_id, frames[fid].at(symbol_id));
-#endif
-    return frames[fid].at(symbol_id) == 'P' ? true : false;
+  try {
+    return frames[frame_id % frames.size()].at(symbol_id) == 'P';
+  }
+  catch (const std::out_of_range &) {
+    return false;
+  }
 } 
 
 bool Config::isData(int frame_id, int symbol_id) 
 {
-    int fid = frame_id % framePeriod;
-    if (symbol_id >= frames[fid].size()) return false;
-#if DEBUG_PRINT
-    printf("isData(%d, %d) = %c\n",frame_id, symbol_id, frames[fid].at(symbol_id));
-#endif
-    return frames[fid].at(symbol_id) == 'U' ? true : false;
+  try {
+    return frames[frame_id % frames.size()].at(symbol_id) == 'U';
+  }
+  catch (const std::out_of_range &) {
+    return false;
+  }
 } 
 
 unsigned Config::getCoreCount()

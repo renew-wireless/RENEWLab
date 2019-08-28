@@ -31,7 +31,7 @@ RadioConfig::RadioConfig(Config *cfg):
         bsTxStreams.resize(_cfg->nCells);
         bsRxStreams.resize(_cfg->nCells);
 
-        for (int c = 0; c < _cfg->nCells; c++)
+        for (unsigned int c = 0; c < _cfg->nCells; c++)
         {
             //load channels
             std::vector<size_t> channels;
@@ -150,10 +150,12 @@ RadioConfig::RadioConfig(Config *cfg):
                 {
                     device->setGain(SOAPY_SDR_TX, ch, "ATTN", -6);           //{-18,-12,-6,0}
                     if (info["frontend"].find("CBRSc") != std::string::npos) // on revC front-end, it is safe to turn on PA2
+		    {
                         if ( cfg->freq < 3e9 && cfg->freq > 2e9) 
                             device->setGain(SOAPY_SDR_TX, ch, "PA2", 0);     //CBRS LO, [0|17]
                         else if (cfg->freq >= 3e9) 
                             device->setGain(SOAPY_SDR_TX, ch, "PA2", 0);     //CBRS HI, [0|14]
+		    }
                     else
                         device->setGain(SOAPY_SDR_TX, ch, "PA2", 0);         //[0|17]
                 }
@@ -292,7 +294,7 @@ void *RadioConfig::initBSRadio(void *in_context)
     rc->bsRxStreams[c][i] = rc->bsSdrs[c][i]->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CS16, channels, sargs);
     rc->bsTxStreams[c][i] = rc->bsSdrs[c][i]->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CS16, channels, sargs);
     rc->remainingJobs--;
-
+    return (NULL);
 }
 
 void RadioConfig::radioConfigure()
@@ -319,8 +321,8 @@ void RadioConfig::radioConfigure()
         }
 
         std::vector<std::string> _tddSched;
-        _tddSched.resize(_cfg->framePeriod);
-        for (int f = 0; f < _cfg->framePeriod; f++)
+        _tddSched.resize(_cfg->frames.size());
+        for (unsigned int f = 0; f < _cfg->frames.size(); f++)
         {
             _tddSched[f] = _cfg->frames[f];
             for (size_t s =0; s < _cfg->frames[f].size(); s++)
@@ -350,8 +352,8 @@ void RadioConfig::radioConfigure()
         std::string confString = "{\"tdd_enabled\":true,\"frame_mode\":\"free_running\",";
         confString +="\"symbol_size\":"+std::to_string(_cfg->sampsPerSymbol);
         confString +=",\"frames\":[";
-        for (int f = 0; f < _cfg->framePeriod; f++)
-            confString += (f == _cfg->framePeriod - 1) ? "\""+_tddSched[f]+"\"" : "\""+_tddSched[f]+"\",";
+        for (int f = 0; f < _cfg->frames.size(); f++)
+            confString += (f == _cfg->frames.size() - 1) ? "\""+_tddSched[f]+"\"" : "\""+_tddSched[f]+"\",";
         confString +="]}";
         std::cout << confString << std::endl;
 #endif
@@ -367,7 +369,7 @@ void RadioConfig::radioConfigure()
                     if (i*_cfg->bsSdrCh == _cfg->beacon_ant && _cfg->bsChannel == "A")
                         bsSdrs[0][i]->writeRegisters("TX_RAM_A", 0, _cfg->beacon);
                     else if ((i*_cfg->bsSdrCh == _cfg->beacon_ant && _cfg->bsChannel == "B")
-                              || (_cfg->bsSdrCh == 2 and i*2+1 == _cfg->beacon_ant))
+                              || (_cfg->bsSdrCh == 2 and i*2u+1 == _cfg->beacon_ant))
                         bsSdrs[0][i]->writeRegisters("TX_RAM_B", 0, _cfg->beacon);
                     else 
                     {
@@ -386,7 +388,7 @@ void RadioConfig::radioConfigure()
                         bsSdrs[0][i]->writeRegisters("TX_RAM_A", 0, _cfg->beacon);
                     if (_cfg->bsChannel != "A")
                         bsSdrs[0][i]->writeRegisters("TX_RAM_B", 0, _cfg->beacon);
-                    int residue = int(pow(2,ceil(log2(nBsAntennas[0]))))-nBsAntennas[0];
+                    //int residue = int(pow(2,ceil(log2(nBsAntennas[0]))))-nBsAntennas[0];
                     for (int j = 0; j < nBsAntennas[0]; j++) beacon_weights[j] = (unsigned)hadamard_weights[i*_cfg->bsSdrCh][j];
                     if (_cfg->bsChannel != "B")
                         bsSdrs[0][i]->writeRegisters("TX_RAM_WGT_A", 0, beacon_weights);
@@ -532,9 +534,9 @@ void RadioConfig::radioStop()
         for (int i = 0; i < nBsSdrs[0]; i++)
         {
             // write schedule
-            for (int j = 0; j < _cfg->frames.size(); j++) 
+            for (unsigned int j = 0; j < _cfg->frames.size(); j++) 
             {
-                for(int k = 0; k < _cfg->symbolsPerFrame; k++) // symnum <= 256
+                for (int k = 0; k < _cfg->symbolsPerFrame; k++) // symnum <= 256
                 {
             	    bsSdrs[0][i]->writeRegister("RFCORE", SCH_ADDR_REG, j*256+k);
             	    bsSdrs[0][i]->writeRegister("RFCORE", SCH_MODE_REG, 0);
@@ -567,7 +569,7 @@ void RadioConfig::radioStop()
     }
 }
 
-void RadioConfig::radioTx(void ** buffs)
+void RadioConfig::radioTx(const void *const *buffs)
 {
     int flags = 0;
     long long frameTime(0);
@@ -577,7 +579,7 @@ void RadioConfig::radioTx(void ** buffs)
     }
 }
 
-int RadioConfig::radioTx(int r /*radio id*/, void ** buffs, int flags, long long & frameTime)
+int RadioConfig::radioTx(int r /*radio id*/, const void *const *buffs, int flags, long long & frameTime)
 {
     if (flags == 1) flags = SOAPY_SDR_HAS_TIME;
     else if (flags == 2) flags = SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST;
@@ -592,18 +594,18 @@ int RadioConfig::radioTx(int r /*radio id*/, void ** buffs, int flags, long long
     return w;
 }
 
-void RadioConfig::radioRx(void ** buffs)
+void RadioConfig::radioRx(void *const *buffs)
 {
     int flags = 0;
     long long frameTime(0);
     for (int i = 0; i < nBsSdrs[0]; i++)
     {
-        void **buff = buffs + (i * 2);
+        void *const *buff = buffs + (i * 2);
         bsSdrs[0][i]->readStream(this->bsRxStreams[0][i], buff, _cfg->sampsPerSymbol, flags, frameTime, 1000000);
     }
 }
 
-int RadioConfig::radioRx(int r /*radio id*/, void ** buffs, long long & frameTime)
+int RadioConfig::radioRx(int r /*radio id*/, void *const *buffs, long long & frameTime)
 {
     int flags = 0;
     if (r < nBsSdrs[0])
@@ -846,7 +848,7 @@ RadioConfig::~RadioConfig()
     {
         if (_cfg->hub_ids.size() > 0)
         {
-            for (int i = 0; i < hubs.size(); i++)
+            for (unsigned int i = 0; i < hubs.size(); i++)
                 SoapySDR::Device::unmake(hubs[i]);
         }
         for (int i = 0; i < nBsSdrs[0]; i++)
