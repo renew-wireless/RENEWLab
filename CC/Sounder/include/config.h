@@ -11,25 +11,23 @@
 #ifndef CONFIG_HEADER
 #define CONFIG_HEADER
 
-#include <algorithm>
-#include <stdexcept>
-#include <vector>
-#include <iostream>
-#include <complex.h>
-#include <fstream>      // std::ifstream
-#include <stdio.h>  /* for fprintf */
-#include <unistd.h>
 #include "macros.h"
 #include "utils.h"
+#include <algorithm>
+#include <complex.h>
+#include <fstream> // std::ifstream
+#include <iostream>
+#include <stdexcept>
+#include <stdio.h> /* for fprintf */
+#include <unistd.h>
+#include <vector>
 #ifdef JSON
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 #endif
 
-class Config
-{
+class Config {
 public:
-
     std::string conf;
     bool bsPresent;
     bool clPresent;
@@ -51,7 +49,7 @@ public:
     double tx_scale;
     std::string pilot_seq;
     std::string beacon_seq;
-    
+
     // BS features
     size_t nCells;
     std::vector<std::string> bs_sdr_file;
