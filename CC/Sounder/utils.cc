@@ -43,7 +43,8 @@ std::vector<std::complex<float>> Utils::doubletocfloat(std::vector<std::vector<d
     return out;
 }
 
-std::vector<std::complex<double>> Utils::uint32tocdouble(std::vector<uint32_t> in, std::string order)
+std::vector<std::complex<double>> Utils::uint32tocdouble(std::vector<uint32_t> in,
+    const std::string& order)
 {
     int len = in.size();
     std::vector<std::complex<double>> out(len, 0);
@@ -65,7 +66,8 @@ std::vector<std::complex<double>> Utils::uint32tocdouble(std::vector<uint32_t> i
     return out;
 }
 
-std::vector<uint32_t> Utils::cint16_to_uint32(std::vector<std::complex<int16_t>> in, bool conj, std::string order)
+std::vector<uint32_t> Utils::cint16_to_uint32(std::vector<std::complex<int16_t>> in, bool conj,
+    const std::string& order)
 {
     std::vector<uint32_t> out(in.size(), 0);
     for (size_t i = 0; i < in.size(); i++) {
@@ -95,7 +97,7 @@ std::vector<std::vector<size_t>> Utils::loadSymbols(std::vector<std::string> fra
     return symId;
 }
 
-void Utils::loadDevices(std::string filename, std::vector<std::string>& data)
+void Utils::loadDevices(const std::string& filename, std::vector<std::string>& data)
 {
     std::string line;
     std::ifstream myfile(filename, std::ifstream::in);
@@ -138,7 +140,7 @@ void Utils::loadData(const char* filename, std::vector<unsigned>& data, int samp
     fclose(fp);
 }
 
-void Utils::loadTDDConfig(const std::string filename, std::string& jconfig)
+void Utils::loadTDDConfig(const std::string& filename, std::string& jconfig)
 {
     std::string line;
     std::ifstream configFile(filename);

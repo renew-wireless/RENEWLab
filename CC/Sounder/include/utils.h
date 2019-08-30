@@ -40,13 +40,15 @@ public:
 
     static std::vector<std::complex<int16_t>> double_to_int16(std::vector<std::vector<double>> in);
     static std::vector<std::complex<float>> doubletocfloat(std::vector<std::vector<double>> in);
-    static std::vector<std::complex<double>> uint32tocdouble(std::vector<uint32_t> in, std::string order);
-    static std::vector<uint32_t> cint16_to_uint32(std::vector<std::complex<int16_t>> in, bool conj, std::string order);
+    static std::vector<std::complex<double>> uint32tocdouble(std::vector<uint32_t> in,
+                                                             const std::string& order);
+    static std::vector<uint32_t> cint16_to_uint32(std::vector<std::complex<int16_t>> in, bool conj,
+                                                  const std::string& order);
     static std::vector<std::vector<size_t>> loadSymbols(std::vector<std::string> frames, char sym);
-    static void loadDevices(std::string filename, std::vector<std::string>& data);
+    static void loadDevices(const std::string& filename, std::vector<std::string>& data);
     static void loadData(const char* filename, std::vector<std::complex<int16_t>>& data, int samples);
     static void loadData(const char* filename, std::vector<unsigned>& data, int samples);
-    static void loadTDDConfig(const std::string filename, std::string& jconfig);
+    static void loadTDDConfig(const std::string& filename, std::string& jconfig);
     static std::vector<std::string> split(const std::string& s, char delimiter);
     static void printVector(std::vector<std::complex<int16_t>>& data);
 };

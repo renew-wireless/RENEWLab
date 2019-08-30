@@ -46,7 +46,7 @@ public:
 
     void start();
     void stop();
-    herr_t initHDF5(std::string);
+    herr_t initHDF5(const std::string &);
     void openHDF5();
     void closeHDF5();
     static void* taskThread(void* context);

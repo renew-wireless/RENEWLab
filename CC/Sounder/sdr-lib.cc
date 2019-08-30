@@ -361,7 +361,7 @@ void RadioConfig::radioConfigure()
                 } else // beamsweep
                 {
                     std::vector<unsigned> beacon_weights(nBsAntennas[0]);
-                    int hadamardLog = 8 * sizeof(nBsAntennas[0]) -__builtin_clz(nBsAntennas[0] - 1);
+                    int hadamardLog = 8 * sizeof(nBsAntennas[0]) - __builtin_clz(nBsAntennas[0] - 1);
                     int hadamardSize = 1 << hadamardLog;
                     std::vector<std::vector<double>> hadamard_weights = CommsLib::getSequence(hadamardSize, CommsLib::HADAMARD);
                     if (_cfg->bsChannel != "B")

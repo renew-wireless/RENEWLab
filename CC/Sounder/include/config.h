@@ -129,7 +129,7 @@ public:
     unsigned int rx_thread_num;
     unsigned int task_thread_num;
 
-    Config(std::string);
+    Config(const std::string &);
     ~Config();
 };
 

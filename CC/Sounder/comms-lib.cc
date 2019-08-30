@@ -22,7 +22,7 @@
 #include "include/comms-lib.h"
 //#include <itpp/itbase.h>
 
-int CommsLib::findLTS(std::vector<std::complex<double>> iq, int seqLen)
+int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
 {
     /*
      * Find 802.11-based LTS (Long Training Sequence)
@@ -317,16 +317,12 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             -0.01265117, -0.07852478, 0.00233959, 0.04599876, -0.13244371,
             -0.01347272, 0.1427553, 0.09199751, 0.1427553, -0.01347272, -0.13244371 };
 
-        for (int j = 0; j < 2; j++) {
-            std::vector<double> a;
-            for (int i = 0; i < 16; i++) {
-                if (j == 0) {
-                    a.push_back(sts_re[i]);
-                } else {
-                    a.push_back(sts_im[i]);
-                }
-            }
-            matrix[j] = a;
+        int size = sizeof(sts_re) / sizeof(sts_re[0]);
+        matrix[0].resize(size);
+        matrix[1].resize(size);
+        for (int i = 0; i < size; i++) {
+            matrix[0][i] = sts_re[i];
+            matrix[1][i] = sts_im[i];
         }
     } else if (type == LTS_SEQ) {
         // LTS - 802.11 Long training sequence (160 samples == 2.5 symbols, cp length of 32 samples)
@@ -399,17 +395,13 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             0.08770675983572167, -0.027885918828227545, -0.08279790948776067, 0.11115794305116433, 0.12032513267372755 };
 
         // Grab the last N samples (sequence length specified, provide more flexibility)
-        int startIdx = 160 - N;
-        for (int j = 0; j < 2; j++) {
-            std::vector<double> a;
-            for (int i = startIdx; i < 160; i++) {
-                if (j == 0) {
-                    a.push_back(lts_re[i]);
-                } else {
-                    a.push_back(lts_im[i]);
-                }
-            }
-            matrix[j] = a;
+        int size = sizeof(lts_re) / sizeof(lts_re[0]);
+        int startIdx = size - N;
+        matrix[0].resize(N);
+        matrix[1].resize(N);
+        for (int i = 0; i < N; i++) {
+            matrix[0][i] = lts_re[i + startIdx];
+            matrix[1][i] = lts_im[i + startIdx];
         }
     } else if (type == LTE_ZADOFF_CHU) {
         // LTE Zadoff Chu Sequence: Generate the 25th root length-63 Zadoff-Chu sequence
@@ -443,16 +435,12 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             -0.6427876096866254, -0.8660254037842936, 0.2947551744110826, 0.19814614320024387, -0.6801727377715282,
             -0.9308737486441722, -0.6038044103258398, 1.021155254707157e-12 };
 
-        for (int j = 0; j < 2; j++) {
-            std::vector<double> a;
-            for (int i = 0; i < 63; i++) {
-                if (j == 0) {
-                    a.push_back(lts_re[i]);
-                } else {
-                    a.push_back(lts_im[i]);
-                }
-            }
-            matrix[j] = a;
+        int size = sizeof(lts_re) / sizeof(lts_re[0]);
+        matrix[0].resize(size);
+        matrix[1].resize(size);
+        for (int i = 0; i < size; i++) {
+            matrix[0][i] = lts_re[i];
+            matrix[1][i] = lts_im[i];
         }
     } else if (type == GOLD_IFFT) {
         // Gold IFFT Sequence - seq_length=128, cp=0, upsample=1
@@ -512,69 +500,59 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             -0.26278743, -0.43609348, 0.33639774, -0.88476783, -0.48144832,
             0.5407985, 0.8769358, 0.4669951 };
 
-        for (int j = 0; j < 2; j++) {
-            std::vector<double> a;
-            for (int i = 0; i < 128; i++) {
-                if (j == 0) {
-                    a.push_back(lts_re[i]);
-                } else {
-                    a.push_back(lts_im[i]);
-                }
-            }
-            matrix[j] = a;
+        int size = sizeof(lts_re) / sizeof(lts_re[0]);
+        matrix[0].resize(size);
+        matrix[1].resize(size);
+        for (int i = 0; i < size; i++) {
+            matrix[0][i] = lts_re[i];
+            matrix[1][i] = lts_im[i];
         }
     } else if (type == HADAMARD) {
         // Hadamard
+        matrix.resize(N);
         if (N == 2) {
-            matrix.resize(2);
-            int had[2][2] = { {
-                                  1,
-                                  1,
-                              },
-                { 1, -1 } };
-
-            for (int i = 0; i < 2; i++) {
-                std::vector<double> a;
-                for (int j = 0; j < 2; j++) {
-                    a.push_back((double)had[i][j]);
-                }
-                matrix[i] = a;
+            int had[2][2] = {
+                { 1, 1 },
+                { 1, -1 }
+            };
+            for (int i = 0; i < N; i++) {
+                matrix[i].resize(N);
+                for (int j = 0; j < N; j++)
+                    matrix[i][j] = had[i][j];
             }
         }
         if (N == 4) {
-            matrix.resize(4);
-            int had[4][4] = { { 1, 1, 1, 1 },
+            int had[4][4] = {
+                { 1, 1, 1, 1 },
                 { 1, -1, 1, -1 },
                 { 1, 1, -1, -1 },
-                { 1, -1, -1, 1 } };
-            for (int i = 0; i < 4; i++) {
-                std::vector<double> a;
-                for (int j = 0; j < 4; j++) {
-                    a.push_back((double)had[i][j]);
-                }
-                matrix[i] = a;
+                { 1, -1, -1, 1 }
+            };
+            for (int i = 0; i < N; i++) {
+                matrix[i].resize(N);
+                for (int j = 0; j < N; j++)
+                    matrix[i][j] = had[i][j];
             }
         }
         if (N == 8) {
-            matrix.resize(8);
-            int had[8][8] = { { 1, 1, 1, 1, 1, 1, 1, 1 },
+            int had[8][8] = {
+                { 1, 1, 1, 1, 1, 1, 1, 1 },
                 { 1, -1, 1, -1, 1, -1, 1, -1 },
                 { 1, 1, -1, -1, 1, 1, -1, -1 },
                 { 1, -1, -1, 1, 1, -1, -1, 1 },
                 { 1, 1, 1, 1, -1, -1, -1, -1 },
                 { 1, -1, 1, -1, -1, 1, -1, 1 },
                 { 1, 1, -1, -1, -1, -1, 1, 1 },
-                { 1, -1, -1, 1, -1, 1, 1, -1 } };
-            for (int i = 0; i < 8; i++) {
-                std::vector<double> a;
-                for (int j = 0; j < 8; j++) {
-                    a.push_back((double)had[i][j]);
-                }
-                matrix[i] = a;
+                { 1, -1, -1, 1, -1, 1, 1, -1 }
+            };
+            for (int i = 0; i < N; i++) {
+                matrix[i].resize(N);
+                for (int j = 0; j < N; j++)
+                    matrix[i][j] = had[i][j];
             }
         } else if (N == 16) {
-            matrix.resize(16);
-            int had[16][16] = { { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+            int had[16][16] = {
+                { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
                 { 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1 },
                 { 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1 },
                 { 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1 },
@@ -589,18 +567,17 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
                 { 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 1, 1, 1 },
                 { 1, -1, 1, -1, -1, 1, -1, 1, -1, 1, -1, 1, 1, -1, 1, -1 },
                 { 1, 1, -1, -1, -1, -1, 1, 1, -1, -1, 1, 1, 1, 1, -1, -1 },
-                { 1, -1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1, -1, -1, 1 } };
+                { 1, -1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1, -1, -1, 1 }
+            };
 
-            for (int i = 0; i < 16; i++) {
-                std::vector<double> a;
-                for (int j = 0; j < 16; j++) {
-                    a.push_back((double)had[i][j]);
-                }
-                matrix[i] = a;
+            for (int i = 0; i < N; i++) {
+                matrix[i].resize(N);
+                for (int j = 0; j < N; j++)
+                    matrix[i][j] = had[i][j];
             }
         } else if (N == 32) {
-            matrix.resize(32);
-            int had[32][32] = { { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+            int had[32][32] = {
+                { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
                 { 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1 },
                 { 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1 },
                 { 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1 },
@@ -631,17 +608,16 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
                 { 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 1, 1, 1, -1, -1, -1, -1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1 },
                 { 1, -1, 1, -1, -1, 1, -1, 1, -1, 1, -1, 1, 1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, -1, 1, -1, 1, -1, -1, 1, -1, 1 },
                 { 1, 1, -1, -1, -1, -1, 1, 1, -1, -1, 1, 1, 1, 1, -1, -1, -1, -1, 1, 1, 1, 1, -1, -1, 1, 1, -1, -1, -1, -1, 1, 1 },
-                { 1, -1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1, 1, 1, -1 } };
-            for (int i = 0; i < 32; i++) {
-                std::vector<double> a;
-                for (int j = 0; j < 32; j++) {
-                    a.push_back((double)had[i][j]);
-                }
-                matrix[i] = a;
+                { 1, -1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1, 1, 1, -1 }
+            };
+            for (int i = 0; i < N; i++) {
+                matrix[i].resize(N);
+                for (int j = 0; j < N; j++)
+                    matrix[i][j] = had[i][j];
             }
         } else if (N == 64) {
-            matrix.resize(64);
-            int had[64][64] = { { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+            int had[64][64] = {
+                { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
                 { 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1 },
                 { 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1 },
                 { 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1 },
@@ -704,13 +680,12 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
                 { 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 1, 1, 1, -1, -1, -1, -1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 1, 1, 1 },
                 { 1, -1, 1, -1, -1, 1, -1, 1, -1, 1, -1, 1, 1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, -1, 1, -1, 1, -1, -1, 1, -1, 1, -1, 1, -1, 1, 1, -1, 1, -1, 1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, -1, -1, 1, -1, 1, -1, 1, -1, 1, 1, -1, 1, -1 },
                 { 1, 1, -1, -1, -1, -1, 1, 1, -1, -1, 1, 1, 1, 1, -1, -1, -1, -1, 1, 1, 1, 1, -1, -1, 1, 1, -1, -1, -1, -1, 1, 1, -1, -1, 1, 1, 1, 1, -1, -1, 1, 1, -1, -1, -1, -1, 1, 1, 1, 1, -1, -1, -1, -1, 1, 1, -1, -1, 1, 1, 1, 1, -1, -1 },
-                { 1, -1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1, 1, 1, -1, 1, -1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1, -1, -1, 1 } };
-            for (int i = 0; i < 64; i++) {
-                std::vector<double> a;
-                for (int j = 0; j < 64; j++) {
-                    a.push_back((double)had[i][j]);
-                }
-                matrix[i] = a;
+                { 1, -1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1, 1, 1, -1, 1, -1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1, -1, -1, 1 }
+            };
+            for (int i = 0; i < N; i++) {
+                matrix[i].resize(N);
+                for (int j = 0; j < N; j++)
+                    matrix[i][j] = had[i][j];
             }
         }
     }

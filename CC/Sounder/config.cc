@@ -11,7 +11,7 @@
 #include "include/config.h"
 #include "include/comms-lib.h"
 
-Config::Config(std::string jsonfile)
+Config::Config(const std::string& jsonfile)
 {
     int pilotSeqLen;
     std::string conf;

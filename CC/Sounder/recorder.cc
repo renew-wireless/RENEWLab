@@ -47,7 +47,7 @@ Recorder::Recorder(Config* cfg)
     }
 }
 
-herr_t Recorder::initHDF5(std::string hdf5)
+herr_t Recorder::initHDF5(const std::string& hdf5)
 {
     hdf5name = hdf5;
     hdf5group = "/"; // make sure it starts with '/'
