@@ -87,8 +87,7 @@ private:
 
     int config_pilot_extent_step = 400;
     int config_data_extent_step = 400;
-    int config_dump_data;
-    int config_dump_data_size;
+    bool config_dump_data;
     int maxFrameNumber;
     int rx_thread_num;
     int task_thread_num;

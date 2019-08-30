@@ -451,7 +451,8 @@ herr_t Recorder::initHDF5(std::string hdf5)
         pilot_prop.close();
         pilot_dataspace->close();
         pilot_dataset->close();
-        if (cfg->ulSymsPerFrame > 0) {
+	config_dump_data = cfg->ulSymsPerFrame > 0;
+        if (config_dump_data) {
             DataSpace* data_dataspace = new DataSpace(5, dims_data, max_dims_data);
             data_prop.setChunk(5, cdims);
 
@@ -461,12 +462,8 @@ herr_t Recorder::initHDF5(std::string hdf5)
             data_prop.close();
             data_dataspace->close();
             data_dataset->close();
-            config_dump_data = 1;
             delete data_dataspace;
             data_dataset->close();
-        } else {
-            config_dump_data_size = 0;
-            config_dump_data = 0;
         }
         //status = H5Gclose(group_id);
         //if (status < 0 ) return status;
@@ -518,7 +515,7 @@ void Recorder::openHDF5()
 #endif
     pilot_filespace->close();
     // Get Dataset for DATA (If Enabled) and check the shape of it
-    if ((config_dump_data == 1)) {
+    if (config_dump_data) {
         data_dataset = new DataSet(file->openDataSet("/Data/UplinkData"));
 
         data_filespace = new DataSpace(data_dataset->getSpace());
@@ -551,7 +548,7 @@ void Recorder::closeHDF5()
     pilot_dataset->close();
 
     // Resize Data Dataset (If Needed)
-    if (config_dump_data == 1) {
+    if (config_dump_data) {
         dims_data[0] = frameNumber;
         data_dataset->extend(dims_data);
         data_prop.close();
