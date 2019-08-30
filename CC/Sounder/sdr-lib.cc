@@ -361,13 +361,14 @@ void RadioConfig::radioConfigure()
                 } else // beamsweep
                 {
                     std::vector<unsigned> beacon_weights(nBsAntennas[0]);
-                    int hadamardSize = int(pow(2, ceil(log2(nBsAntennas[0]))));
+                    int hadamardLog = 8 * sizeof(nBsAntennas[0]) -__builtin_clz(nBsAntennas[0] - 1);
+                    int hadamardSize = 1 << hadamardLog;
                     std::vector<std::vector<double>> hadamard_weights = CommsLib::getSequence(hadamardSize, CommsLib::HADAMARD);
                     if (_cfg->bsChannel != "B")
                         bsSdrs[0][i]->writeRegisters("TX_RAM_A", 0, _cfg->beacon);
                     if (_cfg->bsChannel != "A")
                         bsSdrs[0][i]->writeRegisters("TX_RAM_B", 0, _cfg->beacon);
-                    //int residue = int(pow(2,ceil(log2(nBsAntennas[0]))))-nBsAntennas[0];
+                    //int residue = hadamardSize - nBsAntennas[0];
                     for (int j = 0; j < nBsAntennas[0]; j++)
                         beacon_weights[j] = (unsigned)hadamard_weights[i * _cfg->bsSdrCh][j];
                     if (_cfg->bsChannel != "B")

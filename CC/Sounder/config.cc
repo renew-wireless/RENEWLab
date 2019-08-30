@@ -228,7 +228,7 @@ Config::Config(std::string jsonfile)
             int cpSize = this->cpSize;
             int mod_type = clDataMod == "64QAM" ? CommsLib::QAM64 : (clDataMod == "16QAM" ? CommsLib::QAM16 : CommsLib::QPSK);
             std::cout << mod_type << std::endl;
-            int mod_order = (int)pow(2, mod_type);
+            int mod_order = 1 << mod_type;
             std::cout << mod_order << std::endl;
             if (fftSize != 64)
                 fftSize = 64;
