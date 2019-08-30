@@ -224,8 +224,8 @@ Config::Config(std::string jsonfile)
 
         // compose data subframe
         if ((bsPresent and ULSymbols[0].size() > 0) or (clPresent and clULSymbols[0].size() > 0)) {
-            int fftSize = fftSize;
-            int cpSize = cpSize;
+            int fftSize = this->fftSize;
+            int cpSize = this->cpSize;
             int mod_type = clDataMod == "64QAM" ? CommsLib::QAM64 : (clDataMod == "16QAM" ? CommsLib::QAM16 : CommsLib::QPSK);
             std::cout << mod_type << std::endl;
             int mod_order = (int)pow(2, mod_type);
