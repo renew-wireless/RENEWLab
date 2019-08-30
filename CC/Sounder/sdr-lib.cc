@@ -672,6 +672,8 @@ void RadioConfig::collectCSI(bool& adjust)
                 continue;
             int rx_flags = SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST;
             ret = bsSdrs[0][j]->activateStream(this->bsRxStreams[0][j], rx_flags, rxTime, _cfg->sampsPerSymbol);
+            if (ret < 0)
+                std::cout << "bad activate at node " << j << std::endl;
         }
 
         if (hubs.size() == 0)
