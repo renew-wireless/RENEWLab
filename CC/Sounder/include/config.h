@@ -112,7 +112,10 @@ public:
     const int data_offset = sizeof(int) * 4;
     // header 4 int for: frame_id, subframe_id, cell_id, ant_id
     // ushort for: I/Q samples
-    size_t getPackageLength() { return sizeof(int) * 4 + sizeof(ushort) * (size_t)sampsPerSymbol * 2; }
+    size_t getPackageLength()
+    {
+        return sizeof(int) * 4 + sizeof(ushort) * (size_t)sampsPerSymbol * 2;
+    }
     size_t getNumAntennas();
     int getClientId(int, int);
     int getUlSFIndex(int, int);
