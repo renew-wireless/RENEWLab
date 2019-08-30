@@ -451,7 +451,7 @@ herr_t Recorder::initHDF5(std::string hdf5)
         pilot_prop.close();
         pilot_dataspace->close();
         pilot_dataset->close();
-	config_dump_data = cfg->ulSymsPerFrame > 0;
+        config_dump_data = cfg->ulSymsPerFrame > 0;
         if (config_dump_data) {
             DataSpace* data_dataspace = new DataSpace(5, dims_data, max_dims_data);
             data_prop.setChunk(5, cdims);

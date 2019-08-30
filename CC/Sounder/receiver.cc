@@ -239,7 +239,7 @@ void* Receiver::loopRecv(void* in_context)
         }
     }
     if (bsSdrCh != 2)
-	delete [] cur_ptr_buffer2;
+        delete[] cur_ptr_buffer2;
     return 0;
 }
 
