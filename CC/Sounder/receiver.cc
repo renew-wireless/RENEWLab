@@ -153,16 +153,14 @@ void* Receiver::loopRecv(void* in_context)
     // to handle second channel at each radio
     // this is assuming buffer_frame_num is at least 2
     char* cur_ptr_buffer2;
-    int* cur_ptr_buffer_status2;
     char* buffer2 = obj_ptr->buffer_[tid] + cfg->getPackageLength();
     int* buffer_status2 = obj_ptr->buffer_status_[tid] + 1;
-    if (cfg->bsSdrCh == 2) {
+    int* cur_ptr_buffer_status2 = buffer_status2;
+    const int bsSdrCh = cfg->bsSdrCh;
+    if (bsSdrCh == 2)
         cur_ptr_buffer2 = buffer2;
-        cur_ptr_buffer_status2 = buffer_status2;
-    } else {
+    else
         cur_ptr_buffer2 = new char[cfg->getPackageLength()];
-        cur_ptr_buffer_status2 = NULL;
-    }
 
     int offset = 0;
     long long frameTime;
@@ -186,12 +184,12 @@ void* Receiver::loopRecv(void* in_context)
 
             frame_id = (int)(frameTime >> 32);
             symbol_id = (int)((frameTime >> 16) & 0xFFFF);
-            ant_id = rid * cfg->bsSdrCh;
+            ant_id = rid * bsSdrCh;
             *((int*)cur_ptr_buffer) = frame_id;
             *((int*)cur_ptr_buffer + 1) = symbol_id;
             *((int*)cur_ptr_buffer + 2) = 0; //cell_id
             *((int*)cur_ptr_buffer + 3) = ant_id;
-            if (cfg->bsSdrCh == 2) {
+            if (bsSdrCh == 2) {
                 *((int*)cur_ptr_buffer2) = frame_id;
                 *((int*)cur_ptr_buffer2 + 1) = symbol_id;
                 *((int*)cur_ptr_buffer2 + 2) = 0; //cell_id
@@ -212,8 +210,8 @@ void* Receiver::loopRecv(void* in_context)
             offset = cur_ptr_buffer_status - buffer_status;
             // move ptr & set status to full
             cur_ptr_buffer_status[0] = 1; // has data, after it is read it should be set to 0
-            cur_ptr_buffer_status = buffer_status + (cur_ptr_buffer_status - buffer_status + cfg->bsSdrCh) % buffer_frame_num;
-            cur_ptr_buffer = buffer + ((char*)cur_ptr_buffer - (char*)buffer + cfg->getPackageLength() * cfg->bsSdrCh) % buffer_length;
+            cur_ptr_buffer_status = buffer_status + (cur_ptr_buffer_status - buffer_status + bsSdrCh) % buffer_frame_num;
+            cur_ptr_buffer = buffer + ((char*)cur_ptr_buffer - (char*)buffer + cfg->getPackageLength() * bsSdrCh) % buffer_length;
             // push EVENT_RX_SYMBOL event into the queue
             Event_data package_message;
             package_message.event_type = EVENT_RX_SYMBOL;
@@ -223,11 +221,11 @@ void* Receiver::loopRecv(void* in_context)
                 printf("socket message enqueue failed\n");
                 exit(0);
             }
-            if (cfg->bsSdrCh == 2) {
+            if (bsSdrCh == 2) {
                 offset = cur_ptr_buffer_status2 - buffer_status; // offset is absolute
                 cur_ptr_buffer_status2[0] = 1; // has data, after doing fft, it is set to 0
-                cur_ptr_buffer_status2 = buffer_status2 + (cur_ptr_buffer_status2 - buffer_status2 + cfg->bsSdrCh) % buffer_frame_num;
-                cur_ptr_buffer2 = buffer2 + ((char*)cur_ptr_buffer2 - (char*)buffer2 + cfg->getPackageLength() * cfg->bsSdrCh) % buffer_length;
+                cur_ptr_buffer_status2 = buffer_status2 + (cur_ptr_buffer_status2 - buffer_status2 + bsSdrCh) % buffer_frame_num;
+                cur_ptr_buffer2 = buffer2 + ((char*)cur_ptr_buffer2 - (char*)buffer2 + cfg->getPackageLength() * bsSdrCh) % buffer_length;
                 // push EVENT_RX_SYMBOL event into the queue
                 Event_data package_message2;
                 package_message2.event_type = EVENT_RX_SYMBOL;
@@ -240,6 +238,8 @@ void* Receiver::loopRecv(void* in_context)
             }
         }
     }
+    if (bsSdrCh != 2)
+	delete [] cur_ptr_buffer2;
     return 0;
 }
 
