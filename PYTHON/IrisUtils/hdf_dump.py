@@ -28,9 +28,10 @@ import h5py
 import matplotlib.pyplot as plt
 import collections
 import time
+from optparse import OptionParser
 from channel_analysis import *
 
-no_corr = False
+do_corr = False
 
  # add frame_start for plot indexing!
 def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_ant=0, cp=16):
@@ -414,7 +415,7 @@ class hdfDump:
         Input:
             default_frame: Index of frame to be plotted. Default to frame #100
         """
-        global no_corr 
+        global do_corr 
         plt.close("all")
 
         data = self.data
@@ -453,7 +454,7 @@ class hdfDump:
         n_ue = num_cl
         frm_plt = min(default_frame, samples_P.shape[0] + self.n_frm_st)
         
-        if not no_corr:
+        if do_corr:
             csi_from_pilots_start = time.time()
             csi_mat, match_filt, sub_fr_strt, cmpx_pilots, k_lts, n_lts = csi_from_pilots(
                 samples_P, z_padding, frm_st_idx = self.n_frm_st, frame_to_plot = frm_plt, ref_ant =ant_i)
@@ -549,163 +550,103 @@ class hdfDump:
                 axes[5, idx].plot(corr_total[pilot_frames, u])
             axes[5, idx].set_xlabel('Frame')
         
-        if not no_corr:
+        if do_corr:
             return csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots, f_st
         else:
             plt.show()
             return 0
         
     
-if __name__ == '__main__':
+def main():
+    global do_corr
     # Tested with inputs: ./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5 300  (for two users)
     #                     ./data_in/Argos-2019-3-30-12-20-50_1x8x1.hdf5 300  (for one user) 
-
-    scrpt_strt = time.time()
-    if len(sys.argv) >1:
-        if sys.argv[1] == "-h":
-            print('>>> format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)> <n_frames_to_inspect (optional, default=0)> <start_of_frames (optional, default=0)><<<')
-            sys.exit(0)
-        
-            
-        
-        if len(sys.argv) > 6:
-            print('Too many arguments! >>> format: ./hdfPlot.py <filename> <frame_to_plot (optional, default=100)> <ref_antenna (optional, default=0)> <n_frames_to_inspect (optional, default=0)> <start_of_frames (optional, default=0)> <<<')
-            sys.exit(0)
-
-        filename = sys.argv[1]
-        frame_to_plot = None
-        ref_ant = None
-        
-        if len(sys.argv) == 3:
-            if sys.argv[2] == "-nocorr": 
-                no_corr = True
-                frame_to_plot = 0
-                ref_ant = 0
-                n_frames_to_inspect = 0
-                n_f_st = 0
-            else:
-                frame_to_plot = int(sys.argv[2])
-                n_frames_to_inspect = 0
-                n_f_st = 0
-                ref_ant = 0
-                if n_frames_to_inspect == 0:
-                    print("WARNING: No frames_to_inspect given. Will process the whole dataset.") 
-        if len(sys.argv) == 4:
-            frame_to_plot = int(sys.argv[2])
-            ref_ant = int(sys.argv[3])
-            n_frames_to_inspect = 0
-            n_f_st = 0
-            if frame_to_plot < 0:
-                frame_to_plot = 0
-                print("WARNING: Gave negative value for frame _to_plot, set it to {}".format(frame_to_plot))
-            if ref_ant < 0:
-                ref_ant = 0
-                print("WARNING: Gave negative value for ref_ant, set it to {}.".format(ref_ant))
-            if n_frames_to_inspect == 0:
-                print("WARNING: No frames_to_inspect given. Will process the whole dataset.") 
-                
-        
-        if len(sys.argv) == 5:
-            
-            if sys.argv[2] == "-nocorr": 
-                no_corr = True
-                frame_to_plot = int(sys.argv[3])
-                ref_ant = int(sys.argv[4])
-                n_frames_to_inspect = 0
-            else:
-                frame_to_plot = int(sys.argv[2])
-                ref_ant = int(sys.argv[3])
-                n_frames_to_inspect = int(sys.argv[4])
-                n_f_st = 0
-                if frame_to_plot < 0:
-                    frame_to_plot = 0
-                    print("WARNING: Gave negative value for frame _to_plot, set it to {}.".format(frame_to_plot)) 
-                if ref_ant < 0:
-                    ref_ant = 0
-                    print("WARNING: Gave negative value for ref_ant, set it to {}.".format(ref_ant))
-                if n_frames_to_inspect <= 0:
-                    n_frames_to_inspect = 1
-                    print("WARNING: Gave negative/zero value for n_frames_to_inspect, set it to {}.".format(n_frames_to_inspect))               
-                
-                if frame_to_plot > n_frames_to_inspect:
-                    print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames: frame_to_plot:{} >  n_frames_to_inspect:{}. ".format(
-                        frame_to_plot, n_frames_to_inspect))
-                    print("Setting the frame to inspect to 0")
-                    frame_to_plot = 0
-            
-                
-        if len(sys.argv) == 6:
-            frame_to_plot = int(sys.argv[2])
-            ref_ant = int(sys.argv[3])
-            n_frames_to_inspect = int(sys.argv[4])
-            n_f_st = int(sys.argv[5])
-
-            if frame_to_plot < 0:
-                frame_to_plot = 0
-                print("WARNING: Gave negative value for frame _to_plot, set it to {}.".format(frame_to_plot))
-            if ref_ant < 0:
-                ref_ant = 0
-                print("WARNING: Gave negative value for ref_ant, set it to {}.".format(ref_ant))
-            if n_frames_to_inspect <= 0:
-                n_frames_to_inspect = 1
-                print("WARNING: Gave negative/zero value for n_frames_to_inspect, set it to {}.".format(n_frames_to_inspect))               
-            if n_f_st < 0:
-                n_f_st = 0
-                print("WARNING: Gave negative value for start_of_frames, set it to {}.".format(n_f_st))
-                               
-            if (frame_to_plot > n_f_st + n_frames_to_inspect) or (frame_to_plot < n_f_st) :
-                print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames +  or at an index smaller than the required start of the frames: frame_to_plot:{} > n_frames_to_inspect:{} or frame_to_plot:{} <  n_f_st:{}. ".format(
-                        frame_to_plot, n_frames_to_inspect, frame_to_plot, n_f_st))
-                print("Setting the frame to inspect/plot to {}".format(n_f_st))
-                frame_to_plot = n_f_st
-            
-        print(">> frame to plot = {}, ref. ant = {}, no. of frames to inspect = {}, starting frame = {} <<".format(frame_to_plot,ref_ant,n_frames_to_inspect, n_f_st))
-        # Instantiate
-        hdf5 = hdfDump(filename, n_frames_to_inspect, n_f_st)
-        hdf5.get_hdf5()
-        hdf5.parse_hdf5()
-
-        # Check which data we have available
-        data_types_avail = []
-        pilots_avail = bool(hdf5.data['Pilot_Samples'])
-        ul_data_avail = bool(hdf5.data['UplinkData'])
-
-        if pilots_avail:
-            data_types_avail.append("PILOTS")
-            print("PILOT Data Available")
-        if ul_data_avail:
-            data_types_avail.append("UL_DATA")
-            print("Uplink Data Available")
-
-        # Empty structure
-        if not data_types_avail:
-            raise Exception(' **** No pilots or uplink data found **** ')
-
-        hdf5.get_attributes()
-        hdf5.get_samples(data_types_avail)
-
-        raw_data = hdf5.data
-        metadata = hdf5.metadata
-        samples = hdf5.samples
-        
-        if no_corr:
-            x = hdf5.verify_hdf5(frame_to_plot, ref_ant)
-            sys.exit(0)
-            
-        if frame_to_plot is not None and ref_ant is not None:
-            csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots, f_st = hdf5.verify_hdf5(frame_to_plot, ref_ant)
-            
-        elif frame_to_plot is not None and ref_ant is None:
-            csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots, f_st = hdf5.verify_hdf5(frame_to_plot)
-            ref_ant = 0
-        else:
-            csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots, f_st = hdf5.verify_hdf5()
-            frame_to_plot = 0
-            ref_ant = 0
-            
+    parser = OptionParser()
+    parser.add_option("--do_corr", action="store_true", dest="do_corr", help="Run script without analysis", default= False)
+    parser.add_option("--frame_to_plot", type="int", dest="frame_to_plot", help="Frame number to plot", default=0)
+    parser.add_option("--ref_ant", type="int", dest="ref_ant", help="Reference antenna", default=0)
+    parser.add_option("--n_frames_to_inspect", type="int", dest="n_frames_to_inspect", help="Number of frames to inspect", default=0)
+    parser.add_option("--fr_strt", type="int", dest="fr_strt", help="Starting frame. Must have set n_frames_to_inspect first and make sure fr_strt is within boundaries ", default=0)
+    (options, args) = parser.parse_args()
     
+    do_corr = options.do_corr 
+    n_frames_to_inspect = options.n_frames_to_inspect
+    ref_ant = options.ref_ant
+    frame_to_plot = options.frame_to_plot
+    fr_strt = options.fr_strt
+    
+    
+    filename = sys.argv[1]
+     
+    scrpt_strt = time.time()
+   
+   
+
+    if n_frames_to_inspect == 0:
+        print("WARNING: No frames_to_inspect given. Will process the whole dataset.") 
+       
+    if frame_to_plot < 0:
+        frame_to_plot = 0
+        print("WARNING: Gave negative value for frame _to_plot, set it to {}".format(frame_to_plot))
+    if ref_ant < 0:
+        ref_ant = 0
+        print("WARNING: Gave negative value for ref_ant, set it to {}.".format(ref_ant))
+    if n_frames_to_inspect == 0:
+        print("WARNING: No frames_to_inspect given. Will process the whole dataset.")
+    if n_frames_to_inspect < 0:
+        n_frames_to_inspect = 1
+        print("WARNING: Gave negative/zero value for n_frames_to_inspect, set it to {}.".format(n_frames_to_inspect))               
+                
+    if frame_to_plot > n_frames_to_inspect:
+        print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames: frame_to_plot:{} >  n_frames_to_inspect:{}. ".format(
+                frame_to_plot, n_frames_to_inspect))
+        print("Setting the frame to inspect to 0")
+        frame_to_plot = 0
+    if fr_strt < 0:
+        fr_strt = 0
+        print("WARNING: Gave negative value for start_of_frames, set it to {}.".format(fr_strt))
+                               
+    if (frame_to_plot > fr_strt + n_frames_to_inspect) or (frame_to_plot < fr_strt) :
+        print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames +  or at an index smaller than the required start of the frames: frame_to_plot:{} > n_frames_to_inspect:{} or frame_to_plot:{} <  fr_strt:{}. ".format(
+                frame_to_plot, n_frames_to_inspect, frame_to_plot, fr_strt))
+        print("Setting the frame to inspect/plot to {}".format(fr_strt))
+        frame_to_plot = fr_strt
+            
+    print(">> frame to plot = {}, ref. ant = {}, no. of frames to inspect = {}, starting frame = {} <<".format(frame_to_plot,ref_ant,n_frames_to_inspect, fr_strt))
+        
+    # Instantiate
+    hdf5 = hdfDump(filename, n_frames_to_inspect, fr_strt)
+    hdf5.get_hdf5()
+    hdf5.parse_hdf5()
+
+    # Check which data we have available
+    data_types_avail = []
+    pilots_avail = bool(hdf5.data['Pilot_Samples'])
+    ul_data_avail = bool(hdf5.data['UplinkData'])
+    
+    if pilots_avail:
+        data_types_avail.append("PILOTS")
+        print("PILOT Data Available")
+    if ul_data_avail:
+        data_types_avail.append("UL_DATA")
+        print("Uplink Data Available")
+
+    # Empty structure
+    if not data_types_avail:
+        raise Exception(' **** No pilots or uplink data found **** ')
+
+    hdf5.get_attributes()
+    hdf5.get_samples(data_types_avail)
+
+    raw_data = hdf5.data
+    metadata = hdf5.metadata
+    samples = hdf5.samples
+        
+    if not do_corr:
+        x = hdf5.verify_hdf5(frame_to_plot, ref_ant)
+        sys.exit(0)
     else:
-        raise Exception("format: ./hdfPlot.py <filename>")
+        csi_mat, match_filt_clr, frame_map, sub_fr_strt, cmpx_pilots, f_st = hdf5.verify_hdf5(frame_to_plot, ref_ant)
     
     scrpt_end = time.time()
     
@@ -796,3 +737,6 @@ if __name__ == '__main__':
     print("** \tWARNING: If you attempt to plot a different frame after running this script, remember to subtract the frame_start you gave! **")
     print(">> \tE.g.: frame no. 1763 and frame_start = 1500 --> plot(match_filter_clr[<frame 1736 - 1500>, <cell>, <ue>, ref_antenna,:])\n")
     print(">>>> Script Duration: time: %f \n" % ( scrpt_end - scrpt_strt) )
+
+if __name__ == '__main__':
+    main()
