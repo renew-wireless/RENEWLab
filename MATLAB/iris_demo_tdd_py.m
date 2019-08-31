@@ -111,11 +111,12 @@ ifft_in_mat = zeros(N_SC, N_OFDM_SYM);
 ifft_in_mat(SC_IND_DATA, :)   = tx_syms_mat;
 ifft_in_mat(SC_IND_PILOTS, :) = pilots_mat;
 
-%Perform the IFFT
+% Do yourselves: Perform the IFFT
 tx_payload_mat = ifft(ifft_in_mat, N_SC, 1);
 
 % Insert the cyclic prefix
 if(CP_LEN > 0)
+    % Do yourselves: Insert CP
     tx_cp = tx_payload_mat((end-CP_LEN+1 : end), :);
     tx_payload_mat = [tx_cp; tx_payload_mat];
 end
@@ -210,7 +211,8 @@ rx_lts = rx_vec_iris(lts_ind : lts_ind+159);
 rx_lts1 = rx_lts(-64+-FFT_OFFSET + [97:160]);
 rx_lts2 = rx_lts(-FFT_OFFSET + [97:160]);
 
-% Received LTSs 
+% Received LTSs
+% Do yourselves: take the FD pilots:
 rx_lts1_f = fft(rx_lts1);
 rx_lts2_f = fft(rx_lts2);
 
@@ -239,12 +241,13 @@ payload_mat = reshape(payload_vec, (N_SC+CP_LEN), N_OFDM_SYM);
 % Remove the cyclic prefix, keeping FFT_OFFSET samples of CP (on average)
 payload_mat_noCP = payload_mat(CP_LEN-FFT_OFFSET+[1:N_SC], :);
 
-% Take the FFT
+% Do yourselves: Take the FFT
 syms_f_mat = fft(payload_mat_noCP, N_SC, 1);
 
 % Equalize (just divide by complex chan estimates)
 syms_eq_mat = syms_f_mat ./ repmat(rx_H_est, 1, N_OFDM_SYM);
 
+%% Calculate phase correction
 if DO_APPLY_PHASE_ERR_CORRECTION
     % Extract the pilots and calculate per-symbol phase error
     pilots_f_mat = syms_eq_mat(SC_IND_PILOTS, :);
@@ -257,6 +260,7 @@ end
 pilot_phase_err_corr = repmat(pilot_phase_err, N_SC, 1);
 pilot_phase_corr = exp(-1i*(pilot_phase_err_corr));
 
+%% Apply phase correction
 % Apply the pilot phase correction per symbol
 syms_eq_pc_mat = syms_eq_mat .* pilot_phase_corr;
 payload_syms_mat = syms_eq_pc_mat(SC_IND_DATA, :);

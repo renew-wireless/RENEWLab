@@ -269,6 +269,7 @@ rx_H_est = reshape(rx_H_est_2d,N_SC,1,N_BS_NODE);       % Expand to a 3rd dimens
 H_pow = sum(abs(conj(rx_H_est_2d).*rx_H_est_2d),2);
 H_pow = repmat(H_pow,1,N_OFDM_SYM);
 syms_eq_mat_mrc =  sum( (repmat(conj(rx_H_est), 1, N_OFDM_SYM,1).* syms_f_mat_mrc), 3)./H_pow;
+
 %Equalize each branch separately
 syms_eq_mat_1 = syms_f_mat_1 ./ repmat(H_b1, 1, N_OFDM_SYM);
 syms_eq_mat_2 = syms_f_mat_2 ./ repmat(H_b2, 1, N_OFDM_SYM);

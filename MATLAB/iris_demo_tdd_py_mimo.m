@@ -266,12 +266,15 @@ for iue = 1:N_UE
    plt_j_ix = (iue-1) * n_plt_samp +1:iue * n_plt_samp;
    Y_lts(:,iue,:) = rx_lts_mat(:,plt_j_ix);
 end
+
 % Take N_SC spamples from each LTS
 rx_lts_idx = CP_LEN +1 : N_LTS_SYM * N_SC +CP_LEN;
 Y_lts = Y_lts(:,:,rx_lts_idx);
+
 % Reshape the matix to have each lts pilot in a different dimension:
 % N_BS_NODE x N_UE x 64 x 2
 Y_lts = reshape(Y_lts, N_BS_NODE, N_UE, [], N_LTS_SYM); 
+
 % Take FFT:
 Y_lts_f = fft(Y_lts, N_SC,3);
 % Construct known pilot matrix to use i next step:

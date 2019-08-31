@@ -15,6 +15,7 @@ function [syms, data] = bits2syms(bitstream, MOD_ORDER)
 % Returns modulated complex symbols and symbols in form of integer numbers
 
 nbits = length(bitstream);
+% Do yourselves: derive the number of bits per symbol
 sym_bits = log2(MOD_ORDER);
 if mod(nbits, sym_bits) ~= 0
     error("Length of bit stream has to be divisible by log2(MOD_ORDER)");
