@@ -56,8 +56,8 @@ switch(MOD_ORDER)
 end
 
 %  Do your selves: Get bits from rx_data:
-bits = de2bi([rx_data; (MOD_ORDER-1)], 'left-msb')'; % This is a matrix now
-bits = bits(:,1:end-1);
-bits = bits(:);
+bits_matrix = de2bi([rx_data; (MOD_ORDER-1)], 'left-msb')'; % This is a matrix now
+bits_matrix = bits_matrix(:,1:end-1);
+bits = bits_matrix(:);
 
 end

@@ -27,7 +27,7 @@ SIM_MOD                 = 1;
 DEBUG                   = 1;
 
 if SIM_MOD
-    chan_type               = "rayleigh";
+    chan_type               = "rayleigh"; % Will use only Rayleigh for simulation
     sim_SNR_db              = 15;    
 end
 fprintf("Channel type: %s \n",chan_type);
@@ -305,9 +305,10 @@ for j=1:length(nz_sc)
         HH_inv = inv((squeeze(H_hat(:,:, nz_sc(j) ) )' * squeeze(H_hat(:,:, nz_sc(j) ) ) ) ) * squeeze(H_hat(:,:, nz_sc(j) ) )';
         x = HH_inv*squeeze(Y_data(:,nz_sc(j),:));
     else
-        % Conjugate:
+        % Do yourselves: Conj BF: 
+        % Normalization coeff:
         H_pow = diag(abs (H_hat(:,:, nz_sc(j) )' * H_hat(:,:, nz_sc(j) ) ));
-        % normalization: 
+        % Apply BF: 
         x = (H_hat(:,:, nz_sc(j) )') * squeeze(Y_data(:,nz_sc(j),:))./ repmat(H_pow, 1, N_OFDM_SYM);
     end
     syms_eq(:,nz_sc(j),:) = x;

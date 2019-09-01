@@ -26,7 +26,7 @@ SIM_MOD                 = 1;
 
 
 if SIM_MOD
-    chan_type               = "rayleigh";
+    chan_type               = "awgn";
     nt                      = 100;
     sim_SNR_db              = 1:20;
     nsnr                    = length(sim_SNR_db);
@@ -268,7 +268,8 @@ syms_f_mat_2 = syms_f_mat_mrc(:,:,2);
 rx_H_est = reshape(rx_H_est_2d,N_SC,1,N_BS_NODE);       % Expand to a 3rd dimension to agree with the dimensions od syms_f_mat
 H_pow = sum(abs(conj(rx_H_est_2d).*rx_H_est_2d),2);
 H_pow = repmat(H_pow,1,N_OFDM_SYM);
-syms_eq_mat_mrc =  sum( (repmat(conj(rx_H_est), 1, N_OFDM_SYM,1).* syms_f_mat_mrc), 3)./H_pow;
+% Do yourselves: MRC equalization:
+syms_eq_mat_mrc =  sum( (repmat(conj(rx_H_est), 1, N_OFDM_SYM,1).* syms_f_mat_mrc), 3)./H_pow; % MRC equalization: combine The two branches and equalize. 
 
 %Equalize each branch separately
 syms_eq_mat_1 = syms_f_mat_1 ./ repmat(H_b1, 1, N_OFDM_SYM);
@@ -657,13 +658,15 @@ if SIM_MOD
     ber_avg = mean(ber_SIM)';
     semilogy(sim_SNR_db, [ber_avg berr_th], 'o-', 'LineWidth', 2);
     axis([0 sim_SNR_db(end) 1e-3 1]);
-    legend('Simulation', 'No Eq. Error');
+    hold on;
+    plot(xlim, [1 1]*1e-2, '--r', 'linewidth', 2);
+    legend('Simulation', 'No Eq. Error', '1% BER');
     grid on;
     set(gca,'FontSize',16);
     xlabel('SNR (dB)');
     ylabel('BER');
-
-title('Bit Error rate vs SNR');
+    hold off;
+    title('Bit Error rate vs SNR');
 end
 
 %% Calculate Rx stats

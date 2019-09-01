@@ -17,7 +17,7 @@ snr = 15;
 n_ant =  1;                             % number of antennas
 awgn = 1;                               % AWGN channel(1) or fading(0)
 
-% Do yourselves: Create a random column vector my_bits with ones and zeros;
+% random bits
 mybits = randi(2, nbits,1) - 1;
 
 [syms, tx_data]  = bits2syms(mybits, MOD_ORDER);
