@@ -27,7 +27,7 @@ CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_MOD                 = 1;
 
 if SIM_MOD
-    chan_type               = "awgn";
+    chan_type               = "rayleigh";
     nt                      = 100;
     sim_SNR_db              = 1:20;
     nsnr                    = length(sim_SNR_db);
@@ -76,7 +76,6 @@ N_ZPAD_POST             = N_ZPAD_PRE -14;                         % Zero-padding
 
 % Rx processing params
 FFT_OFFSET                    = 16;          % Number of CP samples to use in FFT (on average)
-LTS_CORR_THRESH               = 0.8;         % Normalized threshold for LTS correlation
 DO_APPLY_PHASE_ERR_CORRECTION = 1;           % Enable Residual CFO estimation/correction
 
 %% Define the preamble
@@ -102,7 +101,7 @@ pilots = [1 1 -1 1].';
 % Repeat the pilots across all OFDM symbols
 pilots_mat = repmat(pilots, 1, N_OFDM_SYM);
 
-%% IFFT
+%% Time Domain
 
 % Do yourselves: construct the TD input matrix
 fdd_mat = zeros(N_SC, N_OFDM_SYM);
@@ -138,7 +137,6 @@ for isnr = 1:nsnr
 if (SIM_MOD)        
     rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db(isnr));
     rx_vec_iris = rx_vec_iris.'; % just to agree with what the hardware spits out.
-    SAMP_FREQ = SMPL_RT;
     
 else
 %% Init Iris nodes
@@ -146,7 +144,7 @@ else
 % Set up the Iris experiment
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
- % Create a two Iris node objects:
+ % Create two Iris node objects:
     b_ids(end+1) = "0339";
     ue_ids(end+1) = "RF3C000045";
     
@@ -185,7 +183,6 @@ else
     
     rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, "iris", [], sdr_params(1), sdr_params(2));
 
-    SAMP_FREQ = sdr_params(1).sample_rate;
 end
     rx_vec_iris = rx_vec_iris.';
     l_rx_dec=length(rx_vec_iris);
@@ -202,7 +199,6 @@ m_filt = (abs(v0).^2)./v1; % normalized correlation
 lts_corr = m_filt;
 [rho_max, ipos] = max(lts_corr);
 
-lts_peaks = find(lts_corr(1:800) > LTS_CORR_THRESH*max(lts_corr));
 payload_ind = ipos +1;
 lts_ind = payload_ind - N_LTS_SYM*(N_SC + CP_LEN);
 
@@ -216,8 +212,8 @@ rx_lts2 = rx_lts(-FFT_OFFSET + [97:160]);
 rx_lts1_f = fft(rx_lts1);
 rx_lts2_f = fft(rx_lts2);
 
-% Calculate channel estimate from average of 2 training symbols
-rx_H_est = lts_f.' .* (rx_lts1_f + rx_lts2_f)/2; 
+% Do yourselves: Calculate channel estimate from average of 2 training symbols: 
+rx_H_est = mean([rx_lts1_f./lts_f.'   rx_lts2_f./ lts_f.'], 2); 
 
 %% Rx payload processing
 % Extract the payload samples (integer number of OFDM symbols following preamble)
@@ -241,10 +237,10 @@ payload_mat = reshape(payload_vec, (N_SC+CP_LEN), N_OFDM_SYM);
 % Remove the cyclic prefix, keeping FFT_OFFSET samples of CP (on average)
 payload_mat_noCP = payload_mat(CP_LEN-FFT_OFFSET+[1:N_SC], :);
 
-% Do yourselves: Take the FFT
+% Do yourselves: bring to frequency domain:
 syms_f_mat = fft(payload_mat_noCP, N_SC, 1);
 
-% Equalize (just divide by complex chan estimates)
+% Do yourselves: Equalize.
 syms_eq_mat = syms_f_mat ./ repmat(rx_H_est, 1, N_OFDM_SYM);
 
 %% Calculate phase correction
@@ -299,6 +295,13 @@ end
         fprintf(1,'SNR = %f BER = %12.4e BER_no_err = %12.4e \n', sim_SNR_db(isnr), mean(ber_SIM(:,isnr)),  berr_th(isnr));
     end
 end
+
+% EVM & SNR
+% Do yourselves. Calculate EVM and effective SNR:
+evm_mat = abs(payload_syms_mat - tx_syms_mat).^2;
+aevms = mean(evm_mat(:)); % needs to be a scalar
+snr = 10*log10(1./aevms); % calculate in dB scale.
+
 
 %% Plot Results
 
@@ -415,11 +418,6 @@ end
 % EVM & SNR
 cf = cf + 1;
 figure(cf); clf;
-
-evm_mat = abs(payload_syms_mat - tx_syms_mat).^2;
-aevms = mean(evm_mat(:));
-snr = 10*log10(1./aevms);
-
 subplot(2,1,1)
 plot(100*evm_mat(:),'o','MarkerSize',1)
 axis tight
