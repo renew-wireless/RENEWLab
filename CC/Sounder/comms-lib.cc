@@ -510,11 +510,11 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
     } else if (type == HADAMARD) {
         // Hadamard - using Sylvester's construction for powers of 2.
         matrix.resize(N);
-        if ((N & (N-1)) == 0) {
+        if ((N & (N - 1)) == 0) {
             for (int i = 0; i < N; i++) {
                 matrix[i].resize(N);
                 for (int j = 0; j < N; j++)
-                    matrix[i][j] = __builtin_parity(i&j) ? -1 : 1;
+                    matrix[i][j] = __builtin_parity(i & j) ? -1 : 1;
             }
         }
     }
