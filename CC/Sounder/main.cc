@@ -24,16 +24,15 @@ int main(int argc, char const* argv[])
         return EXIT_SUCCESS;
     }
 
-    Config* config = new Config(argv[1]);
+    Config config(argv[1]);
 
-    Recorder* dr;
     try {
         SignalHandler signalHandler;
 
         // Register signal handler to handle kill signal
         signalHandler.setupSignalHandlers();
-        dr = new Recorder(config);
-        dr->start();
+        Recorder dr(&config);
+        dr.start();
         ret = EXIT_SUCCESS;
     } catch (SignalException& e) {
         std::cerr << "SignalException: " << e.what() << std::endl;
