@@ -59,4 +59,5 @@ private:
     int nClSdrs;
     int nClAntennas;
     std::atomic<int> remainingJobs;
+    RadioConfigContext* context;
 };
