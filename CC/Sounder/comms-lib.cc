@@ -514,7 +514,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             for (int i = 0; i < N; i++) {
                 matrix[i].resize(N);
                 for (int j = 0; j < N; j++)
-                    matrix[i][j] = __builtin_parity(i & j) ? -1 : 1;
+                    matrix[i][j] = __builtin_parity(i & j) != 0 ? -1 : 1;
             }
         }
     }

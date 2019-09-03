@@ -369,7 +369,7 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         att.write(PredType::NATIVE_INT, &attr_data);
 
         // Client AGC enable flag
-        attr_data = cfg->clAgcEn;
+        attr_data = cfg->clAgcEn ? 1 : 0;
         att = mainGroup.createAttribute("CL_AGC_EN", PredType::STD_I32BE, attr_ds);
         att.write(PredType::NATIVE_INT, &attr_data);
 

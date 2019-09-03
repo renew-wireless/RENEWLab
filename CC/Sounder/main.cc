@@ -18,7 +18,8 @@ int main(int argc, char const* argv[])
     if (argc != 2) {
         std::cerr << "Usage: " << argv[0] << " CONFIG_FILE_NAME" << std::endl;
         return EXIT_FAILURE;
-    } else if (strcmp(argv[1], "--help") == 0 or strcmp(argv[1], "-h") == 0) {
+    }
+    if (strcmp(argv[1], "--help") == 0 or strcmp(argv[1], "-h") == 0) {
         std::cerr << "Usage: " << argv[0] << " CONFIG_FILE_NAME" << std::endl;
         return EXIT_SUCCESS;
     }

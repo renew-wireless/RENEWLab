@@ -50,7 +50,7 @@ std::vector<pthread_t> Receiver::startClientThreads()
             profile->nsamps = config_->sampsPerSymbol;
             profile->txSyms = config_->clULSymbols[i].size();
             profile->rxSyms = config_->clDLSymbols[i].size();
-            profile->txStartSym = config_->clULSymbols[i].size() > 0 ? config_->clULSymbols[i][0] : 0;
+            profile->txStartSym = config_->clULSymbols[i].empty() ? 0 : config_->clULSymbols[i][0];
             profile->txFrameDelta = frameTimeDelta;
             profile->device = radioconfig_->devs[i];
             profile->rxs = radioconfig_->rxss[i];

@@ -72,13 +72,13 @@ public:
     };
 
 public:
-    Receiver(int n_rx_threads, Config* cfg, moodycamel::ConcurrentQueue<Event_data>* in_queue);
+    Receiver(int n_rx_threads, Config* config, moodycamel::ConcurrentQueue<Event_data>* in_queue);
     ~Receiver();
 
     std::vector<pthread_t> startRecvThreads(char** in_buffer, int** in_buffer_status, int in_buffer_frame_num, int in_buffer_length, int in_core_id = 0);
     std::vector<pthread_t> startClientThreads();
     void go();
-    static void* loopRecv(void* context);
+    static void* loopRecv(void* in_context);
     static void* clientTxRx(void* context);
 
 private:

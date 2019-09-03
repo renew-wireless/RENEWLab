@@ -223,7 +223,7 @@ Config::Config(const std::string& jsonfile)
 #endif
 
         // compose data subframe
-        if ((bsPresent and ULSymbols[0].size() > 0) or (clPresent and clULSymbols[0].size() > 0)) {
+        if ((bsPresent and !ULSymbols[0].empty()) or (clPresent and !clULSymbols[0].empty())) {
             int fftSize = this->fftSize;
             int cpSize = this->cpSize;
             int mod_type = clDataMod == "64QAM" ? CommsLib::QAM64 : (clDataMod == "16QAM" ? CommsLib::QAM16 : CommsLib::QPSK);
@@ -313,9 +313,7 @@ Config::Config(const std::string& jsonfile)
 
     // Multi-threading settings
     unsigned nCores = this->getCoreCount();
-    core_alloc = true;
-    if (nCores <= RX_THREAD_NUM)
-        core_alloc = false;
+    core_alloc = nCores > RX_THREAD_NUM;
     if (bsPresent && (pilotSymsPerFrame + ulSymsPerFrame > 0)) {
         rx_thread_num = (nCores >= 2 * RX_THREAD_NUM && nBsSdrs[0] >= RX_THREAD_NUM) ? RX_THREAD_NUM : 1;
         task_thread_num = TASK_THREAD_NUM;
@@ -345,8 +343,7 @@ size_t Config::getNumAntennas()
 {
     if (!bsPresent)
         return 1;
-    else
-        return nBsSdrs[0] * bsSdrCh;
+    return nBsSdrs[0] * bsSdrCh;
 }
 
 Config::~Config() {}
@@ -361,8 +358,8 @@ int Config::getClientId(int frame_id, int symbol_id)
         printf("getClientId(%d, %d) = %d\n", frame_id, symbol_id, it - pilotSymbols[fid].begin());
 #endif
         return it - pilotSymbols[fid].begin();
-    } else
-        return -1;
+    }
+    return -1;
 }
 
 int Config::getUlSFIndex(int frame_id, int symbol_id)
@@ -375,8 +372,8 @@ int Config::getUlSFIndex(int frame_id, int symbol_id)
         printf("getUlSFIndexId(%d, %d) = %d\n", frame_id, symbol_id, it - ULSymbols[fid].begin());
 #endif
         return it - ULSymbols[fid].begin();
-    } else
-        return -1;
+    }
+    return -1;
 }
 
 int Config::getDlSFIndex(int frame_id, int symbol_id)
@@ -386,8 +383,7 @@ int Config::getDlSFIndex(int frame_id, int symbol_id)
     it = find(DLSymbols[fid].begin(), DLSymbols[fid].end(), symbol_id);
     if (it != DLSymbols[fid].end())
         return it - DLSymbols[fid].begin();
-    else
-        return -1;
+    return -1;
 }
 
 bool Config::isPilot(int frame_id, int symbol_id)

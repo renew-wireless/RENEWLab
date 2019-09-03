@@ -48,7 +48,7 @@ RadioConfig::RadioConfig(Config* cfg)
             this->nBsAntennas[c] = nBsSdrs[c] * _cfg->bsSdrCh;
             std::cout << this->nBsSdrs[c] << " radios in cell " << c << std::endl;
             //isUE = _cfg->isUE;
-            if (_cfg->hub_ids.size() > 0) {
+            if (!_cfg->hub_ids.empty()) {
                 args["driver"] = "remote";
                 args["timeout"] = "1000000";
                 args["serial"] = _cfg->hub_ids.at(c);
@@ -135,7 +135,7 @@ RadioConfig::RadioConfig(Config* cfg)
                         device->setGain(SOAPY_SDR_RX, ch, "LNA2", 14); //[0,14]
                 }
 
-                device->setGain(SOAPY_SDR_RX, ch, "LNA", ch ? _cfg->clRxgainB_vec[i] : _cfg->clRxgainA_vec[i]); //[0,30]
+                device->setGain(SOAPY_SDR_RX, ch, "LNA", ch != 0 ? _cfg->clRxgainB_vec[i] : _cfg->clRxgainA_vec[i]); //[0,30]
                 device->setGain(SOAPY_SDR_RX, ch, "TIA", 0); //[0,12]
                 device->setGain(SOAPY_SDR_RX, ch, "PGA", 0); //[-12,19]
 
@@ -153,7 +153,7 @@ RadioConfig::RadioConfig(Config* cfg)
                         device->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|17]
                 }
                 device->setGain(SOAPY_SDR_TX, ch, "IAMP", 12); //[-12,12]
-                device->setGain(SOAPY_SDR_TX, ch, "PAD", ch ? _cfg->clTxgainB_vec[i] : _cfg->clTxgainA_vec[i]); //[0,52]
+                device->setGain(SOAPY_SDR_TX, ch, "PAD", ch != 0 ? _cfg->clTxgainB_vec[i] : _cfg->clTxgainA_vec[i]); //[0,52]
             }
 
             for (auto ch : channels) {
@@ -239,7 +239,7 @@ void* RadioConfig::initBSRadio(void* in_context)
         }
 
         // lime
-        rc->bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "LNA", ch ? cfg->rxgainB : cfg->rxgainA); //[0,30]
+        rc->bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "LNA", ch != 0 ? cfg->rxgainB : cfg->rxgainA); //[0,30]
         rc->bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "TIA", 0); //[0,12]
         rc->bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "PGA", 0); //[-12,19]
 
@@ -266,7 +266,7 @@ void* RadioConfig::initBSRadio(void* in_context)
 
         // lime
         rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "IAMP", 12); //[0,12]
-        rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PAD", ch ? cfg->txgainB : cfg->txgainA); //[0,30]
+        rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PAD", ch != 0 ? cfg->txgainB : cfg->txgainA); //[0,30]
     }
 
     for (auto ch : channels) {
@@ -473,7 +473,7 @@ void RadioConfig::radioConfigure()
 void RadioConfig::radioStart()
 {
     if (_cfg->bsPresent) {
-        if (hubs.size() == 0) {
+        if (hubs.empty()) {
             bsSdrs[0][0]->writeSetting("TRIGGER_GEN", "");
         } else {
             hubs[0]->writeSetting("TRIGGER_GEN", "");
@@ -653,7 +653,7 @@ void RadioConfig::collectCSI(bool& adjust)
 
     int ch = (_cfg->bsChannel == "B") ? 1 : 0;
     for (int i = 0; i < R; i++) {
-        bsSdrs[0][i]->setGain(SOAPY_SDR_TX, ch, "PAD", ch ? _cfg->calTxGainB : _cfg->calTxGainA);
+        bsSdrs[0][i]->setGain(SOAPY_SDR_TX, ch, "PAD", ch != 0 ? _cfg->calTxGainB : _cfg->calTxGainA);
         bsSdrs[0][i]->writeSetting("TDD_CONFIG", "{\"tdd_enabled\":false}");
         bsSdrs[0][i]->writeSetting("TDD_MODE", "false");
         bsSdrs[0][i]->activateStream(this->bsTxStreams[0][i]);
@@ -665,7 +665,7 @@ void RadioConfig::collectCSI(bool& adjust)
 
         auto ref_sdr = bsSdrs[0][i];
         int tx_flags = SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST;
-        int ret = ref_sdr->writeStream(this->bsTxStreams[0][i], ch ? txbuff1.data() : txbuff0.data(), _cfg->sampsPerSymbol, tx_flags, txTime, 1000000);
+        int ret = ref_sdr->writeStream(this->bsTxStreams[0][i], ch != 0 ? txbuff1.data() : txbuff0.data(), _cfg->sampsPerSymbol, tx_flags, txTime, 1000000);
         if (ret < 0)
             std::cout << "bad write\n";
         for (int j = 0; j < R; j++) {
@@ -677,7 +677,7 @@ void RadioConfig::collectCSI(bool& adjust)
                 std::cout << "bad activate at node " << j << std::endl;
         }
 
-        if (hubs.size() == 0)
+        if (hubs.empty())
             bsSdrs[0][0]->writeSetting("TRIGGER_GEN", "");
         else
             hubs[0]->writeSetting("TRIGGER_GEN", "");
@@ -750,7 +750,7 @@ void RadioConfig::collectCSI(bool& adjust)
     for (int i = 0; i < R; i++) {
         bsSdrs[0][i]->deactivateStream(this->bsTxStreams[0][i]);
         bsSdrs[0][i]->deactivateStream(this->bsRxStreams[0][i]);
-        bsSdrs[0][i]->setGain(SOAPY_SDR_TX, ch, "PAD", ch ? _cfg->txgainB : _cfg->txgainA); //[0,30]
+        bsSdrs[0][i]->setGain(SOAPY_SDR_TX, ch, "PAD", ch != 0 ? _cfg->txgainB : _cfg->txgainA); //[0,30]
     }
 
     for (int i = 0; i < R; i++)
@@ -794,7 +794,7 @@ void RadioConfig::sync_delays(int cellIdx)
 RadioConfig::~RadioConfig()
 {
     if (_cfg->bsPresent) {
-        if (_cfg->hub_ids.size() > 0) {
+        if (!_cfg->hub_ids.empty()) {
             for (unsigned int i = 0; i < hubs.size(); i++)
                 SoapySDR::Device::unmake(hubs[i]);
         }

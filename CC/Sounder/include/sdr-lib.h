@@ -15,7 +15,7 @@
 class RadioConfig {
 public:
     RadioConfig(Config* cfg);
-    static void* initBSRadio(void* context);
+    static void* initBSRadio(void* in_context);
     void radioConfigure();
     void radioStart();
     void radioStop();
