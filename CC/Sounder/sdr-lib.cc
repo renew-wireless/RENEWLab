@@ -59,23 +59,23 @@ RadioConfig::RadioConfig(Config* cfg)
             bsSdrs[c].resize(radioNum);
             bsTxStreams[c].resize(radioNum);
             bsRxStreams[c].resize(radioNum);
-            context = new RadioConfigContext[radioNum];
+            RadioConfigContext context;
             remainingJobs = radioNum;
             for (int i = 0; i < radioNum; i++) {
                 //args["serial"] = _cfg->bs_sdr_ids[c][i];
                 //args["timeout"] = "1000000";
                 //bsSdrs[c].push_back(SoapySDR::Device::make(args));
-                context[i].ptr = this;
-                context[i].tid = i;
-                context[i].cell = c;
+                context.ptr = this;
+                context.tid = i;
+                context.cell = c;
 #ifdef THREADED_INIT
                 pthread_t init_thread_;
-                if (pthread_create(&init_thread_, NULL, RadioConfig::initBSRadio, (void*)(&context[i])) != 0) {
+                if (pthread_create(&init_thread_, NULL, RadioConfig::initBSRadio, (void*)&context) != 0) {
                     perror("init thread create failed");
                     exit(0);
                 }
 #else
-                RadioConfig::initBSRadio((void*)&context[i]);
+                RadioConfig::initBSRadio((void*)&context);
 #endif
             }
 
@@ -177,9 +177,10 @@ RadioConfig::RadioConfig(Config* cfg)
 
 void* RadioConfig::initBSRadio(void* in_context)
 {
-    RadioConfig* rc = ((RadioConfigContext*)in_context)->ptr;
-    int i = ((RadioConfigContext*)in_context)->tid;
-    int c = ((RadioConfigContext*)in_context)->cell;
+    RadioConfigContext* context = (RadioConfigContext*)in_context;
+    RadioConfig* rc = context->ptr;
+    int i = context->tid;
+    int c = context->cell;
     Config* cfg = rc->_cfg;
 
     //load channels
