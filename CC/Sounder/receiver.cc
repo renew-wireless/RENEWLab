@@ -109,10 +109,10 @@ void Receiver::go()
 
 void* Receiver::loopRecv(void* in_context)
 {
-
-    Receiver* obj_ptr = ((ReceiverContext*)in_context)->ptr;
+    ReceiverContext* context = (ReceiverContext*)in_context;
+    Receiver* obj_ptr = context->ptr;
     Config* cfg = obj_ptr->config_;
-    int tid = ((ReceiverContext*)in_context)->tid;
+    int tid = context->tid;
     moodycamel::ConcurrentQueue<Event_data>* message_queue_ = obj_ptr->message_queue_;
 
     if (cfg->core_alloc) {

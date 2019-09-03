@@ -49,7 +49,7 @@ public:
     herr_t initHDF5(const std::string &);
     void openHDF5();
     void closeHDF5();
-    static void* taskThread(void* context);
+    static void* taskThread(void* in_context);
     herr_t record(int tid, int offset);
 
     struct EventHandlerContext {

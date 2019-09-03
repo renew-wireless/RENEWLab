@@ -635,13 +635,13 @@ void Recorder::start()
     this->stop();
 }
 
-void* Recorder::taskThread(void* context)
+void* Recorder::taskThread(void* in_context)
 {
-
-    Recorder* obj_ptr = ((EventHandlerContext*)context)->obj_ptr;
+    EventHandlerContext* context = (EventHandlerContext*)in_context;
+    Recorder* obj_ptr = context->obj_ptr;
     Config* cfg = obj_ptr->cfg;
     moodycamel::ConcurrentQueue<Event_data>* task_queue_ = &(obj_ptr->task_queue_);
-    int tid = ((EventHandlerContext*)context)->id;
+    int tid = context->id;
     printf("task thread %d starts\n", tid);
 
     obj_ptr->task_ptok[tid].reset(new moodycamel::ProducerToken(obj_ptr->message_queue_));

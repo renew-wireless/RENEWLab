@@ -177,9 +177,10 @@ RadioConfig::RadioConfig(Config* cfg)
 
 void* RadioConfig::initBSRadio(void* in_context)
 {
-    RadioConfig* rc = ((RadioConfigContext*)in_context)->ptr;
-    int i = ((RadioConfigContext*)in_context)->tid;
-    int c = ((RadioConfigContext*)in_context)->cell;
+    RadioConfigContext* context = (RadioConfigContext*) in_context;
+    RadioConfig* rc = context->ptr;
+    int i = context->tid;
+    int c = context->cell;
     Config* cfg = rc->_cfg;
 
     //load channels
