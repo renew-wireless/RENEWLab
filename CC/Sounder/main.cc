@@ -35,7 +35,6 @@ int main(int argc, char const* argv[])
         dr = new Recorder(config);
         dr->start();
         ret = EXIT_SUCCESS;
-        delete dr;
     } catch (SignalException& e) {
         std::cerr << "SignalException: " << e.what() << std::endl;
         ret = EXIT_FAILURE;

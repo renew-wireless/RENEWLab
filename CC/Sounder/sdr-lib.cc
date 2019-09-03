@@ -31,7 +31,6 @@ RadioConfig::RadioConfig(Config* cfg)
 
         for (unsigned int c = 0; c < _cfg->nCells; c++) {
             //load channels
-            std::vector<RadioConfigContext> context;
             std::vector<size_t> channels;
             if (_cfg->bsChannel == "A")
                 channels = { 0 };
@@ -60,7 +59,7 @@ RadioConfig::RadioConfig(Config* cfg)
             bsSdrs[c].resize(radioNum);
             bsTxStreams[c].resize(radioNum);
             bsRxStreams[c].resize(radioNum);
-            context.resize(radioNum);
+            context = new RadioConfigContext[radioNum];
             remainingJobs = radioNum;
             for (int i = 0; i < radioNum; i++) {
                 //args["serial"] = _cfg->bs_sdr_ids[c][i];
