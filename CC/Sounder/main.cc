@@ -32,7 +32,7 @@ int main(int argc, char const* argv[])
         // Register signal handler to handle kill signal
         signalHandler.setupSignalHandlers();
         Recorder dr(&config);
-        dr.start();
+        dr.do_it();
         ret = EXIT_SUCCESS;
     } catch (SignalException& e) {
         std::cerr << "SignalException: " << e.what() << std::endl;
