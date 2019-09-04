@@ -137,7 +137,6 @@ for isnr = 1:nsnr
 if (SIM_MOD)        
     rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db(isnr));
     rx_vec_iris = rx_vec_iris.'; % just to agree with what the hardware spits out.
-    SAMP_FREQ = SMPL_RT;
     
 else
 
@@ -186,13 +185,8 @@ else
     sdr_params(2).txfreq = TX_FRQ;
     sdr_params(2).rxfreq = RX_FRQ;   
     sdr_params(2).tdd_sched = ue_scheds(1);
-   
-    % Iris nodes objects
-    node_bs = iris_py(sdr_params(1));
-    node_ue = iris_py(sdr_params(2));
-    SAMP_FREQ = sdr_params(1).sample_rate;
     
-    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, "iris", [], sdr_params(1), sdr_params(2));
+    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, [], sdr_params(1), sdr_params(2));
 
 end
 rx_vec_iris = rx_vec_iris.';
