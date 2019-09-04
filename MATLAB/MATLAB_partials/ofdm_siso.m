@@ -24,7 +24,7 @@ WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 
 
-SIM_MOD                 = 1;
+SIM_MOD                 = 0;
 
 if SIM_MOD
     chan_type               = "rayleigh";
@@ -181,7 +181,7 @@ else
     sdr_params(2).rxfreq = RX_FRQ;
     sdr_params(2).tdd_sched = ue_scheds(1);
     
-    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, "iris", [], sdr_params(1), sdr_params(2));
+    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, [], sdr_params(1), sdr_params(2));
 
 end
     rx_vec_iris = rx_vec_iris.';

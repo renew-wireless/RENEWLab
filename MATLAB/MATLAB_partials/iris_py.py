@@ -12,12 +12,6 @@
 """
 
 import sys
-#These are needed in case one needs to run the driver on its own.
-# Make sure it is ran from the Python toolbox folder. 
-sys.path.append('../PYTHON/IrisUtils/')
-sys.path.append('../')
-sys.path.append('../IrisUtils/data_in/')
-
 from argparse import ArgumentParser
 import SoapySDR
 from SoapySDR import * #SOAPY_SDR_ constants
@@ -27,10 +21,7 @@ import time
 import os
 import math
 import json
-import threading
-from generate_sequence import *
 import matplotlib.pyplot as plt
-from type_conv import *
 
 
 # CORRTHRESHOLDING REGS
@@ -56,8 +47,43 @@ FPGA_IRIS030_WR_PKT_DET_NEW_FRAME = 300
 tx_advance = 68
 corr_threshold = 1
 
-preambles_bs = generate_training_seq(preamble_type='gold_ifft', seq_length=128, cp=0, upsample=1)
-beacon = preambles_bs[0, :]*.5
+#preambles_bs = generate_training_seq(preamble_type='gold_ifft', seq_length=128, cp=0, upsample=1)
+
+#beacon = preambles_bs[0, :]*.5
+#np.savetxt('beacon.txt', np.column_stack([beacon.real, beacon.imag]))
+# Read beacon from file
+bcn_real, bcn_imag = np.loadtxt('beacon.txt', unpack=True)
+beacon = bcn_real + 1j * bcn_imag
+
+#Generate LTS seq:
+def gen_lts(seq_length=128, cp=0, upsample=1):
+# Generate 802.11 LTS preamble
+    lts_freq = np.array([
+        0, 0, 0, 0, 0, 0, 1, 1, -1, -1, 1, 1, -1, 1, -1, 1, 1, 1, 1, 1, 1, -1, -1, 1, 1, -1, 1, -1, 1, 1, 1, 1, 0,1, -1, -1, 1,
+        1, -1, 1, -1, 1, -1, -1, -1, -1, -1, 1, 1, -1, -1, 1, -1, 1, -1, 1, 1, 1, 1, 0, 0, 0, 0, 0])
+    up_zeros = np.zeros(len(lts_freq) // 2 * (upsample - 1))
+    lts_freq_up = np.concatenate((up_zeros, lts_freq, up_zeros))
+    signal = np.fft.ifft(np.fft.ifftshift(lts_freq_up))
+    # Now affix the cyclic prefix
+    sequence = np.concatenate((signal[len(signal) - cp:], signal, signal))  # could use tile...
+    return sequence, lts_freq
+
+def cfloat2uint32(arr, order='IQ'):
+    """
+    Convert floating point iq values to uint32 (FPGA format)
+    ARGS:
+    - arr: Data array
+    - order: Whether it is IQ or QI
+    RETURNS:
+    - corresponding uint32 value
+    """
+    arr_i = (np.real(arr) * 32767).astype(np.uint16)    
+    arr_q = (np.imag(arr) * 32767).astype(np.uint16)
+    if order == 'IQ':
+        return np.bitwise_or(arr_q, np.left_shift(arr_i.astype(np.uint32), 16))
+    else:
+        return np.bitwise_or(arr_i, np.left_shift(arr_q.astype(np.uint32), 16))
+
 
 #######################################				
 #######	SDR Class:		#######
@@ -108,7 +134,7 @@ class Iris_py:
 			if sample_rate is not None:
 				self.sdr.setSampleRate(SOAPY_SDR_TX, chan, sample_rate)
 			if bw is not None:
-				self.sdr.setBandwidth(SOAPY_SDR_TX, chan, bw)
+			    self.sdr.setBandwidth(SOAPY_SDR_TX, chan, 3*sample_rate)
 			if tx_gain is not None:
 				self.sdr.setGain(SOAPY_SDR_TX, chan, tx_gain) 
 			if tx_freq is not None:
@@ -124,7 +150,7 @@ class Iris_py:
 			if sample_rate is not None:
 				self.sdr.setSampleRate(SOAPY_SDR_RX, chan, sample_rate)
 			if bw is not None:
-				self.sdr.setBandwidth(SOAPY_SDR_RX, chan, bw)
+			    self.sdr.setBandwidth(SOAPY_SDR_RX, chan, 3*sample_rate)
 			if rx_gain is not None:
 				self.sdr.setGain(SOAPY_SDR_RX, chan, rx_gain)
 			if rx_freq is not None:
@@ -376,7 +402,7 @@ if __name__ == '__main__':
 	nsamps_pad = 82
 	n_sym_samp = nsamps + 2*nsamps_pad - 14
 
-	ltsSym, lts_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
+	ltsSym, lts_f = gen_lts(cp=32, upsample=1)
 	
 	pad1 = np.zeros((nsamps_pad), np.complex64)			# to comprensate for front-end group delay
 	pad2 = np.zeros((nsamps_pad-14), np.complex64)		# to comprensate for rf path delay
