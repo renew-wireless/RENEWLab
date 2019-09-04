@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2019, Rice University 
+ Copyright (c) 2018-2019, Rice University
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
  Author(s): Rahman Doost-Mohamamdy: doost@rice.edu
 
@@ -39,7 +39,9 @@ Recorder::Recorder(Config* cfg)
             EventHandlerContext* context = new EventHandlerContext;
             context->obj_ptr = this;
             context->id = i;
-            if (pthread_create(&task_threads[i], NULL, Recorder::taskThread, &context) != 0) {
+            if (pthread_create(&task_threads[i], NULL, Recorder::taskThread,
+                    &context)
+                != 0) {
                 perror("task thread create failed");
                 exit(0);
             }
@@ -51,23 +53,33 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
 {
     hdf5name = hdf5;
     hdf5group = "/"; // make sure it starts with '/'
-    std::cout << "Set HDF5 File to " << hdf5name << " and group to " << hdf5group << std::endl;
+    std::cout << "Set HDF5 File to " << hdf5name << " and group to " << hdf5group
+              << std::endl;
 
     // dataset dimension
-    dims_pilot[0] = MAX_FRAME_INC; //cfg->maxFrame;
+    dims_pilot[0] = MAX_FRAME_INC; // cfg->maxFrame;
     dims_pilot[1] = cfg->nCells;
-    dims_pilot[2] = cfg->pilotSymsPerFrame; //cfg->nClSdrs;
+    dims_pilot[2] = cfg->pilotSymsPerFrame; // cfg->nClSdrs;
     dims_pilot[3] = cfg->getNumAntennas();
     dims_pilot[4] = 2 * cfg->sampsPerSymbol; // IQ
-    hsize_t cdims[5] = { 1, 1, 1, 1, 2 * (hsize_t)cfg->sampsPerSymbol }; // pilot chunk size, TODO: optimize size
-    hsize_t max_dims_pilot[5] = { H5S_UNLIMITED, cfg->nCells, (hsize_t)cfg->pilotSymsPerFrame, cfg->getNumAntennas(), 2 * (hsize_t)cfg->sampsPerSymbol };
+    hsize_t cdims[5] = {
+        1, 1, 1, 1,
+        2 * (hsize_t)cfg->sampsPerSymbol
+    }; // pilot chunk size, TODO: optimize size
+    hsize_t max_dims_pilot[5] = {
+        H5S_UNLIMITED, cfg->nCells, (hsize_t)cfg->pilotSymsPerFrame,
+        cfg->getNumAntennas(), 2 * (hsize_t)cfg->sampsPerSymbol
+    };
 
-    dims_data[0] = MAX_FRAME_INC; //cfg->maxFrame;
+    dims_data[0] = MAX_FRAME_INC; // cfg->maxFrame;
     dims_data[1] = cfg->nCells;
     dims_data[2] = cfg->ulSymsPerFrame;
     dims_data[3] = cfg->getNumAntennas();
     dims_data[4] = 2 * cfg->sampsPerSymbol; // IQ
-    hsize_t max_dims_data[5] = { H5S_UNLIMITED, (hsize_t)cfg->nCells, (hsize_t)cfg->ulSymsPerFrame, cfg->getNumAntennas(), 2 * (hsize_t)cfg->sampsPerSymbol };
+    hsize_t max_dims_data[5] = {
+        H5S_UNLIMITED, (hsize_t)cfg->nCells, (hsize_t)cfg->ulSymsPerFrame,
+        cfg->getNumAntennas(), 2 * (hsize_t)cfg->sampsPerSymbol
+    };
 
     // Used to create variable strings
     std::ostringstream oss;
@@ -76,13 +88,14 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         Exception::dontPrint();
 
         file = new H5File(hdf5name, H5F_ACC_TRUNC);
-        //group = new Group(file->createGroup("/Data"));
+        // group = new Group(file->createGroup("/Data"));
         auto mainGroup = file->createGroup("/Data");
         DataSpace* pilot_dataspace = new DataSpace(5, dims_pilot, max_dims_pilot);
         pilot_prop.setChunk(5, cdims);
 
-        DataSet* pilot_dataset = new DataSet(file->createDataSet("/Data/Pilot_Samples",
-            PredType::STD_I16BE, *pilot_dataspace, pilot_prop));
+        DataSet* pilot_dataset = new DataSet(
+            file->createDataSet("/Data/Pilot_Samples", PredType::STD_I16BE,
+                *pilot_dataspace, pilot_prop));
 
         // Attribute dataspace
         hsize_t dims[1] = { 1 };
@@ -91,7 +104,8 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         DataSpace attr_vec_ds;
 
         // Create new string datatype for attribute
-        StrType strdatatype(PredType::C_S1, H5T_VARIABLE); // of variable length characters
+        StrType strdatatype(PredType::C_S1,
+            H5T_VARIABLE); // of variable length characters
 
         // For scalars
         int attr_data;
@@ -123,7 +137,8 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
 
         // Number of samples on each symbol (excluding prefix/postfix)
         attr_data = cfg->sampsPerSymbol - cfg->prefix - cfg->postfix;
-        att = mainGroup.createAttribute("SYMBOL_LEN_NO_PAD", PredType::STD_I32BE, attr_ds);
+        att = mainGroup.createAttribute("SYMBOL_LEN_NO_PAD", PredType::STD_I32BE,
+            attr_ds);
         att.write(PredType::NATIVE_INT, &attr_data);
 
         // Number of samples for prefix (padding)
@@ -152,12 +167,12 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         att.write(PredType::NATIVE_INT, &attr_data);
 
         // Beacon sequence type (string)
-        //attr_data_str = cfg->beacon_seq;
+        // attr_data_str = cfg->beacon_seq;
         att = mainGroup.createAttribute("BEACON_SEQ_TYPE", strdatatype, attr_ds);
         att.write(strdatatype, cfg->beacon_seq);
 
         // Pilot sequence type (string)
-        //attr_data_str = cfg->pilot_seq;
+        // attr_data_str = cfg->pilot_seq;
         att = mainGroup.createAttribute("PILOT_SEQ_TYPE", strdatatype, attr_ds);
         att.write(strdatatype, cfg->pilot_seq);
 
@@ -169,7 +184,8 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         dimsVec[0] = att_vector.size();
         attr_vec_ds = DataSpace(1, dimsVec);
         att = mainGroup.createAttribute("BS_HUB_ID", strdatatype, attr_vec_ds);
-        //Convert the vector into a C string array - Because the input function ::write requires that.
+        // Convert the vector into a C string array - Because the input function
+        // ::write requires that.
         for (size_t index = 0; index < att_vector.size(); ++index) {
             cStrArray.push_back(att_vector[index].c_str());
         }
@@ -182,15 +198,18 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         cStrArray.clear();
         att_vector.clear();
         std::vector<std::string> att_vectorTmp;
-        att_matrix = cfg->bs_sdr_ids; //test: {{"AAA", "BBB"}, {"CCC", "DDD"}, {"EEE", "FFF"}}
+        att_matrix = cfg->bs_sdr_ids; // test: {{"AAA", "BBB"}, {"CCC", "DDD"},
+            // {"EEE", "FFF"}}
         for (size_t index = 0; index < att_matrix.size(); ++index) {
             std::string irisPerCell = std::to_string(att_matrix[index].size());
             att_vectorTmp.push_back(irisPerCell);
         }
         dimsVec[0] = att_vectorTmp.size();
         attr_vec_ds = DataSpace(1, dimsVec);
-        att = mainGroup.createAttribute("BS_SDR_NUM_PER_CELL", strdatatype, attr_vec_ds);
-        //Convert the vector into a C string array - Because the input function ::write requires that.
+        att = mainGroup.createAttribute("BS_SDR_NUM_PER_CELL", strdatatype,
+            attr_vec_ds);
+        // Convert the vector into a C string array - Because the input function
+        // ::write requires that.
         for (size_t index = 0; index < att_vectorTmp.size(); ++index) {
             cStrArray.push_back(att_vectorTmp[index].c_str());
         }
@@ -205,7 +224,8 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         dimsVec[0] = att_vector.size();
         attr_vec_ds = DataSpace(1, dimsVec);
         att = mainGroup.createAttribute("BS_SDR_ID", strdatatype, attr_vec_ds);
-        //Convert the vector into a C string array - Because the input function ::write requires that.
+        // Convert the vector into a C string array - Because the input function
+        // ::write requires that.
         for (size_t index = 0; index < att_vector.size(); ++index) {
             cStrArray.push_back(att_vector[index].c_str());
         }
@@ -220,16 +240,19 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
 
         // How many RF channels per Iris board are enabled ("single" or "dual")
         attr_data = cfg->bsSdrCh;
-        att = mainGroup.createAttribute("BS_CH_PER_RADIO", PredType::STD_I32BE, attr_ds);
+        att = mainGroup.createAttribute("BS_CH_PER_RADIO", PredType::STD_I32BE,
+            attr_ds);
         att.write(PredType::NATIVE_INT, &attr_data);
 
-        // Frame schedule (vec of strings for now, this should change to matrix when we go to multi-cell)
+        // Frame schedule (vec of strings for now, this should change to matrix when
+        // we go to multi-cell)
         cStrArray.clear();
         att_vector = cfg->frames;
         dimsVec[0] = att_vector.size();
         attr_vec_ds = DataSpace(1, dimsVec);
         att = mainGroup.createAttribute("BS_FRAME_SCHED", strdatatype, attr_vec_ds);
-        //Convert the vector into a C string array - Because the input function ::write requires that.
+        // Convert the vector into a C string array - Because the input function
+        // ::write requires that.
         for (size_t index = 0; index < att_vector.size(); ++index) {
             cStrArray.push_back(att_vector[index].c_str());
         }
@@ -239,22 +262,26 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
 
         // RX Gain RF channel A
         attr_data_double = cfg->rxgainA;
-        att = mainGroup.createAttribute("BS_RX_GAIN_A", PredType::NATIVE_DOUBLE, attr_ds);
+        att = mainGroup.createAttribute("BS_RX_GAIN_A", PredType::NATIVE_DOUBLE,
+            attr_ds);
         att.write(PredType::NATIVE_DOUBLE, &attr_data_double);
 
         // TX Gain RF channel A
         attr_data_double = cfg->txgainA;
-        att = mainGroup.createAttribute("BS_TX_GAIN_A", PredType::NATIVE_DOUBLE, attr_ds);
+        att = mainGroup.createAttribute("BS_TX_GAIN_A", PredType::NATIVE_DOUBLE,
+            attr_ds);
         att.write(PredType::NATIVE_DOUBLE, &attr_data_double);
 
         // RX Gain RF channel B
         attr_data_double = cfg->rxgainB;
-        att = mainGroup.createAttribute("BS_RX_GAIN_B", PredType::NATIVE_DOUBLE, attr_ds);
+        att = mainGroup.createAttribute("BS_RX_GAIN_B", PredType::NATIVE_DOUBLE,
+            attr_ds);
         att.write(PredType::NATIVE_DOUBLE, &attr_data_double);
 
         // TX Gain RF channel B
         attr_data_double = cfg->txgainB;
-        att = mainGroup.createAttribute("BS_TX_GAIN_B", PredType::NATIVE_DOUBLE, attr_ds);
+        att = mainGroup.createAttribute("BS_TX_GAIN_B", PredType::NATIVE_DOUBLE,
+            attr_ds);
         att.write(PredType::NATIVE_DOUBLE, &attr_data_double);
 
         // Beamsweep (true or false)
@@ -264,7 +291,8 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
 
         // Beacon Antenna
         attr_data = cfg->beacon_ant;
-        att = mainGroup.createAttribute("BS_BEACON_ANT", PredType::STD_I32BE, attr_ds);
+        att = mainGroup.createAttribute("BS_BEACON_ANT", PredType::STD_I32BE,
+            attr_ds);
         att.write(PredType::NATIVE_INT, &attr_data);
 
         // Number of antennas on Base Station
@@ -282,24 +310,28 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         attr_data_ind = cfg->data_ind;
         dimsVec[0] = attr_data_ind.size();
         attr_vec_ds = DataSpace(1, dimsVec);
-        att = mainGroup.createAttribute("OFDM_DATA_SC", PredType::STD_I32BE, attr_vec_ds);
+        att = mainGroup.createAttribute("OFDM_DATA_SC", PredType::STD_I32BE,
+            attr_vec_ds);
         att.write(PredType::NATIVE_INT, &attr_data_ind[0]);
 
         // Pilot subcarriers (indexes)
         attr_pilot_sc = cfg->pilot_sc;
         dimsVec[0] = attr_pilot_sc[0].size();
         attr_vec_ds = DataSpace(1, dimsVec);
-        att = mainGroup.createAttribute("OFDM_PILOT_SC", PredType::STD_I32BE, attr_vec_ds);
+        att = mainGroup.createAttribute("OFDM_PILOT_SC", PredType::STD_I32BE,
+            attr_vec_ds);
         att.write(PredType::NATIVE_INT, &attr_pilot_sc[0][0]);
         // Pilot subcarriers (values)
         dimsVec[0] = attr_pilot_sc[1].size();
         attr_vec_ds = DataSpace(1, dimsVec);
-        att = mainGroup.createAttribute("OFDM_PILOT_SC_VALS", PredType::STD_I32BE, attr_vec_ds);
+        att = mainGroup.createAttribute("OFDM_PILOT_SC_VALS", PredType::STD_I32BE,
+            attr_vec_ds);
         att.write(PredType::NATIVE_INT, &attr_pilot_sc[1][0]);
 
         // Freq. Domain Data Symbols - OBCH
         attr_txdata_freq_dom = cfg->txdata_freq_dom;
-        std::vector<double> re_im_split_vec; // re-write complex vector. type not supported by hdf5
+        std::vector<double>
+            re_im_split_vec; // re-write complex vector. type not supported by hdf5
         for (size_t i = 0; i < attr_txdata_freq_dom.size(); i++) {
             oss.str("");
             oss.clear();
@@ -321,7 +353,8 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
 
         // Time Domain Data Symbols
         attr_txdata_time_dom = cfg->txdata_time_dom;
-        //std::vector<double> re_im_split_vec;  // Declared above... re-write complex vector. type not supported by hdf5
+        // std::vector<double> re_im_split_vec;  // Declared above... re-write
+        // complex vector. type not supported by hdf5
         for (size_t i = 0; i < attr_txdata_time_dom.size(); i++) {
             oss.str("");
             oss.clear();
@@ -343,14 +376,16 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
 
         // Freq. Domain Pilot symbols (real and imaginary parts)
         attr_pilot_double = cfg->pilot_double;
-        std::vector<double> re_im_split_vec_pilot; // re-write complex vector. type not supported by hdf5
+        std::vector<double> re_im_split_vec_pilot; // re-write complex vector. type
+            // not supported by hdf5
         for (size_t j = 0; j < attr_pilot_double[0].size(); j++) {
             re_im_split_vec_pilot.push_back(attr_pilot_double[0][j]);
             re_im_split_vec_pilot.push_back(attr_pilot_double[1][j]);
         }
         dimsVec[0] = re_im_split_vec_pilot.size();
         attr_vec_ds = DataSpace(1, dimsVec);
-        att = mainGroup.createAttribute("OFDM_PILOT", PredType::NATIVE_DOUBLE, attr_vec_ds);
+        att = mainGroup.createAttribute("OFDM_PILOT", PredType::NATIVE_DOUBLE,
+            attr_vec_ds);
         att.write(PredType::NATIVE_DOUBLE, &re_im_split_vec_pilot[0]);
 
         // Number of Clients
@@ -365,7 +400,8 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
 
         // Client antenna polarization
         attr_data = cfg->clSdrCh;
-        att = mainGroup.createAttribute("CL_CH_PER_RADIO", PredType::STD_I32BE, attr_ds);
+        att = mainGroup.createAttribute("CL_CH_PER_RADIO", PredType::STD_I32BE,
+            attr_ds);
         att.write(PredType::NATIVE_INT, &attr_data);
 
         // Client AGC enable flag
@@ -377,7 +413,8 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         attr_gain_vec = cfg->clRxgainA_vec;
         dimsVec[0] = attr_gain_vec.size();
         attr_vec_ds = DataSpace(1, dimsVec);
-        att = mainGroup.createAttribute("CL_RX_GAIN_A", PredType::NATIVE_DOUBLE, attr_vec_ds);
+        att = mainGroup.createAttribute("CL_RX_GAIN_A", PredType::NATIVE_DOUBLE,
+            attr_vec_ds);
         if (!(cfg->clRxgainA_vec).empty()) {
             att.write(PredType::NATIVE_DOUBLE, &attr_gain_vec[0]);
         }
@@ -386,7 +423,8 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         attr_gain_vec = cfg->clTxgainA_vec;
         dimsVec[0] = attr_gain_vec.size();
         attr_vec_ds = DataSpace(1, dimsVec);
-        att = mainGroup.createAttribute("CL_TX_GAIN_A", PredType::NATIVE_DOUBLE, attr_vec_ds);
+        att = mainGroup.createAttribute("CL_TX_GAIN_A", PredType::NATIVE_DOUBLE,
+            attr_vec_ds);
         if (!(cfg->clTxgainA_vec).empty()) {
             att.write(PredType::NATIVE_DOUBLE, &attr_gain_vec[0]);
         }
@@ -395,7 +433,8 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         attr_gain_vec = cfg->clRxgainB_vec;
         dimsVec[0] = attr_gain_vec.size();
         attr_vec_ds = DataSpace(1, dimsVec);
-        att = mainGroup.createAttribute("CL_RX_GAIN_B", PredType::NATIVE_DOUBLE, attr_vec_ds);
+        att = mainGroup.createAttribute("CL_RX_GAIN_B", PredType::NATIVE_DOUBLE,
+            attr_vec_ds);
         if (!(cfg->clRxgainB_vec).empty()) {
             att.write(PredType::NATIVE_DOUBLE, &attr_gain_vec[0]);
         }
@@ -404,7 +443,8 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         attr_gain_vec = cfg->clTxgainB_vec;
         dimsVec[0] = attr_gain_vec.size();
         attr_vec_ds = DataSpace(1, dimsVec);
-        att = mainGroup.createAttribute("CL_TX_GAIN_B", PredType::NATIVE_DOUBLE, attr_vec_ds);
+        att = mainGroup.createAttribute("CL_TX_GAIN_B", PredType::NATIVE_DOUBLE,
+            attr_vec_ds);
         if (!(cfg->clTxgainB_vec).empty()) {
             att.write(PredType::NATIVE_DOUBLE, &attr_gain_vec[0]);
         }
@@ -415,7 +455,8 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         dimsVec[0] = att_vector.size();
         attr_vec_ds = DataSpace(1, dimsVec);
         att = mainGroup.createAttribute("CL_FRAME_SCHED", strdatatype, attr_vec_ds);
-        //Convert the vector into a C string array - Because the input function ::write requires that.
+        // Convert the vector into a C string array - Because the input function
+        // ::write requires that.
         for (size_t index = 0; index < att_vector.size(); ++index) {
             cStrArray.push_back(att_vector[index].c_str());
         }
@@ -429,7 +470,8 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         dimsVec[0] = att_vector.size();
         attr_vec_ds = DataSpace(1, dimsVec);
         att = mainGroup.createAttribute("CL_SDR_ID", strdatatype, attr_vec_ds);
-        //Convert the vector into a C string array - Because the input function ::write requires that.
+        // Convert the vector into a C string array - Because the input function
+        // ::write requires that.
         for (size_t index = 0; index < att_vector.size(); ++index) {
             cStrArray.push_back(att_vector[index].c_str());
         }
@@ -456,8 +498,8 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
             DataSpace* data_dataspace = new DataSpace(5, dims_data, max_dims_data);
             data_prop.setChunk(5, cdims);
 
-            DataSet* data_dataset = new DataSet(file->createDataSet("/Data/UplinkData",
-                PredType::STD_I16BE, *data_dataspace, data_prop));
+            DataSet* data_dataset = new DataSet(file->createDataSet(
+                "/Data/UplinkData", PredType::STD_I16BE, *data_dataspace, data_prop));
 
             data_prop.close();
             data_dataspace->close();
@@ -465,8 +507,8 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
             delete data_dataspace;
             data_dataset->close();
         }
-        //status = H5Gclose(group_id);
-        //if (status < 0 ) return status;
+        // status = H5Gclose(group_id);
+        // if (status < 0 ) return status;
         delete pilot_dataspace;
         pilot_dataset->close();
         file->close();
@@ -511,7 +553,9 @@ void Recorder::openHDF5()
     if (H5D_CHUNKED == pilot_prop.getLayout())
         cndims_pilot = pilot_prop.getChunk(ndims, cdims_pilot);
     cout << "dim pilot chunk = " << cndims_pilot << endl;
-    cout << "New Pilot Dataset Dimension " << ndims << "," << dims_pilot[0] << "," << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << "," << dims_pilot[4] << endl;
+    cout << "New Pilot Dataset Dimension " << ndims << "," << dims_pilot[0] << ","
+         << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << ","
+         << dims_pilot[4] << endl;
 #endif
     pilot_filespace.close();
     // Get Dataset for DATA (If Enabled) and check the shape of it
@@ -525,12 +569,17 @@ void Recorder::openHDF5()
 
 #if DEBUG_PRINT
         int cndims_data = 0;
-        hsize_t cdims_data[5] = { 1, 1, 1, 1, 2 * (hsize_t)cfg->sampsPerSymbol }; // data chunk size, TODO: optimize size
+        hsize_t cdims_data[5] = {
+            1, 1, 1, 1,
+            2 * (hsize_t)cfg->sampsPerSymbol
+        }; // data chunk size, TODO: optimize size
         if (H5D_CHUNKED == data_prop.getLayout())
             cndims_data = data_prop.getChunk(ndims, cdims_data);
         cout << "dim data chunk = " << cndims_data << endl;
         ;
-        cout << "New Data Dataset Dimension " << ndims << "," << dims_data[0] << "," << dims_data[1] << "," << dims_data[2] << "," << dims_data[3] << "," << dims_data[4] << endl;
+        cout << "New Data Dataset Dimension " << ndims << "," << dims_data[0] << ","
+             << dims_data[1] << "," << dims_data[2] << "," << dims_data[3] << ","
+             << dims_data[4] << endl;
 #endif
         data_filespace->close();
     }
@@ -597,8 +646,9 @@ void Recorder::start()
             rx_buffer_ptrs[i] = rx_buffer_[i].buffer.data();
             rx_buffer_status_ptrs[i] = rx_buffer_[i].buffer_status.data();
         }
-        std::vector<pthread_t> recv_thread = receiver_->startRecvThreads(rx_buffer_ptrs,
-            rx_buffer_status_ptrs, rx_buffer_[0].buffer_status.size(), rx_buffer_[0].buffer.size(), 1);
+        std::vector<pthread_t> recv_thread = receiver_->startRecvThreads(
+            rx_buffer_ptrs, rx_buffer_status_ptrs,
+            rx_buffer_[0].buffer_status.size(), rx_buffer_[0].buffer.size(), 1);
     } else
         receiver_->go(); // only beamsweeping
 
@@ -643,7 +693,8 @@ void* Recorder::taskThread(void* in_context)
     delete context;
     printf("task thread %d starts\n", tid);
 
-    obj_ptr->task_ptok[tid].reset(new moodycamel::ProducerToken(obj_ptr->message_queue_));
+    obj_ptr->task_ptok[tid].reset(
+        new moodycamel::ProducerToken(obj_ptr->message_queue_));
 
     Event_data event;
     bool ret = false;
@@ -674,15 +725,13 @@ herr_t Recorder::record(int, int offset)
     ant_id = *((int*)cur_ptr_buffer + 3);
 #if DEBUG_PRINT
     int cell_id = *((int*)cur_ptr_buffer + 2);
-    printf("record process frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n", frame_id, symbol_id, cell_id, ant_id);
-    printf("record samples: %d %d %d %d %d %d %d %d ....\n", *((short*)cur_ptr_buffer + 9),
-        *((short*)cur_ptr_buffer + 10),
-        *((short*)cur_ptr_buffer + 11),
-        *((short*)cur_ptr_buffer + 12),
-        *((short*)cur_ptr_buffer + 13),
-        *((short*)cur_ptr_buffer + 14),
-        *((short*)cur_ptr_buffer + 15),
-        *((short*)cur_ptr_buffer + 16));
+    printf("record process frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n",
+        frame_id, symbol_id, cell_id, ant_id);
+    printf("record samples: %d %d %d %d %d %d %d %d ....\n",
+        *((short*)cur_ptr_buffer + 9), *((short*)cur_ptr_buffer + 10),
+        *((short*)cur_ptr_buffer + 11), *((short*)cur_ptr_buffer + 12),
+        *((short*)cur_ptr_buffer + 13), *((short*)cur_ptr_buffer + 14),
+        *((short*)cur_ptr_buffer + 15), *((short*)cur_ptr_buffer + 16));
 #endif
     short* cur_ptr_buffer_short = (short*)(cur_ptr_buffer + sizeof(int) * 4);
     if (cfg->max_frame != 0 && frame_id > cfg->max_frame) {
@@ -715,15 +764,17 @@ herr_t Recorder::record(int, int offset)
         count[4] = dims_pilot[4]; // data size
 
         if (cfg->isPilot(frame_id, symbol_id)) {
-            //assert(pilot_dataset >= 0);
+            // assert(pilot_dataset >= 0);
             // Are we going to extend the dataset?
             if ((size_t)frame_id >= dims_pilot[0]) {
                 dims_pilot[0] = cfg->max_frame != 0
-                    ? std::min(dims_pilot[0] + config_pilot_extent_step, (long long unsigned int)cfg->max_frame + 1) // 400 is a threshold.
+                    ? std::min(dims_pilot[0] + config_pilot_extent_step,
+                          (long long unsigned int)cfg->max_frame + 1) // 400 is a threshold.
                     : dims_pilot[0] + config_pilot_extent_step;
                 pilot_dataset->extend(dims_pilot);
 #if DEBUG_PRINT
-                std::cout << "FrameId " << frame_id << ", (Pilot) Extent to " << dims_pilot[0] << " Frames" << std::endl;
+                std::cout << "FrameId " << frame_id << ", (Pilot) Extent to "
+                          << dims_pilot[0] << " Frames" << std::endl;
 #endif
             }
             // Select a hyperslab in extended portion of the dataset
@@ -732,16 +783,18 @@ herr_t Recorder::record(int, int offset)
 
             // define memory space
             DataSpace pilot_memspace(5, count, NULL);
-            pilot_dataset->write(cur_ptr_buffer_short, PredType::NATIVE_INT16, pilot_memspace, pilot_filespace);
+            pilot_dataset->write(cur_ptr_buffer_short, PredType::NATIVE_INT16,
+                pilot_memspace, pilot_filespace);
             pilot_filespace.close();
         } else if (cfg->isData(frame_id, symbol_id)) {
 
-            //assert(data_dataset >= 0);
+            // assert(data_dataset >= 0);
             // Are we going to extend the dataset?
             if ((size_t)frame_id >= dims_data[0]) {
-                //dims_data[0] = dims_data[0] + config_data_extent_step;
+                // dims_data[0] = dims_data[0] + config_data_extent_step;
                 dims_data[0] = cfg->max_frame != 0
-                    ? std::min(dims_data[0] + config_data_extent_step, (long long unsigned int)cfg->max_frame + 1) // 400 is a threshold.
+                    ? std::min(dims_data[0] + config_data_extent_step,
+                          (long long unsigned int)cfg->max_frame + 1) // 400 is a threshold.
                     : dims_data[0] + config_data_extent_step;
                 data_dataset->extend(dims_data);
                 printf("(Data) Extent to %llu Frames\n", dims_data[0]);
@@ -760,7 +813,8 @@ herr_t Recorder::record(int, int offset)
 
             // define memory space
             DataSpace* data_memspace = new DataSpace(5, count, NULL);
-            data_dataset->write(cur_ptr_buffer_short, PredType::NATIVE_INT16, *data_memspace, *data_filespace);
+            data_dataset->write(cur_ptr_buffer_short, PredType::NATIVE_INT16,
+                *data_memspace, *data_filespace);
             delete data_memspace;
         }
     }
@@ -773,8 +827,13 @@ herr_t Recorder::record(int, int offset)
     // catch failure caused by the DataSet operations
     catch (DataSetIException error) {
         error.printError();
-        std::cout << "DataSet: Failed to record pilots from frame " << frame_id << " , UE " << cfg->getClientId(frame_id, symbol_id) << " antenna " << ant_id << " dims_pilot[4] " << dims_pilot[4] << std::endl;
-        std::cout << "Dataset Dimension is " << ndims << "," << dims_pilot[0] << "," << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << "," << dims_pilot[4] << endl;
+        std::cout << "DataSet: Failed to record pilots from frame " << frame_id
+                  << " , UE " << cfg->getClientId(frame_id, symbol_id)
+                  << " antenna " << ant_id << " dims_pilot[4] " << dims_pilot[4]
+                  << std::endl;
+        std::cout << "Dataset Dimension is " << ndims << "," << dims_pilot[0] << ","
+                  << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3]
+                  << "," << dims_pilot[4] << endl;
         return -1;
     }
 
