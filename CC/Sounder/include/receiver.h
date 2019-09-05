@@ -100,6 +100,8 @@ private:
     // pointer of message_queue_
     moodycamel::ConcurrentQueue<Event_data>* message_queue_;
     int core_id_;
+
+    ReceiverContext* context;
 };
 
 #endif

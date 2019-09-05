@@ -21,6 +21,8 @@ Receiver::Receiver(int n_rx_threads, Config* config, moodycamel::ConcurrentQueue
     /* initialize random seed: */
     srand(time(NULL));
 
+    if (thread_num_ > 0)
+        context = new ReceiverContext[thread_num_];
     message_queue_ = in_queue;
     radioconfig_->radioConfigure();
 }
@@ -83,11 +85,10 @@ std::vector<pthread_t> Receiver::startRecvThreads(char** in_buffer, int** in_buf
     for (int i = 0; i < thread_num_; i++) {
         pthread_t recv_thread_;
         // record the thread id
-        ReceiverContext* context = new ReceiverContext;
-        context->ptr = this;
-        context->tid = i;
+        context[i].ptr = this;
+        context[i].tid = i;
         // start socket thread
-        if (pthread_create(&recv_thread_, NULL, Receiver::loopRecv, (void*)&context) != 0) {
+        if (pthread_create(&recv_thread_, NULL, Receiver::loopRecv, (void*)(&context[i])) != 0) {
             perror("socket recv thread create failed");
             exit(0);
         }
@@ -112,7 +113,6 @@ void* Receiver::loopRecv(void* in_context)
     Receiver* obj_ptr = context->ptr;
     Config* cfg = obj_ptr->config_;
     int tid = context->tid;
-    delete context;
     moodycamel::ConcurrentQueue<Event_data>* message_queue_ = obj_ptr->message_queue_;
 
     if (cfg->core_alloc) {
@@ -271,7 +271,6 @@ void* Receiver::clientTxRx(void* context)
     //std::cout << "Thread " << tid << ", txSyms " << txSyms << ", rxSyms " << rxSyms << ", txStartSym " << txStartSym << ", rate " << profile->rate << ", txFrameDelta " << txFrameDelta << ", nsamps " << NUM_SAMPS << std::endl;
     //d_mutex.unlock();
 
-    delete profile;
     std::vector<std::complex<float>> buffs(NUM_SAMPS, 0);
     std::vector<void*> rxbuff(2);
     rxbuff[0] = buffs.data();
