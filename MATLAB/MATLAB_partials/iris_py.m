@@ -22,7 +22,7 @@ classdef iris_py < handle
         
         % Parameters to feed python (pun very intended!)
         serial_ids;
-        n_chain;        % number of Iris boards in a chain
+        n_chain;         % number of Iris boards in a chain
 		sample_rate;
 		tx_freq;
 		rx_freq;
@@ -32,6 +32,7 @@ classdef iris_py < handle
 		n_samp;
         tdd_sched;
         n_zpad_samp;    %number of zero-padding samples
+        n_frame = 10;
         
     end
     
@@ -48,6 +49,7 @@ classdef iris_py < handle
                 obj.tx_gain = sdr_params.txgain;
                 obj.rx_gain = sdr_params.rxgain;
                 obj.n_samp = sdr_params.n_samp;
+                obj.n_frame = sdr_params.n_frame;
                 obj.tdd_sched = sdr_params.tdd_sched; % This is an array
                 obj.n_zpad_samp = sdr_params.n_zpad_samp;
                 
@@ -57,7 +59,8 @@ classdef iris_py < handle
                         'tx_freq', obj.tx_freq, 'rx_freq', obj.rx_freq,...
                         'tx_gain',obj.tx_gain,'rx_gain',obj.rx_gain,...
                         'sample_rate',obj.sample_rate, 'n_samp',...
-                        obj.n_samp,'n_zpad_samp',obj.n_zpad_samp) ); 
+                        obj.n_samp,'n_zpad_samp',obj.n_zpad_samp,...
+                        'max_frames',obj.n_frame) ); 
                     
                     obj.py_obj_array(ipy,:) = {py_obj};
                 end
@@ -129,12 +132,13 @@ classdef iris_py < handle
         
         % Read n_samp data
         function [data, len] = sdrrx(obj, n_samp)
-            data = zeros(obj.n_chain, n_samp);
+            data = zeros(obj.n_chain, obj.n_frame*n_samp);  % Change this to max frame!
             for ipy = 1:obj.n_chain
                 rcv_data = obj.py_obj_array{ipy}.recv_stream_tdd();
                 data(ipy,:) = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(rcv_data) ) ) ) + ...
                     1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(rcv_data) ) ) );
             end
+            data = obj.get_best_frame(data.', n_samp);
             len = length(data);
         end
         
@@ -144,6 +148,19 @@ classdef iris_py < handle
                 obj.py_obj_array{ipy}.close();
                 delete(obj.py_obj_array{ipy});
             end
+        end
+        
+        function [data] = get_best_frame(obj, data_frame, n_samp)
+            data_frame = reshape(data_frame,n_samp, [], obj.n_frame );
+            if obj.n_chain == 1
+                 mean_pow = mean(abs ( data_frame),1) ;
+            else  
+                mean_pow = mean(mean(abs ( data_frame) ,1) );
+            end
+            [m,pos] = max(mean_pow);
+            data = data_frame(:,:,pos).';
+            fprintf('Returning frame number %d with max power = %f \n',pos,m);
+            
         end
         
     end

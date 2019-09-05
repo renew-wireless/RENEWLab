@@ -12,6 +12,12 @@
 """
 
 import sys
+#These are needed in case one needs to run the driver on its own.
+# Make sure it is ran from the Python toolbox folder. 
+sys.path.append('../PYTHON/IrisUtils/')
+sys.path.append('../')
+sys.path.append('../IrisUtils/data_in/')
+
 from argparse import ArgumentParser
 import SoapySDR
 from SoapySDR import * #SOAPY_SDR_ constants
@@ -21,6 +27,7 @@ import time
 import os
 import math
 import json
+import threading
 import matplotlib.pyplot as plt
 
 
@@ -48,16 +55,18 @@ tx_advance = 68
 corr_threshold = 1
 
 #preambles_bs = generate_training_seq(preamble_type='gold_ifft', seq_length=128, cp=0, upsample=1)
-
 #beacon = preambles_bs[0, :]*.5
 #np.savetxt('beacon.txt', np.column_stack([beacon.real, beacon.imag]))
+
 # Read beacon from file
 bcn_real, bcn_imag = np.loadtxt('beacon.txt', unpack=True)
 beacon = bcn_real + 1j * bcn_imag
 
+
+
 #Generate LTS seq:
 def gen_lts(seq_length=128, cp=0, upsample=1):
-# Generate 802.11 LTS preamble
+    # Generate 802.11 LTS preamble
     lts_freq = np.array([
         0, 0, 0, 0, 0, 0, 1, 1, -1, -1, 1, 1, -1, 1, -1, 1, 1, 1, 1, 1, 1, -1, -1, 1, 1, -1, 1, -1, 1, 1, 1, 1, 0,1, -1, -1, 1,
         1, -1, 1, -1, 1, -1, -1, -1, -1, -1, 1, 1, -1, -1, 1, -1, 1, -1, 1, 1, 1, 1, 0, 0, 0, 0, 0])
@@ -77,7 +86,7 @@ def cfloat2uint32(arr, order='IQ'):
     RETURNS:
     - corresponding uint32 value
     """
-    arr_i = (np.real(arr) * 32767).astype(np.uint16)    
+    arr_i = (np.real(arr) * 32767).astype(np.uint16)
     arr_q = (np.imag(arr) * 32767).astype(np.uint16)
     if order == 'IQ':
         return np.bitwise_or(arr_q, np.left_shift(arr_i.astype(np.uint32), 16))
@@ -102,7 +111,8 @@ class Iris_py:
 		bw = None,
 		sample_rate = None,
 		n_samp = None,				# Total number of samples, including zero-pads
-		n_zpad_samp = 150,			# Total number of samples used for zero-padding in prefix and postfix 
+		n_zpad_samp = 150,			# Total number of samples used for zero-padding in prefix and postfix
+                max_frames = 10,                        # Number of frames TXed: How many times the schedule will be repeated
 		both_channels = False,
 		agc_en = False,
 	):
@@ -119,6 +129,7 @@ class Iris_py:
 		self.agc_en = agc_en
 		self.both_channels = both_channels
 		self.n_zpad_samp = int(n_zpad_samp)
+                self.max_frames = int(max_frames)
 
 		# PACKET DETECT SETUP
 		self.sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_THRESH, 0)
@@ -134,7 +145,7 @@ class Iris_py:
 			if sample_rate is not None:
 				self.sdr.setSampleRate(SOAPY_SDR_TX, chan, sample_rate)
 			if bw is not None:
-			    self.sdr.setBandwidth(SOAPY_SDR_TX, chan, 3*sample_rate)
+				self.sdr.setBandwidth(SOAPY_SDR_TX, chan, bw)
 			if tx_gain is not None:
 				self.sdr.setGain(SOAPY_SDR_TX, chan, tx_gain) 
 			if tx_freq is not None:
@@ -150,7 +161,7 @@ class Iris_py:
 			if sample_rate is not None:
 				self.sdr.setSampleRate(SOAPY_SDR_RX, chan, sample_rate)
 			if bw is not None:
-			    self.sdr.setBandwidth(SOAPY_SDR_RX, chan, 3*sample_rate)
+				self.sdr.setBandwidth(SOAPY_SDR_RX, chan, bw)
 			if rx_gain is not None:
 				self.sdr.setGain(SOAPY_SDR_RX, chan, rx_gain)
 			if rx_freq is not None:
@@ -223,9 +234,9 @@ class Iris_py:
 			self.tdd_sched = tdd_sched
 		else: self.tdd_sched = "G"
 		print(tdd_sched)
-		
+	        max_frames = self.max_frames
 		if bool(is_bs):
-			conf_str = {"tdd_enabled": True, "frame_mode": "free_running", "symbol_size" : self.n_samp, "max_frame": 1, "frames": [self.tdd_sched]}
+			conf_str = {"tdd_enabled": True, "frame_mode": "free_running", "symbol_size" : self.n_samp, "max_frame": max_frames, "frames": [self.tdd_sched]}
 			self.sdr.writeSetting("TDD_CONFIG", json.dumps(conf_str))
 		else:
 			conf_str = {"tdd_enabled": True, "frame_mode": "triggered", "symbol_size" : self.n_samp, "frames": [self.tdd_sched]}
@@ -314,19 +325,24 @@ class Iris_py:
 
 	def recv_stream_tdd(self):
 		'''Read an incoming stream.'''
+                max_frames = int(self.max_frames)
 		in_len  =  int(self.n_samp)
 		wave_rx_a = np.zeros((in_len), dtype=np.complex64)
 		wave_rx_b = np.zeros((in_len), dtype=np.complex64)
+                rx_frames_a = np.zeros((in_len*max_frames), dtype=np.complex64)
 
 		n_R = self.tdd_sched.count("R")         #How many Read frames in the tdd schedule
 		print("n_samp is: %d  \n"%self.n_samp)
-		for k in range(n_R):
-			r1 = self.sdr.readStream(self.rx_stream, [wave_rx_a, wave_rx_b], int(self.n_samp))
-			print("reading stream: ({})".format(r1))
+
+                for m in range(max_frames):
+                    for k in range(n_R):
+		        r1 = self.sdr.readStream(self.rx_stream, [wave_rx_a, wave_rx_b], int(self.n_samp))
+		        print("reading stream: ({})".format(r1))
+                    rx_frames_a[m*in_len : (m*in_len + in_len)] = wave_rx_a
 
 		print("SDR {} ".format(SoapySDR.timeNsToTicks(self.sdr.getHardwareTime(""), self.sample_rate)))
 		#print("recv_stream_tdd: wave_rx_a: \n")
-		return( wave_rx_a )
+		return( rx_frames_a )
 
 	def close(self):
 		'''Cleanup streams. Rest SDRs'''

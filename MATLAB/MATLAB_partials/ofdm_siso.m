@@ -52,6 +52,7 @@ RX_FRQ                  = TX_FRQ;
 TX_GN                   = 40;
 RX_GN                   = 20;
 SMPL_RT                 = 5e6;
+N_FRM                   = 20;
 
 b_ids = string.empty();
 b_scheds = string.empty();
@@ -145,7 +146,7 @@ else
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
  % Create two Iris node objects:
-    b_ids(end+1) = "0339";
+    b_ids(end+1) = "0318";
     ue_ids(end+1) = "RF3C000045";
     
     b_prim_sched = "PGGGGGRG";           % BS primary noede's schedule: Send Beacon only from one Iris board
@@ -170,6 +171,7 @@ else
         'rxgain', RX_GN, ...
         'sample_rate', SMPL_RT, ...
         'n_samp', n_samp, ...          % number of samples per frame time.
+        'n_frame', N_FRM, ...
         'tdd_sched', b_scheds, ...     % number of zero-paddes samples
         'n_zpad_samp', (N_ZPAD_PRE + N_ZPAD_POST) ...
         );
@@ -377,7 +379,7 @@ end
 
 % Channel Estimates
 cf = cf + 1;
-
+figure(cf); clf;
 rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
 rx_H_est_plot(SC_IND_DATA) = rx_H_est(SC_IND_DATA);
 rx_H_est_plot(SC_IND_PILOTS) = rx_H_est(SC_IND_PILOTS);

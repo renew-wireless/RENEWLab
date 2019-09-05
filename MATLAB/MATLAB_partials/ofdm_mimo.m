@@ -23,7 +23,7 @@ end
 % Params:
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
-SIM_MOD                 = 1;
+SIM_MOD                 = 0;
 DEBUG                   = 1;
 
 if SIM_MOD
@@ -35,14 +35,14 @@ end
 fprintf("Channel type: %s \n",chan_type);
 
 % Iris params:
-N_BS_NODE               = 8;
+N_BS_NODE               = 4;
 N_UE                    = 2;
 TX_FRQ                  = 3.6e9;
 RX_FRQ                  = TX_FRQ;
 TX_GN                   = 40;
 RX_GN                   = 20;
 SMPL_RT                 = 5e6;
- 
+N_FRM                   = 20;
 
 b_ids                   = string.empty();
 b_scheds                = string.empty();
@@ -55,7 +55,7 @@ fprintf("MIMO algorithm: %s \n",MIMO_ALG);
 % Waveform params
 N_OFDM_SYM              = 46;         % Number of OFDM symbols for burst, it needs to be less than 47
 MOD_ORDER               = 16;          % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
-TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
+TX_SCALE                = 0.5;         % Scale for Tx waveform ([0:1])
 
 % OFDM params
 SC_IND_PILOTS           = [8 22 44 58];                           % Pilot subcarrier indices
@@ -143,7 +143,8 @@ if (SIM_MOD)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 else
     % Device IDs of BS nodes and UE nodes
-    b_ids = ["0328", "0339", "0268", "0282", "0344", "0233", "0334", "0402"];
+    b_ids = ["0328", "0339", "0268", "0282"]%, "0344", "0233", "0334", "0402"];
+    %b_ids = ["0276", "0318", "0380", "0266", "0338", "0329", "0264", "0279"];
     ue_ids= ["RF3C000025", "RF3C000045"];
 
     b_prim_sched = "PGGGGGGGGGGRG";           % BS primary node's schedule: Send Beacon only from one Iris board
@@ -175,6 +176,7 @@ else
         'rxgain', RX_GN, ...
         'sample_rate', SMPL_RT, ...
         'n_samp', n_samp, ...          % number of samples per frame time.
+        'n_frame', N_FRM, ...
         'tdd_sched', b_scheds, ...     % number of zero-paddes samples
         'n_zpad_samp', (N_ZPAD_PRE + N_ZPAD_POST) ...
         );
@@ -225,6 +227,7 @@ for ibs =1:N_BS_NODE
         % minimum sanity check of the correlator's output
         if pream_ind_ibs < 1
             fprintf("Bad correlator output!\n");
+            pream_ind_ibs = length(preamble) + 91;
             figure,
             for sp = 1:N_BS_NODE
                 subplot(N_BS_NODE,1,sp);
@@ -236,7 +239,7 @@ for ibs =1:N_BS_NODE
             end
             sgtitle('LTS correlations accross antennas')
             
-            return; 
+            %return; 
         else
             rx_lts_mat(ibs,:) = rx_vec_iris(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 );
             payload_rx(ibs,:) = rx_vec_iris(ibs, payload_ind(ibs) : payload_ind(ibs)+(N_OFDM_SYM)*(N_SC +CP_LEN)-1);

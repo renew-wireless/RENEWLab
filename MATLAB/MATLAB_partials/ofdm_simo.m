@@ -22,7 +22,7 @@ end
 % Params:
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
-SIM_MOD                 = 1;    
+SIM_MOD                 = 0;    
 
 
 if SIM_MOD
@@ -52,7 +52,7 @@ RX_FRQ                  = TX_FRQ;
 TX_GN                   = 40;
 RX_GN                   = 20;
 SMPL_RT                 = 5e6;
-
+N_FRM                   = 20;
 
 b_ids = string.empty();
 b_scheds = string.empty();
@@ -146,7 +146,7 @@ else
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     % Create a two Iris node objects:
-    b_ids = ["0339", "0268"];
+    b_ids = ["0318", "0380"];
     ue_ids= "RF3C000045";
 
     b_prim_sched = "PGGGGGRG";           % BS primary noede's schedule: Send Beacon only from one Iris board
@@ -175,6 +175,7 @@ else
         'rxgain', RX_GN, ...
         'sample_rate', SMPL_RT, ...
         'n_samp', n_samp, ...          % number of samples per frame time.
+        'n_frame', N_FRM, ...
         'tdd_sched', b_scheds, ...     % number of zero-paddes samples
         'n_zpad_samp', (N_ZPAD_PRE + N_ZPAD_POST) ...
         );
@@ -449,7 +450,7 @@ end
 
 % Channel Estimates (MRC)
 cf = cf + 1;
-
+figure(cf); clf;
 rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
 rx_H_est_plot(SC_IND_DATA) = rx_H_est(SC_IND_DATA);
 rx_H_est_plot(SC_IND_PILOTS) = rx_H_est(SC_IND_PILOTS);
