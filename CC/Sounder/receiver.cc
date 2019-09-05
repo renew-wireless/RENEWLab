@@ -134,13 +134,13 @@ void* Receiver::loopRecv(void* in_context)
     // use token to speed up
     moodycamel::ProducerToken local_ptok(*message_queue_);
 
-    char* buffer = obj_ptr->buffer_[tid];
-    int* buffer_status = obj_ptr->buffer_status_[tid];
+    char* buffer1 = obj_ptr->buffer_[tid];
+    int* buffer_status1 = obj_ptr->buffer_status_[tid];
     int buffer_length = obj_ptr->buffer_length_;
     int buffer_frame_num = obj_ptr->buffer_frame_num_;
 
-    char* cur_ptr_buffer = buffer;
-    int* cur_ptr_buffer_status = buffer_status;
+    int buffer1_index = 0;
+    int status1_index = 0;
 
     int nradio_per_thread = cfg->nBsSdrs[0] / obj_ptr->thread_num_;
     int rem_thread_nradio = cfg->nBsSdrs[0] % obj_ptr->thread_num_;
@@ -152,21 +152,21 @@ void* Receiver::loopRecv(void* in_context)
 
     // to handle second channel at each radio
     // this is assuming buffer_frame_num is at least 2
-    char* cur_ptr_buffer2;
-    char* buffer2 = obj_ptr->buffer_[tid] + cfg->getPackageLength();
+    char* buffer2;
     int* buffer_status2 = obj_ptr->buffer_status_[tid] + 1;
-    int* cur_ptr_buffer_status2 = buffer_status2;
+    int buffer2_index = 0;
+    int status2_index = 0;
     const int bsSdrCh = cfg->bsSdrCh;
-    if (bsSdrCh == 2)
-        cur_ptr_buffer2 = buffer2;
+    if (bsSdrCh == 1)
+        buffer2 = obj_ptr->buffer_[tid] + cfg->getPackageLength();
     else
-        cur_ptr_buffer2 = new char[cfg->getPackageLength()];
+        buffer2 = new char[cfg->getPackageLength()];
 
     int offset = 0;
     long long frameTime;
     while (cfg->running) {
         // if buffer is full, exit
-        if (cur_ptr_buffer_status[0] == 1) {
+        if (buffer_status1[status1_index] == 1) {
             printf("thread %d buffer full\n", tid);
             exit(0);
         }
@@ -174,9 +174,11 @@ void* Receiver::loopRecv(void* in_context)
         // receive data
         for (int it = 0; it < nradio_cur_thread; it++) {
             int rid = (tid < rem_thread_nradio) ? tid * (nradio_per_thread + 1) + it : tid * (nradio_per_thread) + rem_thread_nradio + it;
-            void* samp1 = cur_ptr_buffer + 4 * sizeof(int);
-            void* samp2 = cur_ptr_buffer2 + 4 * sizeof(int);
+            void* samp1 = buffer1 + buffer1_index + 4 * sizeof(int);
+            void* samp2 = buffer2 + buffer2_index + 4 * sizeof(int);
             void* samp[2] = { samp1, samp2 };
+            int* int_sample1 = (int*)(buffer1 + buffer1_index);
+            int* int_sample2 = (int*)(buffer2 + buffer2_index);
             if (radio->radioRx(rid, samp, frameTime) < 0) {
                 cfg->running = false;
                 break;
@@ -185,33 +187,29 @@ void* Receiver::loopRecv(void* in_context)
             frame_id = (int)(frameTime >> 32);
             symbol_id = (int)((frameTime >> 16) & 0xFFFF);
             ant_id = rid * bsSdrCh;
-            *((int*)cur_ptr_buffer) = frame_id;
-            *((int*)cur_ptr_buffer + 1) = symbol_id;
-            *((int*)cur_ptr_buffer + 2) = 0; //cell_id
-            *((int*)cur_ptr_buffer + 3) = ant_id;
+            int_sample1[0] = frame_id;
+            int_sample1[1] = symbol_id;
+            int_sample1[2] = 0; //cell_id
+            int_sample1[3] = ant_id;
             if (bsSdrCh == 2) {
-                *((int*)cur_ptr_buffer2) = frame_id;
-                *((int*)cur_ptr_buffer2 + 1) = symbol_id;
-                *((int*)cur_ptr_buffer2 + 2) = 0; //cell_id
-                *((int*)cur_ptr_buffer2 + 3) = ant_id + 1;
+                int_sample2[0] = frame_id;
+                int_sample2[1] = symbol_id;
+                int_sample2[2] = 0; //cell_id
+                int_sample2[3] = ant_id + 1;
             }
 #if DEBUG_PRINT
+            short* short_sample1 = (short*)(buffer1 + buffer1_index);
             printf("receive thread %d, frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n", tid, frame_id, symbol_id, cell_id, ant_id);
-            printf("receive samples: %d %d %d %d %d %d %d %d ...\n", *((short*)cur_ptr_buffer + 9),
-                *((short*)cur_ptr_buffer + 10),
-                *((short*)cur_ptr_buffer + 11),
-                *((short*)cur_ptr_buffer + 12),
-                *((short*)cur_ptr_buffer + 13),
-                *((short*)cur_ptr_buffer + 14),
-                *((short*)cur_ptr_buffer + 15),
-                *((short*)cur_ptr_buffer + 16));
+            printf("receive samples: %d %d %d %d %d %d %d %d ...\n",
+                short_sample1[9], short_sample1[10], short_sample1[11], short_sample1[12],
+                short_sample1[13], short_sample1[14], short_sample1[15], short_sample1[16]);
 #endif
             // get the position in buffer
-            offset = cur_ptr_buffer_status - buffer_status;
+            offset = status1_index;
             // move ptr & set status to full
-            cur_ptr_buffer_status[0] = 1; // has data, after it is read it should be set to 0
-            cur_ptr_buffer_status = buffer_status + (cur_ptr_buffer_status - buffer_status + bsSdrCh) % buffer_frame_num;
-            cur_ptr_buffer = buffer + ((char*)cur_ptr_buffer - (char*)buffer + cfg->getPackageLength() * bsSdrCh) % buffer_length;
+            buffer_status1[status1_index] = 1; // has data, after it is read it should be set to 0
+            status1_index = (status1_index + bsSdrCh) % buffer_frame_num;
+            buffer1_index = (buffer1_index + cfg->getPackageLength() * bsSdrCh) % buffer_length;
             // push EVENT_RX_SYMBOL event into the queue
             Event_data package_message;
             package_message.event_type = EVENT_RX_SYMBOL;
@@ -222,10 +220,10 @@ void* Receiver::loopRecv(void* in_context)
                 exit(0);
             }
             if (bsSdrCh == 2) {
-                offset = cur_ptr_buffer_status2 - buffer_status; // offset is absolute
-                cur_ptr_buffer_status2[0] = 1; // has data, after doing fft, it is set to 0
-                cur_ptr_buffer_status2 = buffer_status2 + (cur_ptr_buffer_status2 - buffer_status2 + bsSdrCh) % buffer_frame_num;
-                cur_ptr_buffer2 = buffer2 + ((char*)cur_ptr_buffer2 - (char*)buffer2 + cfg->getPackageLength() * bsSdrCh) % buffer_length;
+                offset = status2_index; // offset is absolute
+                buffer_status2[status2_index] = 1; // has data, after doing fft, it is set to 0
+                status2_index = (status2_index + bsSdrCh) % buffer_frame_num;
+                buffer2_index = (buffer2_index + cfg->getPackageLength() * bsSdrCh) % buffer_length;
                 // push EVENT_RX_SYMBOL event into the queue
                 Event_data package_message2;
                 package_message2.event_type = EVENT_RX_SYMBOL;
@@ -238,8 +236,8 @@ void* Receiver::loopRecv(void* in_context)
             }
         }
     }
-    if (bsSdrCh != 2)
-        delete[] cur_ptr_buffer2;
+    if (bsSdrCh != 1)
+        delete[] buffer2;
     return 0;
 }
 
