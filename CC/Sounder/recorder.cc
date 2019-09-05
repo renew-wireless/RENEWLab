@@ -605,9 +605,7 @@ void Recorder::closeHDF5()
         data_dataset->extend(dims_data);
         data_prop.close();
         data_filespace->close();
-        delete data_filespace;
         data_dataset->close();
-        delete data_dataset;
     }
 
     file->close();
