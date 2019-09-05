@@ -102,6 +102,13 @@ std::vector<pthread_t> Receiver::startRecvThreads(char** in_buffer, int** in_buf
     return created_threads;
 }
 
+void Receiver::completeRecvThreads(const std::vector<pthread_t>& recv_thread)
+{
+    for (std::vector<pthread_t>::const_iterator it = recv_thread.begin();
+         it != recv_thread.end(); ++it)
+        pthread_join(*it, NULL);
+}
+
 void Receiver::go()
 {
     radioconfig_->radioStart(); // hardware trigger

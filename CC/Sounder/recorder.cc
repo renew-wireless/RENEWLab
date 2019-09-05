@@ -571,6 +571,8 @@ Recorder::~Recorder()
 void Recorder::stop()
 {
     cfg->running = false;
+    if (rx_thread_num > 0)
+        receiver_->completeRecvThreads(recv_thread);
     receiver_.reset();
     if (cfg->bsPresent && rx_thread_num > 0)
         this->closeHDF5();
@@ -599,7 +601,7 @@ void Recorder::start()
             rx_buffer_ptrs[i] = rx_buffer_[i].buffer.data();
             rx_buffer_status_ptrs[i] = rx_buffer_[i].buffer_status.data();
         }
-        std::vector<pthread_t> recv_thread = receiver_->startRecvThreads(rx_buffer_ptrs,
+        recv_thread = receiver_->startRecvThreads(rx_buffer_ptrs,
             rx_buffer_status_ptrs, rx_buffer_[0].buffer_status.size(), rx_buffer_[0].buffer.size(), 1);
     } else
         receiver_->go(); // only beamsweeping

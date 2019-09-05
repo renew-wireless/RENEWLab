@@ -76,6 +76,7 @@ public:
     ~Receiver();
 
     std::vector<pthread_t> startRecvThreads(char** in_buffer, int** in_buffer_status, int in_buffer_frame_num, int in_buffer_length, int in_core_id = 0);
+    void completeRecvThreads(const std::vector<pthread_t>& recv_thread);
     std::vector<pthread_t> startClientThreads();
     void go();
     static void* loopRecv(void* in_context);

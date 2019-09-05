@@ -94,6 +94,7 @@ private:
     moodycamel::ConcurrentQueue<Event_data> task_queue_;
     moodycamel::ConcurrentQueue<Event_data> message_queue_;
     pthread_t* task_threads; //[TASK_THREAD_NUM];
+    std::vector<pthread_t> recv_thread;
 
     EventHandlerContext* context; //[TASK_THREAD_NUM];
 
