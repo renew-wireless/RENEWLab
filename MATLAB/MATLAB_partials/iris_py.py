@@ -12,12 +12,6 @@
 """
 
 import sys
-#These are needed in case one needs to run the driver on its own.
-# Make sure it is ran from the Python toolbox folder. 
-sys.path.append('../PYTHON/IrisUtils/')
-sys.path.append('../')
-sys.path.append('../IrisUtils/data_in/')
-
 from argparse import ArgumentParser
 import SoapySDR
 from SoapySDR import * #SOAPY_SDR_ constants
