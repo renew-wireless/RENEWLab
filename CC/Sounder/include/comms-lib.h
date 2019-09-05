@@ -51,7 +51,7 @@ public:
     static std::vector<std::complex<float>> FFT(std::vector<std::complex<float>>, int);
     static std::vector<std::complex<float>> IFFT(std::vector<std::complex<float>>, int);
 
-    static int findLTS(const std::vector<std::complex<double>> &iq, int seqLen);
+    static int findLTS(const std::vector<std::complex<double>>& iq, int seqLen);
     static std::vector<double> convolve(std::vector<std::complex<double>> const& f, std::vector<std::complex<double>> const& g);
     static std::vector<std::complex<double>> csign(std::vector<std::complex<double>> iq);
     static void meshgrid(std::vector<int> x_in, std::vector<int> y_in, std::vector<std::vector<int>>& x, std::vector<std::vector<int>>& y);
