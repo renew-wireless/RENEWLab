@@ -49,12 +49,6 @@ Recorder::Recorder(Config* cfg)
     }
 }
 
-void Recorder::finishHDF5()
-{
-    // delete group;
-    delete file;
-}
-
 herr_t Recorder::initHDF5(const std::string& hdf5)
 {
     hdf5name = hdf5;
@@ -99,8 +93,9 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         DataSpace* pilot_dataspace = new DataSpace(5, dims_pilot, max_dims_pilot);
         pilot_prop.setChunk(5, cdims);
 
-        file->createDataSet("/Data/Pilot_Samples", PredType::STD_I16BE,
-            *pilot_dataspace, pilot_prop);
+        DataSet* pilot_dataset = new DataSet(
+            file->createDataSet("/Data/Pilot_Samples", PredType::STD_I16BE,
+                *pilot_dataspace, pilot_prop));
 
         // Attribute dataspace
         hsize_t dims[1] = { 1 };
@@ -497,6 +492,7 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
 
         pilot_prop.close();
         pilot_dataspace->close();
+        pilot_dataset->close();
         config_dump_data = cfg->ulSymsPerFrame > 0;
         if (config_dump_data) {
             DataSpace* data_dataspace = new DataSpace(5, dims_data, max_dims_data);
@@ -514,6 +510,7 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         // status = H5Gclose(group_id);
         // if (status < 0 ) return status;
         delete pilot_dataspace;
+        pilot_dataset->close();
         file->close();
     }
     // catch failure caused by the H5File operations
@@ -597,7 +594,6 @@ void Recorder::closeHDF5()
     pilot_dataset->extend(dims_pilot);
     pilot_prop.close();
     pilot_dataset->close();
-    delete pilot_dataset;
 
     // Resize Data Dataset (If Needed)
     if (config_dump_data) {
@@ -619,7 +615,15 @@ Recorder::~Recorder()
     delete[] task_threads;
 }
 
-void Recorder::do_it()
+void Recorder::stop()
+{
+    cfg->running = false;
+    receiver_.reset();
+    if (cfg->bsPresent && rx_thread_num > 0)
+        this->closeHDF5();
+}
+
+void Recorder::start()
 {
     if (cfg->core_alloc && pin_to_core(0) != 0) {
         perror("pinning main thread to core 0 failed");
@@ -635,7 +639,7 @@ void Recorder::do_it()
             exit(1);
         openHDF5();
 
-        // create socket buffer and socket threads
+        // creare socket buffer and socket threads
         char* rx_buffer_ptrs[rx_thread_num];
         int* rx_buffer_status_ptrs[rx_thread_num];
         for (int i = 0; i < rx_thread_num; i++) {
@@ -676,11 +680,7 @@ void Recorder::do_it()
             }
         }
     }
-    cfg->running = false;
-    receiver_.reset();
-    if (cfg->bsPresent && rx_thread_num > 0)
-        closeHDF5();
-    finishHDF5();
+    this->stop();
 }
 
 void* Recorder::taskThread(void* in_context)
