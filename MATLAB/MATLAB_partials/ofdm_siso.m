@@ -52,7 +52,7 @@ RX_FRQ                  = TX_FRQ;
 TX_GN                   = 40;
 RX_GN                   = 20;
 SMPL_RT                 = 5e6;
-N_FRM                   = 10;
+N_FRM                   = 2;
 
 b_ids = string.empty();
 b_scheds = string.empty();
