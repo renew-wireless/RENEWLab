@@ -151,17 +151,39 @@ classdef iris_py < handle
         end
         
         function [data] = get_best_frame(obj, data_frame, n_samp)
-            
-            data_frame = reshape(data_frame,n_samp, [], obj.n_frame );
-            if obj.n_chain == 1
-                 mean_pow = mean(abs ( data_frame).^2,1) ;
-            else  
-                mean_pow = mean(sum(abs ( data_frame).^2 ,2) );                
+            % FD LTS
+            lts_f = [0 1 -1 -1 1 1 -1 1 -1 1 -1 -1 -1 -1 -1 1 1 -1 ...
+                -1 1 -1 1 -1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 1 1 -1 -1 ...
+                1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1].';
+            % TD LTS
+            lts_t = ifft(lts_f, 64);
+            % Correlation through filtering
+            lts_corr = zeros(size(data_frame));
+            unos = ones(size(lts_t));
+            a = 1;
+            for nc =1:size(data_frame,2)
+                v0 = filter(flipud(conj(lts_t)),a,data_frame(:,nc));
+                v1 = filter(unos,a,abs(data_frame(:,nc)).^2);
+                lts_corr(:,nc) = (abs(v0).^2)./v1; % normalized correlation
             end
-            
-            [m,pos] = max(mean_pow);
-            data = data_frame(:,:,pos).';
-            fprintf('Returning frame number %d with max power = %f \n',pos,m);
+            % Sum accross antennas
+            lts_corr_sum = sum(lts_corr,2);
+            % Assume peak in the first 500 samples
+            if length(lts_corr_sum >= 500)
+                lts_corr_sum = lts_corr_sum(1:500,:);
+            end
+            % Breack into frames
+            lts_corr_frm = reshape(lts_corr_sum, [], obj.n_frame);
+            % Avg corr value per frame
+            frm_avg_corr = mean(lts_corr_frm)
+            % Take index of maximum corr. value
+            [max_corr, m_idx] = max(frm_avg_corr);
+            % Reshape data frame to n_samp-by-n_antenna-by-n_frame
+            data_frame = reshape(data_frame,n_samp, [], obj.n_frame );        
+
+            % Return the frame with the highest value 
+            data = data_frame(:,:,m_idx).';
+            fprintf('Returning frame number %d with max mean correlation = %f \n',m_idx,max_corr);
         end
         
     end
