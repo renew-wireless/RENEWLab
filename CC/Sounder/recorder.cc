@@ -734,10 +734,9 @@ herr_t Recorder::record(int, int offset)
             pilot_filespace->selectHyperslab(H5S_SELECT_SET, count, hdfoffset);
 
             // define memory space
-            DataSpace* pilot_memspace = new DataSpace(5, count, NULL);
-            pilot_dataset->write(cur_ptr_buffer_short, PredType::NATIVE_INT16, *pilot_memspace, *pilot_filespace);
+            DataSpace pilot_memspace(5, count, NULL);
+            pilot_dataset->write(cur_ptr_buffer_short, PredType::NATIVE_INT16, pilot_memspace, *pilot_filespace);
             pilot_filespace->close();
-            delete pilot_memspace;
         } else if (cfg->isData(frame_id, symbol_id)) {
 
             //assert(data_dataset >= 0);
