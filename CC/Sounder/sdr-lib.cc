@@ -263,14 +263,14 @@ void *RadioConfig::initBSRadio(void *in_context)
         // front-end 
         if (info["frontend"].find("CBRS") != std::string::npos && cfg->freq > 3e9) // CBRS HI
         {
-            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "ATTN", 0);  //[-18,0] by 3
+            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "ATTN", -6);  //[-18,0] by 3
             rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA1", 15);  //[0|13.7] no bypass
             rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA2", 0);   //[0|14]   can bypass
             rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA3", 30);  //[0|31]   no bypass
         }
         if (info["frontend"].find("CBRS") != std::string::npos && cfg->freq < 3e9 && cfg->freq > 2e9) // CBRS LO
         {
-            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "ATTN", 0);  //[-18,0] by 3
+            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "ATTN", -6);  //[-18,0] by 3
             rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA1", 14);  //[0|14] no bypass
             rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA2", 0);   //[0|17]   can bypass. Can cause saturation or PA damage!! DO NOT USE IF NOT SURE!!!
             rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA3", 30);  //[0|31.5]   no bypass
