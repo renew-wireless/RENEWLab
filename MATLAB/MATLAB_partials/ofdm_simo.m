@@ -36,7 +36,7 @@ if SIM_MOD
 else
     nt                      = 1;
     nsnr                    = 1;
-    TX_SCALE                =  0.5;         % Scale for Tx waveform ([0:1])
+    TX_SCALE                =  1;         % Scale for Tx waveform ([0:1])
 
     chan_type               = "iris";
 end
@@ -52,7 +52,7 @@ RX_FRQ                  = TX_FRQ;
 TX_GN                   = 40;
 RX_GN                   = 20;
 SMPL_RT                 = 5e6;
-N_FRM                   = 20;
+N_FRM                   = 10;
 
 b_ids = string.empty();
 b_scheds = string.empty();
@@ -146,8 +146,8 @@ else
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     % Create a two Iris node objects:
-    b_ids = ["0318", "0380"];
-    ue_ids= "RF3C000045";
+    b_ids = ["0276", "0318"];
+    ue_ids= "RF3C000025";
 
     b_prim_sched = "PGGGGGRG";           % BS primary noede's schedule: Send Beacon only from one Iris board
     b_sec_sched = "GGGGGGRG"; 

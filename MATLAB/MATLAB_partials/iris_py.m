@@ -158,31 +158,45 @@ classdef iris_py < handle
             % TD LTS
             lts_t = ifft(lts_f, 64);
             % Correlation through filtering
-            lts_corr = zeros(size(data_frame));
+            lts_corr_dr = zeros(size(data_frame));
             unos = ones(size(lts_t));
             a = 1;
             for nc =1:size(data_frame,2)
                 v0 = filter(flipud(conj(lts_t)),a,data_frame(:,nc));
                 v1 = filter(unos,a,abs(data_frame(:,nc)).^2);
-                lts_corr(:,nc) = (abs(v0).^2)./v1; % normalized correlation
+                lts_corr_dr(:,nc) = (abs(v0).^2)./v1; % normalized correlation
             end
             % Sum accross antennas
-            lts_corr_sum = sum(lts_corr,2);
+            lts_corr_sum = sum(lts_corr_dr,2);
+            % zero non-peaks:
+            lts_corr_sum(lts_corr_sum < 0.4) = 0;
+            
             % Assume peak in the first 500 samples
-            if length(lts_corr_sum >= 500)
-                lts_corr_sum = lts_corr_sum(1:500,:);
-            end
-            % Breack into frames
             lts_corr_frm = reshape(lts_corr_sum, [], obj.n_frame);
+            
+            if obj.n_chain == 1 && length(lts_corr_frm >= 300)
+                lts_corr_frm = lts_corr_frm(1:300,:);
+            elseif (obj.n_chain > 1) && length(lts_corr_frm >= 450)
+                lts_corr_frm = lts_corr_frm(1:450,:);
+            end
+            save my_data.mat lts_corr_dr lts_corr_frm
+            
             % Avg corr value per frame
             frm_avg_corr = mean(lts_corr_frm)
             % Take index of maximum corr. value
             [max_corr, m_idx] = max(frm_avg_corr);
+           
             % Reshape data frame to n_samp-by-n_antenna-by-n_frame
-            data_frame = reshape(data_frame,n_samp, [], obj.n_frame );        
-
+            data_split  = zeros(obj.n_samp, obj.n_chain,obj.n_frame);
+            for nf = 1:obj.n_frame
+                strt_idx = (nf-1)*obj.n_samp +1;
+                end_idx = nf*obj.n_samp;
+                data_split(:,:,nf) = data_frame(strt_idx :end_idx ,:);
+            end
+            %data_frame = reshape(data_frame,n_samp, [], obj.n_frame );        
+    
             % Return the frame with the highest value 
-            data = data_frame(:,:,m_idx).';
+            data = data_split(:,:,m_idx).';
             fprintf('Returning frame number %d with max mean correlation = %f \n',m_idx,max_corr);
         end
         

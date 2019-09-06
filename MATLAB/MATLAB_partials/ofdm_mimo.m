@@ -35,7 +35,7 @@ end
 fprintf("Channel type: %s \n",chan_type);
 
 % Iris params:
-N_BS_NODE               = 4;
+N_BS_NODE               = 8;
 N_UE                    = 2;
 TX_FRQ                  = 3.6e9;
 RX_FRQ                  = TX_FRQ;
@@ -143,7 +143,7 @@ if (SIM_MOD)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 else
     % Device IDs of BS nodes and UE nodes
-    b_ids = ["0328", "0339", "0268", "0282"]%, "0344", "0233", "0334", "0402"];
+    b_ids = ["0328", "0339", "0268", "0282", "0344", "0233", "0334", "0402"];
     %b_ids = ["0276", "0318", "0380", "0266", "0338", "0329", "0264", "0279"];
     ue_ids= ["RF3C000025", "RF3C000045"];
 
@@ -207,29 +207,34 @@ l_rx_dec=length(rx_vec_iris);
 a = 1;
 unos = ones(size(preamble_common'));
 lts_corr = zeros(N_BS_NODE, length(rx_vec_iris));
+data_len = (N_OFDM_SYM)*(N_SC +CP_LEN);
 rx_lts_mat = double.empty();
 payload_ind = int32.empty();
-payload_rx = double.empty();
+payload_rx = zeros(N_BS_NODE, data_len);
 lts_peaks = zeros(N_BS_NODE, N_UE);
+
 for ibs =1:N_BS_NODE
+        % Correlation through filtering
         v0 = filter(fliplr(preamble_common'),a,rx_vec_iris(ibs,:));
         v1 = filter(unos,a,abs(rx_vec_iris(ibs,:)).^2);
         lts_corr(ibs,:) = (abs(v0).^2)./v1; % normalized correlation
+        
+        % Sort the correlation values
         sort_corr = sort(lts_corr(ibs,:), 'descend');
+        % Take the N_UE largest values
         rho_max = sort_corr(1:N_UE);
+        % 
         lts_peaks(ibs,:) = find(lts_corr(ibs,:) >= min(rho_max));
         
         % position of the last peak
-        ipos = max(lts_peaks(ibs,:));
-        
-        payload_ind(ibs) = ipos +1;
-        pream_ind_ibs = payload_ind(ibs) - length(preamble);
-        % minimum sanity check of the correlator's output
-        if pream_ind_ibs < 1
-            fprintf("Bad correlator output!\n");
-            pream_ind_ibs = length(preamble) + 91;
+        max_idx = max(lts_peaks(ibs,:));
+        % In case of Bad correlatons:
+        if (max_idx + data_len) > length(rx_vec_iris) || (max_idx < 0) || (max_idx - length(preamble) < 0)
+            fprintf('Bad correlation at antenna %d max_idx = %d \n', ibs, max_idx);
+            max_idx = length(rx_vec_iris)-data_len -1;
+            
             figure,
-            for sp = 1:N_BS_NODE
+            for sp = 1:ibs
                 subplot(N_BS_NODE,1,sp);
                 plot(lts_corr(sp,:));
                 grid on;
@@ -238,12 +243,15 @@ for ibs =1:N_BS_NODE
                 ylabel(y_label);
             end
             sgtitle('LTS correlations accross antennas')
-            
-            %return; 
-        else
-            rx_lts_mat(ibs,:) = rx_vec_iris(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 );
-            payload_rx(ibs,:) = rx_vec_iris(ibs, payload_ind(ibs) : payload_ind(ibs)+(N_OFDM_SYM)*(N_SC +CP_LEN)-1);
+            % Real value doesn't matter since we have corrrupt data:
         end
+            
+        payload_ind(ibs) = max_idx +1;
+        pream_ind_ibs = payload_ind(ibs) - length(preamble);
+        pl_idx = payload_ind(ibs) : payload_ind(ibs) + data_len;
+        rx_lts_mat(ibs,:) = rx_vec_iris(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 );
+        payload_rx(ibs,1:length(pl_idx) -1) = rx_vec_iris(ibs, payload_ind(ibs) : payload_ind(ibs) + length(pl_idx) -2);
+
 end
 
 if DEBUG

@@ -214,7 +214,8 @@ class Iris_py:
 			self.tdd_sched = tdd_sched
 		else: self.tdd_sched = "G"
 		print(tdd_sched)
-		conf_str = {"tdd_enabled": True, "frame_mode": "free_running", "symbol_size" : self.n_samp, "max_frame": 1, "frames": [self.tdd_sched]}
+                max_frames = self.max_frames
+		conf_str = {"tdd_enabled": True, "frame_mode": "free_running", "symbol_size" : self.n_samp, "max_frame": max_frames, "frames": [self.tdd_sched]}
 		self.sdr.writeSetting("TDD_CONFIG", json.dumps(conf_str))
 		self.sdr.writeSetting("TDD_MODE", "true")
 		self.sdr.writeSetting("TX_SW_DELAY", str(30))
