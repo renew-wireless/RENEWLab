@@ -132,13 +132,13 @@ classdef iris_py < handle
         
         % Read n_samp data
         function [data, len] = sdrrx(obj, n_samp)
-            data = zeros(obj.n_chain, obj.n_frame*n_samp);  % Change this to max frame!
+            data_raw = zeros(obj.n_chain, obj.n_frame*n_samp);  % Change this to max frame!
             for ipy = 1:obj.n_chain
                 rcv_data = obj.py_obj_array{ipy}.recv_stream_tdd();
-                data(ipy,:) = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(rcv_data) ) ) ) + ...
+                data_raw(ipy,:) = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(rcv_data) ) ) ) + ...
                     1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(rcv_data) ) ) );
             end
-            data = obj.get_best_frame(data.', n_samp);
+            data = obj.get_best_frame(data_raw.', n_samp);
             len = length(data);
         end
         
@@ -151,16 +151,17 @@ classdef iris_py < handle
         end
         
         function [data] = get_best_frame(obj, data_frame, n_samp)
+            
             data_frame = reshape(data_frame,n_samp, [], obj.n_frame );
             if obj.n_chain == 1
-                 mean_pow = mean(abs ( data_frame),1) ;
+                 mean_pow = mean(abs ( data_frame).^2,1) ;
             else  
-                mean_pow = mean(mean(abs ( data_frame) ,1) );
+                mean_pow = mean(sum(abs ( data_frame).^2 ,2) );                
             end
+            
             [m,pos] = max(mean_pow);
             data = data_frame(:,:,pos).';
             fprintf('Returning frame number %d with max power = %f \n',pos,m);
-            
         end
         
     end
