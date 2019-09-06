@@ -458,17 +458,11 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         pilot_dataspace->close();
         config_dump_data = cfg->ulSymsPerFrame > 0;
         if (config_dump_data) {
-            DataSpace* data_dataspace = new DataSpace(5, dims_data, max_dims_data);
+            DataSpace data_dataspace(5, dims_data, max_dims_data);
             data_prop.setChunk(5, cdims);
-
-            DataSet* data_dataset = new DataSet(file->createDataSet("/Data/UplinkData",
-                PredType::STD_I16BE, *data_dataspace, data_prop));
-
+            file->createDataSet("/Data/UplinkData",
+                PredType::STD_I16BE, data_dataspace, data_prop);
             data_prop.close();
-            data_dataspace->close();
-            data_dataset->close();
-            delete data_dataspace;
-            data_dataset->close();
         }
         //status = H5Gclose(group_id);
         //if (status < 0 ) return status;
