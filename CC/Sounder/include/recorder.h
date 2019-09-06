@@ -44,11 +44,11 @@ public:
     Recorder(Config* cfg);
     ~Recorder();
 
-    void start();
-    void stop();
+    void do_it();
     herr_t initHDF5(const std::string&);
     void openHDF5();
     void closeHDF5();
+    void finishHDF5();
     static void* taskThread(void* in_context);
     herr_t record(int tid, int offset);
 
