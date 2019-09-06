@@ -67,7 +67,8 @@ std::vector<pthread_t> Receiver::startClientThreads()
     return client_threads;
 }
 
-std::vector<pthread_t> Receiver::startRecvThreads(char** in_buffer, int** in_buffer_status, int in_buffer_frame_num, int in_buffer_length, int in_core_id)
+std::vector<pthread_t> Receiver::startRecvThreads(char** in_buffer, int** in_buffer_status,
+    unsigned in_buffer_frame_num, unsigned in_buffer_length, unsigned in_core_id)
 {
     buffer_frame_num_ = in_buffer_frame_num;
     assert(in_buffer_length == config_->getPackageLength() * buffer_frame_num_);
