@@ -96,8 +96,6 @@ private:
     pthread_t* task_threads; //[TASK_THREAD_NUM];
     std::vector<pthread_t> recv_thread;
 
-    EventHandlerContext* context; //[TASK_THREAD_NUM];
-
     std::vector<std::unique_ptr<moodycamel::ProducerToken>> task_ptok; //[TASK_THREAD_NUM];
 };
 #endif

@@ -35,11 +35,11 @@ Recorder::Recorder(Config* cfg)
         // task threads
         task_ptok.resize(task_thread_num);
         task_threads = new pthread_t[task_thread_num];
-        context = new EventHandlerContext[task_thread_num];
         for (int i = 0; i < task_thread_num; i++) {
-            context[i].obj_ptr = this;
-            context[i].id = i;
-            if (pthread_create(&task_threads[i], NULL, Recorder::taskThread, &context[i]) != 0) {
+            EventHandlerContext* context = new EventHandlerContext;
+            context->obj_ptr = this;
+            context->id = i;
+            if (pthread_create(&task_threads[i], NULL, Recorder::taskThread, context) != 0) {
                 perror("task thread create failed");
                 exit(0);
             }
@@ -565,7 +565,6 @@ Recorder::~Recorder()
 {
     delete[] rx_buffer_;
     delete[] task_threads;
-    delete[] context;
 }
 
 void Recorder::stop()
@@ -644,6 +643,7 @@ void* Recorder::taskThread(void* in_context)
     Config* cfg = obj_ptr->cfg;
     moodycamel::ConcurrentQueue<Event_data>* task_queue_ = &(obj_ptr->task_queue_);
     int tid = context->id;
+    delete context;
     printf("task thread %d starts\n", tid);
 
     obj_ptr->task_ptok[tid].reset(new moodycamel::ProducerToken(obj_ptr->message_queue_));
