@@ -499,12 +499,12 @@ void Recorder::openHDF5()
     pilot_dataset = new DataSet(file->openDataSet("/Data/Pilot_Samples"));
 
     // Get the dataset's dataspace and creation property list.
-    pilot_filespace = new DataSpace(pilot_dataset->getSpace());
+    DataSpace pilot_filespace(pilot_dataset->getSpace());
     pilot_prop = pilot_dataset->getCreatePlist();
 
     // Get information to obtain memory dataspace.
-    ndims = pilot_filespace->getSimpleExtentNdims();
-    // herr_t status_n = pilot_filespace->getSimpleExtentDims(dims_pilot);
+    ndims = pilot_filespace.getSimpleExtentNdims();
+    // herr_t status_n = pilot_filespace.getSimpleExtentDims(dims_pilot);
 
 #if DEBUG_PRINT
     int cndims_pilot = 0;
@@ -513,7 +513,7 @@ void Recorder::openHDF5()
     cout << "dim pilot chunk = " << cndims_pilot << endl;
     cout << "New Pilot Dataset Dimension " << ndims << "," << dims_pilot[0] << "," << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << "," << dims_pilot[4] << endl;
 #endif
-    pilot_filespace->close();
+    pilot_filespace.close();
     // Get Dataset for DATA (If Enabled) and check the shape of it
     if (config_dump_data) {
         data_dataset = new DataSet(file->openDataSet("/Data/UplinkData"));
@@ -544,7 +544,6 @@ void Recorder::closeHDF5()
     dims_pilot[0] = frameNumber;
     pilot_dataset->extend(dims_pilot);
     pilot_prop.close();
-    pilot_filespace->close();
     pilot_dataset->close();
 
     // Resize Data Dataset (If Needed)
@@ -730,13 +729,13 @@ herr_t Recorder::record(int, int offset)
 #endif
             }
             // Select a hyperslab in extended portion of the dataset
-            pilot_filespace = new DataSpace(pilot_dataset->getSpace());
-            pilot_filespace->selectHyperslab(H5S_SELECT_SET, count, hdfoffset);
+            DataSpace pilot_filespace(pilot_dataset->getSpace());
+            pilot_filespace.selectHyperslab(H5S_SELECT_SET, count, hdfoffset);
 
             // define memory space
             DataSpace pilot_memspace(5, count, NULL);
-            pilot_dataset->write(cur_ptr_buffer_short, PredType::NATIVE_INT16, pilot_memspace, *pilot_filespace);
-            pilot_filespace->close();
+            pilot_dataset->write(cur_ptr_buffer_short, PredType::NATIVE_INT16, pilot_memspace, pilot_filespace);
+            pilot_filespace.close();
         } else if (cfg->isData(frame_id, symbol_id)) {
 
             //assert(data_dataset >= 0);

@@ -71,7 +71,6 @@ private:
     DSetCreatPropList pilot_prop;
     DSetCreatPropList data_prop;
 
-    DataSpace* pilot_filespace;
     DataSpace* data_filespace;
 
     DataSet* pilot_dataset;
