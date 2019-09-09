@@ -90,9 +90,6 @@ private:
 
     RadioConfig* radioconfig_;
 
-    pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-    pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-
     char** buffer_;
     int** buffer_status_;
     int buffer_length_;

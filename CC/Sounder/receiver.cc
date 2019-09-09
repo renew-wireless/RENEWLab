@@ -96,7 +96,6 @@ std::vector<pthread_t> Receiver::startRecvThreads(char** in_buffer, int** in_buf
     }
 
     sleep(1);
-    pthread_cond_broadcast(&cond);
     //sleep(.01);
     go();
     return created_threads;
@@ -131,13 +130,6 @@ void* Receiver::loopRecv(void* in_context)
             exit(0);
         }
     }
-
-    // Use mutex to sychronize data receiving across threads
-    pthread_mutex_lock(&obj_ptr->mutex);
-    printf("Recv Thread %d: waiting for release\n", tid);
-
-    pthread_cond_wait(&obj_ptr->cond, &obj_ptr->mutex);
-    pthread_mutex_unlock(&obj_ptr->mutex); // unlocking for all other threads
 
     // use token to speed up
     moodycamel::ProducerToken local_ptok(*message_queue_);
