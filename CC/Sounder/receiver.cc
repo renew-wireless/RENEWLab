@@ -142,12 +142,12 @@ void* Receiver::loopRecv(void* in_context)
     int buffer1_index = 0;
     int status1_index = 0;
 
-    int nradio_per_thread = cfg->nBsSdrs[0] / obj_ptr->thread_num_;
-    int rem_thread_nradio = cfg->nBsSdrs[0] % obj_ptr->thread_num_;
-    int nradio_cur_thread = nradio_per_thread;
-    if (tid < rem_thread_nradio)
-        nradio_cur_thread += 1;
-    printf("receiver thread %d has %d radios\n", tid, nradio_cur_thread);
+    int num_threads = obj_ptr->thread_num_;
+    int num_radios = cfg->nBsSdrs[0];
+    int radio_start = tid * num_radios / num_threads;
+    int radio_end = (tid + 1) * num_radios / num_threads;
+
+    printf("receiver thread %d has %d radios\n", tid, radio_end - radio_start);
     RadioConfig* radio = obj_ptr->radioconfig_;
 
     // to handle second channel at each radio
@@ -172,21 +172,20 @@ void* Receiver::loopRecv(void* in_context)
         }
         int ant_id, frame_id, symbol_id; // cell_id;
         // receive data
-        for (int it = 0; it < nradio_cur_thread; it++) {
-            int rid = (tid < rem_thread_nradio) ? tid * (nradio_per_thread + 1) + it : tid * (nradio_per_thread) + rem_thread_nradio + it;
+        for (int it = radio_start; it < radio_end; it++) {
             void* samp1 = buffer1 + buffer1_index + 4 * sizeof(int);
             void* samp2 = buffer2 + buffer2_index + 4 * sizeof(int);
             void* samp[2] = { samp1, samp2 };
             int* int_sample1 = (int*)(buffer1 + buffer1_index);
             int* int_sample2 = (int*)(buffer2 + buffer2_index);
-            if (radio->radioRx(rid, samp, frameTime) < 0) {
+            if (radio->radioRx(it, samp, frameTime) < 0) {
                 cfg->running = false;
                 break;
             }
 
             frame_id = (int)(frameTime >> 32);
             symbol_id = (int)((frameTime >> 16) & 0xFFFF);
-            ant_id = rid * bsSdrCh;
+            ant_id = it * bsSdrCh;
             int_sample1[0] = frame_id;
             int_sample1[1] = symbol_id;
             int_sample1[2] = 0; //cell_id
