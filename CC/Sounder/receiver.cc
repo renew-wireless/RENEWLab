@@ -131,13 +131,11 @@ void* Receiver::loopRecv(void* in_context)
     moodycamel::ProducerToken local_ptok(*message_queue_);
 
     const int bsSdrCh = cfg->bsSdrCh;
-    int buffer_length = rx_buffer[0].buffer.size();
     int buffer_frame_num = rx_buffer[0].buffer_status.size();
 
     // handle two channels at each radio
     // this is assuming buffer_frame_num is at least 2
-    int buffer_index = 0;
-    int status_index = 0;
+    int cursor = 0;
     int* buffer_status[2] = {
         rx_buffer[tid].buffer_status.data(),
         rx_buffer[tid].buffer_status.data() + 1
@@ -157,15 +155,15 @@ void* Receiver::loopRecv(void* in_context)
 
     while (cfg->running) {
         // if buffer is full, exit
-        if (buffer_status[0][status_index] == 1) {
+        if (buffer_status[0][cursor] == 1) {
             printf("thread %d buffer full\n", tid);
             exit(0);
         }
         int ant_id, frame_id, symbol_id; // cell_id;
         // receive data
         for (int it = radio_start; it < radio_end; it++) {
-            void* samp1 = buffer[0] + buffer_index + 4 * sizeof(int);
-            void* samp2 = buffer[1] + buffer_index + 4 * sizeof(int);
+            void* samp1 = buffer[0] + cursor * cfg->getPackageLength() + 4 * sizeof(int);
+            void* samp2 = buffer[1] + cursor * cfg->getPackageLength() + 4 * sizeof(int);
             void* samp[2] = { samp1, samp2 };
             long long frameTime;
             if (radio->radioRx(it, samp, frameTime) < 0) {
@@ -177,33 +175,34 @@ void* Receiver::loopRecv(void* in_context)
             symbol_id = (int)((frameTime >> 16) & 0xFFFF);
             ant_id = it * bsSdrCh;
 #if DEBUG_PRINT
-            short* short_sample1 = (short*)(buffer[0] + buffer_index);
-            printf("receive thread %d, frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n", tid, frame_id, symbol_id, cell_id, ant_id);
+            short* short_sample1 = (short*)(buffer[0] + cursor * cfg->getPackageLength());
+            printf("receive thread %d, frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n",
+                tid, frame_id, symbol_id, cell_id, ant_id);
             printf("receive samples: %d %d %d %d %d %d %d %d ...\n",
                 short_sample1[9], short_sample1[10], short_sample1[11], short_sample1[12],
                 short_sample1[13], short_sample1[14], short_sample1[15], short_sample1[16]);
 #endif
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
-                int* int_sample = (int*)(buffer[ch] + buffer_index);
+                int* int_sample = (int*)(buffer[ch] + cursor * cfg->getPackageLength());
                 int_sample[0] = frame_id;
                 int_sample[1] = symbol_id;
                 int_sample[2] = 0; //cell_id
                 int_sample[3] = ant_id + ch;
 
                 // move ptr & set status to full
-                buffer_status[ch][status_index] = 1; // has data, after it is read it should be set to 0
+                buffer_status[ch][cursor] = 1; // has data, after it is read it should be set to 0
                 // push EVENT_RX_SYMBOL event into the queue
                 Event_data package_message;
                 package_message.event_type = EVENT_RX_SYMBOL;
-                // data records the position of this packet in the buffer & tid of this socket (so that task thread could know which buffer it should visit)
-                package_message.data = status_index + tid * buffer_frame_num;
+                // data records the position of this packet in the buffer & tid of this socket
+                // (so that task thread could know which buffer it should visit)
+                package_message.data = cursor + tid * buffer_frame_num;
                 if (!message_queue_->enqueue(local_ptok, package_message)) {
                     printf("socket message enqueue failed\n");
                     exit(0);
                 }
             }
-            status_index = (status_index + bsSdrCh) % buffer_frame_num;
-            buffer_index = (buffer_index + cfg->getPackageLength() * bsSdrCh) % buffer_length;
+            cursor = (cursor + bsSdrCh) % buffer_frame_num;
         }
     }
     return 0;
