@@ -81,18 +81,17 @@ std::vector<pthread_t> Receiver::startRecvThreads(char** in_buffer, int** in_buf
     core_id_ = in_core_id;
 
     std::vector<pthread_t> created_threads;
+    created_threads.resize(thread_num_);
     for (int i = 0; i < thread_num_; i++) {
-        pthread_t recv_thread_;
         // record the thread id
         ReceiverContext* context = new ReceiverContext;
         context->ptr = this;
         context->tid = i;
         // start socket thread
-        if (pthread_create(&recv_thread_, NULL, Receiver::loopRecv, context) != 0) {
+        if (pthread_create(&created_threads[i], NULL, Receiver::loopRecv, context) != 0) {
             perror("socket recv thread create failed");
             exit(0);
         }
-        created_threads.push_back(recv_thread_);
     }
 
     sleep(1);
@@ -116,14 +115,15 @@ void Receiver::go()
 void* Receiver::loopRecv(void* in_context)
 {
     ReceiverContext* context = (ReceiverContext*)in_context;
-    Receiver* obj_ptr = context->ptr;
-    Config* cfg = obj_ptr->config_;
+    Receiver* receiver = context->ptr;
+    Config* cfg = receiver->config_;
     int tid = context->tid;
     delete context;
-    moodycamel::ConcurrentQueue<Event_data>* message_queue_ = obj_ptr->message_queue_;
+
+    moodycamel::ConcurrentQueue<Event_data>* message_queue_ = receiver->message_queue_;
 
     if (cfg->core_alloc) {
-        int core_id = obj_ptr->core_id_;
+        int core_id = receiver->core_id_;
         printf("pinning thread %d to core %d\n", tid, core_id + tid);
         if (pin_to_core(core_id + tid) != 0) {
             printf("pin thread %d to core %d failed\n", tid, core_id + tid);
@@ -134,50 +134,44 @@ void* Receiver::loopRecv(void* in_context)
     // use token to speed up
     moodycamel::ProducerToken local_ptok(*message_queue_);
 
-    char* buffer1 = obj_ptr->buffer_[tid];
-    int* buffer_status1 = obj_ptr->buffer_status_[tid];
-    int buffer_length = obj_ptr->buffer_length_;
-    int buffer_frame_num = obj_ptr->buffer_frame_num_;
+    const int bsSdrCh = cfg->bsSdrCh;
+    int buffer_length = receiver->buffer_length_;
+    int buffer_frame_num = receiver->buffer_frame_num_;
 
-    int buffer1_index = 0;
-    int status1_index = 0;
+    // handle two channels at each radio
+    // this is assuming buffer_frame_num is at least 2
+    int buffer_index = 0;
+    int status_index = 0;
+    int* buffer_status[2] = {
+        receiver->buffer_status_[tid],
+        receiver->buffer_status_[tid] + 1
+    };
+    char* buffer[2] = {
+        receiver->buffer_[tid],
+        receiver->buffer_[tid] + cfg->getPackageLength()
+    };
 
-    int num_threads = obj_ptr->thread_num_;
+    int num_threads = receiver->thread_num_;
     int num_radios = cfg->nBsSdrs[0];
     int radio_start = tid * num_radios / num_threads;
     int radio_end = (tid + 1) * num_radios / num_threads;
 
     printf("receiver thread %d has %d radios\n", tid, radio_end - radio_start);
-    RadioConfig* radio = obj_ptr->radioconfig_;
+    RadioConfig* radio = receiver->radioconfig_;
 
-    // to handle second channel at each radio
-    // this is assuming buffer_frame_num is at least 2
-    char* buffer2;
-    int* buffer_status2 = obj_ptr->buffer_status_[tid] + 1;
-    int buffer2_index = 0;
-    int status2_index = 0;
-    const int bsSdrCh = cfg->bsSdrCh;
-    if (bsSdrCh == 1)
-        buffer2 = obj_ptr->buffer_[tid] + cfg->getPackageLength();
-    else
-        buffer2 = new char[cfg->getPackageLength()];
-
-    int offset = 0;
-    long long frameTime;
     while (cfg->running) {
         // if buffer is full, exit
-        if (buffer_status1[status1_index] == 1) {
+        if (buffer_status[0][status_index] == 1) {
             printf("thread %d buffer full\n", tid);
             exit(0);
         }
         int ant_id, frame_id, symbol_id; // cell_id;
         // receive data
         for (int it = radio_start; it < radio_end; it++) {
-            void* samp1 = buffer1 + buffer1_index + 4 * sizeof(int);
-            void* samp2 = buffer2 + buffer2_index + 4 * sizeof(int);
+            void* samp1 = buffer[0] + buffer_index + 4 * sizeof(int);
+            void* samp2 = buffer[1] + buffer_index + 4 * sizeof(int);
             void* samp[2] = { samp1, samp2 };
-            int* int_sample1 = (int*)(buffer1 + buffer1_index);
-            int* int_sample2 = (int*)(buffer2 + buffer2_index);
+            long long frameTime;
             if (radio->radioRx(it, samp, frameTime) < 0) {
                 cfg->running = false;
                 break;
@@ -186,57 +180,36 @@ void* Receiver::loopRecv(void* in_context)
             frame_id = (int)(frameTime >> 32);
             symbol_id = (int)((frameTime >> 16) & 0xFFFF);
             ant_id = it * bsSdrCh;
-            int_sample1[0] = frame_id;
-            int_sample1[1] = symbol_id;
-            int_sample1[2] = 0; //cell_id
-            int_sample1[3] = ant_id;
-            if (bsSdrCh == 2) {
-                int_sample2[0] = frame_id;
-                int_sample2[1] = symbol_id;
-                int_sample2[2] = 0; //cell_id
-                int_sample2[3] = ant_id + 1;
-            }
 #if DEBUG_PRINT
-            short* short_sample1 = (short*)(buffer1 + buffer1_index);
+            short* short_sample1 = (short*)(buffer[0] + buffer_index);
             printf("receive thread %d, frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n", tid, frame_id, symbol_id, cell_id, ant_id);
             printf("receive samples: %d %d %d %d %d %d %d %d ...\n",
                 short_sample1[9], short_sample1[10], short_sample1[11], short_sample1[12],
                 short_sample1[13], short_sample1[14], short_sample1[15], short_sample1[16]);
 #endif
-            // get the position in buffer
-            offset = status1_index;
-            // move ptr & set status to full
-            buffer_status1[status1_index] = 1; // has data, after it is read it should be set to 0
-            status1_index = (status1_index + bsSdrCh) % buffer_frame_num;
-            buffer1_index = (buffer1_index + cfg->getPackageLength() * bsSdrCh) % buffer_length;
-            // push EVENT_RX_SYMBOL event into the queue
-            Event_data package_message;
-            package_message.event_type = EVENT_RX_SYMBOL;
-            // data records the position of this packet in the buffer & tid of this socket (so that task thread could know which buffer it should visit)
-            package_message.data = offset + tid * buffer_frame_num;
-            if (!message_queue_->enqueue(local_ptok, package_message)) {
-                printf("socket message enqueue failed\n");
-                exit(0);
-            }
-            if (bsSdrCh == 2) {
-                offset = status2_index; // offset is absolute
-                buffer_status2[status2_index] = 1; // has data, after doing fft, it is set to 0
-                status2_index = (status2_index + bsSdrCh) % buffer_frame_num;
-                buffer2_index = (buffer2_index + cfg->getPackageLength() * bsSdrCh) % buffer_length;
+            for (auto ch = 0; ch < bsSdrCh; ++ch) {
+                int* int_sample = (int*)(buffer[ch] + buffer_index);
+                int_sample[0] = frame_id;
+                int_sample[1] = symbol_id;
+                int_sample[2] = 0; //cell_id
+                int_sample[3] = ant_id + ch;
+
+                // move ptr & set status to full
+                buffer_status[ch][status_index] = 1; // has data, after it is read it should be set to 0
                 // push EVENT_RX_SYMBOL event into the queue
-                Event_data package_message2;
-                package_message2.event_type = EVENT_RX_SYMBOL;
+                Event_data package_message;
+                package_message.event_type = EVENT_RX_SYMBOL;
                 // data records the position of this packet in the buffer & tid of this socket (so that task thread could know which buffer it should visit)
-                package_message2.data = offset + tid * buffer_frame_num;
-                if (!message_queue_->enqueue(local_ptok, package_message2)) {
+                package_message.data = status_index + tid * buffer_frame_num;
+                if (!message_queue_->enqueue(local_ptok, package_message)) {
                     printf("socket message enqueue failed\n");
                     exit(0);
                 }
             }
+            status_index = (status_index + bsSdrCh) % buffer_frame_num;
+            buffer_index = (buffer_index + cfg->getPackageLength() * bsSdrCh) % buffer_length;
         }
     }
-    if (bsSdrCh != 1)
-        delete[] buffer2;
     return 0;
 }
 
