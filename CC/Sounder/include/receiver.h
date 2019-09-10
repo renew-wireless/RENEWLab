@@ -91,9 +91,6 @@ private:
 
     RadioConfig* radioconfig_;
 
-    int buffer_length_;
-    int buffer_frame_num_;
-
     int thread_num_;
     // pointer of message_queue_
     moodycamel::ConcurrentQueue<Event_data>* message_queue_;

@@ -69,11 +69,9 @@ std::vector<pthread_t> Receiver::startClientThreads()
 
 std::vector<pthread_t> Receiver::startRecvThreads(SampleBuffer* rx_buffer, unsigned in_core_id)
 {
-    buffer_frame_num_ = rx_buffer[0].buffer_status.size();
-    assert(rx_buffer[0].buffer.size() == config_->getPackageLength() * buffer_frame_num_);
+    assert(rx_buffer[0].buffer.size() == config_->getPackageLength() * rx_buffer[0].buffer_status.size());
     assert(rx_buffer[0].buffer_status.size() != 0);
     assert(rx_buffer[0].buffer.size() != 0);
-    buffer_length_ = rx_buffer[0].buffer.size();
 
     std::vector<pthread_t> created_threads;
     created_threads.resize(thread_num_);
@@ -133,8 +131,8 @@ void* Receiver::loopRecv(void* in_context)
     moodycamel::ProducerToken local_ptok(*message_queue_);
 
     const int bsSdrCh = cfg->bsSdrCh;
-    int buffer_length = receiver->buffer_length_;
-    int buffer_frame_num = receiver->buffer_frame_num_;
+    int buffer_length = rx_buffer[0].buffer.size();
+    int buffer_frame_num = rx_buffer[0].buffer_status.size();
 
     // handle two channels at each radio
     // this is assuming buffer_frame_num is at least 2
