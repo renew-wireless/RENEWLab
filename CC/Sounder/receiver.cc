@@ -134,7 +134,7 @@ void* Receiver::loopRecv(void* in_context)
 
     // handle two channels at each radio
     // this is assuming buffer_frame_num is at least 2
-    int* buffer_status = rx_buffer[tid].buffer_status.data();
+    std::vector<bool>& buffer_status = rx_buffer[tid].buffer_status;
     char* buffer = rx_buffer[tid].buffer.data();
     int num_threads = receiver->thread_num_;
     int num_radios = cfg->nBsSdrs[0];
@@ -147,7 +147,7 @@ void* Receiver::loopRecv(void* in_context)
     for (int cursor = 0; cfg->running;
          cursor += bsSdrCh, cursor %= buffer_frame_num) {
         // if buffer is full, exit
-        if (buffer_status[cursor] == 1) {
+        if (buffer_status[cursor]) {
             printf("thread %d buffer full\n", tid);
             exit(0);
         }
@@ -182,7 +182,7 @@ void* Receiver::loopRecv(void* in_context)
                 int_sample[3] = ant_id + ch;
 
                 // move ptr & set status to full
-                buffer_status[cursor + ch] = 1; // has data, after it is read it should be set to 0
+                buffer_status[cursor + ch] = true; // has data, after it is read it should be set to 0
                 // push EVENT_RX_SYMBOL event into the queue
                 Event_data package_message;
                 package_message.event_type = EVENT_RX_SYMBOL;

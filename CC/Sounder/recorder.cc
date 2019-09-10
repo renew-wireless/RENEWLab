@@ -775,6 +775,6 @@ herr_t Recorder::record(int, int offset)
 clean_exit:
 
     // after finish
-    rx_buffer_[buffer_id].buffer_status[offset] = 0; // now empty
+    rx_buffer_[buffer_id].buffer_status[offset] = false; // now empty
     return 0;
 }
