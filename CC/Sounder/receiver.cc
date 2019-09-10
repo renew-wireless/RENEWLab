@@ -117,8 +117,6 @@ void* Receiver::loopRecv(void* in_context)
     int core_id = context->core_id;
     delete context;
 
-    moodycamel::ConcurrentQueue<Event_data>* message_queue_ = receiver->message_queue_;
-
     if (cfg->core_alloc) {
         printf("pinning thread %d to core %d\n", tid, core_id + tid);
         if (pin_to_core(core_id + tid) != 0) {
@@ -128,6 +126,7 @@ void* Receiver::loopRecv(void* in_context)
     }
 
     // use token to speed up
+    moodycamel::ConcurrentQueue<Event_data>* message_queue_ = receiver->message_queue_;
     moodycamel::ProducerToken local_ptok(*message_queue_);
 
     const int bsSdrCh = cfg->bsSdrCh;
@@ -152,7 +151,6 @@ void* Receiver::loopRecv(void* in_context)
             printf("thread %d buffer full\n", tid);
             exit(0);
         }
-        int ant_id, frame_id, symbol_id; // cell_id;
         // receive data
         for (int it = radio_start; it < radio_end; it++) {
             void* samp[bsSdrCh];
@@ -165,9 +163,9 @@ void* Receiver::loopRecv(void* in_context)
                 break;
             }
 
-            frame_id = (int)(frameTime >> 32);
-            symbol_id = (int)((frameTime >> 16) & 0xFFFF);
-            ant_id = it * bsSdrCh;
+            int frame_id = (int)(frameTime >> 32);
+            int symbol_id = (int)((frameTime >> 16) & 0xFFFF);
+            int ant_id = it * bsSdrCh;
 #if DEBUG_PRINT
             short* short_sample1 = (short*)(buffer + cursor * cfg->getPackageLength());
             printf("receive thread %d, frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n",
