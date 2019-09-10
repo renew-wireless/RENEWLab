@@ -135,16 +135,8 @@ void* Receiver::loopRecv(void* in_context)
 
     // handle two channels at each radio
     // this is assuming buffer_frame_num is at least 2
-    int cursor = 0;
-    int* buffer_status[2] = {
-        rx_buffer[tid].buffer_status.data(),
-        rx_buffer[tid].buffer_status.data() + 1
-    };
-    char* buffer[2] = {
-        rx_buffer[tid].buffer.data(),
-        rx_buffer[tid].buffer.data() + cfg->getPackageLength()
-    };
-
+    int* buffer_status = rx_buffer[tid].buffer_status.data();
+    char* buffer = rx_buffer[tid].buffer.data();
     int num_threads = receiver->thread_num_;
     int num_radios = cfg->nBsSdrs[0];
     int radio_start = tid * num_radios / num_threads;
@@ -153,18 +145,20 @@ void* Receiver::loopRecv(void* in_context)
     printf("receiver thread %d has %d radios\n", tid, radio_end - radio_start);
     RadioConfig* radio = receiver->radioconfig_;
 
-    while (cfg->running) {
+    for (int cursor = 0; cfg->running;
+         cursor += bsSdrCh, cursor %= buffer_frame_num) {
         // if buffer is full, exit
-        if (buffer_status[0][cursor] == 1) {
+        if (buffer_status[cursor] == 1) {
             printf("thread %d buffer full\n", tid);
             exit(0);
         }
         int ant_id, frame_id, symbol_id; // cell_id;
         // receive data
         for (int it = radio_start; it < radio_end; it++) {
-            void* samp1 = buffer[0] + cursor * cfg->getPackageLength() + 4 * sizeof(int);
-            void* samp2 = buffer[1] + cursor * cfg->getPackageLength() + 4 * sizeof(int);
-            void* samp[2] = { samp1, samp2 };
+            void* samp[bsSdrCh];
+            for (auto ch = 0; ch < bsSdrCh; ++ch) {
+                samp[ch] = buffer + 4 * sizeof(int) + (cursor + ch) * cfg->getPackageLength();
+            }
             long long frameTime;
             if (radio->radioRx(it, samp, frameTime) < 0) {
                 cfg->running = false;
@@ -175,7 +169,7 @@ void* Receiver::loopRecv(void* in_context)
             symbol_id = (int)((frameTime >> 16) & 0xFFFF);
             ant_id = it * bsSdrCh;
 #if DEBUG_PRINT
-            short* short_sample1 = (short*)(buffer[0] + cursor * cfg->getPackageLength());
+            short* short_sample1 = (short*)(buffer + cursor * cfg->getPackageLength());
             printf("receive thread %d, frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n",
                 tid, frame_id, symbol_id, cell_id, ant_id);
             printf("receive samples: %d %d %d %d %d %d %d %d ...\n",
@@ -183,14 +177,14 @@ void* Receiver::loopRecv(void* in_context)
                 short_sample1[13], short_sample1[14], short_sample1[15], short_sample1[16]);
 #endif
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
-                int* int_sample = (int*)(buffer[ch] + cursor * cfg->getPackageLength());
+                int* int_sample = (int*)(buffer + (cursor + ch) * cfg->getPackageLength());
                 int_sample[0] = frame_id;
                 int_sample[1] = symbol_id;
                 int_sample[2] = 0; //cell_id
                 int_sample[3] = ant_id + ch;
 
                 // move ptr & set status to full
-                buffer_status[ch][cursor] = 1; // has data, after it is read it should be set to 0
+                buffer_status[cursor + ch] = 1; // has data, after it is read it should be set to 0
                 // push EVENT_RX_SYMBOL event into the queue
                 Event_data package_message;
                 package_message.event_type = EVENT_RX_SYMBOL;
@@ -202,7 +196,6 @@ void* Receiver::loopRecv(void* in_context)
                     exit(0);
                 }
             }
-            cursor = (cursor + bsSdrCh) % buffer_frame_num;
         }
     }
     return 0;
