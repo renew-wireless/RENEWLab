@@ -25,7 +25,7 @@ Recorder::Recorder(Config* cfg)
         rx_buffer_ = new SampleBuffer[rx_thread_num];
         for (int i = 0; i < rx_thread_num; i++) {
             rx_buffer_[i].buffer.resize(buffer_chunk_size * cfg->getPackageLength());
-            rx_buffer_[i].buffer_status.resize(buffer_chunk_size);
+            rx_buffer_[i].pkg_buf_inuse.resize(buffer_chunk_size);
         }
     }
 
@@ -775,6 +775,6 @@ herr_t Recorder::record(int, int offset)
 clean_exit:
 
     // after finish
-    rx_buffer_[buffer_id].buffer_status[offset] = false; // now empty
+    rx_buffer_[buffer_id].pkg_buf_inuse[offset] = false; // now empty
     return 0;
 }

@@ -40,7 +40,7 @@ struct Event_data {
 
 struct SampleBuffer {
     std::vector<char> buffer;
-    std::vector<bool> buffer_status;
+    std::vector<bool> pkg_buf_inuse;
 };
 
 //std::atomic_int thread_count(0);
