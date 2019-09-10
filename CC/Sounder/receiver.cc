@@ -67,18 +67,13 @@ std::vector<pthread_t> Receiver::startClientThreads()
     return client_threads;
 }
 
-std::vector<pthread_t> Receiver::startRecvThreads(char** in_buffer, int** in_buffer_status,
-    unsigned in_buffer_frame_num, unsigned in_buffer_length, unsigned in_core_id)
+std::vector<pthread_t> Receiver::startRecvThreads(SampleBuffer* rx_buffer, unsigned in_core_id)
 {
-    buffer_frame_num_ = in_buffer_frame_num;
-    assert(in_buffer_length == config_->getPackageLength() * buffer_frame_num_);
-    assert(in_buffer_frame_num != 0);
-    assert(in_buffer_length != 0);
-    buffer_length_ = in_buffer_length;
-    buffer_ = in_buffer;
-    buffer_status_ = in_buffer_status;
-
-    core_id_ = in_core_id;
+    buffer_frame_num_ = rx_buffer[0].buffer_status.size();
+    assert(rx_buffer[0].buffer.size() == config_->getPackageLength() * buffer_frame_num_);
+    assert(rx_buffer[0].buffer_status.size() != 0);
+    assert(rx_buffer[0].buffer.size() != 0);
+    buffer_length_ = rx_buffer[0].buffer.size();
 
     std::vector<pthread_t> created_threads;
     created_threads.resize(thread_num_);
@@ -86,6 +81,8 @@ std::vector<pthread_t> Receiver::startRecvThreads(char** in_buffer, int** in_buf
         // record the thread id
         ReceiverContext* context = new ReceiverContext;
         context->ptr = this;
+        context->buffer = rx_buffer;
+        context->core_id = in_core_id;
         context->tid = i;
         // start socket thread
         if (pthread_create(&created_threads[i], NULL, Receiver::loopRecv, context) != 0) {
@@ -116,14 +113,15 @@ void* Receiver::loopRecv(void* in_context)
 {
     ReceiverContext* context = (ReceiverContext*)in_context;
     Receiver* receiver = context->ptr;
+    SampleBuffer* rx_buffer = context->buffer;
     Config* cfg = receiver->config_;
     int tid = context->tid;
+    int core_id = context->core_id;
     delete context;
 
     moodycamel::ConcurrentQueue<Event_data>* message_queue_ = receiver->message_queue_;
 
     if (cfg->core_alloc) {
-        int core_id = receiver->core_id_;
         printf("pinning thread %d to core %d\n", tid, core_id + tid);
         if (pin_to_core(core_id + tid) != 0) {
             printf("pin thread %d to core %d failed\n", tid, core_id + tid);
@@ -143,12 +141,12 @@ void* Receiver::loopRecv(void* in_context)
     int buffer_index = 0;
     int status_index = 0;
     int* buffer_status[2] = {
-        receiver->buffer_status_[tid],
-        receiver->buffer_status_[tid] + 1
+        rx_buffer[tid].buffer_status.data(),
+        rx_buffer[tid].buffer_status.data() + 1
     };
     char* buffer[2] = {
-        receiver->buffer_[tid],
-        receiver->buffer_[tid] + cfg->getPackageLength()
+        rx_buffer[tid].buffer.data(),
+        rx_buffer[tid].buffer.data() + cfg->getPackageLength()
     };
 
     int num_threads = receiver->thread_num_;

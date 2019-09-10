@@ -52,6 +52,8 @@ public:
     // use for create pthread
     struct ReceiverContext {
         Receiver* ptr;
+        SampleBuffer* buffer;
+        int core_id;
         int tid;
     };
 
@@ -75,8 +77,7 @@ public:
     Receiver(int n_rx_threads, Config* config, moodycamel::ConcurrentQueue<Event_data>* in_queue);
     ~Receiver();
 
-    std::vector<pthread_t> startRecvThreads(char** in_buffer, int** in_buffer_status,
-        unsigned in_buffer_frame_num, unsigned in_buffer_length, unsigned in_core_id = 0);
+    std::vector<pthread_t> startRecvThreads(SampleBuffer* rx_buffer, unsigned in_core_id = 0);
     void completeRecvThreads(const std::vector<pthread_t>& recv_thread);
     std::vector<pthread_t> startClientThreads();
     void go();
@@ -90,15 +91,12 @@ private:
 
     RadioConfig* radioconfig_;
 
-    char** buffer_;
-    int** buffer_status_;
     int buffer_length_;
     int buffer_frame_num_;
 
     int thread_num_;
     // pointer of message_queue_
     moodycamel::ConcurrentQueue<Event_data>* message_queue_;
-    int core_id_;
 };
 
 #endif

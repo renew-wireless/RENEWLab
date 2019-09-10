@@ -582,14 +582,7 @@ void Recorder::do_it()
         openHDF5();
 
         // create socket buffer and socket threads
-        char* rx_buffer_ptrs[rx_thread_num];
-        int* rx_buffer_status_ptrs[rx_thread_num];
-        for (int i = 0; i < rx_thread_num; i++) {
-            rx_buffer_ptrs[i] = rx_buffer_[i].buffer.data();
-            rx_buffer_status_ptrs[i] = rx_buffer_[i].buffer_status.data();
-        }
-        recv_thread = receiver_->startRecvThreads(rx_buffer_ptrs,
-            rx_buffer_status_ptrs, rx_buffer_[0].buffer_status.size(), rx_buffer_[0].buffer.size(), 1);
+        recv_thread = receiver_->startRecvThreads(rx_buffer_, 1);
     } else
         receiver_->go(); // only beamsweeping
 
