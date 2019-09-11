@@ -184,12 +184,8 @@ class Iris_py:
 			if ("CBRS" in info["frontend"]):
 				#Tx:
 				self.sdr.setGain(SOAPY_SDR_TX, chan, 'ATTN', 0) #[-18,0] by 3
-				self.sdr.setGain(SOAPY_SDR_TX, chan, 'PA1', 15) #[0|15]
-				self.sdr.setGain(SOAPY_SDR_TX, chan, 'PA2', 0) #[0|15]
-				self.sdr.setGain(SOAPY_SDR_TX, chan, 'PA3', 30) #[0|30]
-            	#Rx:
+            	                #Rx:
 				self.sdr.setGain(SOAPY_SDR_RX, chan, 'ATTN', 0) #[-18,0]
-				self.sdr.setGain(SOAPY_SDR_RX, chan, 'LNA1', 30) #[0,33]
 				self.sdr.setGain(SOAPY_SDR_RX, chan, 'LNA2', 17) #[0,17]
 
 		self.tx_stream = None # Burst mode
@@ -384,7 +380,7 @@ if __name__ == '__main__':
 	parser.add_argument("--rate", type=float, dest="rate", help="Sample rate", default= 5e6)
 	parser.add_argument("--txGain", type=float, dest="txGain", help="Optional Tx gain (dB)", default=40)
 	parser.add_argument("--rxGain", type=float, dest="rxGain", help="Optional Rx gain (dB)", default=20)
-	parser.add_argument("--freq", type=float, dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
+	parser.add_argument("--freq", type=float, dest="freq", help="Optional Tx freq (Hz)", default=2.5e9)
 	parser.add_argument("--bw", type=float, dest="bw", help="Optional filter bw (Hz)", default=None)
 	args = parser.parse_args()
 	
@@ -464,7 +460,7 @@ if __name__ == '__main__':
 
 	wave_rx_a_bs_mn =  siso_bs.recv_stream_tdd()
 
-	freq = 3.6e9
+	freq = 2.5e9
 	print("printing number of frames")
 	print("BS 0x%X" % SoapySDR.timeNsToTicks(siso_bs.sdr.getHardwareTime(""), freq))
 	print("UE 0x%X" % SoapySDR.timeNsToTicks(siso_ue.sdr.getHardwareTime(""), freq))

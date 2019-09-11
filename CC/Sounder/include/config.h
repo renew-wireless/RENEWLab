@@ -11,25 +11,23 @@
 #ifndef CONFIG_HEADER
 #define CONFIG_HEADER
 
-#include <algorithm>
-#include <stdexcept>
-#include <vector>
-#include <iostream>
-#include <complex.h>
-#include <fstream>      // std::ifstream
-#include <stdio.h>  /* for fprintf */
-#include <unistd.h>
 #include "macros.h"
 #include "utils.h"
+#include <algorithm>
+#include <complex.h>
+#include <fstream> // std::ifstream
+#include <iostream>
+#include <stdexcept>
+#include <stdio.h> /* for fprintf */
+#include <unistd.h>
+#include <vector>
 #ifdef JSON
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 #endif
 
-class Config
-{
+class Config {
 public:
-
     std::string conf;
     bool bsPresent;
     bool clPresent;
@@ -51,7 +49,7 @@ public:
     float tx_scale;
     std::string pilot_seq;
     std::string beacon_seq;
-    
+
     // BS features
     size_t nCells;
     std::vector<std::string> bs_sdr_file;
@@ -65,7 +63,6 @@ public:
     std::vector<size_t> nBsAntennas;
     size_t bsSdrCh;
     std::string bsChannel;
-    int framePeriod;
     std::vector<std::string> frames;
     std::string frame_mode;
     int max_frame;
@@ -82,7 +79,7 @@ public:
     std::string trace_file;
 
     // Clients features
-    int nClSdrs;
+    unsigned int nClSdrs;
     std::vector<std::string> cl_sdr_ids;
     int clSdrCh;
     std::string clChannel;
@@ -115,7 +112,10 @@ public:
     const int data_offset = sizeof(int) * 4;
     // header 4 int for: frame_id, subframe_id, cell_id, ant_id
     // ushort for: I/Q samples
-    size_t getPackageLength() { return sizeof(int) * 4 + sizeof(ushort) * (size_t)sampsPerSymbol * 2; }
+    size_t getPackageLength()
+    {
+        return sizeof(int) * 4 + sizeof(ushort) * (size_t)sampsPerSymbol * 2;
+    }
     size_t getNumAntennas();
     int getClientId(int, int);
     int getUlSFIndex(int, int);
@@ -126,10 +126,10 @@ public:
 
     std::atomic<bool> running;
     bool core_alloc;
-    int rx_thread_num;
-    int task_thread_num;
+    unsigned int rx_thread_num;
+    unsigned int task_thread_num;
 
-    Config(std::string);
+    Config(const std::string&);
     ~Config();
 };
 

@@ -1,6 +1,6 @@
 {
 	"Clients" : {
-		 "frequency" : 3.6e9,
+		 "frequency" : 2.5e9,
 		 "channel" : "A",
 		 "agc_en" : false,
 		 "rxgainA" : [20],
@@ -21,7 +21,7 @@
 		 "modulation" : "QPSK",
 		 "pilot_seq" : "lts-half",
 		 "sdr_id" : [
-		     "RF3C000045"
+		     "RF3E000145"
 		 ]
 	}
 }

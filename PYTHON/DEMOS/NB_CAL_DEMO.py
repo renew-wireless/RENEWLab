@@ -38,7 +38,8 @@ def calibrate_array(hub_serial, serials, ref_serial, rate, freq, txgain, rxgain,
     for i, sdr in enumerate(sdrs):
         info = sdr.getHardwareInfo();
         print("%s settings on device %d" % (info["frontend"], i))
-        for ch in [0, 1]:
+        channel = [1] if second_channel else [0]
+        for ch in channel:
             sdr.setFrequency(SOAPY_SDR_TX, ch, freq)
             sdr.setFrequency(SOAPY_SDR_RX, ch, freq)
             sdr.setSampleRate(SOAPY_SDR_TX, ch, rate)
@@ -55,15 +56,9 @@ def calibrate_array(hub_serial, serials, ref_serial, rate, freq, txgain, rxgain,
             sdr.setGain(SOAPY_SDR_RX, ch, 'PGA', 0) #[-12,19]
             sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
             sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
-        #for ch in [0,1]:
+        #for ch in channel:
         #    sdr.writeSetting(SOAPY_SDR_RX, ch, "CALIBRATE", '')
         #    sdr.writeSetting(SOAPY_SDR_TX, ch, "CALIBRATE", '')
-        if second_channel:
-            sdr.writeSetting(SOAPY_SDR_RX, 0, 'ENABLE_CHANNEL', 'false')
-            sdr.writeSetting(SOAPY_SDR_TX, 0, 'ENABLE_CHANNEL', 'false')
-        else:
-            sdr.writeSetting(SOAPY_SDR_RX, 1, 'ENABLE_CHANNEL', 'false')
-            sdr.writeSetting(SOAPY_SDR_TX, 1, 'ENABLE_CHANNEL', 'false')
 
         sdr.writeRegister("IRIS30", RF_RST_REG, (1<<29) | 0x1)
         sdr.writeRegister("IRIS30", RF_RST_REG, (1<<29))
@@ -234,9 +229,9 @@ def main():
     parser.add_option("--serials", type="string", dest="serials", help="serial number of all devices", default="bs_serials.txt")
     parser.add_option("--ref-serial", type="string", dest="ref_serial", help="reference serial number of the device", default="")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=1e6)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=40.0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=20.0)
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Tx gain (dB)", default=20.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=2.5e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-pad", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)
     parser.add_option("--postfix-pad", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)

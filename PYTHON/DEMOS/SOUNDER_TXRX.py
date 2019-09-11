@@ -257,10 +257,12 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
         info = sdr.getHardwareInfo()
         print("%s settings on device %d" % (info["frontend"], i))
         for ch in [0, 1]:
+            sdr.setBandwidth(SOAPY_SDR_TX, ch, 3*rate)
+            sdr.setBandwidth(SOAPY_SDR_RX, ch, 3*rate)
             sdr.setSampleRate(SOAPY_SDR_TX, ch, rate)
             sdr.setSampleRate(SOAPY_SDR_RX, ch, rate)
-            # sdr.setFrequency(SOAPY_SDR_TX, ch, freq)
-            # sdr.setFrequency(SOAPY_SDR_RX, ch, freq)
+            #sdr.setFrequency(SOAPY_SDR_TX, ch, freq)
+            #sdr.setFrequency(SOAPY_SDR_RX, ch, freq)
             sdr.setFrequency(SOAPY_SDR_TX, ch, 'RF', freq-.75*rate)
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'RF', freq-.75*rate)
             sdr.setFrequency(SOAPY_SDR_TX, ch, 'BB', .75*rate)
@@ -268,10 +270,11 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
             if "CBRS" in info["frontend"]:
                 sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', -6)  # {-18,-12,-6,0}
             sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)   # [0,52]
+            sdr.setGain(SOAPY_SDR_TX, ch, "IAMP", 12)
 
             if "CBRS" in info["frontend"]:
                 sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', -6)   # {-18,-12,-6,0}
-                sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 14)  # LO: [0|17], HI:[0|14]
+                sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 17)  # LO: [0|17], HI:[0|14]
 
             # LMS gains
             if agc_en:
@@ -296,7 +299,6 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
         for ch in [0, 1]:
             if calibrate:
                 sdr.writeSetting(SOAPY_SDR_RX, ch, "CALIBRATE", 'SKLK')
-                sdr.writeSetting(SOAPY_SDR_TX, ch, "CALIBRATE", '')
 
         sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 0x1)
         sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29))
@@ -353,7 +355,7 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
     beacon2 = wbz  # beacon1 if both_channels else wbz
 
     bsched = "PGR"+''.join("G"*(numSyms-txSymNum-4))+''.join("R"*txSymNum)+"G" 
-    msched = "GRP"+''.join("G"*(numSyms-txSymNum-4))+''.join("T"*txSymNum)+"G"
+    msched = "GGP"+''.join("G"*(numSyms-txSymNum-4))+''.join("T"*txSymNum)+"G"
     if both_channels:
         bsched = "PGRR"+''.join("G"*(numSyms-txSymNum-5))+''.join("R"*txSymNum)+"G" 
         msched = "GGPP"+''.join("G"*(numSyms-txSymNum-5))+''.join("T"*txSymNum)+"G"
@@ -502,12 +504,12 @@ def signal_handler(rate, numSyms, txSymNum, signal, frame):
 #########################################
 def main():
     parser = OptionParser()
-    parser.add_option("--serial1", type="string", dest="serial1", help="serial number of the master device", default="RF3C000042")
-    parser.add_option("--serial2", type="string", dest="serial2", help="serial number of the slave device", default="RF3C000025")
+    parser.add_option("--serial1", type="string", dest="serial1", help="serial number of the master device", default="RF3E000134")
+    parser.add_option("--serial2", type="string", dest="serial2", help="serial number of the slave device", default="RF3E000060")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=30.0)
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) - only used if agc disabled", default=20.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=52.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) - only used if agc disabled", default=14.0)
+    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=2.5e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)     # to compensate for front-end group delay
     parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)  # to compensate for rf path delay
@@ -517,10 +519,10 @@ def main():
     parser.add_option("--ue-tx-advance", type="int", dest="tx_advance", help="sample advance for tx vs rx", default=68)
     parser.add_option("--both-channels", action="store_true", dest="both_channels", help="transmit from both channels", default=False)
     parser.add_option("--calibrate", action="store_true", dest="calibrate", help="transmit from both channels", default=False)
-    parser.add_option("--use-trig", action="store_true", dest="use_trig", help="uses chain triggers for synchronization", default=True)
-    parser.add_option("--wait-trigger", action="store_true", dest="wait_trigger", help="wait for a trigger to start a frame", default=False)
+    parser.add_option("--use-trig", action="store_true", dest="use_trig", help="uses chain triggers for synchronization", default=False)
+    parser.add_option("--wait-trigger", action="store_true", dest="wait_trigger", help="wait for a trigger to start a frame", default=True)
     parser.add_option("--auto-tx-gain", action="store_true", dest="auto_tx_gain", help="automatically go over tx gains", default=False)
-    parser.add_option("--record", action="store_true", dest="record", help="record received pilots and data", default=True)
+    parser.add_option("--record", action="store_true", dest="record", help="record received pilots and data", default=False)
     parser.add_option("--agc-enable", action="store_true", dest="agc_en", help="Enable AGC flag", default=False)
     (options, args) = parser.parse_args()
 

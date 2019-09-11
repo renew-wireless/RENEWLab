@@ -35,7 +35,6 @@ extern "C" {
 #define MUFFT_RESTRICT
 #endif
 
-
 /// \weakgroup muFFT muFFT public API
 /// @{
 ///
@@ -43,7 +42,7 @@ extern "C" {
 /// The forward FFT transform.
 #define MUFFT_FORWARD (-1)
 /// The inverse FFT transform.
-#define MUFFT_INVERSE  (1)
+#define MUFFT_INVERSE (1)
 
 /// \addtogroup MUFFT_FLAG Planning options
 /// @{
@@ -78,47 +77,47 @@ extern "C" {
 typedef struct mufft_plan_1d mufft_plan_1d;
 
 /// \brief Create a plan for a 1D complex-to-complex inverse or forward FFT.
-/// 
-/// @param N The transform size. Must be power-of-two and at least 2. 
+///
+/// @param N The transform size. Must be power-of-two and at least 2.
 /// @param direction Forward (\ref MUFFT_FORWARD) or inverse (\ref MUFFT_INVERSE) transform.
 /// @param flags Flags for the planning. See \ref MUFFT_FLAG.
 /// @returns A 1D transform plan, or `NULL` if an error occured.
-mufft_plan_1d *mufft_create_plan_1d_c2c(unsigned N, int direction, unsigned flags);
+mufft_plan_1d* mufft_create_plan_1d_c2c(unsigned N, int direction, unsigned flags);
 
 /// \brief Create a plan for real-to-complex forward transform.
 ///
 /// The real-to-complex transform is optimized for the case when the input data to the transform is purely real.
 /// The transform is implemented as an N / 2 complex transform with a final butterfly pass to complete the transform.
 /// The transform may have different numerical precision characteristics compared to the purely complex transform.
-/// 
+///
 /// @param N The transform size. Must be power-of-two and at least 4.
 /// The required storage for the output is N / 2 + 1 complex values due to redundancies in the frequency plane as
 /// X(k) = X(N - k)* when the input to an FFT is real.
 /// @param flags Flags for the planning. See \ref MUFFT_FLAG. If \ref MUFFT_FLAG_FULL_R2C flag is added, the transform will output the full N complex frequency samples, instead of the minimum N / 2 + 1 samples.
 /// @returns A 1D transform plan, or `NULL` if an error occured.
-mufft_plan_1d *mufft_create_plan_1d_r2c(unsigned N, unsigned flags);
+mufft_plan_1d* mufft_create_plan_1d_r2c(unsigned N, unsigned flags);
 
 /// \brief Create a plan for complex-to-real inverse transform.
 ///
 /// The complex-to-real transform is optimized for the case when the output data of the transform is purely real.
 /// The transform is implemented as an N / 2 complex inverse transform with an initial butterfly pass to turn the real N-point transform into an N / 2 complex transform.
 /// The transform may have different numerical precision characteristics compared to the purely complex transform.
-/// 
+///
 /// @param N The transform size. Must be power-of-two and at least 4.
 /// The required input for the transform is N / 2 + 1 complex values.
 /// @param flags Flags for the planning. See \ref MUFFT_FLAG.
 /// @returns A 1D transform plan, or `NULL` if an error occured.
-mufft_plan_1d *mufft_create_plan_1d_c2r(unsigned N, unsigned flags);
+mufft_plan_1d* mufft_create_plan_1d_c2r(unsigned N, unsigned flags);
 
 /// \brief Executes a 1D FFT plan.
 /// @param plan Previously allocated 1D FFT plan.
 /// @param output Output of the transform. The data must be aligned. See \ref MUFFT_MEMORY.
 /// @param input Input to the transform. The data must be aligned. See \ref MUFFT_MEMORY.
-void mufft_execute_plan_1d(mufft_plan_1d *plan, void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input);
+void mufft_execute_plan_1d(mufft_plan_1d* plan, void* MUFFT_RESTRICT output, const void* MUFFT_RESTRICT input);
 
 /// \brief Free a previously allocated 1D FFT plan.
 /// @param plan A plan. May be `NULL` in which case nothing happens.
-void mufft_free_plan_1d(mufft_plan_1d *plan);
+void mufft_free_plan_1d(mufft_plan_1d* plan);
 /// @}
 
 /// \addtogroup MUFFT_CONV 1D fast convolution
@@ -160,15 +159,15 @@ typedef struct mufft_plan_conv mufft_plan_conv;
 /// The length of a convolution is equal to K + L - 1, where K and L are the lengths of the two input arrays which are to be convolved. If the output array is overrun, the results will spill into the start of the output array which is rarely a desirable result.
 /// A very common approach when convolving two arrays of size N in filtering applications is to use an FFT of length N * 2, which can perfectly contain the result of the convolution with just outputing a single redundant value since we need an array of N * 2 - 1.
 /// Linear phase FIR filters tend to be of odd length, and we can e.g. implement a 33-tap FIR filter by convolving 32 input samples with 33 FIR samples to form a 64 sample result.
-/// 
+///
 /// @param N the number of samples in the FFT. N must be at least 4 and power-of-two.
 /// @param flags Flags to be passed to the FFT planning. See \ref MUFFT_FLAG.
 /// @param method The convolution method to use. See \ref MUFFT_CONV_METHOD. Stereo convolution is supported as well as zero-padding the input data without extra memory copies.
 /// @returns An instance of a convolution plan, or `NULL` if failed.
-mufft_plan_conv *mufft_create_plan_conv(unsigned N, unsigned flags, unsigned method);
+mufft_plan_conv* mufft_create_plan_conv(unsigned N, unsigned flags, unsigned method);
 
 /// \brief Applies forward FFT of either first or second input block.
-/// 
+///
 /// When doing block-based overlap-add convolution with FFTs the filter generally stays constant over many transforms.
 /// We can do the forward transform of the filter input once and cache the FFT of the filter. Only the FFT of the input blocks have to be performed in this case.
 ///
@@ -176,13 +175,13 @@ mufft_plan_conv *mufft_create_plan_conv(unsigned N, unsigned flags, unsigned met
 /// @param block Which block to forward FFT transform. \ref MUFFT_CONV_BLOCK_FIRST or \ref MUFFT_CONV_BLOCK_SECOND are accepted. Which input is first and second is arbitrary and up to the API user.
 /// @param output The FFT of input. Its required buffer size can be queried with mufft_conv_get_transformed_block_size.
 /// @param input Input data to be transformed. Must be aligned to a boundary which matches with the SIMD instruction set used by your hardware, typically 16 or 32 bytes. Use \ref MUFFT_MEMORY to allocate properly aligned memory. Depending on the convolution method used, this input array is either treated as a complex array or real array with length either N or N / 2 if zero padding is used.
-void mufft_execute_conv_input(mufft_plan_conv *plan, unsigned block, void *output, const void *input);
+void mufft_execute_conv_input(mufft_plan_conv* plan, unsigned block, void* output, const void* input);
 
 /// \brief Queries the buffer size for intermediate FFT blocks.
 ///
 /// @param plan Convolution instance
 /// @returns The number of bytes required to hold the output of mufft_execute_conv_input. Can be passed directly to \ref MUFFT_MEMORY.
-size_t mufft_conv_get_transformed_block_size(mufft_plan_conv *plan);
+size_t mufft_conv_get_transformed_block_size(mufft_plan_conv* plan);
 
 /// \brief Multiply together FFTs of the two input arrays obtained from \ref mufft_execute_conv_input and perform a normalized inverse FFT.
 ///
@@ -192,14 +191,14 @@ size_t mufft_conv_get_transformed_block_size(mufft_plan_conv *plan);
 /// @param output Output data. Must be aligned to a boundary which matches with the SIMD instruction set used by your hardware, typically 16 or 32 bytes. Use \ref MUFFT_MEMORY to allocate properly aligned memory. Depending on the convolution method used, the type of output is either treated as a complex array or real array of length N.
 /// @param input_first The output obtained earlier by mufft_execute_conv_input for \ref MUFFT_CONV_BLOCK_FIRST.
 /// @param input_second The output obtained earlier by mufft_execute_conv_input for \ref MUFFT_CONV_BLOCK_SECOND.
-void mufft_execute_conv_output(mufft_plan_conv *plan, void *output, const void *input_first, const void *input_second);
+void mufft_execute_conv_output(mufft_plan_conv* plan, void* output, const void* input_first, const void* input_second);
 
 /// \brief Free a previously allocated convolution plan obtained from \ref mufft_create_plan_conv.
-void mufft_free_plan_conv(mufft_plan_conv *plan);
+void mufft_free_plan_conv(mufft_plan_conv* plan);
 
 /// \brief Vector complex multiply routine signature
-typedef void (*mufft_convolve_func)(void *output, const void *a, const void *b,
-                                    float normalization, unsigned samples);
+typedef void (*mufft_convolve_func)(void* output, const void* a, const void* b,
+    float normalization, unsigned samples);
 
 /// \brief Gets a function pointer which implements complex multiplication (convolution in frequency domain).
 /// @param flags See \ref MUFFT_FLAG.
@@ -223,13 +222,13 @@ typedef struct mufft_plan_2d mufft_plan_2d;
 /// \brief Create a plan for a 2D complex-to-complex inverse or forward FFT.
 ///
 /// The input and output data to the 2D transform is represented as a row-major array.
-/// 
+///
 /// @param Nx The transform size in X dimension (number of columns). Must be power-of-two and at least 2.
 /// @param Ny The transform size in Y dimension (number of rows). Must be power-of-two and at least 2.
 /// @param direction Forward (\ref MUFFT_FORWARD) or inverse (\ref MUFFT_INVERSE) transform.
 /// @param flags Flags for the planning. See \ref MUFFT_FLAG.
 /// @returns A 2D transform plan, or `NULL` if an error occured.
-mufft_plan_2d *mufft_create_plan_2d_c2c(unsigned Nx, unsigned Ny, int direction, unsigned flags);
+mufft_plan_2d* mufft_create_plan_2d_c2c(unsigned Nx, unsigned Ny, int direction, unsigned flags);
 
 /// \brief Create a plan for a 2D real-to-complex forward FFT.
 ///
@@ -241,12 +240,12 @@ mufft_plan_2d *mufft_create_plan_2d_c2c(unsigned Nx, unsigned Ny, int direction,
 /// The vertical transform will only transform the first N / 2 + D columns,
 /// where D is some convenient value which aligns well to the SIMD instruction set used.
 /// The full N complex samples can be processed vertically as well if \ref MUFFT_FLAG_FULL_R2C is used.
-/// 
+///
 /// @param Nx The transform size in X dimension (number of columns). Must be power-of-two and at least 4.
 /// @param Ny The transform size in Y dimension (number of rows). Must be power-of-two and at least 2.
 /// @param flags Flags for the planning. See \ref MUFFT_FLAG. If \ref MUFFT_FLAG_FULL_R2C flag is added, the transform will output the full N complex frequency samples, instead of the minimum N / 2 + 1 samples.
 /// @returns A 2D transform plan, or `NULL` if an error occured.
-mufft_plan_2d *mufft_create_plan_2d_r2c(unsigned Nx, unsigned Ny, unsigned flags);
+mufft_plan_2d* mufft_create_plan_2d_r2c(unsigned Nx, unsigned Ny, unsigned flags);
 
 /// \brief Create a plan for a 2D complex-to-real inverse FFT.
 ///
@@ -258,22 +257,22 @@ mufft_plan_2d *mufft_create_plan_2d_r2c(unsigned Nx, unsigned Ny, unsigned flags
 /// The output array needs a minimum size of 2 * Nx * Ny * sizeof(float) and not the expected Nx * Ny * sizeof(float).
 /// muFFT uses the output buffer as a scratch buffer during the FFT computation.
 /// The end result however, will only require Nx * Ny * sizeof(float) size.
-/// 
+///
 /// @param Nx The transform size in X dimension (number of columns). Must be power-of-two and at least 4.
 /// @param Ny The transform size in Y dimension (number of rows). Must be power-of-two and at least 2.
 /// @param flags Flags for the planning. See \ref MUFFT_FLAG.
 /// @returns A 2D transform plan, or `NULL` if an error occured.
-mufft_plan_2d *mufft_create_plan_2d_c2r(unsigned Nx, unsigned Ny, unsigned flags);
+mufft_plan_2d* mufft_create_plan_2d_c2r(unsigned Nx, unsigned Ny, unsigned flags);
 
 /// \brief Executes a 2D FFT plan.
 /// @param plan Previously allocated 2D FFT plan.
 /// @param output Output of the transform. The data must be aligned. See \ref MUFFT_MEMORY.
 /// @param input Input to the transform. The data must be aligned. See \ref MUFFT_MEMORY.
-void mufft_execute_plan_2d(mufft_plan_2d *plan, void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input);
+void mufft_execute_plan_2d(mufft_plan_2d* plan, void* MUFFT_RESTRICT output, const void* MUFFT_RESTRICT input);
 
 /// \brief Free a previously allocated 2D FFT plan.
 /// @param plan A plan. May be `NULL` in which case nothing happens.
-void mufft_free_plan_2d(mufft_plan_2d *plan);
+void mufft_free_plan_2d(mufft_plan_2d* plan);
 /// @}
 
 /// \addtogroup MUFFT_MEMORY Memory allocation
@@ -283,18 +282,18 @@ void mufft_free_plan_2d(mufft_plan_2d *plan);
 /// Must be freed with \ref mufft_free.
 /// @param size Number of bytes to allocate.
 /// @returns Allocated storage, or `NULL`.
-void *mufft_alloc(size_t size);
+void* mufft_alloc(size_t size);
 
 /// \brief Allocate zeroed out aligned storage suitable for muFFT.
 /// Same as calloc(), but aligned.
 /// Must be freed with \ref mufft_free.
 /// @param size Number of bytes to allocate.
 /// @returns Allocated storage, or `NULL`.
-void *mufft_calloc(size_t size);
+void* mufft_calloc(size_t size);
 
 /// \brief Free previously allocated storage obtained from \ref mufft_alloc or \ref mufft_calloc.
 /// @param ptr Pointer to be freed. Can be `NULL` in which case nothing happens.
-void mufft_free(void *ptr);
+void mufft_free(void* ptr);
 /// @}
 
 ///
@@ -306,4 +305,3 @@ void mufft_free(void *ptr);
 #endif
 
 #endif
-

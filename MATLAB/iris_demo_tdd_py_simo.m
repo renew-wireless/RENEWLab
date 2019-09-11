@@ -47,7 +47,7 @@ fprintf("Channel type: %s \n",chan_type);
 %Iris params:
 N_BS_NODE = 2;
 N_UE = 1;
-TX_FRQ                  = 3.6e9;
+TX_FRQ                  = 2.5e9;
 RX_FRQ                  = TX_FRQ;
 TX_GN                   = 40;
 RX_GN                   = 20;

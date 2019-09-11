@@ -73,7 +73,7 @@ rxStream = None
 recorder = None
 FIG_LEN = 16384   
 Rate = 5e6 
-fft_size = 1024
+fft_size = 2**12 # 1024
 numBufferSamps = 1000
 rssiPwrBuffer = collections.deque(maxlen=numBufferSamps)
 timePwrBuffer = collections.deque(maxlen=numBufferSamps)
@@ -265,6 +265,8 @@ def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
 
     # Set params on both channels (both RF chains)
     for ch in [0, 1]:
+        #sdr.setBandwidth(SOAPY_SDR_RX, ch, 3*Rate)
+        #sdr.setBandwidth(SOAPY_SDR_TX, ch, 3*Rate)
         sdr.setFrequency(SOAPY_SDR_RX, ch, freq)
         sdr.setSampleRate(SOAPY_SDR_RX, ch, Rate)
         sdr.setFrequency(SOAPY_SDR_TX, ch, freq)
@@ -365,7 +367,7 @@ def animate(i, num_samps, recorder, agc_en, wait_trigger):
 
     # Compute Power of Frequency Domain Signal (FFT)
     f1, powerBins, noiseFloor, pks = fft_power(sampsRx[0], Rate, num_bins=fft_size, peak=1.0,
-                                               scaling='density', peak_thresh=20)
+                                               scaling='spectrum', peak_thresh=20)
     fftPower = bandpower(sampsRx[0], Rate, 0, Rate / 2)
     fftPower_dB = 10 * np.log10(fftPower)
     fftPower_dBm = 10 * np.log10(fftPower / 1e-3)
@@ -390,7 +392,7 @@ def animate(i, num_samps, recorder, agc_en, wait_trigger):
 
     # Fill out data structures with measured data
     line1.set_data(range(buff0.size), np.real(sampsRx[0]))
-    line2.set_data(range(buff0.size), np.real(sampsRx[1]))
+    line2.set_data(range(buff0.size), np.imag(sampsRx[0]))
     line3.set_data(range(buff0.size), np.abs(sampsRx[0]))
     line4.set_data(range(buff0.size), np.abs(sampsRx[1]))
     line5.set_data(range(buff0.size), np.angle(sampsRx[0]))
@@ -437,19 +439,19 @@ def replay(name, leng):
 def main():
     parser = OptionParser()
     parser.add_option("--label", type="string", dest="label", help="label for recorded file name", default="rx2.600GHz_TEST.hdf5")
-    parser.add_option("--lna", type="float", dest="lna", help="Lime Chip Rx LNA gain [0:30](dB)", default=20.0)
+    parser.add_option("--lna", type="float", dest="lna", help="Lime Chip Rx LNA gain [0:30](dB)", default=14.0)
     parser.add_option("--tia", type="float", dest="tia", help="Lime Chip Rx TIA gain [0,3,9,12] (dB)", default=0.0)
     parser.add_option("--pga", type="float", dest="pga", help="Lime Chip Rx PGA gain [-12:19] (dB)", default=0.0)
-    parser.add_option("--lna1", type="float", dest="lna1", help="BRS/CBRS Front-end LNA1 gain stage [0:33] (dB)", default=30.0)
+    parser.add_option("--lna1", type="float", dest="lna1", help="BRS/CBRS Front-end LNA1 gain stage [0:33] (dB)", default=33.0)
     parser.add_option("--lna2", type="float", dest="lna2", help="BRS/CBRS Front-end LNA2 gain [0:17] (dB)", default=17.0)
     parser.add_option("--attn", type="float", dest="rxattn", help="BRS/CBRS Front-end ATTN gain stage [-18:6:0] (dB)", default=0.0)
     parser.add_option("--latitude", type="float", dest="latitude", help="Latitude", default=0.0)
     parser.add_option("--longitude", type="float", dest="longitude", help="Longitude", default=0.0)
     parser.add_option("--elevation", type="float", dest="elevation", help="Elevation", default=0.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Rx freq (Hz)", default=3.6e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Optional Rx freq (Hz)", default=2.5e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=16384)
     parser.add_option("--serial", type="string", dest="serial", help="Serial number of the device", default="")
-    parser.add_option("--rxMode", type="string", dest="rxMode", help="RX Mode, Options:BASIC/REC/REPLAY", default="REC")
+    parser.add_option("--rxMode", type="string", dest="rxMode", help="RX Mode, Options:BASIC/REC/REPLAY", default="BASIC")
     parser.add_option("--AGCen", type="int", dest="AGCen", help="Enable AGC Flag. Options:0/1", default=0)
     parser.add_option("--wait-trigger", action="store_true", dest="wait_trigger", help="wait for a trigger to start a frame",default=False)
     (options, args) = parser.parse_args()
