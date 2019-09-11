@@ -659,13 +659,10 @@ herr_t Recorder::record(int, int offset)
     offset = offset - buffer_id * buffer_frame_num;
     // read info
     char* cur_ptr_buffer = rx_buffer_[buffer_id].buffer.data() + offset * cfg->getPackageLength();
-    int ant_id, frame_id, symbol_id;
-    frame_id = *((int*)cur_ptr_buffer);
-    symbol_id = *((int*)cur_ptr_buffer + 1);
-    ant_id = *((int*)cur_ptr_buffer + 3);
+    struct Package* pkg = (struct Package*)cur_ptr_buffer;
 #if DEBUG_PRINT
-    int cell_id = *((int*)cur_ptr_buffer + 2);
-    printf("record process frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n", frame_id, symbol_id, cell_id, ant_id);
+    printf("record process frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n",
+        pkg->frame_id, pkg->symbol_id, pkg->cell_id, pkg->ant_id);
     printf("record samples: %d %d %d %d %d %d %d %d ....\n", *((short*)cur_ptr_buffer + 9),
         *((short*)cur_ptr_buffer + 10),
         *((short*)cur_ptr_buffer + 11),
@@ -676,7 +673,7 @@ herr_t Recorder::record(int, int offset)
         *((short*)cur_ptr_buffer + 16));
 #endif
     short* cur_ptr_buffer_short = (short*)(cur_ptr_buffer + sizeof(int) * 4);
-    if (cfg->max_frame != 0 && frame_id > cfg->max_frame) {
+    if (cfg->max_frame != 0 && pkg->frame_id > cfg->max_frame) {
         closeHDF5();
         goto clean_exit;
     }
@@ -684,7 +681,7 @@ herr_t Recorder::record(int, int offset)
         Exception::dontPrint();
         // Update the max frame number.
         // Note that the 'frameid' might be out of order.
-        if (frame_id > maxFrameNumber) {
+        if (pkg->frame_id > maxFrameNumber) {
             // Open the hdf5 file if we haven't.
             closeHDF5();
             openHDF5();
@@ -693,10 +690,10 @@ herr_t Recorder::record(int, int offset)
         hsize_t count[5];
         hsize_t hdfoffset[5];
 
-        hdfoffset[0] = frame_id;
+        hdfoffset[0] = pkg->frame_id;
         hdfoffset[1] = 0; // will change later after we use cell_id
-        hdfoffset[2] = cfg->getClientId(frame_id, symbol_id);
-        hdfoffset[3] = ant_id;
+        hdfoffset[2] = cfg->getClientId(pkg->frame_id, pkg->symbol_id);
+        hdfoffset[3] = pkg->ant_id;
         hdfoffset[4] = 0;
 
         count[0] = 1; // frame
@@ -705,16 +702,16 @@ herr_t Recorder::record(int, int offset)
         count[3] = 1; // ant
         count[4] = dims_pilot[4]; // data size
 
-        if (cfg->isPilot(frame_id, symbol_id)) {
+        if (cfg->isPilot(pkg->frame_id, pkg->symbol_id)) {
             //assert(pilot_dataset >= 0);
             // Are we going to extend the dataset?
-            if ((size_t)frame_id >= dims_pilot[0]) {
+            if ((size_t)pkg->frame_id >= dims_pilot[0]) {
                 dims_pilot[0] = cfg->max_frame != 0
                     ? std::min(dims_pilot[0] + config_pilot_extent_step, (long long unsigned int)cfg->max_frame + 1) // 400 is a threshold.
                     : dims_pilot[0] + config_pilot_extent_step;
                 pilot_dataset->extend(dims_pilot);
 #if DEBUG_PRINT
-                std::cout << "FrameId " << frame_id << ", (Pilot) Extent to " << dims_pilot[0] << " Frames" << std::endl;
+                std::cout << "FrameId " << pkg->frame_id << ", (Pilot) Extent to " << dims_pilot[0] << " Frames" << std::endl;
 #endif
             }
             // Select a hyperslab in extended portion of the dataset
@@ -723,13 +720,14 @@ herr_t Recorder::record(int, int offset)
 
             // define memory space
             DataSpace pilot_memspace(5, count, NULL);
-            pilot_dataset->write(cur_ptr_buffer_short, PredType::NATIVE_INT16, pilot_memspace, pilot_filespace);
+            pilot_dataset->write(cur_ptr_buffer_short, PredType::NATIVE_INT16,
+                pilot_memspace, pilot_filespace);
             pilot_filespace.close();
-        } else if (cfg->isData(frame_id, symbol_id)) {
+        } else if (cfg->isData(pkg->frame_id, pkg->symbol_id)) {
 
             //assert(data_dataset >= 0);
             // Are we going to extend the dataset?
-            if ((size_t)frame_id >= dims_data[0]) {
+            if ((size_t)pkg->frame_id >= dims_data[0]) {
                 //dims_data[0] = dims_data[0] + config_data_extent_step;
                 dims_data[0] = cfg->max_frame != 0
                     ? std::min(dims_data[0] + config_data_extent_step, (long long unsigned int)cfg->max_frame + 1) // 400 is a threshold.
@@ -738,7 +736,7 @@ herr_t Recorder::record(int, int offset)
                 printf("(Data) Extent to %llu Frames\n", dims_data[0]);
             }
 
-            hdfoffset[2] = cfg->getUlSFIndex(frame_id, symbol_id);
+            hdfoffset[2] = cfg->getUlSFIndex(pkg->frame_id, pkg->symbol_id);
             count[0] = 1;
             count[1] = 1;
             count[2] = 1;
@@ -764,7 +762,7 @@ herr_t Recorder::record(int, int offset)
     // catch failure caused by the DataSet operations
     catch (DataSetIException error) {
         error.printError();
-        std::cout << "DataSet: Failed to record pilots from frame " << frame_id << " , UE " << cfg->getClientId(frame_id, symbol_id) << " antenna " << ant_id << " dims_pilot[4] " << dims_pilot[4] << std::endl;
+        std::cout << "DataSet: Failed to record pilots from frame " << pkg->frame_id << " , UE " << cfg->getClientId(pkg->frame_id, pkg->symbol_id) << " antenna " << pkg->ant_id << " dims_pilot[4] " << dims_pilot[4] << std::endl;
         std::cout << "Dataset Dimension is " << ndims << "," << dims_pilot[0] << "," << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << "," << dims_pilot[4] << endl;
         return -1;
     }

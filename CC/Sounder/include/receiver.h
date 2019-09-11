@@ -38,6 +38,20 @@ struct Event_data {
     int data;
 };
 
+struct Package {
+    int frame_id;
+    int symbol_id;
+    int cell_id;
+    int ant_id;
+    Package(int f, int s, int c, int a)
+        : frame_id(f)
+        , symbol_id(s)
+        , cell_id(c)
+        , ant_id(a)
+    {
+    }
+};
+
 struct SampleBuffer {
     std::vector<char> buffer;
     std::vector<bool> pkg_buf_inuse;

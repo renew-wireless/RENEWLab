@@ -176,12 +176,8 @@ void Receiver::loopRecv(ReceiverContext* context)
                 short_sample1[13], short_sample1[14], short_sample1[15], short_sample1[16]);
 #endif
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
-                int* int_sample = (int*)(buffer + (cursor + ch) * config_->getPackageLength());
-                int_sample[0] = frame_id;
-                int_sample[1] = symbol_id;
-                int_sample[2] = 0; //cell_id
-                int_sample[3] = ant_id + ch;
-
+                new (buffer + (cursor + ch) * config_->getPackageLength())
+                    Package(frame_id, symbol_id, 0, ant_id + ch);
                 // move ptr & set status to full
                 pkg_buf_inuse[cursor + ch] = true; // has data, after it is read it should be set to 0
                 // push EVENT_RX_SYMBOL event into the queue
