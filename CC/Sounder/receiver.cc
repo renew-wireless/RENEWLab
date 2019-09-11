@@ -168,12 +168,12 @@ void Receiver::loopRecv(ReceiverContext* context)
             int symbol_id = (int)((frameTime >> 16) & 0xFFFF);
             int ant_id = it * bsSdrCh;
 #if DEBUG_PRINT
-            short* short_sample1 = (short*)(buffer + cursor * config_->getPackageLength());
+            Package* pkg = (Package*)(buffer + cursor * config_->getPackageLength());
             printf("receive thread %d, frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n",
                 tid, frame_id, symbol_id, cell_id, ant_id);
             printf("receive samples: %d %d %d %d %d %d %d %d ...\n",
-                short_sample1[9], short_sample1[10], short_sample1[11], short_sample1[12],
-                short_sample1[13], short_sample1[14], short_sample1[15], short_sample1[16]);
+                pkg->data[1], pkg->data[2], pkg->data[3], pkg->data[4],
+                pkg->data[5], pkg->data[6], pkg->data[7], pkg->data[8]);
 #endif
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
                 new (buffer + (cursor + ch) * config_->getPackageLength())

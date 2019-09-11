@@ -43,6 +43,7 @@ struct Package {
     int symbol_id;
     int cell_id;
     int ant_id;
+    short data[];
     Package(int f, int s, int c, int a)
         : frame_id(f)
         , symbol_id(s)

@@ -663,16 +663,10 @@ herr_t Recorder::record(int, int offset)
 #if DEBUG_PRINT
     printf("record process frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n",
         pkg->frame_id, pkg->symbol_id, pkg->cell_id, pkg->ant_id);
-    printf("record samples: %d %d %d %d %d %d %d %d ....\n", *((short*)cur_ptr_buffer + 9),
-        *((short*)cur_ptr_buffer + 10),
-        *((short*)cur_ptr_buffer + 11),
-        *((short*)cur_ptr_buffer + 12),
-        *((short*)cur_ptr_buffer + 13),
-        *((short*)cur_ptr_buffer + 14),
-        *((short*)cur_ptr_buffer + 15),
-        *((short*)cur_ptr_buffer + 16));
+    printf("record samples: %d %d %d %d %d %d %d %d ....\n",
+        pkg->data[1], pkg->data[2], pkg->data[3], pkg->data[4],
+        pkg->data[5], pkg->data[6], pkg->data[7], pkg->data[8]);
 #endif
-    short* cur_ptr_buffer_short = (short*)(cur_ptr_buffer + sizeof(int) * 4);
     if (cfg->max_frame != 0 && pkg->frame_id > cfg->max_frame) {
         closeHDF5();
         goto clean_exit;
@@ -720,7 +714,7 @@ herr_t Recorder::record(int, int offset)
 
             // define memory space
             DataSpace pilot_memspace(5, count, NULL);
-            pilot_dataset->write(cur_ptr_buffer_short, PredType::NATIVE_INT16,
+            pilot_dataset->write(pkg->data, PredType::NATIVE_INT16,
                 pilot_memspace, pilot_filespace);
             pilot_filespace.close();
         } else if (cfg->isData(pkg->frame_id, pkg->symbol_id)) {
@@ -749,7 +743,7 @@ herr_t Recorder::record(int, int offset)
 
             // define memory space
             DataSpace* data_memspace = new DataSpace(5, count, NULL);
-            data_dataset->write(cur_ptr_buffer_short, PredType::NATIVE_INT16, *data_memspace, *data_filespace);
+            data_dataset->write(pkg->data, PredType::NATIVE_INT16, *data_memspace, *data_filespace);
             delete data_memspace;
         }
     }
