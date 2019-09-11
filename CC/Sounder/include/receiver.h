@@ -81,8 +81,10 @@ public:
     void completeRecvThreads(const std::vector<pthread_t>& recv_thread);
     std::vector<pthread_t> startClientThreads();
     void go();
-    static void* loopRecv(void* in_context);
-    static void* clientTxRx(void* context);
+    static void* loopRecv_launch(void* in_context);
+    void loopRecv(ReceiverContext* context);
+    static void* clientTxRx_launch(void* in_context);
+    void clientTxRx(dev_profile* context);
 
 private:
     Config* config_;

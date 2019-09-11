@@ -39,7 +39,7 @@ Recorder::Recorder(Config* cfg)
             EventHandlerContext* context = new EventHandlerContext;
             context->obj_ptr = this;
             context->id = i;
-            if (pthread_create(&task_threads[i], NULL, Recorder::taskThread, context) != 0) {
+            if (pthread_create(&task_threads[i], NULL, Recorder::taskThread_launch, context) != 0) {
                 perror("task thread create failed");
                 exit(0);
             }
@@ -621,31 +621,34 @@ void Recorder::do_it()
     finishHDF5();
 }
 
-void* Recorder::taskThread(void* in_context)
+void* Recorder::taskThread_launch(void* in_context)
 {
     EventHandlerContext* context = (EventHandlerContext*)in_context;
-    Recorder* obj_ptr = context->obj_ptr;
-    Config* cfg = obj_ptr->cfg;
-    moodycamel::ConcurrentQueue<Event_data>* task_queue_ = &(obj_ptr->task_queue_);
+    Recorder* recorder = context->obj_ptr;
+    recorder->taskThread(context);
+    return 0;
+}
+
+void Recorder::taskThread(EventHandlerContext* context)
+{
     int tid = context->id;
     delete context;
     printf("task thread %d starts\n", tid);
 
-    obj_ptr->task_ptok[tid].reset(new moodycamel::ProducerToken(obj_ptr->message_queue_));
+    task_ptok[tid].reset(new moodycamel::ProducerToken(message_queue_));
 
     Event_data event;
     bool ret = false;
     while (cfg->running) {
-        ret = task_queue_->try_dequeue(event);
+        ret = task_queue_.try_dequeue(event);
         if (!ret)
             continue;
 
         // do different tasks according to task type
         if (event.event_type == TASK_RECORD) {
-            obj_ptr->record(tid, event.data);
+            record(tid, event.data);
         }
     }
-    return 0;
 }
 
 // do Crop

@@ -70,12 +70,12 @@ RadioConfig::RadioConfig(Config* cfg)
                 context->cell = c;
 #ifdef THREADED_INIT
                 pthread_t init_thread_;
-                if (pthread_create(&init_thread_, NULL, RadioConfig::initBSRadio, context) != 0) {
+                if (pthread_create(&init_thread_, NULL, RadioConfig::initBSRadio_launch, context) != 0) {
                     perror("init thread create failed");
                     exit(0);
                 }
 #else
-                RadioConfig::initBSRadio(context);
+                initBSRadio(context);
 #endif
             }
 
@@ -175,26 +175,31 @@ RadioConfig::RadioConfig(Config* cfg)
     std::cout << "radio init done!" << std::endl;
 }
 
-void* RadioConfig::initBSRadio(void* in_context)
+void* RadioConfig::initBSRadio_launch(void* in_context)
 {
     RadioConfigContext* context = (RadioConfigContext*)in_context;
     RadioConfig* rc = context->ptr;
+    rc->initBSRadio(context);
+    return 0;
+}
+
+void RadioConfig::initBSRadio(RadioConfigContext* context)
+{
     int i = context->tid;
     int c = context->cell;
     delete context;
-    Config* cfg = rc->_cfg;
 
     //load channels
     std::vector<size_t> channels;
-    if (cfg->bsChannel == "A")
+    if (_cfg->bsChannel == "A")
         channels = { 0 };
-    else if (cfg->bsChannel == "B")
+    else if (_cfg->bsChannel == "B")
         channels = { 1 };
-    else if (cfg->bsSdrCh == 2)
+    else if (_cfg->bsSdrCh == 2)
         channels = { 0, 1 };
     else {
         std::cout << "Error! Supported number of channels 1 or 2, setting to 2!" << std::endl;
-        cfg->bsSdrCh = 2;
+        _cfg->bsSdrCh = 2;
         channels = { 0, 1 };
     }
 
@@ -202,89 +207,88 @@ void* RadioConfig::initBSRadio(void* in_context)
     SoapySDR::Kwargs sargs;
     args["driver"] = "iris";
     args["timeout"] = "1000000";
-    args["serial"] = cfg->bs_sdr_ids[0][i];
-    rc->bsSdrs[c][i] = (SoapySDR::Device::make(args));
+    args["serial"] = _cfg->bs_sdr_ids[0][i];
+    bsSdrs[c][i] = (SoapySDR::Device::make(args));
     //use the TRX antenna port for both tx and rx
     for (auto ch : channels)
-        rc->bsSdrs[c][i]->setAntenna(SOAPY_SDR_RX, ch, "TRX");
+        bsSdrs[c][i]->setAntenna(SOAPY_SDR_RX, ch, "TRX");
 
-    SoapySDR::Kwargs info = rc->bsSdrs[c][i]->getHardwareInfo();
+    SoapySDR::Kwargs info = bsSdrs[c][i]->getHardwareInfo();
     for (auto ch : { 0, 1 }) //channels)
     {
-        rc->bsSdrs[c][i]->setBandwidth(SOAPY_SDR_RX, ch, (1 + 2 * cfg->bbf_ratio) * cfg->rate);
-        rc->bsSdrs[c][i]->setBandwidth(SOAPY_SDR_TX, ch, (1 + 2 * cfg->bbf_ratio) * cfg->rate);
+        bsSdrs[c][i]->setBandwidth(SOAPY_SDR_RX, ch, (1 + 2 * _cfg->bbf_ratio) * _cfg->rate);
+        bsSdrs[c][i]->setBandwidth(SOAPY_SDR_TX, ch, (1 + 2 * _cfg->bbf_ratio) * _cfg->rate);
 
-        rc->bsSdrs[c][i]->setSampleRate(SOAPY_SDR_RX, ch, cfg->rate);
-        rc->bsSdrs[c][i]->setSampleRate(SOAPY_SDR_TX, ch, cfg->rate);
+        bsSdrs[c][i]->setSampleRate(SOAPY_SDR_RX, ch, _cfg->rate);
+        bsSdrs[c][i]->setSampleRate(SOAPY_SDR_TX, ch, _cfg->rate);
 
-        rc->bsSdrs[c][i]->setFrequency(SOAPY_SDR_RX, ch, "RF", cfg->freq - cfg->bbf_ratio * cfg->rate);
-        rc->bsSdrs[c][i]->setFrequency(SOAPY_SDR_RX, ch, "BB", cfg->bbf_ratio * cfg->rate);
-        rc->bsSdrs[c][i]->setFrequency(SOAPY_SDR_TX, ch, "RF", cfg->freq - cfg->bbf_ratio * cfg->rate);
-        rc->bsSdrs[c][i]->setFrequency(SOAPY_SDR_TX, ch, "BB", cfg->bbf_ratio * cfg->rate);
+        bsSdrs[c][i]->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->freq - _cfg->bbf_ratio * _cfg->rate);
+        bsSdrs[c][i]->setFrequency(SOAPY_SDR_RX, ch, "BB", _cfg->bbf_ratio * _cfg->rate);
+        bsSdrs[c][i]->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->freq - _cfg->bbf_ratio * _cfg->rate);
+        bsSdrs[c][i]->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->bbf_ratio * _cfg->rate);
 
         // receive gains
 
         // front-end
         if (info["frontend"].find("CBRS") != std::string::npos) {
-            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "ATTN", -12); //[-18,0]
-            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "LNA1", 33); //[0,33]
-            if (cfg->freq > 3e9)
-                rc->bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "LNA2", 14); //HI[0,14]
+            bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "ATTN", -12); //[-18,0]
+            bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "LNA1", 33); //[0,33]
+            if (_cfg->freq > 3e9)
+                bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "LNA2", 14); //HI[0,14]
             else
-                rc->bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //LO[0,17]
+                bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //LO[0,17]
         }
         if (info["frontend"].find("UHF") != std::string::npos) {
-            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "ATTN1", -6); //[-18,0]
-            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "ATTN2", -12); //[-18,0]
+            bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "ATTN1", -6); //[-18,0]
+            bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "ATTN2", -12); //[-18,0]
             //bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "LNA1", 30); //[0,33]
             //bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //[0,17]
         }
 
         // lime
-        rc->bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "LNA", ch != 0 ? cfg->rxgainB : cfg->rxgainA); //[0,30]
-        rc->bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "TIA", 0); //[0,12]
-        rc->bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "PGA", 0); //[-12,19]
+        bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "LNA", ch != 0 ? _cfg->rxgainB : _cfg->rxgainA); //[0,30]
+        bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "TIA", 0); //[0,12]
+        bsSdrs[c][i]->setGain(SOAPY_SDR_RX, ch, "PGA", 0); //[-12,19]
 
         // transmit gains
 
         // front-end
-        if (info["frontend"].find("CBRS") != std::string::npos && cfg->freq > 3e9) // CBRS HI
+        if (info["frontend"].find("CBRS") != std::string::npos && _cfg->freq > 3e9) // CBRS HI
         {
-            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "ATTN", 0); //[-18,0] by 3
-            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA1", 15); //[0|13.7] no bypass
-            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|14]   can bypass
-            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA3", 30); //[0|31]   no bypass
+            bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "ATTN", 0); //[-18,0] by 3
+            bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA1", 15); //[0|13.7] no bypass
+            bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|14]   can bypass
+            bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA3", 30); //[0|31]   no bypass
         }
-        if (info["frontend"].find("CBRS") != std::string::npos && cfg->freq < 3e9 && cfg->freq > 2e9) // CBRS LO
+        if (info["frontend"].find("CBRS") != std::string::npos && _cfg->freq < 3e9 && _cfg->freq > 2e9) // CBRS LO
         {
-            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //[-18,0] by 3
-            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA1", 14); //[0|14] no bypass
-            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|17]   can bypass. Can cause saturation or PA damage!! DO NOT USE IF NOT SURE!!!
-            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA3", 30); //[0|31.5]   no bypass
+            bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //[-18,0] by 3
+            bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA1", 14); //[0|14] no bypass
+            bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|17]   can bypass. Can cause saturation or PA damage!! DO NOT USE IF NOT SURE!!!
+            bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PA3", 30); //[0|31.5]   no bypass
         }
         if (info["frontend"].find("UHF") != std::string::npos) {
-            rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "ATTN", 0); //[-18,0] by 3
+            bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "ATTN", 0); //[-18,0] by 3
         }
 
         // lime
-        rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "IAMP", 12); //[0,12]
-        rc->bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PAD", ch != 0 ? cfg->txgainB : cfg->txgainA); //[0,30]
+        bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "IAMP", 12); //[0,12]
+        bsSdrs[c][i]->setGain(SOAPY_SDR_TX, ch, "PAD", ch != 0 ? _cfg->txgainB : _cfg->txgainA); //[0,30]
     }
 
     for (auto ch : channels) {
         //bsSdrs[c][i]->writeSetting(SOAPY_SDR_RX, ch, "CALIBRATE", "SKLK");
         //bsSdrs[c][i]->writeSetting(SOAPY_SDR_TX, ch, "CALIBRATE", "");
-        rc->bsSdrs[c][i]->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
+        bsSdrs[c][i]->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
     }
 
     // resets the DATA_clk domain logic.
-    rc->bsSdrs[c][i]->writeRegister("IRIS30", 48, (1 << 29) | 0x1);
-    rc->bsSdrs[c][i]->writeRegister("IRIS30", 48, (1 << 29));
-    rc->bsSdrs[c][i]->writeRegister("IRIS30", 48, 0);
-    rc->bsRxStreams[c][i] = rc->bsSdrs[c][i]->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CS16, channels, sargs);
-    rc->bsTxStreams[c][i] = rc->bsSdrs[c][i]->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CS16, channels, sargs);
-    rc->remainingJobs--;
-    return (NULL);
+    bsSdrs[c][i]->writeRegister("IRIS30", 48, (1 << 29) | 0x1);
+    bsSdrs[c][i]->writeRegister("IRIS30", 48, (1 << 29));
+    bsSdrs[c][i]->writeRegister("IRIS30", 48, 0);
+    bsRxStreams[c][i] = bsSdrs[c][i]->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CS16, channels, sargs);
+    bsTxStreams[c][i] = bsSdrs[c][i]->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CS16, channels, sargs);
+    remainingJobs--;
 }
 
 void RadioConfig::radioConfigure()

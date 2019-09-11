@@ -15,7 +15,7 @@
 class RadioConfig {
 public:
     RadioConfig(Config* cfg);
-    static void* initBSRadio(void* in_context);
+    static void* initBSRadio_launch(void* in_context);
     void radioConfigure();
     void radioStart();
     void radioStop();
@@ -38,6 +38,7 @@ public:
         int tid;
         int cell;
     };
+    void initBSRadio(RadioConfigContext* context);
 
 private:
     Config* _cfg;
