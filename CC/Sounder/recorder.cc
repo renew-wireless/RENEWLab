@@ -84,11 +84,12 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         file = new H5File(hdf5name, H5F_ACC_TRUNC);
         //group = new Group(file->createGroup("/Data"));
         auto mainGroup = file->createGroup("/Data");
-        DataSpace* pilot_dataspace = new DataSpace(5, dims_pilot, max_dims_pilot);
         pilot_prop.setChunk(5, cdims);
 
+        DataSpace pilot_dataspace(5, dims_pilot, max_dims_pilot);
         file->createDataSet("/Data/Pilot_Samples", PredType::STD_I16BE,
-            *pilot_dataspace, pilot_prop);
+            pilot_dataspace, pilot_prop);
+        pilot_dataspace.close();
 
         // Attribute dataspace
         hsize_t dims[1] = { 1 };
@@ -455,7 +456,6 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         // ********************* //
 
         pilot_prop.close();
-        pilot_dataspace->close();
         config_dump_data = cfg->ulSymsPerFrame > 0;
         if (config_dump_data) {
             DataSpace data_dataspace(5, dims_data, max_dims_data);
@@ -466,7 +466,6 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         }
         //status = H5Gclose(group_id);
         //if (status < 0 ) return status;
-        delete pilot_dataspace;
         file->close();
     }
     // catch failure caused by the H5File operations
@@ -741,9 +740,8 @@ herr_t Recorder::record(int, int offset)
             data_filespace.selectHyperslab(H5S_SELECT_SET, count, hdfoffset);
 
             // define memory space
-            DataSpace* data_memspace = new DataSpace(5, count, NULL);
-            data_dataset->write(pkg->data, PredType::NATIVE_INT16, *data_memspace, data_filespace);
-            delete data_memspace;
+            DataSpace data_memspace(5, count, NULL);
+            data_dataset->write(pkg->data, PredType::NATIVE_INT16, data_memspace, data_filespace);
         }
     }
     // catch failure caused by the H5File operations
