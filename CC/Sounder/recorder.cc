@@ -516,10 +516,10 @@ void Recorder::openHDF5()
     if (config_dump_data) {
         data_dataset = new DataSet(file->openDataSet("/Data/UplinkData"));
 
-        data_filespace = new DataSpace(data_dataset->getSpace());
+        DataSpace data_filespace(data_dataset->getSpace());
         data_prop = data_dataset->getCreatePlist();
-        ndims = data_filespace->getSimpleExtentNdims();
-        // status_n = data_filespace->getSimpleExtentDims(dims_data);
+        ndims = data_filespace.getSimpleExtentNdims();
+        // status_n = data_filespace.getSimpleExtentDims(dims_data);
 
 #if DEBUG_PRINT
         int cndims_data = 0;
@@ -530,7 +530,7 @@ void Recorder::openHDF5()
         ;
         cout << "New Data Dataset Dimension " << ndims << "," << dims_data[0] << "," << dims_data[1] << "," << dims_data[2] << "," << dims_data[3] << "," << dims_data[4] << endl;
 #endif
-        data_filespace->close();
+        data_filespace.close();
     }
 }
 
@@ -550,7 +550,6 @@ void Recorder::closeHDF5()
         dims_data[0] = frameNumber;
         data_dataset->extend(dims_data);
         data_prop.close();
-        data_filespace->close();
         data_dataset->close();
     }
 
@@ -738,12 +737,12 @@ herr_t Recorder::record(int, int offset)
             count[4] = dims_data[4];
 
             // Select a hyperslab in extended portion of the dataset
-            data_filespace = new DataSpace(data_dataset->getSpace());
-            data_filespace->selectHyperslab(H5S_SELECT_SET, count, hdfoffset);
+            DataSpace data_filespace(data_dataset->getSpace());
+            data_filespace.selectHyperslab(H5S_SELECT_SET, count, hdfoffset);
 
             // define memory space
             DataSpace* data_memspace = new DataSpace(5, count, NULL);
-            data_dataset->write(pkg->data, PredType::NATIVE_INT16, *data_memspace, *data_filespace);
+            data_dataset->write(pkg->data, PredType::NATIVE_INT16, *data_memspace, data_filespace);
             delete data_memspace;
         }
     }
