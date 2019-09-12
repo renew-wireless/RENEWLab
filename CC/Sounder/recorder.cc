@@ -692,13 +692,15 @@ herr_t Recorder::record(int, int offset)
         if (cfg->isPilot(pkg->frame_id, pkg->symbol_id)) {
             //assert(pilot_dataset >= 0);
             // Are we going to extend the dataset?
-            if ((size_t)pkg->frame_id >= dims_pilot[0]) {
-                dims_pilot[0] = cfg->max_frame != 0
-                    ? std::min(dims_pilot[0] + config_pilot_extent_step, (long long unsigned int)cfg->max_frame + 1) // 400 is a threshold.
-                    : dims_pilot[0] + config_pilot_extent_step;
+            int frameNumber = dims_pilot[0];
+            if (pkg->frame_id >= frameNumber) {
+                frameNumber += config_pilot_extent_step;
+                if (cfg->max_frame != 0)
+                    frameNumber = std::min(frameNumber, cfg->max_frame + 1);
+                dims_pilot[0] = frameNumber;
                 pilot_dataset->extend(dims_pilot);
 #if DEBUG_PRINT
-                std::cout << "FrameId " << pkg->frame_id << ", (Pilot) Extent to " << dims_pilot[0] << " Frames" << std::endl;
+                std::cout << "FrameId " << pkg->frame_id << ", (Pilot) Extent to " << frameNumber << " Frames" << std::endl;
 #endif
             }
 
@@ -718,13 +720,16 @@ herr_t Recorder::record(int, int offset)
 
             //assert(data_dataset >= 0);
             // Are we going to extend the dataset?
-            if ((size_t)pkg->frame_id >= dims_data[0]) {
-                //dims_data[0] = dims_data[0] + config_data_extent_step;
-                dims_data[0] = cfg->max_frame != 0
-                    ? std::min(dims_data[0] + config_data_extent_step, (long long unsigned int)cfg->max_frame + 1) // 400 is a threshold.
-                    : dims_data[0] + config_data_extent_step;
+            int frameNumber = dims_data[0];
+            if (pkg->frame_id >= frameNumber) {
+                frameNumber += config_data_extent_step;
+                if (cfg->max_frame != 0)
+                    frameNumber = std::min(frameNumber, cfg->max_frame + 1);
+                dims_data[0] = frameNumber;
                 data_dataset->extend(dims_data);
-                printf("(Data) Extent to %llu Frames\n", dims_data[0]);
+#if DEBUG_PRINT
+                std::cout << "FrameId " << pkg->frame_id << ", (Data) Extent to " << frameNumber << " Frames" << std::endl;
+#endif
             }
 
             hdfoffset[2] = cfg->getUlSFIndex(pkg->frame_id, pkg->symbol_id);
