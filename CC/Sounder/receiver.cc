@@ -56,7 +56,7 @@ std::vector<pthread_t> Receiver::startClientThreads()
             profile->core = i + 1 + config_->rx_thread_num + config_->task_thread_num;
             profile->ptr = this;
             // start socket thread
-            if (pthread_create(&cl_thread_, NULL, Receiver::clientTxRx, (void*)(profile)) != 0) {
+            if (pthread_create(&cl_thread_, NULL, Receiver::clientTxRx_launch, profile) != 0) {
                 perror("socket client thread create failed");
                 exit(0);
             }
@@ -69,11 +69,9 @@ std::vector<pthread_t> Receiver::startClientThreads()
 
 std::vector<pthread_t> Receiver::startRecvThreads(SampleBuffer* rx_buffer, unsigned in_core_id)
 {
-    buffer_frame_num_ = rx_buffer[0].buffer_status.size();
-    assert(rx_buffer[0].buffer.size() == config_->getPackageLength() * buffer_frame_num_);
-    assert(rx_buffer[0].buffer_status.size() != 0);
+    assert(rx_buffer[0].buffer.size() == config_->getPackageLength() * rx_buffer[0].pkg_buf_inuse.size());
+    assert(rx_buffer[0].pkg_buf_inuse.size() != 0);
     assert(rx_buffer[0].buffer.size() != 0);
-    buffer_length_ = rx_buffer[0].buffer.size();
 
     std::vector<pthread_t> created_threads;
     created_threads.resize(thread_num_);
@@ -85,7 +83,7 @@ std::vector<pthread_t> Receiver::startRecvThreads(SampleBuffer* rx_buffer, unsig
         context->core_id = in_core_id;
         context->tid = i;
         // start socket thread
-        if (pthread_create(&created_threads[i], NULL, Receiver::loopRecv, context) != 0) {
+        if (pthread_create(&created_threads[i], NULL, Receiver::loopRecv_launch, context) != 0) {
             perror("socket recv thread create failed");
             exit(0);
         }
@@ -109,19 +107,21 @@ void Receiver::go()
     radioconfig_->radioStart(); // hardware trigger
 }
 
-void* Receiver::loopRecv(void* in_context)
+void* Receiver::loopRecv_launch(void* in_context)
 {
     ReceiverContext* context = (ReceiverContext*)in_context;
-    Receiver* receiver = context->ptr;
+    context->ptr->loopRecv(context);
+    return 0;
+}
+
+void Receiver::loopRecv(ReceiverContext* context)
+{
     SampleBuffer* rx_buffer = context->buffer;
-    Config* cfg = receiver->config_;
     int tid = context->tid;
     int core_id = context->core_id;
     delete context;
 
-    moodycamel::ConcurrentQueue<Event_data>* message_queue_ = receiver->message_queue_;
-
-    if (cfg->core_alloc) {
+    if (config_->core_alloc) {
         printf("pinning thread %d to core %d\n", tid, core_id + tid);
         if (pin_to_core(core_id + tid) != 0) {
             printf("pin thread %d to core %d failed\n", tid, core_id + tid);
@@ -132,114 +132,103 @@ void* Receiver::loopRecv(void* in_context)
     // use token to speed up
     moodycamel::ProducerToken local_ptok(*message_queue_);
 
-    const int bsSdrCh = cfg->bsSdrCh;
-    int buffer_length = receiver->buffer_length_;
-    int buffer_frame_num = receiver->buffer_frame_num_;
+    const int bsSdrCh = config_->bsSdrCh;
+    int buffer_frame_num = rx_buffer[0].pkg_buf_inuse.size();
 
     // handle two channels at each radio
     // this is assuming buffer_frame_num is at least 2
-    int buffer_index = 0;
-    int status_index = 0;
-    int* buffer_status[2] = {
-        rx_buffer[tid].buffer_status.data(),
-        rx_buffer[tid].buffer_status.data() + 1
-    };
-    char* buffer[2] = {
-        rx_buffer[tid].buffer.data(),
-        rx_buffer[tid].buffer.data() + cfg->getPackageLength()
-    };
-
-    int num_threads = receiver->thread_num_;
-    int num_radios = cfg->nBsSdrs[0];
-    int radio_start = tid * num_radios / num_threads;
-    int radio_end = (tid + 1) * num_radios / num_threads;
+    std::vector<bool>& pkg_buf_inuse = rx_buffer[tid].pkg_buf_inuse;
+    char* buffer = rx_buffer[tid].buffer.data();
+    int num_radios = config_->nBsSdrs[0];
+    int radio_start = tid * num_radios / thread_num_;
+    int radio_end = (tid + 1) * num_radios / thread_num_;
 
     printf("receiver thread %d has %d radios\n", tid, radio_end - radio_start);
-    RadioConfig* radio = receiver->radioconfig_;
 
-    while (cfg->running) {
+    for (int cursor = 0; config_->running;
+         cursor += bsSdrCh, cursor %= buffer_frame_num) {
         // if buffer is full, exit
-        if (buffer_status[0][status_index] == 1) {
+        if (pkg_buf_inuse[cursor]) {
             printf("thread %d buffer full\n", tid);
             exit(0);
         }
-        int ant_id, frame_id, symbol_id; // cell_id;
         // receive data
         for (int it = radio_start; it < radio_end; it++) {
-            void* samp1 = buffer[0] + buffer_index + 4 * sizeof(int);
-            void* samp2 = buffer[1] + buffer_index + 4 * sizeof(int);
-            void* samp[2] = { samp1, samp2 };
+            void* samp[bsSdrCh];
+            for (auto ch = 0; ch < bsSdrCh; ++ch) {
+                samp[ch] = buffer + 4 * sizeof(int) + (cursor + ch) * config_->getPackageLength();
+            }
             long long frameTime;
-            if (radio->radioRx(it, samp, frameTime) < 0) {
-                cfg->running = false;
+            if (radioconfig_->radioRx(it, samp, frameTime) < 0) {
+                config_->running = false;
                 break;
             }
 
-            frame_id = (int)(frameTime >> 32);
-            symbol_id = (int)((frameTime >> 16) & 0xFFFF);
-            ant_id = it * bsSdrCh;
+            int frame_id = (int)(frameTime >> 32);
+            int symbol_id = (int)((frameTime >> 16) & 0xFFFF);
+            int ant_id = it * bsSdrCh;
 #if DEBUG_PRINT
-            short* short_sample1 = (short*)(buffer[0] + buffer_index);
-            printf("receive thread %d, frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n", tid, frame_id, symbol_id, cell_id, ant_id);
+            Package* pkg = (Package*)(buffer + cursor * config_->getPackageLength());
+            printf("receive thread %d, frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n",
+                tid, frame_id, symbol_id, cell_id, ant_id);
             printf("receive samples: %d %d %d %d %d %d %d %d ...\n",
-                short_sample1[9], short_sample1[10], short_sample1[11], short_sample1[12],
-                short_sample1[13], short_sample1[14], short_sample1[15], short_sample1[16]);
+                pkg->data[1], pkg->data[2], pkg->data[3], pkg->data[4],
+                pkg->data[5], pkg->data[6], pkg->data[7], pkg->data[8]);
 #endif
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
-                int* int_sample = (int*)(buffer[ch] + buffer_index);
-                int_sample[0] = frame_id;
-                int_sample[1] = symbol_id;
-                int_sample[2] = 0; //cell_id
-                int_sample[3] = ant_id + ch;
-
+                new (buffer + (cursor + ch) * config_->getPackageLength())
+                    Package(frame_id, symbol_id, 0, ant_id + ch);
                 // move ptr & set status to full
-                buffer_status[ch][status_index] = 1; // has data, after it is read it should be set to 0
+                pkg_buf_inuse[cursor + ch] = true; // has data, after it is read it should be set to 0
                 // push EVENT_RX_SYMBOL event into the queue
                 Event_data package_message;
                 package_message.event_type = EVENT_RX_SYMBOL;
-                // data records the position of this packet in the buffer & tid of this socket (so that task thread could know which buffer it should visit)
-                package_message.data = status_index + tid * buffer_frame_num;
+                // data records the position of this packet in the buffer & tid of this socket
+                // (so that task thread could know which buffer it should visit)
+                package_message.data = cursor + tid * buffer_frame_num;
                 if (!message_queue_->enqueue(local_ptok, package_message)) {
                     printf("socket message enqueue failed\n");
                     exit(0);
                 }
             }
-            status_index = (status_index + bsSdrCh) % buffer_frame_num;
-            buffer_index = (buffer_index + cfg->getPackageLength() * bsSdrCh) % buffer_length;
         }
     }
+}
+
+void* Receiver::clientTxRx_launch(void* in_context)
+{
+    dev_profile* context = (dev_profile*)in_context;
+    Receiver* receiver = context->ptr;
+    receiver->clientTxRx(context);
     return 0;
 }
 
-void* Receiver::clientTxRx(void* context)
+void Receiver::clientTxRx(dev_profile* context)
 {
-    dev_profile* profile = (dev_profile*)context;
-    SoapySDR::Device* device = profile->device;
-    SoapySDR::Stream* rxStream = profile->rxs;
-    SoapySDR::Stream* txStream = profile->txs;
-    int tid = profile->tid;
-    int txSyms = profile->txSyms;
-    int rxSyms = profile->rxSyms;
-    int txStartSym = profile->txStartSym;
-    unsigned txFrameDelta = profile->txFrameDelta;
-    int NUM_SAMPS = profile->nsamps;
-    Receiver* obj_ptr = profile->ptr;
-    Config* cfg = obj_ptr->config_;
+    SoapySDR::Device* device = context->device;
+    SoapySDR::Stream* rxStream = context->rxs;
+    SoapySDR::Stream* txStream = context->txs;
+    int tid = context->tid;
+    int txSyms = context->txSyms;
+    int rxSyms = context->rxSyms;
+    int txStartSym = context->txStartSym;
+    unsigned txFrameDelta = context->txFrameDelta;
+    int NUM_SAMPS = context->nsamps;
 
-    if (cfg->core_alloc) {
-        printf("pinning client thread %d to core %d\n", tid, profile->core);
-        if (pin_to_core(profile->core) != 0) {
-            printf("pin client thread %d to core %d failed\n", tid, profile->core);
+    if (config_->core_alloc) {
+        printf("pinning client thread %d to core %d\n", tid, context->core);
+        if (pin_to_core(context->core) != 0) {
+            printf("pin client thread %d to core %d failed\n", tid, context->core);
             exit(0);
         }
     }
 
     //while(!d_mutex.try_lock()){}
     //thread_count++;
-    //std::cout << "Thread " << tid << ", txSyms " << txSyms << ", rxSyms " << rxSyms << ", txStartSym " << txStartSym << ", rate " << profile->rate << ", txFrameDelta " << txFrameDelta << ", nsamps " << NUM_SAMPS << std::endl;
+    //std::cout << "Thread " << tid << ", txSyms " << txSyms << ", rxSyms " << rxSyms << ", txStartSym " << txStartSym << ", rate " << context->rate << ", txFrameDelta " << txFrameDelta << ", nsamps " << NUM_SAMPS << std::endl;
     //d_mutex.unlock();
 
-    delete profile;
+    delete context;
     std::vector<std::complex<float>> buffs(NUM_SAMPS, 0);
     std::vector<void*> rxbuff(2);
     rxbuff[0] = buffs.data();
@@ -247,8 +236,8 @@ void* Receiver::clientTxRx(void* context)
 
     std::vector<void*> txbuff(2);
     if (txSyms > 0) {
-        txbuff[0] = cfg->txdata[tid].data();
-        txbuff[1] = cfg->txdata[tid].data();
+        txbuff[0] = config_->txdata[tid].data();
+        txbuff[1] = config_->txdata[tid].data();
         std::cout << txSyms << " uplink symbols will be sent per frame..." << std::endl;
     }
 
@@ -256,7 +245,7 @@ void* Receiver::clientTxRx(void* context)
     struct timespec tv, tv2;
     clock_gettime(CLOCK_MONOTONIC, &tv);
 
-    while (cfg->running) {
+    while (config_->running) {
         clock_gettime(CLOCK_MONOTONIC, &tv2);
         double diff = (tv2.tv_sec * 1e9 + tv2.tv_nsec - tv.tv_sec * 1e9 - tv.tv_nsec) / 1e9;
         if (diff > 2) {
@@ -291,7 +280,7 @@ void* Receiver::clientTxRx(void* context)
         txTime += ((long long)txFrameDelta << 32);
         txTime += ((long long)txStartSym << 16);
         //printf("rxTime %llx, txTime %llx \n", firstRxTime, txTime);
-        if (!cfg->running)
+        if (!config_->running)
             flags |= SOAPY_SDR_END_BURST; //end burst on last iter
         for (int i = 0; i < txSyms; i++) {
             //if (i == txSyms - 1)
@@ -305,5 +294,4 @@ void* Receiver::clientTxRx(void* context)
             }
         }
     }
-    return 0;
 }

@@ -49,13 +49,14 @@ public:
     void openHDF5();
     void closeHDF5();
     void finishHDF5();
-    static void* taskThread(void* in_context);
+    static void* taskThread_launch(void* in_context);
     herr_t record(int tid, int offset);
 
     struct EventHandlerContext {
         Recorder* obj_ptr;
         int id;
     };
+    void taskThread(EventHandlerContext* context);
 
 private:
     Config* cfg;
@@ -70,8 +71,6 @@ private:
     Group* group;
     DSetCreatPropList pilot_prop;
     DSetCreatPropList data_prop;
-
-    DataSpace* data_filespace;
 
     DataSet* pilot_dataset;
     DataSet* data_dataset;

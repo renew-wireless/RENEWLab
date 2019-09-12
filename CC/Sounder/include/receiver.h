@@ -38,9 +38,24 @@ struct Event_data {
     int data;
 };
 
+struct Package {
+    int frame_id;
+    int symbol_id;
+    int cell_id;
+    int ant_id;
+    short data[];
+    Package(int f, int s, int c, int a)
+        : frame_id(f)
+        , symbol_id(s)
+        , cell_id(c)
+        , ant_id(a)
+    {
+    }
+};
+
 struct SampleBuffer {
     std::vector<char> buffer;
-    std::vector<int> buffer_status;
+    std::vector<bool> pkg_buf_inuse;
 };
 
 //std::atomic_int thread_count(0);
@@ -81,8 +96,10 @@ public:
     void completeRecvThreads(const std::vector<pthread_t>& recv_thread);
     std::vector<pthread_t> startClientThreads();
     void go();
-    static void* loopRecv(void* in_context);
-    static void* clientTxRx(void* context);
+    static void* loopRecv_launch(void* in_context);
+    void loopRecv(ReceiverContext* context);
+    static void* clientTxRx_launch(void* in_context);
+    void clientTxRx(dev_profile* context);
 
 private:
     Config* config_;
@@ -90,9 +107,6 @@ private:
     int* socket_;
 
     RadioConfig* radioconfig_;
-
-    int buffer_length_;
-    int buffer_frame_num_;
 
     int thread_num_;
     // pointer of message_queue_
