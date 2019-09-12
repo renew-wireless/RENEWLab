@@ -59,21 +59,22 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
     hdf5group = "/"; // make sure it starts with '/'
     std::cout << "Set HDF5 File to " << hdf5name << " and group to " << hdf5group << std::endl;
 
+    hsize_t IQ = 2 * cfg->sampsPerSymbol;
     // dataset dimension
     dims_pilot[0] = MAX_FRAME_INC; //cfg->maxFrame;
     dims_pilot[1] = cfg->nCells;
     dims_pilot[2] = cfg->pilotSymsPerFrame; //cfg->nClSdrs;
     dims_pilot[3] = cfg->getNumAntennas();
-    dims_pilot[4] = 2 * cfg->sampsPerSymbol; // IQ
-    hsize_t cdims[5] = { 1, 1, 1, 1, 2 * (hsize_t)cfg->sampsPerSymbol }; // pilot chunk size, TODO: optimize size
-    hsize_t max_dims_pilot[5] = { H5S_UNLIMITED, cfg->nCells, (hsize_t)cfg->pilotSymsPerFrame, cfg->getNumAntennas(), 2 * (hsize_t)cfg->sampsPerSymbol };
+    dims_pilot[4] = IQ;
+    hsize_t cdims[5] = { 1, 1, 1, 1, IQ }; // pilot chunk size, TODO: optimize size
+    hsize_t max_dims_pilot[5] = { H5S_UNLIMITED, cfg->nCells, (hsize_t)cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ };
 
     dims_data[0] = MAX_FRAME_INC; //cfg->maxFrame;
     dims_data[1] = cfg->nCells;
     dims_data[2] = cfg->ulSymsPerFrame;
     dims_data[3] = cfg->getNumAntennas();
-    dims_data[4] = 2 * cfg->sampsPerSymbol; // IQ
-    hsize_t max_dims_data[5] = { H5S_UNLIMITED, (hsize_t)cfg->nCells, (hsize_t)cfg->ulSymsPerFrame, cfg->getNumAntennas(), 2 * (hsize_t)cfg->sampsPerSymbol };
+    dims_data[4] = IQ;
+    hsize_t max_dims_data[5] = { H5S_UNLIMITED, (hsize_t)cfg->nCells, (hsize_t)cfg->ulSymsPerFrame, cfg->getNumAntennas(), IQ };
 
     // Used to create variable strings
     std::ostringstream oss;
@@ -504,11 +505,12 @@ void Recorder::openHDF5()
     // herr_t status_n = pilot_filespace.getSimpleExtentDims(dims_pilot);
 
 #if DEBUG_PRINT
+    hsize_t IQ = 2 * cfg->sampsPerSymbol;
     int cndims_pilot = 0;
     if (H5D_CHUNKED == pilot_prop.getLayout())
         cndims_pilot = pilot_prop.getChunk(ndims, cdims_pilot);
     cout << "dim pilot chunk = " << cndims_pilot << endl;
-    cout << "New Pilot Dataset Dimension " << ndims << "," << dims_pilot[0] << "," << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << "," << dims_pilot[4] << endl;
+    cout << "New Pilot Dataset Dimension " << ndims << "," << dims_pilot[0] << "," << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << "," << IQ < endl;
 #endif
     pilot_filespace.close();
     // Get Dataset for DATA (If Enabled) and check the shape of it
@@ -522,12 +524,12 @@ void Recorder::openHDF5()
 
 #if DEBUG_PRINT
         int cndims_data = 0;
-        hsize_t cdims_data[5] = { 1, 1, 1, 1, 2 * (hsize_t)cfg->sampsPerSymbol }; // data chunk size, TODO: optimize size
+        hsize_t cdims_data[5] = { 1, 1, 1, 1, IQ }; // data chunk size, TODO: optimize size
         if (H5D_CHUNKED == data_prop.getLayout())
             cndims_data = data_prop.getChunk(ndims, cdims_data);
         cout << "dim data chunk = " << cndims_data << endl;
         ;
-        cout << "New Data Dataset Dimension " << ndims << "," << dims_data[0] << "," << dims_data[1] << "," << dims_data[2] << "," << dims_data[3] << "," << dims_data[4] << endl;
+        cout << "New Data Dataset Dimension " << ndims << "," << dims_data[0] << "," << dims_data[1] << "," << dims_data[2] << "," << dims_data[3] << "," << IQ << endl;
 #endif
         data_filespace.close();
     }
@@ -665,6 +667,7 @@ herr_t Recorder::record(int, int offset)
         pkg->data[1], pkg->data[2], pkg->data[3], pkg->data[4],
         pkg->data[5], pkg->data[6], pkg->data[7], pkg->data[8]);
 #endif
+    hsize_t IQ = 2 * cfg->sampsPerSymbol;
     if (cfg->max_frame != 0 && pkg->frame_id > cfg->max_frame) {
         closeHDF5();
         goto clean_exit;
@@ -703,7 +706,7 @@ herr_t Recorder::record(int, int offset)
 
             // Select a hyperslab in extended portion of the dataset
             DataSpace pilot_filespace(pilot_dataset->getSpace());
-            hsize_t count[] = { 1, 1, 1, 1, dims_pilot[4] };
+            hsize_t count[] = { 1, 1, 1, 1, IQ };
             pilot_filespace.selectHyperslab(H5S_SELECT_SET, count, hdfoffset);
 
             // define memory space
@@ -728,7 +731,7 @@ herr_t Recorder::record(int, int offset)
 
             // Select a hyperslab in extended portion of the dataset
             DataSpace data_filespace(data_dataset->getSpace());
-            hsize_t count[] = { 1, 1, 1, 1, dims_data[4] };
+            hsize_t count[] = { 1, 1, 1, 1, IQ };
             data_filespace.selectHyperslab(H5S_SELECT_SET, count, hdfoffset);
 
             // define memory space
@@ -745,8 +748,8 @@ herr_t Recorder::record(int, int offset)
     // catch failure caused by the DataSet operations
     catch (DataSetIException error) {
         error.printError();
-        std::cout << "DataSet: Failed to record pilots from frame " << pkg->frame_id << " , UE " << cfg->getClientId(pkg->frame_id, pkg->symbol_id) << " antenna " << pkg->ant_id << " dims_pilot[4] " << dims_pilot[4] << std::endl;
-        std::cout << "Dataset Dimension is " << ndims << "," << dims_pilot[0] << "," << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << "," << dims_pilot[4] << endl;
+        std::cout << "DataSet: Failed to record pilots from frame " << pkg->frame_id << " , UE " << cfg->getClientId(pkg->frame_id, pkg->symbol_id) << " antenna " << pkg->ant_id << " IQ " << IQ << std::endl;
+        std::cout << "Dataset Dimension is " << ndims << "," << dims_pilot[0] << "," << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << "," << IQ << endl;
         return -1;
     }
 
