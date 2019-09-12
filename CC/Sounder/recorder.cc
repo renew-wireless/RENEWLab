@@ -679,20 +679,12 @@ herr_t Recorder::record(int, int offset)
             openHDF5();
             maxFrameNumber = maxFrameNumber + MAX_FRAME_INC;
         }
-        hsize_t count[5];
-        hsize_t hdfoffset[5];
 
+        hsize_t hdfoffset[5];
         hdfoffset[0] = pkg->frame_id;
         hdfoffset[1] = 0; // will change later after we use cell_id
-        hdfoffset[2] = cfg->getClientId(pkg->frame_id, pkg->symbol_id);
         hdfoffset[3] = pkg->ant_id;
         hdfoffset[4] = 0;
-
-        count[0] = 1; // frame
-        count[1] = 1; // cell
-        count[2] = 1; // ue num (subframe)
-        count[3] = 1; // ant
-        count[4] = dims_pilot[4]; // data size
 
         if (cfg->isPilot(pkg->frame_id, pkg->symbol_id)) {
             //assert(pilot_dataset >= 0);
@@ -706,8 +698,12 @@ herr_t Recorder::record(int, int offset)
                 std::cout << "FrameId " << pkg->frame_id << ", (Pilot) Extent to " << dims_pilot[0] << " Frames" << std::endl;
 #endif
             }
+
+            hdfoffset[2] = cfg->getClientId(pkg->frame_id, pkg->symbol_id);
+
             // Select a hyperslab in extended portion of the dataset
             DataSpace pilot_filespace(pilot_dataset->getSpace());
+            hsize_t count[] = { 1, 1, 1, 1, dims_pilot[4] };
             pilot_filespace.selectHyperslab(H5S_SELECT_SET, count, hdfoffset);
 
             // define memory space
@@ -729,14 +725,10 @@ herr_t Recorder::record(int, int offset)
             }
 
             hdfoffset[2] = cfg->getUlSFIndex(pkg->frame_id, pkg->symbol_id);
-            count[0] = 1;
-            count[1] = 1;
-            count[2] = 1;
-            count[3] = 1;
-            count[4] = dims_data[4];
 
             // Select a hyperslab in extended portion of the dataset
             DataSpace data_filespace(data_dataset->getSpace());
+            hsize_t count[] = { 1, 1, 1, 1, dims_data[4] };
             data_filespace.selectHyperslab(H5S_SELECT_SET, count, hdfoffset);
 
             // define memory space
