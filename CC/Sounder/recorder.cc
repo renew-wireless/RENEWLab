@@ -59,22 +59,22 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
     hdf5group = "/"; // make sure it starts with '/'
     std::cout << "Set HDF5 File to " << hdf5name << " and group to " << hdf5group << std::endl;
 
-    hsize_t IQ = 2 * cfg->sampsPerSymbol;
     // dataset dimension
-    dims_pilot[0] = MAX_FRAME_INC; //cfg->maxFrame;
-    dims_pilot[1] = cfg->nCells;
-    dims_pilot[2] = cfg->pilotSymsPerFrame; //cfg->nClSdrs;
-    dims_pilot[3] = cfg->getNumAntennas();
-    dims_pilot[4] = IQ;
+    hsize_t IQ = 2 * cfg->sampsPerSymbol;
     hsize_t cdims[5] = { 1, 1, 1, 1, IQ }; // pilot chunk size, TODO: optimize size
-    hsize_t max_dims_pilot[5] = { H5S_UNLIMITED, cfg->nCells, (hsize_t)cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ };
+    frame_number_pilot = MAX_FRAME_INC; //cfg->maxFrame;
+    hsize_t dims_pilot[] = {
+        frame_number_pilot, cfg->nCells,
+        cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
+    };
+    hsize_t max_dims_pilot[5] = { H5S_UNLIMITED, cfg->nCells, cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ };
 
-    dims_data[0] = MAX_FRAME_INC; //cfg->maxFrame;
-    dims_data[1] = cfg->nCells;
-    dims_data[2] = cfg->ulSymsPerFrame;
-    dims_data[3] = cfg->getNumAntennas();
-    dims_data[4] = IQ;
-    hsize_t max_dims_data[5] = { H5S_UNLIMITED, (hsize_t)cfg->nCells, (hsize_t)cfg->ulSymsPerFrame, cfg->getNumAntennas(), IQ };
+    frame_number_data = MAX_FRAME_INC; //cfg->maxFrame;
+    hsize_t dims_data[] = {
+        frame_number_data, cfg->nCells,
+        cfg->ulSymsPerFrame, cfg->getNumAntennas(), IQ
+    };
+    hsize_t max_dims_data[5] = { H5S_UNLIMITED, cfg->nCells, cfg->ulSymsPerFrame, cfg->getNumAntennas(), IQ };
 
     // Used to create variable strings
     std::ostringstream oss;
@@ -502,6 +502,10 @@ void Recorder::openHDF5()
 
     // Get information to obtain memory dataspace.
     ndims = pilot_filespace.getSimpleExtentNdims();
+    // hsize_t dims_pilot[] = {
+    //    frame_number_pilot, cfg->nCells,
+    //    cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
+    //};
     // herr_t status_n = pilot_filespace.getSimpleExtentDims(dims_pilot);
 
 #if DEBUG_PRINT
@@ -510,7 +514,13 @@ void Recorder::openHDF5()
     if (H5D_CHUNKED == pilot_prop.getLayout())
         cndims_pilot = pilot_prop.getChunk(ndims, cdims_pilot);
     cout << "dim pilot chunk = " << cndims_pilot << endl;
-    cout << "New Pilot Dataset Dimension " << ndims << "," << dims_pilot[0] << "," << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << "," << IQ < endl;
+    hsize_t dims_pilot[] = {
+        frame_number_pilot, cfg->nCells,
+        cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
+    };
+    cout << "New Pilot Dataset Dimension " << ndims << ",";
+    cout << dims_pilot[0] << "," << dims_pilot[1] << ",";
+    cout << dims_pilot[2] << "," << dims_pilot[3] << "," << IQ < endl;
 #endif
     pilot_filespace.close();
     // Get Dataset for DATA (If Enabled) and check the shape of it
@@ -529,7 +539,12 @@ void Recorder::openHDF5()
             cndims_data = data_prop.getChunk(ndims, cdims_data);
         cout << "dim data chunk = " << cndims_data << endl;
         ;
-        cout << "New Data Dataset Dimension " << ndims << "," << dims_data[0] << "," << dims_data[1] << "," << dims_data[2] << "," << dims_data[3] << "," << IQ << endl;
+        hsize_t dims_data[] = {
+            frame_number_data, cfg->nCells,
+            cfg->ulSymsPerFrame, cfg->getNumAntennas(), IQ
+        };
+        cout << "New Data Dataset Dimension " << ndims << "," << dims_data[0] << ",";
+        cout << dims_data[1] << "," << dims_data[2] << "," << dims_data[3] << "," << IQ << endl;
 #endif
         data_filespace.close();
     }
@@ -537,10 +552,15 @@ void Recorder::openHDF5()
 
 void Recorder::closeHDF5()
 {
-    int frameNumber = maxFrameNumber;
+    unsigned frameNumber = maxFrameNumber;
+    hsize_t IQ = 2 * cfg->sampsPerSymbol;
 
     // Resize Pilot Dataset
-    dims_pilot[0] = frameNumber;
+    frame_number_pilot = frameNumber;
+    hsize_t dims_pilot[] = {
+        frame_number_pilot, cfg->nCells,
+        cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
+    };
     pilot_dataset->extend(dims_pilot);
     pilot_prop.close();
     pilot_dataset->close();
@@ -548,7 +568,11 @@ void Recorder::closeHDF5()
 
     // Resize Data Dataset (If Needed)
     if (config_dump_data) {
-        dims_data[0] = frameNumber;
+        frame_number_data = frameNumber;
+        hsize_t dims_data[] = {
+            frame_number_data, cfg->nCells,
+            cfg->ulSymsPerFrame, cfg->getNumAntennas(), IQ
+        };
         data_dataset->extend(dims_data);
         data_prop.close();
         data_dataset->close();
@@ -692,15 +716,17 @@ herr_t Recorder::record(int, int offset)
         if (cfg->isPilot(pkg->frame_id, pkg->symbol_id)) {
             //assert(pilot_dataset >= 0);
             // Are we going to extend the dataset?
-            int frameNumber = dims_pilot[0];
-            if (pkg->frame_id >= frameNumber) {
-                frameNumber += config_pilot_extent_step;
+            if (pkg->frame_id >= frame_number_pilot) {
+                frame_number_pilot += config_pilot_extent_step;
                 if (cfg->max_frame != 0)
-                    frameNumber = std::min(frameNumber, cfg->max_frame + 1);
-                dims_pilot[0] = frameNumber;
+                    frame_number_pilot = std::min(frame_number_pilot, cfg->max_frame + 1);
+                hsize_t dims_pilot[] = {
+                    frame_number_pilot, cfg->nCells,
+                    cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
+                };
                 pilot_dataset->extend(dims_pilot);
 #if DEBUG_PRINT
-                std::cout << "FrameId " << pkg->frame_id << ", (Pilot) Extent to " << frameNumber << " Frames" << std::endl;
+                std::cout << "FrameId " << pkg->frame_id << ", (Pilot) Extent to " << frame_number_pilot << " Frames" << std::endl;
 #endif
             }
 
@@ -720,15 +746,17 @@ herr_t Recorder::record(int, int offset)
 
             //assert(data_dataset >= 0);
             // Are we going to extend the dataset?
-            int frameNumber = dims_data[0];
-            if (pkg->frame_id >= frameNumber) {
-                frameNumber += config_data_extent_step;
+            if (pkg->frame_id >= frame_number_data) {
+                frame_number_data += config_data_extent_step;
                 if (cfg->max_frame != 0)
-                    frameNumber = std::min(frameNumber, cfg->max_frame + 1);
-                dims_data[0] = frameNumber;
+                    frame_number_data = std::min(frame_number_data, cfg->max_frame + 1);
+                hsize_t dims_data[] = {
+                    frame_number_data, cfg->nCells,
+                    cfg->ulSymsPerFrame, cfg->getNumAntennas(), IQ
+                };
                 data_dataset->extend(dims_data);
 #if DEBUG_PRINT
-                std::cout << "FrameId " << pkg->frame_id << ", (Data) Extent to " << frameNumber << " Frames" << std::endl;
+                std::cout << "FrameId " << pkg->frame_id << ", (Data) Extent to " << frame_number_data << " Frames" << std::endl;
 #endif
             }
 
@@ -754,6 +782,10 @@ herr_t Recorder::record(int, int offset)
     catch (DataSetIException error) {
         error.printError();
         std::cout << "DataSet: Failed to record pilots from frame " << pkg->frame_id << " , UE " << cfg->getClientId(pkg->frame_id, pkg->symbol_id) << " antenna " << pkg->ant_id << " IQ " << IQ << std::endl;
+        hsize_t dims_pilot[] = {
+            frame_number_pilot, cfg->nCells,
+            cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
+        };
         std::cout << "Dataset Dimension is " << ndims << "," << dims_pilot[0] << "," << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << "," << IQ << endl;
         return -1;
     }

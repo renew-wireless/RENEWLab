@@ -39,10 +39,10 @@ struct Event_data {
 };
 
 struct Package {
-    int frame_id;
-    int symbol_id;
-    int cell_id;
-    int ant_id;
+    uint32_t frame_id;
+    uint32_t symbol_id;
+    uint32_t cell_id;
+    uint32_t ant_id;
     short data[];
     Package(int f, int s, int c, int a)
         : frame_id(f)

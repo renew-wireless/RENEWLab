@@ -41,8 +41,8 @@ public:
     int prefix;
     int postfix;
     int symbolsPerFrame;
-    int pilotSymsPerFrame;
-    int ulSymsPerFrame;
+    size_t pilotSymsPerFrame;
+    size_t ulSymsPerFrame;
     int dlSymsPerFrame;
     int fftSize;
     int cpSize;
@@ -65,7 +65,7 @@ public:
     std::string bsChannel;
     std::vector<std::string> frames;
     std::string frame_mode;
-    int max_frame;
+    size_t max_frame;
     std::vector<std::vector<size_t>> pilotSymbols;
     std::vector<std::vector<size_t>> ULSymbols;
     std::vector<std::vector<size_t>> DLSymbols;
@@ -109,9 +109,6 @@ public:
     std::vector<double> clTxgainB_vec;
     std::vector<double> clRxgainB_vec;
 
-    const int data_offset = sizeof(int) * 4;
-    // header 4 int for: frame_id, subframe_id, cell_id, ant_id
-    // ushort for: I/Q samples
     size_t getPackageLength()
     {
         return sizeof(int) * 4 + sizeof(ushort) * (size_t)sampsPerSymbol * 2;

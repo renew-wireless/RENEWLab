@@ -77,8 +77,8 @@ private:
 
     int ndims;
 
-    hsize_t dims_pilot[5];
-    hsize_t dims_data[5];
+    size_t frame_number_pilot;
+    size_t frame_number_data;
 #if DEBUG_PRINT
     hsize_t cdims_pilot[5];
     hsize_t cdims_data[5];
@@ -87,7 +87,7 @@ private:
     int config_pilot_extent_step = 400;
     int config_data_extent_step = 400;
     bool config_dump_data;
-    int maxFrameNumber;
+    size_t maxFrameNumber;
     int rx_thread_num;
     int task_thread_num;
     moodycamel::ConcurrentQueue<Event_data> task_queue_;
