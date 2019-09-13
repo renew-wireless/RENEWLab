@@ -76,7 +76,6 @@ private:
     DataSet* data_dataset;
 
     int ndims;
-    int cndims;
 
     hsize_t dims_pilot[5];
     hsize_t dims_data[5];
