@@ -80,8 +80,10 @@ private:
 
     hsize_t dims_pilot[5];
     hsize_t dims_data[5];
+#if DEBUG_PRINT
     hsize_t cdims_pilot[5];
     hsize_t cdims_data[5];
+#endif
 
     int config_pilot_extent_step = 400;
     int config_data_extent_step = 400;
