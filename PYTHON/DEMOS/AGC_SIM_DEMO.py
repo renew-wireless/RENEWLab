@@ -31,6 +31,7 @@
 import sys
 sys.path.append('../IrisUtils/')
 sys.path.append('../IrisUtils/data_in/')
+sys.path.append('../../deps/transitions/')
 import SoapySDR
 import collections
 import logging
