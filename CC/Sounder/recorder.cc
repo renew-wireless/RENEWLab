@@ -358,7 +358,6 @@ void Recorder::openHDF5()
     pilot_prop = pilot_dataset->getCreatePlist();
 
     // Get information to obtain memory dataspace.
-    ndims = pilot_filespace.getSimpleExtentNdims();
     // hsize_t dims_pilot[] = {
     //    frame_number_pilot, cfg->nCells,
     //    cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
@@ -386,10 +385,10 @@ void Recorder::openHDF5()
 
         DataSpace data_filespace(data_dataset->getSpace());
         data_prop = data_dataset->getCreatePlist();
-        ndims = data_filespace.getSimpleExtentNdims();
-        // status_n = data_filespace.getSimpleExtentDims(dims_data);
 
 #if DEBUG_PRINT
+        int ndims = data_filespace.getSimpleExtentNdims();
+        // status_n = data_filespace.getSimpleExtentDims(dims_data);
         int cndims_data = 0;
         hsize_t cdims_data[5] = { 1, 1, 1, 1, IQ }; // data chunk size, TODO: optimize size
         if (H5D_CHUNKED == data_prop.getLayout())
@@ -643,6 +642,7 @@ herr_t Recorder::record(int, int offset)
             frame_number_pilot, cfg->nCells,
             cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
         };
+        int ndims = data_dataset->getSpace().getSimpleExtentNdims();
         std::cout << "Dataset Dimension is " << ndims << "," << dims_pilot[0] << "," << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << "," << IQ << endl;
         return -1;
     }

@@ -75,8 +75,6 @@ private:
     DataSet* pilot_dataset;
     DataSet* data_dataset;
 
-    int ndims;
-
     size_t frame_number_pilot;
     size_t frame_number_data;
 #if DEBUG_PRINT
