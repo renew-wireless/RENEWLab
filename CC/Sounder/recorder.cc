@@ -314,8 +314,7 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         // ********************* //
 
         pilot_prop.close();
-        config_dump_data = cfg->ulSymsPerFrame > 0;
-        if (config_dump_data) {
+        if (cfg->ulSymsPerFrame > 0) {
             DataSpace data_dataspace(5, dims_data, max_dims_data);
             data_prop.setChunk(5, cdims);
             file->createDataSet("/Data/UplinkData",
@@ -380,7 +379,7 @@ void Recorder::openHDF5()
 #endif
     pilot_filespace.close();
     // Get Dataset for DATA (If Enabled) and check the shape of it
-    if (config_dump_data) {
+    if (cfg->ulSymsPerFrame > 0) {
         data_dataset = new DataSet(file->openDataSet("/Data/UplinkData"));
 
         DataSpace data_filespace(data_dataset->getSpace());
@@ -423,7 +422,7 @@ void Recorder::closeHDF5()
     delete pilot_dataset;
 
     // Resize Data Dataset (If Needed)
-    if (config_dump_data) {
+    if (cfg->ulSymsPerFrame > 0) {
         frame_number_data = frameNumber;
         hsize_t dims_data[] = {
             frame_number_data, cfg->nCells,
