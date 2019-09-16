@@ -40,7 +40,7 @@ Recorder::Recorder(Config* cfg)
 
     if (task_thread_num > 0) {
         // task threads
-        task_ptok.resize(task_thread_num);
+        // task_ptok.resize(task_thread_num);
         pthread_attr_t detached_attr;
         pthread_attr_init(&detached_attr);
         pthread_attr_setdetachstate(&detached_attr, PTHREAD_CREATE_DETACHED);
@@ -524,7 +524,7 @@ void Recorder::taskThread(EventHandlerContext* context)
     delete context;
     printf("task thread %d starts\n", tid);
 
-    task_ptok[tid].reset(new moodycamel::ProducerToken(message_queue_));
+    // task_ptok[tid].reset(new moodycamel::ProducerToken(message_queue_));
 
     Event_data event;
     bool ret = false;
