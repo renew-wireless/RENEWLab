@@ -86,7 +86,6 @@ private:
     size_t maxFrameNumber;
     moodycamel::ConcurrentQueue<Event_data> task_queue_;
     moodycamel::ConcurrentQueue<Event_data> message_queue_;
-    std::vector<pthread_t> recv_thread;
     std::vector<std::unique_ptr<moodycamel::ProducerToken>> task_ptok; //[TASK_THREAD_NUM];
 };
 #endif

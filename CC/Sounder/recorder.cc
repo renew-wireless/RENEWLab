@@ -455,7 +455,7 @@ void Recorder::do_it()
     }
 
     if (cfg->clPresent) {
-        std::vector<pthread_t> client_threads = receiver_->startClientThreads();
+        auto client_threads = receiver_->startClientThreads();
     }
 
     if (cfg->rx_thread_num > 0) {
@@ -464,7 +464,7 @@ void Recorder::do_it()
         openHDF5();
 
         // create socket buffer and socket threads
-        recv_thread = receiver_->startRecvThreads(rx_buffer_, 1);
+        auto recv_thread = receiver_->startRecvThreads(rx_buffer_, 1);
     } else
         receiver_->go(); // only beamsweeping
 
