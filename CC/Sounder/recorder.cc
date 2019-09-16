@@ -34,12 +34,16 @@ Recorder::Recorder(Config* cfg)
     if (task_thread_num > 0) {
         // task threads
         task_ptok.resize(task_thread_num);
-        task_threads = new pthread_t[task_thread_num];
+        pthread_attr_t detached_attr;
+        pthread_attr_init(&detached_attr);
+        pthread_attr_setdetachstate(&detached_attr, PTHREAD_CREATE_DETACHED);
+
         for (int i = 0; i < task_thread_num; i++) {
             EventHandlerContext* context = new EventHandlerContext;
+            pthread_t task_thread;
             context->obj_ptr = this;
             context->id = i;
-            if (pthread_create(&task_threads[i], NULL, Recorder::taskThread_launch, context) != 0) {
+            if (pthread_create(&task_thread, &detached_attr, Recorder::taskThread_launch, context) != 0) {
                 perror("task thread create failed");
                 exit(0);
             }
@@ -441,7 +445,6 @@ void Recorder::closeHDF5()
 Recorder::~Recorder()
 {
     delete[] rx_buffer_;
-    delete[] task_threads;
 }
 
 void Recorder::do_it()
