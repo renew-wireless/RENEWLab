@@ -60,7 +60,6 @@ public:
 
 private:
     Config* cfg;
-    bool core_alloc;
     std::unique_ptr<Receiver> receiver_;
     SampleBuffer* rx_buffer_;
 
