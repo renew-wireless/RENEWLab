@@ -10,6 +10,13 @@
 
 #include "include/recorder.h"
 
+// buffer length of each rx thread
+const int Recorder::SAMPLE_BUFFER_FRAME_NUM = 80;
+// buffer length of recording part
+const int Recorder::TASK_BUFFER_FRAME_NUM = 60;
+// dequeue bulk size, used to reduce the overhead of dequeue in main thread
+const int Recorder::dequeue_bulk_size = 5;
+
 Recorder::Recorder(Config* cfg)
 {
     this->cfg = cfg;
@@ -105,7 +112,7 @@ static void write_attribute(Group& g, const char name[], const std::vector<int>&
     att.write(PredType::NATIVE_INT, &val[0]);
 }
 
-static void write_attribute(Group& g, const char name[], std::string val)
+static void write_attribute(Group& g, const char name[], const std::string& val)
 {
     hsize_t dims[] = { 1 };
     DataSpace attr_ds = DataSpace(1, dims);

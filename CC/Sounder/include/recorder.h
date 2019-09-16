@@ -34,31 +34,31 @@ using std::endl;
 using namespace H5;
 class Recorder {
 public:
-    // buffer length of each rx thread
-    static const int SAMPLE_BUFFER_FRAME_NUM = 80;
-    // buffer length of recording part
-    static const int TASK_BUFFER_FRAME_NUM = 60;
-    // dequeue bulk size, used to reduce the overhead of dequeue in main thread
-    static const int dequeue_bulk_size = 5;
-
     Recorder(Config* cfg);
     ~Recorder();
 
     void do_it();
+
+private:
+    struct EventHandlerContext {
+        Recorder* obj_ptr;
+        int id;
+    };
+    herr_t record(int tid, int offset);
+    void taskThread(EventHandlerContext* context);
     herr_t initHDF5(const std::string&);
     void openHDF5();
     void closeHDF5();
     void finishHDF5();
     static void* taskThread_launch(void* in_context);
-    herr_t record(int tid, int offset);
 
-    struct EventHandlerContext {
-        Recorder* obj_ptr;
-        int id;
-    };
-    void taskThread(EventHandlerContext* context);
+    // buffer length of each rx thread
+    static const int SAMPLE_BUFFER_FRAME_NUM;
+    // buffer length of recording part
+    static const int TASK_BUFFER_FRAME_NUM;
+    // dequeue bulk size, used to reduce the overhead of dequeue in main thread
+    static const int dequeue_bulk_size;
 
-private:
     Config* cfg;
     std::unique_ptr<Receiver> receiver_;
     SampleBuffer* rx_buffer_;
