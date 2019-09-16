@@ -84,8 +84,6 @@ private:
     int config_pilot_extent_step = 400;
     int config_data_extent_step = 400;
     size_t maxFrameNumber;
-    int rx_thread_num;
-    int task_thread_num;
     moodycamel::ConcurrentQueue<Event_data> task_queue_;
     moodycamel::ConcurrentQueue<Event_data> message_queue_;
     pthread_t* task_threads; //[TASK_THREAD_NUM];

@@ -17,8 +17,8 @@ Recorder::Recorder(Config* cfg)
     std::cout << "buffer_chunk_size " << buffer_chunk_size << std::endl;
     task_queue_ = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
     message_queue_ = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
-    rx_thread_num = cfg->rx_thread_num;
-    task_thread_num = cfg->task_thread_num;
+    int rx_thread_num = cfg->rx_thread_num;
+    int task_thread_num = cfg->task_thread_num;
 
     if (rx_thread_num > 0) {
         // initialize rx buffers
@@ -455,7 +455,7 @@ void Recorder::do_it()
         std::vector<pthread_t> client_threads = receiver_->startClientThreads();
     }
 
-    if (rx_thread_num > 0) {
+    if (cfg->rx_thread_num > 0) {
         if (initHDF5(cfg->trace_file) < 0)
             exit(1);
         openHDF5();
@@ -495,7 +495,7 @@ void Recorder::do_it()
     }
     cfg->running = false;
     receiver_.reset();
-    if (cfg->bsPresent && rx_thread_num > 0)
+    if (cfg->bsPresent && cfg->rx_thread_num > 0)
         closeHDF5();
     finishHDF5();
 }
