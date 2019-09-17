@@ -12,25 +12,8 @@
 #define DATARECORDER_HEADER
 
 #include "H5Cpp.h"
-#include "hdf5.h"
 #include "receiver.h"
-#include "signalHandler.hpp"
-#include <algorithm>
-#include <complex>
-#include <ctime>
-#include <fcntl.h>
-#include <math.h>
-#include <memory>
-#include <pthread.h>
-#include <queue>
-#include <signal.h>
-#include <sstream>
-#include <string>
-#include <system_error>
-#include <unistd.h>
 
-using std::cout;
-using std::endl;
 using namespace H5;
 class Recorder {
 public:
@@ -71,7 +54,7 @@ private:
     H5std_string hdf5group;
 
     H5File* file;
-    Group* group;
+    // Group* group;
     DSetCreatPropList pilot_prop;
     DSetCreatPropList data_prop;
 

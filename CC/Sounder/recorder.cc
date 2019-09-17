@@ -9,6 +9,7 @@
 */
 
 #include "include/recorder.h"
+#include "include/signalHandler.hpp"
 
 // buffer length of each rx thread
 const int Recorder::SAMPLE_BUFFER_FRAME_NUM = 80;
@@ -383,14 +384,15 @@ void Recorder::openHDF5()
     int cndims_pilot = 0;
     if (H5D_CHUNKED == pilot_prop.getLayout())
         cndims_pilot = pilot_prop.getChunk(ndims, cdims_pilot);
-    cout << "dim pilot chunk = " << cndims_pilot << endl;
+    using std::cout;
+    cout << "dim pilot chunk = " << cndims_pilot << std::endl;
     hsize_t dims_pilot[] = {
         frame_number_pilot, cfg->nCells,
         cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
     };
     cout << "New Pilot Dataset Dimension " << ndims << ",";
     cout << dims_pilot[0] << "," << dims_pilot[1] << ",";
-    cout << dims_pilot[2] << "," << dims_pilot[3] << "," << IQ < endl;
+    cout << dims_pilot[2] << "," << dims_pilot[3] << "," << IQ < std::endl;
 #endif
     pilot_filespace.close();
     // Get Dataset for DATA (If Enabled) and check the shape of it
@@ -407,14 +409,14 @@ void Recorder::openHDF5()
         hsize_t cdims_data[5] = { 1, 1, 1, 1, IQ }; // data chunk size, TODO: optimize size
         if (H5D_CHUNKED == data_prop.getLayout())
             cndims_data = data_prop.getChunk(ndims, cdims_data);
-        cout << "dim data chunk = " << cndims_data << endl;
+        cout << "dim data chunk = " << cndims_data << std::endl;
         ;
         hsize_t dims_data[] = {
             frame_number_data, cfg->nCells,
             cfg->ulSymsPerFrame, cfg->getNumAntennas(), IQ
         };
         cout << "New Data Dataset Dimension " << ndims << "," << dims_data[0] << ",";
-        cout << dims_data[1] << "," << dims_data[2] << "," << dims_data[3] << "," << IQ << endl;
+        cout << dims_data[1] << "," << dims_data[2] << "," << dims_data[3] << "," << IQ << std::endl;
 #endif
         data_filespace.close();
     }
@@ -450,7 +452,7 @@ void Recorder::closeHDF5()
 
     file->close();
 
-    cout << "Saving HDF5, " << frameNumber << " frames saved." << endl;
+    std::cout << "Saving HDF5, " << frameNumber << " frames saved." << std::endl;
 }
 
 Recorder::~Recorder()
@@ -656,7 +658,7 @@ herr_t Recorder::record(int, int offset)
             cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
         };
         int ndims = data_dataset->getSpace().getSimpleExtentNdims();
-        std::cout << "Dataset Dimension is " << ndims << "," << dims_pilot[0] << "," << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << "," << IQ << endl;
+        std::cout << "Dataset Dimension is " << ndims << "," << dims_pilot[0] << "," << dims_pilot[1] << "," << dims_pilot[2] << "," << dims_pilot[3] << "," << IQ << std::endl;
         return -1;
     }
 

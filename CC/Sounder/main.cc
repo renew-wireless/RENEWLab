@@ -11,6 +11,7 @@
 */
 
 #include "include/recorder.h"
+#include "include/signalHandler.hpp"
 
 int main(int argc, char const* argv[])
 {
