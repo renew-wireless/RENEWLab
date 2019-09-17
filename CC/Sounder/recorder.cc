@@ -513,7 +513,8 @@ void Recorder::do_it()
     receiver_.reset();
     if (cfg->bsPresent && cfg->rx_thread_num > 0)
         closeHDF5();
-    finishHDF5();
+    if (cfg->rx_thread_num > 0)
+        finishHDF5();
 }
 
 void* Recorder::taskThread_launch(void* in_context)
