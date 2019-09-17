@@ -58,6 +58,10 @@ private:
     static const int TASK_BUFFER_FRAME_NUM;
     // dequeue bulk size, used to reduce the overhead of dequeue in main thread
     static const int dequeue_bulk_size;
+    // pilot dataset size increment
+    static const int config_pilot_extent_step;
+    // data dataset size increment
+    static const int config_data_extent_step;
 
     Config* cfg;
     std::unique_ptr<Receiver> receiver_;
@@ -81,8 +85,6 @@ private:
     hsize_t cdims_data[5];
 #endif
 
-    int config_pilot_extent_step = 400;
-    int config_data_extent_step = 400;
     size_t maxFrameNumber;
     moodycamel::ConcurrentQueue<Event_data> task_queue_;
     moodycamel::ConcurrentQueue<Event_data> message_queue_;

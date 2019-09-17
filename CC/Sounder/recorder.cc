@@ -16,6 +16,10 @@ const int Recorder::SAMPLE_BUFFER_FRAME_NUM = 80;
 const int Recorder::TASK_BUFFER_FRAME_NUM = 60;
 // dequeue bulk size, used to reduce the overhead of dequeue in main thread
 const int Recorder::dequeue_bulk_size = 5;
+// pilot dataset size increment
+const int Recorder::config_pilot_extent_step = 400;
+// data dataset size increment
+const int Recorder::config_data_extent_step = 400;
 
 Recorder::Recorder(Config* cfg)
 {
