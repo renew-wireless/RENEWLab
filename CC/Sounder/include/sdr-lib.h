@@ -44,13 +44,15 @@ private:
     Config* _cfg;
     std::vector<SoapySDR::Device*> hubs;
     std::vector<std::vector<SoapySDR::Device*>> bsSdrs; // [cell, iris]
-    std::vector<SoapySDR::Device*> clSdrs;
-    SoapySDR::Device* ref;
-    SoapySDR::Stream* refRxStream;
     std::vector<std::vector<SoapySDR::Stream*>> bsTxStreams;
     std::vector<std::vector<SoapySDR::Stream*>> bsRxStreams;
+#if 0
+    std::vector<SoapySDR::Device*> clSdrs;
     std::vector<SoapySDR::Stream*> clTxStreams;
     std::vector<SoapySDR::Stream*> clRxStreams;
+#endif
+    SoapySDR::Device* ref;
+    SoapySDR::Stream* refRxStream;
     std::vector<std::complex<int16_t>> buff;
     std::vector<int> nBsSdrs;
     std::vector<int> nBsAntennas;
