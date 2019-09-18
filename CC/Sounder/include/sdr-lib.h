@@ -28,8 +28,8 @@ public:
     void readSensors();
     void radioTx(const void* const* buffs);
     void radioRx(void* const* buffs);
-    int radioTx(int, const void* const* buffs, int flags, long long& frameTime);
-    int radioRx(int, void* const* buffs, long long& frameTime);
+    int radioTx(size_t, const void* const* buffs, int flags, long long& frameTime);
+    int radioRx(size_t, void* const* buffs, long long& frameTime);
     void sync_delays(int cellIdx);
 
     ~RadioConfig();
@@ -50,7 +50,6 @@ private:
     std::vector<std::vector<SoapySDR::Device*>> bsSdrs; // [cell, iris]
     std::vector<std::vector<SoapySDR::Stream*>> bsTxStreams;
     std::vector<std::vector<SoapySDR::Stream*>> bsRxStreams;
-    std::vector<int> nBsSdrs;
     std::vector<int> nBsAntennas;
 #if 0
     std::vector<SoapySDR::Device*> clSdrs;
