@@ -50,9 +50,7 @@ std::vector<pthread_t> Receiver::startClientThreads()
             profile->rxSyms = config_->clDLSymbols[i].size();
             profile->txStartSym = config_->clULSymbols[i].empty() ? 0 : config_->clULSymbols[i][0];
             profile->txFrameDelta = frameTimeDelta;
-            profile->device = radioconfig_->devs[i];
-            profile->rxs = radioconfig_->rxss[i];
-            profile->txs = radioconfig_->txss[i];
+            profile->radio = &radioconfig_->radios[i];
             profile->core = i + 1 + config_->rx_thread_num + config_->task_thread_num;
             profile->ptr = this;
             // start socket thread
@@ -205,9 +203,10 @@ void* Receiver::clientTxRx_launch(void* in_context)
 
 void Receiver::clientTxRx(dev_profile* context)
 {
-    SoapySDR::Device* device = context->device;
-    SoapySDR::Stream* rxStream = context->rxs;
-    SoapySDR::Stream* txStream = context->txs;
+    struct Radio* radio = context->radio;
+    SoapySDR::Device* device = radio->dev;
+    SoapySDR::Stream* rxStream = radio->rxs;
+    SoapySDR::Stream* txStream = radio->txs;
     int tid = context->tid;
     int txSyms = context->txSyms;
     int rxSyms = context->rxSyms;

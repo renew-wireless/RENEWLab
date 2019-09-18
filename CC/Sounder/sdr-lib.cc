@@ -101,9 +101,9 @@ RadioConfig::RadioConfig(Config* cfg)
             channels = { 0, 1 };
         }
         nClSdrs = _cfg->nClSdrs;
+        radios.resize(nClSdrs);
         for (int i = 0; i < nClSdrs; i++) {
             auto device = SoapySDR::Device::make("serial=" + _cfg->cl_sdr_ids.at(i) + ",timeout=10000000");
-            devs.push_back(device);
             SoapySDR::Kwargs info = device->getHardwareInfo();
 
             for (auto ch : { 0, 1 }) //channels)
@@ -163,10 +163,8 @@ RadioConfig::RadioConfig(Config* cfg)
             device->writeRegister("IRIS30", RF_RST_REG, (1 << 29));
             device->writeRegister("IRIS30", RF_RST_REG, 0);
 
-            auto rxStream = device->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CF32, channels);
-            auto txStream = device->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CF32, channels);
-            rxss.push_back(rxStream);
-            txss.push_back(txStream);
+            radios[i].rxs = device->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CF32, channels);
+            radios[i].txs = device->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CF32, channels);
         }
     }
     std::cout << "radio init done!" << std::endl;
@@ -417,7 +415,7 @@ void RadioConfig::radioConfigure()
         }
 
         for (int i = 0; i < nClSdrs; i++) {
-            auto device = devs[i];
+            auto device = radios[i].dev;
             device->writeRegister("IRIS30", CORR_CONF, 0x1);
             for (int k = 0; k < 128; k++)
                 device->writeRegister("ARGCOE", k * 4, 0);
@@ -461,8 +459,8 @@ void RadioConfig::radioConfigure()
             if (_cfg->clSdrCh == 2)
                 device->writeRegisters("TX_RAM_B", 2048, _cfg->pilot);
 
-            device->activateStream(rxss[i]);
-            device->activateStream(txss[i]);
+            device->activateStream(radios[i].rxs);
+            device->activateStream(radios[i].txs);
 
             if (_cfg->bsChannel != "B") // A or AB
                 device->writeRegister("IRIS30", CORR_CONF, 0x11);
@@ -521,7 +519,7 @@ void RadioConfig::radioStop()
     }
     if (_cfg->clPresent) {
         for (int i = 0; i < nClSdrs; i++) {
-            auto device = devs[i];
+            auto device = radios[i].dev;
             device->writeRegister("IRIS30", CORR_CONF, 0);
             std::cout << "device " << i << " T=" << std::hex << SoapySDR::timeNsToTicks(device->getHardwareTime(""), _cfg->rate) << std::dec << std::endl;
             for (int i = 0; i < _cfg->symbolsPerFrame; i++) {
@@ -813,12 +811,12 @@ RadioConfig::~RadioConfig()
     }
     if (_cfg->clPresent) {
         for (int i = 0; i < nClSdrs; i++) {
-            auto device = devs[i];
-            device->deactivateStream(rxss[i]);
-            device->deactivateStream(txss[i]);
+            auto device = radios[i].dev;
+            device->deactivateStream(radios[i].rxs);
+            device->deactivateStream(radios[i].txs);
 
-            device->closeStream(rxss[i]);
-            device->closeStream(txss[i]);
+            device->closeStream(radios[i].rxs);
+            device->closeStream(radios[i].txs);
             SoapySDR::Device::unmake(device);
         }
     }

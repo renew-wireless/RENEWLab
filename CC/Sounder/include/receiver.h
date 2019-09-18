@@ -80,9 +80,7 @@ public:
         int txStartSym;
         unsigned txFrameDelta;
         double rate;
-        SoapySDR::Device* device;
-        SoapySDR::Stream* rxs;
-        SoapySDR::Stream* txs;
+        struct Radio* radio;
         std::string data_file;
         int core;
         Receiver* ptr;

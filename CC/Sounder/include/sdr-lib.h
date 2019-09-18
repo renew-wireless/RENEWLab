@@ -12,6 +12,12 @@
 #include <iostream>
 #include <string>
 
+struct Radio {
+    SoapySDR::Device* dev;
+    SoapySDR::Stream* rxs;
+    SoapySDR::Stream* txs;
+};
+
 class RadioConfig {
 public:
     RadioConfig(Config* cfg);
@@ -27,9 +33,7 @@ public:
     void sync_delays(int cellIdx);
 
     ~RadioConfig();
-    std::vector<SoapySDR::Device*> devs;
-    std::vector<SoapySDR::Stream*> rxss;
-    std::vector<SoapySDR::Stream*> txss;
+    std::vector<struct Radio> radios;
     // use for create pthread
     struct RadioConfigContext {
         RadioConfig* ptr;
