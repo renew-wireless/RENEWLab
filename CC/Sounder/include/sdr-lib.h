@@ -46,20 +46,19 @@ private:
     std::vector<std::vector<SoapySDR::Device*>> bsSdrs; // [cell, iris]
     std::vector<std::vector<SoapySDR::Stream*>> bsTxStreams;
     std::vector<std::vector<SoapySDR::Stream*>> bsRxStreams;
+    int nClSdrs;
+    std::vector<int> nBsSdrs;
+    std::vector<int> nBsAntennas;
 #if 0
     std::vector<SoapySDR::Device*> clSdrs;
     std::vector<SoapySDR::Stream*> clTxStreams;
     std::vector<SoapySDR::Stream*> clRxStreams;
-#endif
     SoapySDR::Device* ref;
     SoapySDR::Stream* refRxStream;
     std::vector<std::complex<int16_t>> buff;
-    std::vector<int> nBsSdrs;
-    std::vector<int> nBsAntennas;
     std::vector<uint32_t> pilot_uint32;
     std::vector<uint32_t> dummy_uint32;
-
-    int nClSdrs;
     int nClAntennas;
+#endif
     std::atomic<int> remainingJobs;
 };
