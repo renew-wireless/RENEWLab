@@ -103,9 +103,6 @@ RadioConfig::RadioConfig(Config* cfg)
         nClSdrs = _cfg->nClSdrs;
         for (int i = 0; i < nClSdrs; i++) {
             auto device = SoapySDR::Device::make("serial=" + _cfg->cl_sdr_ids.at(i) + ",timeout=10000000");
-            if (device == nullptr) {
-                std::cerr << "No device!" << std::endl;
-            }
             devs.push_back(device);
             SoapySDR::Kwargs info = device->getHardwareInfo();
 
