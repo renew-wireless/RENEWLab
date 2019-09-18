@@ -50,7 +50,6 @@ private:
     std::vector<std::vector<SoapySDR::Device*>> bsSdrs; // [cell, iris]
     std::vector<std::vector<SoapySDR::Stream*>> bsTxStreams;
     std::vector<std::vector<SoapySDR::Stream*>> bsRxStreams;
-    int nClSdrs;
     std::vector<int> nBsSdrs;
     std::vector<int> nBsAntennas;
 #if 0

@@ -100,10 +100,10 @@ RadioConfig::RadioConfig(Config* cfg)
             _cfg->bsSdrCh = 2;
             channels = { 0, 1 };
         }
-        nClSdrs = _cfg->nClSdrs;
-        radios.resize(nClSdrs);
-        for (int i = 0; i < nClSdrs; i++) {
+        radios.resize(_cfg->nClSdrs);
+        for (size_t i = 0; i < radios.size(); i++) {
             auto device = SoapySDR::Device::make("serial=" + _cfg->cl_sdr_ids.at(i) + ",timeout=10000000");
+            radios[i].dev = device;
             SoapySDR::Kwargs info = device->getHardwareInfo();
 
             for (auto ch : { 0, 1 }) //channels)
@@ -397,8 +397,8 @@ void RadioConfig::radioConfigure()
         int sp_start = ueTrigOffset % _cfg->sampsPerSymbol;
 
         std::vector<std::string> tddSched;
-        tddSched.resize(nClSdrs);
-        for (int i = 0; i < nClSdrs; i++) {
+        tddSched.resize(radios.size());
+        for (size_t i = 0; i < radios.size(); i++) {
             tddSched[i] = _cfg->clFrames[i];
             for (size_t s = 0; s < _cfg->clFrames[i].size(); s++) {
                 char c = _cfg->clFrames[i].at(s);
@@ -414,7 +414,7 @@ void RadioConfig::radioConfigure()
             std::cout << "Client " << i << " schedule: " << tddSched[i] << std::endl;
         }
 
-        for (int i = 0; i < nClSdrs; i++) {
+        for (size_t i = 0; i < radios.size(); i++) {
             auto device = radios[i].dev;
             device->writeRegister("IRIS30", CORR_CONF, 0x1);
             for (int k = 0; k < 128; k++)
@@ -518,7 +518,7 @@ void RadioConfig::radioStop()
         }
     }
     if (_cfg->clPresent) {
-        for (int i = 0; i < nClSdrs; i++) {
+        for (size_t i = 0; i < radios.size(); i++) {
             auto device = radios[i].dev;
             device->writeRegister("IRIS30", CORR_CONF, 0);
             std::cout << "device " << i << " T=" << std::hex << SoapySDR::timeNsToTicks(device->getHardwareTime(""), _cfg->rate) << std::dec << std::endl;
@@ -810,7 +810,7 @@ RadioConfig::~RadioConfig()
         }
     }
     if (_cfg->clPresent) {
-        for (int i = 0; i < nClSdrs; i++) {
+        for (size_t i = 0; i < radios.size(); i++) {
             auto device = radios[i].dev;
             device->deactivateStream(radios[i].rxs);
             device->deactivateStream(radios[i].txs);
