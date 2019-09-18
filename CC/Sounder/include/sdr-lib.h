@@ -24,8 +24,6 @@ public:
     void radioRx(void* const* buffs);
     int radioTx(int, const void* const* buffs, int flags, long long& frameTime);
     int radioRx(int, void* const* buffs, long long& frameTime);
-    void collectCSI(bool&);
-    static void drain_buffers(SoapySDR::Device* ibsSdrs, SoapySDR::Stream* istream, std::vector<void*> buffs, int symSamp);
     void sync_delays(int cellIdx);
 
     ~RadioConfig();
@@ -41,6 +39,8 @@ public:
     void initBSRadio(RadioConfigContext* context);
 
 private:
+    void collectCSI(bool&);
+    static void drain_buffers(SoapySDR::Device* ibsSdrs, SoapySDR::Stream* istream, std::vector<void*> buffs, int symSamp);
     Config* _cfg;
     std::vector<SoapySDR::Device*> hubs;
     std::vector<std::vector<SoapySDR::Device*>> bsSdrs; // [cell, iris]
