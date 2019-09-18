@@ -23,8 +23,8 @@ end
 % Params:
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
-SIM_MOD                 = 0;
-DEBUG                   = 1;
+SIM_MOD                 = 1;
+DEBUG                   = 0;
 
 if SIM_MOD
     chan_type               = "rayleigh"; % Will use only Rayleigh for simulation
