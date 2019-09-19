@@ -47,9 +47,7 @@ private:
     static void drain_buffers(SoapySDR::Device* ibsSdrs, SoapySDR::Stream* istream, std::vector<void*> buffs, int symSamp);
     Config* _cfg;
     std::vector<SoapySDR::Device*> hubs;
-    std::vector<std::vector<SoapySDR::Device*>> bsSdrs; // [cell, iris]
-    std::vector<std::vector<SoapySDR::Stream*>> bsTxStreams;
-    std::vector<std::vector<SoapySDR::Stream*>> bsRxStreams;
+    std::vector<std::vector<struct Radio>> bsRadios; // [cell, iris]
     std::vector<int> nBsAntennas;
 #if 0
     std::vector<SoapySDR::Device*> clSdrs;
