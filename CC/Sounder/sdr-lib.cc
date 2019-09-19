@@ -130,7 +130,7 @@ RadioConfig::RadioConfig(Config* cfg)
                 }
 
                 // lime
-                dev->setGain(SOAPY_SDR_RX, ch, "LNA", ch != 0 ? _cfg->clRxgainB_vec[i] : _cfg->clRxgainA_vec[i]); //[0,30]
+                dev->setGain(SOAPY_SDR_RX, ch, "LNA", _cfg->clRxgain_vec[ch][i]); //[0,30]
                 dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0); //[0,12]
                 dev->setGain(SOAPY_SDR_RX, ch, "PGA", 0); //[-12,19]
 
@@ -150,7 +150,7 @@ RadioConfig::RadioConfig(Config* cfg)
 
                 // lime
                 dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 12); //[-12,12]
-                dev->setGain(SOAPY_SDR_TX, ch, "PAD", ch != 0 ? _cfg->clTxgainB_vec[i] : _cfg->clTxgainA_vec[i]); //[0,52]
+                dev->setGain(SOAPY_SDR_TX, ch, "PAD", _cfg->clTxgain_vec[ch][i]); //[0,52]
             }
 
             for (auto ch : channels) {
@@ -231,7 +231,7 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
         }
 
         // lime
-        dev->setGain(SOAPY_SDR_RX, ch, "LNA", ch != 0 ? _cfg->rxgainB : _cfg->rxgainA); //[0,30]
+        dev->setGain(SOAPY_SDR_RX, ch, "LNA", _cfg->rxgain[ch]); //[0,30]
         dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0); //[0,12]
         dev->setGain(SOAPY_SDR_RX, ch, "PGA", 0); //[-12,19]
 
@@ -257,7 +257,7 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
 
         // lime
         dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 12); //[0,12]
-        dev->setGain(SOAPY_SDR_TX, ch, "PAD", ch != 0 ? _cfg->txgainB : _cfg->txgainA); //[0,30]
+        dev->setGain(SOAPY_SDR_TX, ch, "PAD", _cfg->txgain[ch]); //[0,30]
     }
 
     for (auto ch : channels) {
@@ -661,7 +661,7 @@ void RadioConfig::collectCSI(bool& adjust)
     for (int i = 0; i < R; i++) {
         struct Radio* bsRadio = &bsRadios[0][i];
         SoapySDR::Device* dev = bsRadio->dev;
-        dev->setGain(SOAPY_SDR_TX, ch, "PAD", ch != 0 ? _cfg->calTxGainB : _cfg->calTxGainA);
+        dev->setGain(SOAPY_SDR_TX, ch, "PAD", _cfg->calTxGain[ch]);
         dev->writeSetting("TDD_CONFIG", "{\"tdd_enabled\":false}");
         dev->writeSetting("TDD_MODE", "false");
         dev->activateStream(bsRadio->txs);
@@ -765,7 +765,7 @@ void RadioConfig::collectCSI(bool& adjust)
         SoapySDR::Device* dev = bsRadio->dev;
         dev->deactivateStream(bsRadio->txs);
         dev->deactivateStream(bsRadio->rxs);
-        dev->setGain(SOAPY_SDR_TX, ch, "PAD", ch != 0 ? _cfg->txgainB : _cfg->txgainA); //[0,30]
+        dev->setGain(SOAPY_SDR_TX, ch, "PAD", _cfg->txgain[ch]); //[0,30]
     }
 
     for (int i = 0; i < R; i++) {

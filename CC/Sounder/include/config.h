@@ -69,12 +69,9 @@ public:
     std::vector<std::vector<size_t>> pilotSymbols;
     std::vector<std::vector<size_t>> ULSymbols;
     std::vector<std::vector<size_t>> DLSymbols;
-    double txgainA;
-    double rxgainA;
-    double txgainB;
-    double rxgainB;
-    double calTxGainA;
-    double calTxGainB;
+    double txgain[2];
+    double rxgain[2];
+    double calTxGain[2];
     bool sampleCalEn;
     std::string trace_file;
 
@@ -104,10 +101,8 @@ public:
     std::vector<std::vector<size_t>> clULSymbols;
     std::vector<std::vector<size_t>> clDLSymbols;
 
-    std::vector<double> clTxgainA_vec;
-    std::vector<double> clRxgainA_vec;
-    std::vector<double> clTxgainB_vec;
-    std::vector<double> clRxgainB_vec;
+    std::vector<double> clTxgain_vec[2];
+    std::vector<double> clRxgain_vec[2];
 
     size_t getPackageLength()
     {
