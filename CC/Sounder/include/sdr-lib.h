@@ -16,6 +16,7 @@ struct Radio {
     SoapySDR::Device* dev;
     SoapySDR::Stream* rxs;
     SoapySDR::Stream* txs;
+    ~Radio(void);
 };
 
 class RadioConfig {

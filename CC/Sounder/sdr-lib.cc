@@ -17,6 +17,21 @@
 
 namespace plt = matplotlibcpp;
 
+static void
+dev_init(SoapySDR::Device* dev, Config* _cfg, int ch)
+{
+    dev->setBandwidth(SOAPY_SDR_RX, ch, (1 + 2 * _cfg->bbf_ratio) * _cfg->rate);
+    dev->setBandwidth(SOAPY_SDR_TX, ch, (1 + 2 * _cfg->bbf_ratio) * _cfg->rate);
+
+    dev->setSampleRate(SOAPY_SDR_RX, ch, _cfg->rate);
+    dev->setSampleRate(SOAPY_SDR_TX, ch, _cfg->rate);
+
+    dev->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->freq - _cfg->bbf_ratio * _cfg->rate);
+    dev->setFrequency(SOAPY_SDR_RX, ch, "BB", _cfg->bbf_ratio * _cfg->rate);
+    dev->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->freq - _cfg->bbf_ratio * _cfg->rate);
+    dev->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->bbf_ratio * _cfg->rate);
+}
+
 RadioConfig::RadioConfig(Config* cfg)
     : _cfg(cfg)
 {
@@ -86,7 +101,7 @@ RadioConfig::RadioConfig(Config* cfg)
             channels = { 0 };
         else if (cfg->bsChannel == "B") {
             channels = { 1 };
-            std::cout << "selecting channel " << cfg->bsChannel << "(" << std::to_string(channels[0]) << ")" << std::endl;
+            std::cout << "selecting channel " << _cfg->bsChannel << "(" << std::to_string(channels[0]) << ")" << std::endl;
         } else if (_cfg->clSdrCh == 2)
             channels = { 0, 1 };
         else {
@@ -96,69 +111,60 @@ RadioConfig::RadioConfig(Config* cfg)
         }
         radios.resize(_cfg->nClSdrs);
         for (size_t i = 0; i < radios.size(); i++) {
-            auto device = SoapySDR::Device::make("serial=" + _cfg->cl_sdr_ids.at(i) + ",timeout=10000000");
-            radios[i].dev = device;
-            SoapySDR::Kwargs info = device->getHardwareInfo();
+            auto dev = SoapySDR::Device::make("serial=" + _cfg->cl_sdr_ids.at(i) + ",timeout=10000000");
+            radios[i].dev = dev;
+            SoapySDR::Kwargs info = dev->getHardwareInfo();
 
             for (auto ch : { 0, 1 }) //channels)
             {
-                device->setBandwidth(SOAPY_SDR_RX, ch, (1 + 2 * _cfg->bbf_ratio) * cfg->rate);
-                device->setBandwidth(SOAPY_SDR_TX, ch, (1 + 2 * _cfg->bbf_ratio) * cfg->rate);
-
-                device->setSampleRate(SOAPY_SDR_RX, ch, _cfg->rate);
-                device->setSampleRate(SOAPY_SDR_TX, ch, _cfg->rate);
-
-                //device->setFrequency(SOAPY_SDR_RX, ch, freq);
-                //device->setFrequency(SOAPY_SDR_TX, ch, freq);
-                device->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->freq - _cfg->bbf_ratio * _cfg->rate);
-                device->setFrequency(SOAPY_SDR_RX, ch, "BB", _cfg->bbf_ratio * _cfg->rate);
-                device->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->freq - _cfg->bbf_ratio * _cfg->rate);
-                device->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->bbf_ratio * _cfg->rate);
-
+                dev_init(dev, _cfg, ch);
                 // receive gains
 
                 if (info["frontend"].find("CBRS") != std::string::npos) {
-                    device->setGain(SOAPY_SDR_RX, ch, "ATTN", -12); //[-18,0]
-                    device->setGain(SOAPY_SDR_RX, ch, "LNA1", 30); //[0,33]
-                    if (cfg->freq < 3e9 && cfg->freq > 2e9)
-                        device->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //[0,17]
+                    dev->setGain(SOAPY_SDR_RX, ch, "ATTN", -12); //[-18,0]
+                    dev->setGain(SOAPY_SDR_RX, ch, "LNA1", 30); //[0,33]
+                    if (cfg->freq < 3e9 && _cfg->freq > 2e9)
+                        dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //[0,17]
                     else if (cfg->freq >= 3e9)
-                        device->setGain(SOAPY_SDR_RX, ch, "LNA2", 14); //[0,14]
+                        dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 14); //[0,14]
                 }
 
-                device->setGain(SOAPY_SDR_RX, ch, "LNA", ch != 0 ? _cfg->clRxgainB_vec[i] : _cfg->clRxgainA_vec[i]); //[0,30]
-                device->setGain(SOAPY_SDR_RX, ch, "TIA", 0); //[0,12]
-                device->setGain(SOAPY_SDR_RX, ch, "PGA", 0); //[-12,19]
+                // lime
+                dev->setGain(SOAPY_SDR_RX, ch, "LNA", ch != 0 ? _cfg->clRxgainB_vec[i] : _cfg->clRxgainA_vec[i]); //[0,30]
+                dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0); //[0,12]
+                dev->setGain(SOAPY_SDR_RX, ch, "PGA", 0); //[-12,19]
 
                 // transmit gains
 
                 if (info["frontend"].find("CBRS") != std::string::npos) {
-                    device->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //{-18,-12,-6,0}
+                    dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //{-18,-12,-6,0}
                     if (info["frontend"].find("CBRSc") != std::string::npos) // on revC front-end, it is safe to turn on PA2
                     {
-                        if (cfg->freq < 3e9 && cfg->freq > 2e9)
-                            device->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //CBRS LO, [0|17]
+                        if (cfg->freq < 3e9 && _cfg->freq > 2e9)
+                            dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //CBRS LO, [0|17]
                         else if (cfg->freq >= 3e9)
-                            device->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //CBRS HI, [0|14]
+                            dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //CBRS HI, [0|14]
                     } else
-                        device->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|17]
+                        dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|17]
                 }
-                device->setGain(SOAPY_SDR_TX, ch, "IAMP", 12); //[-12,12]
-                device->setGain(SOAPY_SDR_TX, ch, "PAD", ch != 0 ? _cfg->clTxgainB_vec[i] : _cfg->clTxgainA_vec[i]); //[0,52]
+
+                // lime
+                dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 12); //[-12,12]
+                dev->setGain(SOAPY_SDR_TX, ch, "PAD", ch != 0 ? _cfg->clTxgainB_vec[i] : _cfg->clTxgainA_vec[i]); //[0,52]
             }
 
             for (auto ch : channels) {
-                //device->writeSetting(SOAPY_SDR_RX, ch, "CALIBRATE", "SKLK");
-                //device->writeSetting(SOAPY_SDR_TX, ch, "CALIBRATE", "");
-                device->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
+                //dev->writeSetting(SOAPY_SDR_RX, ch, "CALIBRATE", "SKLK");
+                //dev->writeSetting(SOAPY_SDR_TX, ch, "CALIBRATE", "");
+                dev->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
             }
 
-            device->writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 1);
-            device->writeRegister("IRIS30", RF_RST_REG, (1 << 29));
-            device->writeRegister("IRIS30", RF_RST_REG, 0);
+            dev->writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 1);
+            dev->writeRegister("IRIS30", RF_RST_REG, (1 << 29));
+            dev->writeRegister("IRIS30", RF_RST_REG, 0);
 
-            radios[i].rxs = device->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CF32, channels);
-            radios[i].txs = device->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CF32, channels);
+            radios[i].rxs = dev->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CF32, channels);
+            radios[i].txs = dev->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CF32, channels);
         }
     }
     std::cout << "radio init done!" << std::endl;
@@ -206,24 +212,13 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
     SoapySDR::Kwargs info = dev->getHardwareInfo();
     for (auto ch : { 0, 1 }) //channels)
     {
-        dev->setBandwidth(SOAPY_SDR_RX, ch, (1 + 2 * _cfg->bbf_ratio) * _cfg->rate);
-        dev->setBandwidth(SOAPY_SDR_TX, ch, (1 + 2 * _cfg->bbf_ratio) * _cfg->rate);
-
-        dev->setSampleRate(SOAPY_SDR_RX, ch, _cfg->rate);
-        dev->setSampleRate(SOAPY_SDR_TX, ch, _cfg->rate);
-
-        dev->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->freq - _cfg->bbf_ratio * _cfg->rate);
-        dev->setFrequency(SOAPY_SDR_RX, ch, "BB", _cfg->bbf_ratio * _cfg->rate);
-        dev->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->freq - _cfg->bbf_ratio * _cfg->rate);
-        dev->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->bbf_ratio * _cfg->rate);
-
+        dev_init(dev, _cfg, ch);
         // receive gains
 
-        // front-end
         if (info["frontend"].find("CBRS") != std::string::npos) {
             dev->setGain(SOAPY_SDR_RX, ch, "ATTN", -12); //[-18,0]
             dev->setGain(SOAPY_SDR_RX, ch, "LNA1", 33); //[0,33]
-            if (_cfg->freq > 3e9)
+            if (_cfg->freq <= 3e9)
                 dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 14); //HI[0,14]
             else
                 dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //LO[0,17]
@@ -242,7 +237,6 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
 
         // transmit gains
 
-        // front-end
         if (info["frontend"].find("CBRS") != std::string::npos && _cfg->freq > 3e9) // CBRS HI
         {
             dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //[-18,0] by 3
@@ -411,18 +405,18 @@ void RadioConfig::radioConfigure()
         }
 
         for (size_t i = 0; i < radios.size(); i++) {
-            auto device = radios[i].dev;
-            device->writeRegister("IRIS30", CORR_CONF, 0x1);
+            auto dev = radios[i].dev;
+            dev->writeRegister("IRIS30", CORR_CONF, 0x1);
             for (int k = 0; k < 128; k++)
-                device->writeRegister("ARGCOE", k * 4, 0);
+                dev->writeRegister("ARGCOE", k * 4, 0);
             usleep(100000);
 
-            device->writeRegister("IRIS30", 64, 1); // reset faros_corr
-            device->writeRegister("IRIS30", 64, 0); // unreset faros_corr
-            device->writeRegister("IRIS30", 92, 1); // threshold is left-shifted by this many bits
+            dev->writeRegister("IRIS30", 64, 1); // reset faros_corr
+            dev->writeRegister("IRIS30", 64, 0); // unreset faros_corr
+            dev->writeRegister("IRIS30", 92, 1); // threshold is left-shifted by this many bits
 
             for (int k = 0; k < 128; k++)
-                device->writeRegister("ARGCOE", k * 4, _cfg->coeffs[k]);
+                dev->writeRegister("ARGCOE", k * 4, _cfg->coeffs[k]);
 
 #ifdef JSON
             json conf;
@@ -442,26 +436,26 @@ void RadioConfig::radioConfigure()
             confString += ",\"frames\":[\"" + tddSched[i] + "\"]}";
             std::cout << confString << std::endl;
 #endif
-            device->writeSetting("TDD_CONFIG", confString);
+            dev->writeSetting("TDD_CONFIG", confString);
 
-            device->setHardwareTime(SoapySDR::ticksToTimeNs((sf_start << 16) | sp_start, _cfg->rate), "TRIGGER");
-            device->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
-            device->writeSetting("TDD_MODE", "true");
+            dev->setHardwareTime(SoapySDR::ticksToTimeNs((sf_start << 16) | sp_start, _cfg->rate), "TRIGGER");
+            dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
+            dev->writeSetting("TDD_MODE", "true");
             // write beacons to FPGA buffers
             if (_cfg->bsChannel != "B")
-                device->writeRegisters("TX_RAM_A", 0, _cfg->pilot);
+                dev->writeRegisters("TX_RAM_A", 0, _cfg->pilot);
             if (_cfg->bsChannel == "B")
-                device->writeRegisters("TX_RAM_B", 0, _cfg->pilot);
+                dev->writeRegisters("TX_RAM_B", 0, _cfg->pilot);
             if (_cfg->clSdrCh == 2)
-                device->writeRegisters("TX_RAM_B", 2048, _cfg->pilot);
+                dev->writeRegisters("TX_RAM_B", 2048, _cfg->pilot);
 
-            device->activateStream(radios[i].rxs);
-            device->activateStream(radios[i].txs);
+            dev->activateStream(radios[i].rxs);
+            dev->activateStream(radios[i].txs);
 
             if (_cfg->bsChannel != "B") // A or AB
-                device->writeRegister("IRIS30", CORR_CONF, 0x11);
+                dev->writeRegister("IRIS30", CORR_CONF, 0x11);
             else
-                device->writeRegister("IRIS30", CORR_CONF, 0x31);
+                dev->writeRegister("IRIS30", CORR_CONF, 0x31);
         }
     }
     std::cout << "Done with frame configuration!" << std::endl;
@@ -822,25 +816,14 @@ RadioConfig::~RadioConfig()
             for (unsigned int i = 0; i < hubs.size(); i++)
                 SoapySDR::Device::unmake(hubs[i]);
         }
-        for (size_t i = 0; i < bsRadios[0].size(); i++) {
-            struct Radio* bsRadio = &bsRadios[0][i];
-            SoapySDR::Device* dev = bsRadio->dev;
-            dev->deactivateStream(bsRadio->rxs);
-            dev->deactivateStream(bsRadio->txs);
-            dev->closeStream(bsRadio->rxs);
-            dev->closeStream(bsRadio->txs);
-            SoapySDR::Device::unmake(dev);
-        }
     }
-    if (_cfg->clPresent) {
-        for (size_t i = 0; i < radios.size(); i++) {
-            auto device = radios[i].dev;
-            device->deactivateStream(radios[i].rxs);
-            device->deactivateStream(radios[i].txs);
+}
 
-            device->closeStream(radios[i].rxs);
-            device->closeStream(radios[i].txs);
-            SoapySDR::Device::unmake(device);
-        }
-    }
+Radio::~Radio(void)
+{
+    dev->deactivateStream(rxs);
+    dev->closeStream(rxs);
+    dev->deactivateStream(txs);
+    dev->closeStream(txs);
+    SoapySDR::Device::unmake(dev);
 }
