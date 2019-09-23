@@ -58,6 +58,8 @@ end
 %  Do your selves: Get bits from rx_data:
 bits_matrix = de2bi([rx_data; (MOD_ORDER-1)], 'left-msb')'; % This is a matrix now
 bits_matrix = bits_matrix(:,1:end-1);
+% Maybe you need to transpose bits_matrix before reshaping it to a vector:
+% bits_matrix = bits_matrix';
 bits = bits_matrix(:);
 
 end
