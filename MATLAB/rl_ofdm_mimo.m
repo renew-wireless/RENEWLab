@@ -21,41 +21,45 @@ if ~isloaded
 end
 
 % Params:
+N_BS_NODE               = 8;           % Number of nodes/antennas at the BS
+N_UE                    = 2;           % Number of UE nodes
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
-CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_MOD                 = 0;
-DEBUG                   = 1;
+DEBUG                   = 0;
 
 if SIM_MOD
     chan_type               = "rayleigh"; % Will use only Rayleigh for simulation
-    sim_SNR_db              = 15;    
+    sim_SNR_db              = 15;   
+    TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
 else 
+    %Iris params:
+    TX_SCALE                = 0.5;         % Scale for Tx waveform ([0:1])
     chan_type               = "iris";
+    USE_HUB                 = 1;
+    TX_FRQ                  = 2.5e9;
+    RX_FRQ                  = TX_FRQ;
+    TX_GN                   = 45;
+    TX_GN_ue                = 48;
+    RX_GN                   = 23;
+    SMPL_RT                 = 5e6;
+    N_FRM                   = 50;
+    b_ids                   = string.empty();
+    b_scheds                = string.empty();
+    ue_ids                  = string.empty();
+    ue_scheds               = string.empty();
 end
 fprintf("Channel type: %s \n",chan_type);
 
-% Iris params:
-N_BS_NODE               = 8;
-N_UE                    = 2;
-TX_FRQ                  = 3.6e9;
-RX_FRQ                  = TX_FRQ;
-TX_GN                   = 40;
-RX_GN                   = 20;
-SMPL_RT                 = 5e6;
-N_FRM                   = 20;
 
-b_ids                   = string.empty();
-b_scheds                = string.empty();
-ue_ids                  = string.empty();
-ue_scheds               = string.empty();
+
 
 MIMO_ALG                = 'ZF';      % MIMO ALGORITHM: ZF or Conjugate 
 fprintf("MIMO algorithm: %s \n",MIMO_ALG);
 
 % Waveform params
-N_OFDM_SYM              = 46;         % Number of OFDM symbols for burst, it needs to be less than 47
+N_OFDM_SYM              = 44;         % Number of OFDM symbols for burst, it needs to be less than 47
 MOD_ORDER               = 16;          % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
-TX_SCALE                = 0.5;         % Scale for Tx waveform ([0:1])
+
 
 % OFDM params
 SC_IND_PILOTS           = [8 22 44 58];                           % Pilot subcarrier indices
@@ -142,14 +146,36 @@ if (SIM_MOD)
 % Set up the Iris experimenty
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 else
-    % Device IDs of BS nodes and UE nodes
-    b_ids = ["0328", "0339", "0268", "0282", "0344", "0233", "0334", "0402"];
-    %b_ids = ["0276", "0318", "0380", "0266", "0338", "0329", "0264", "0279"];
-    ue_ids= ["RF3C000025", "RF3C000045"];
+    % Create BS Hub and UE objects. Note: BS object is a collection of Iris
+    % nodes.
+    if USE_HUB
+        % Using chains of different size requires some internal
+        % calibration on the BS. This functionality will be added later.
+        % For now, we use only the 4-node chains:
+        
+%         b_ids = ["RF3E000134", "RF3E000191", "RF3E000171", "RF3E000105",...
+%             "RF3E000053", "RF3E000177", "RF3E000192", "RF3E000117",...
+%             "RF3E000183", "RF3E000152", "RF3E000123", "RF3E000178", "RF3E000113", "RF3E000176", "RF3E000132", "RF3E000108", ...
+%             "RF3E000143", "RF3E000160", "RF3E000025", "RF3E000034",...
+%             "RF3E000189", "RF3E000024", "RF3E000139", "RF3E000032", "RF3E000154", "RF3E000182", "RF3E000038", "RF3E000137", ...
+%             "RF3E000103", "RF3E000180", "RF3E000181", "RF3E000188"];
+        % IDs of the 4-node chains:
+        b_ids = ["RF3E000134", "RF3E000191", "RF3E000171", "RF3E000105",...
+            "RF3E000053", "RF3E000177", "RF3E000192", "RF3E000117",...
+            "RF3E000143", "RF3E000160", "RF3E000025", "RF3E000034",...
+            "RF3E000103", "RF3E000180", "RF3E000181", "RF3E000188"];
+        
+        hub_id = "FH4A000001";
+        
+    else
+        b_ids = ["RF3E000189", "RF3E000024", "RF3E000139", "RF3E000032", "RF3E000154", "RF3E000182", "RF3E000038", "RF3E000137"];
+    end
+    
+    ue_ids= ["RF3E000060", "RF3E000145"];
 
-    b_prim_sched = "PGGGGGGGGGGRG";           % BS primary node's schedule: Send Beacon only from one Iris board
-    b_sec_sched = "GGGGGGGGGGGRG"; 
-    ue_sched = "GGGGGGGGGGGPG";               % UE schedule
+    b_prim_sched = "PGGGGGGGGGGRGGGG";           % BS primary node's schedule: Send Beacon only from one Iris board
+    b_sec_sched = "GGGGGGGGGGGRGGGG"; 
+    ue_sched = "GGGGGGGGGGGPGGGG";               % UE schedule
 
     % schedule for the other boards
     b_scheds =  b_prim_sched;
@@ -171,7 +197,7 @@ else
         'id', b_ids, ...
         'n_chain',N_BS_NODE, ...        % number of nodes chained together
         'txfreq', TX_FRQ, ...   
-        'rxfreq', TX_FRQ, ...
+        'rxfreq', RX_FRQ, ...
         'txgain', TX_GN, ...
         'rxgain', RX_GN, ...
         'sample_rate', SMPL_RT, ...
@@ -185,20 +211,23 @@ else
     sdr_params(2).id =  ue_ids(1);
     sdr_params(2).n_chain = 1;
     sdr_params(2).rxfreq = RX_FRQ;
-    sdr_params(2).txfreq = RX_FRQ;
+    sdr_params(2).txfreq = TX_FRQ;
+    sdr_params(2).txgain = TX_GN_ue;
     
     sdr_params(2).tdd_sched = ue_scheds(1);
     
     sdr_params(3)= sdr_params(2);
     sdr_params(3).id =  ue_ids(2);
     
-    SAMP_FREQ = sdr_params(1).sample_rate;
-    
-    rx_vec_iris = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, chan_type, [], sdr_params(1), sdr_params(2:3));
+    if USE_HUB
+        rx_vec_iris = getRxVec(tx_vecs_iris,N_BS_NODE, N_UE, chan_type, [], sdr_params(1), sdr_params(2:3), hub_id);
+                               
+    else
+        rx_vec_iris = getRxVec(tx_vecs_iris,N_BS_NODE, N_UE, chan_type, [], sdr_params(1), sdr_params(2:3), []);
+    end
 
 end
 
-%load 'rx_mimo_data_08_02.mat';
 l_rx_dec=length(rx_vec_iris);
 
 %% Correlate for LTS
@@ -223,27 +252,18 @@ for ibs =1:N_BS_NODE
         sort_corr = sort(lts_corr(ibs,:), 'descend');
         % Take the N_UE largest values
         rho_max = sort_corr(1:N_UE);
-        % 
+        % Get the indices of N_UE largest corr. values
         lts_peaks(ibs,:) = find(lts_corr(ibs,:) >= min(rho_max));
         
         % position of the last peak
         max_idx = max(lts_peaks(ibs,:));
-        % In case of Bad correlatons:
+        
+        % In case of bad correlatons:
         if (max_idx + data_len) > length(rx_vec_iris) || (max_idx < 0) || (max_idx - length(preamble) < 0)
             fprintf('Bad correlation at antenna %d max_idx = %d \n', ibs, max_idx);
+            % Real value doesn't matter since we have corrrupt data:
             max_idx = length(rx_vec_iris)-data_len -1;
             
-            figure,
-            for sp = 1:ibs
-                subplot(N_BS_NODE,1,sp);
-                plot(lts_corr(sp,:));
-                grid on;
-                xlabel('Samples');
-                y_label = sprintf('Anetnna %d',sp);
-                ylabel(y_label);
-            end
-            sgtitle('LTS correlations accross antennas')
-            % Real value doesn't matter since we have corrrupt data:
         end
             
         payload_ind(ibs) = max_idx +1;
@@ -363,7 +383,7 @@ cf = 0;
 fst_clr = [0, 0.4470, 0.7410];
 sec_clr = [0.8500, 0.3250, 0.0980];
 
-% Tx signal
+%Tx signal
 cf = cf + 1;
 figure(cf); clf;
 for sp=1:N_UE
@@ -477,13 +497,12 @@ xlabel('Baseband Frequency (MHz)')
 %% EVM & SNR
 sym_errs = sum(tx_data(:) ~= rx_data(:));
 bit_errs = length(find(dec2bin(bitxor(tx_data(:), rx_data(:)),8) == '1'));
-
-cf = cf + 1;
-figure(cf); clf;
 evm_mat = double.empty();
 aevms = zeros(N_UE,1);
 snr_mat = zeros(N_UE,1);
 
+cf = cf + 1;
+figure(cf); clf;
 for sp = 1:N_UE
     tx_vec = tx_syms_mat(:,:,sp);
     evm_mat(:,sp)  = abs(tx_vec(:) - syms_eq_pc(:,sp) ).^2;

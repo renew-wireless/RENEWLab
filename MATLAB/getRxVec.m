@@ -1,4 +1,4 @@
-function y = getRxVec(tx_data, n_bs, n_ue, chan_type, snr, bs_param, ue_param, past_data_fname)
+function y = getRxVec(tx_data, n_bs, n_ue, chan_type, snr, bs_param, ue_param, hub_id)
 %%% Returns Rx vector passed through the channel type given in the input
 %%% list.
 
@@ -48,13 +48,13 @@ elseif chan_type == "mpc"
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%Simplified MIMO MPC: SIMO only!
+%Simplified MIMO MPC: SISO and SIMO only!
 
         nsub = 20;      % number of subpaths per cluster
-        fmaxHz = 0;     % max Doppler spread in Hz
+        fmaxHz = 0;     % max Doppler spread in Hz. NOT USED!
         freqErrHz = 0;  % constant frequency error in Hz
         dlyns=0;        % constant delay in ns
-        angMotion=0;    % angle of motion
+        angMotion=0;    % angle of motion. KEEP at 0.
         
         % Cluster parameters represented as a vector with one
         % component per cluster
@@ -193,58 +193,62 @@ elseif chan_type == "iris"
 % Real HW:
     N_ZPAD_PRE = 90;
     n_samp = bs_param.n_samp;
-    node_bs = iris_py(bs_param);
-    node_ue1 = iris_py(ue_param(1));
+    if ~isempty(hub_id)
+        node_bs = iris_py(bs_param,hub_id);
+    else
+        node_bs = iris_py(bs_param,[]);        % initialize BS
+    end
+    node_ue1 = iris_py(ue_param(1),[]);    % initialize UE
+    
     if n_ue  >1
         node_ue2 = iris_py(ue_param(2)); 
     end
-    trig = 1;
 
     node_ue1.sdr_txgainctrl();
     if n_ue  >1
-        node_ue2.sdr_txgainctrl();
+        node_ue2.sdr_txgainctrl();      % gain control
     end
     
-    node_bs.sdrsync(1);
+    node_bs.sdrsync(1);                 % synchronize delays only for BS
     
     node_ue1.sdrsync(0);
     if n_ue  >1
         node_ue2.sdrsync(0);
     end
-    node_ue1.sdrrxsetup();
+    node_ue1.sdrrxsetup();             % set up reading stream
     if n_ue  >1
         node_ue2.sdrrxsetup();
     end
     node_bs.sdrrxsetup();
     
     chained_mode = 0;
-    node_bs.set_config(chained_mode,1);
+    node_bs.set_config(chained_mode,1); % configure the BS: schedule etc.
    
     node_ue1.set_config(chained_mode,0);
     if n_ue  >1
         node_ue2.set_config(chained_mode,0);
     end
 
-    node_bs.sdr_txbeacon(N_ZPAD_PRE);
+    node_bs.sdr_txbeacon(N_ZPAD_PRE);   % Burn beacon to the BS(1) RAM
     
-    node_ue1.sdrtx(tx_data(:,1));
+    node_ue1.sdrtx(tx_data(:,1));       % Burn data to the UE RAM
     if n_ue  >1
         node_ue2.sdrtx(tx_data(:,2));
     end
-    node_bs.sdr_activate_rx();
+    node_bs.sdr_activate_rx();          % activate reading stream
 
-    node_ue1.sdr_setcorr()
+    node_ue1.sdr_setcorr()              % activate correlator
     if n_ue  >1
         node_ue2.sdr_setcorr()
     end
-    node_bs.sdrtrigger(trig);
+    %node_bs.sdrtrigger(trig);           % set trigger to start the frame  
     
     % Iris Rx 
     % Only UL data:
 
-    [y, data0_len] = node_bs.sdrrx(n_samp);
+    [y, data0_len] = node_bs.sdrrx(n_samp); % read data
 
-    node_bs.sdr_close();
+    node_bs.sdr_close();                % close streams and exit gracefully.
     node_ue1.sdr_close();
     if n_ue  >1
         node_ue2.sdr_close();
@@ -254,11 +258,10 @@ elseif chan_type == "iris"
 
 elseif chan_type == "past_run"
     % Past data
-    old_data = load(past_data_fname);
-    y = old_data.rx_vec_old_data;
+    old_data = load('old_data/mimo_60_145_try_5.mat');
+    y = old_data.rx_vec_iris;
 else 
     y = Nan;
     fprintf("No valid channel type was given!");
 end
-%license('inuse')
 end

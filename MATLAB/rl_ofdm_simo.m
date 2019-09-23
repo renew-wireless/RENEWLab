@@ -22,8 +22,9 @@ end
 % Params:
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
-SIM_MOD                 = 1;    
-
+SIM_MOD                 = 0;    
+N_BS_NODE = 16;
+N_UE = 1;
 
 if SIM_MOD
     chan_type               = "awgn";
@@ -36,28 +37,27 @@ if SIM_MOD
 else
     nt                      = 1;
     nsnr                    = 1;
-    TX_SCALE                =  0.5;         % Scale for Tx waveform ([0:1])
-
+    TX_SCALE                = 0.5;         % Scale for Tx waveform ([0:1])
     chan_type               = "iris";
+
+    
+    %Iris params:
+    USE_HUB                 = 1;
+    TX_FRQ                  = 2.5e9;    
+    RX_FRQ                  = TX_FRQ;
+    TX_GN                   = 40;
+    RX_GN                   = 20;
+    SMPL_RT                 = 5e6;  
+    N_FRM                   = 10;
+    b_ids = string.empty();
+    b_scheds = string.empty();
+    ue_ids = string.empty();
+    ue_scheds = string.empty();
+    
 end
 ber_SIM = zeros(nt,nsnr);           % BER
 berr_th = zeros(nsnr,1);            % Theoretical BER
 fprintf("Channel type: %s \n",chan_type);
-
-%Iris params:
-N_BS_NODE = 2;
-N_UE = 1;
-TX_FRQ                  = 2.5e9;
-RX_FRQ                  = TX_FRQ;
-TX_GN                   = 40;
-RX_GN                   = 20;
-SMPL_RT                 = 5e6;
-
-
-b_ids = string.empty();
-b_scheds = string.empty();
-ue_ids = string.empty();
-ue_scheds = string.empty();
 
 
 % Waveform params
@@ -78,7 +78,6 @@ N_ZPAD_POST             = N_ZPAD_PRE -14;                         % Zero-padding
 
 % Rx processing params
 FFT_OFFSET                    = 16;          % Number of CP samples to use in FFT (on average)
-LTS_CORR_THRESH               = 0.6;         % Normalized threshold for LTS correlation
 DO_APPLY_PHASE_ERR_CORRECTION = 1;           % Enable Residual CFO estimation/correction
 
 %% Define the preamble
@@ -137,7 +136,6 @@ for isnr = 1:nsnr
 if (SIM_MOD)        
     rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db(isnr));
     rx_vec_iris = rx_vec_iris.'; % just to agree with what the hardware spits out.
-    SAMP_FREQ = SMPL_RT;
     
 else
 
@@ -146,10 +144,35 @@ else
 % Set up the Iris experiment
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    % Create a two Iris node objects:
-    b_ids = ["0339", "0268"];
-    ue_ids= "RF3C000045";
-
+    % Create BS Hub and UE objects. Note: BS object is a collection of Iris
+    % nodes.
+    
+    if USE_HUB
+        % Using chains of different size requires some internal
+        % calibration on the BS. This functionality will be added later.
+        % For now, we use only the 4-node chains:
+        
+%         b_ids = ["RF3E000134", "RF3E000191", "RF3E000171", "RF3E000105",...
+%             "RF3E000053", "RF3E000177", "RF3E000192", "RF3E000117",...
+%             "RF3E000183", "RF3E000152", "RF3E000123", "RF3E000178", "RF3E000113", "RF3E000176", "RF3E000132", "RF3E000108", ...
+%             "RF3E000143", "RF3E000160", "RF3E000025", "RF3E000034",...
+%             "RF3E000189", "RF3E000024", "RF3E000139", "RF3E000032", "RF3E000154", "RF3E000182", "RF3E000038", "RF3E000137", ...
+%             "RF3E000103", "RF3E000180", "RF3E000181", "RF3E000188"];
+        % IDs of the 4-node chains:
+        b_ids = ["RF3E000134", "RF3E000191", "RF3E000171", "RF3E000105",...
+            "RF3E000053", "RF3E000177", "RF3E000192", "RF3E000117",...
+            "RF3E000143", "RF3E000160", "RF3E000025", "RF3E000034",...
+            "RF3E000103", "RF3E000180", "RF3E000181", "RF3E000188"];
+        
+        hub_id = "FH4A000001";
+        
+    else
+        b_ids = ["RF3E000189", "RF3E000024", "RF3E000139", "RF3E000032", "RF3E000154", "RF3E000182", "RF3E000038", "RF3E000137"];
+    end
+    
+    ue_ids= "RF3E000060";
+    
+    
     b_prim_sched = "PGGGGGRG";           % BS primary noede's schedule: Send Beacon only from one Iris board
     b_sec_sched = "GGGGGGRG"; 
     ue_sched = "GGGGGGPG";               % UE schedule
@@ -176,6 +199,7 @@ else
         'rxgain', RX_GN, ...
         'sample_rate', SMPL_RT, ...
         'n_samp', n_samp, ...          % number of samples per frame time.
+        'n_frame', N_FRM, ...
         'tdd_sched', b_scheds, ...     % number of zero-paddes samples
         'n_zpad_samp', (N_ZPAD_PRE + N_ZPAD_POST) ...
         );
@@ -186,14 +210,12 @@ else
     sdr_params(2).txfreq = TX_FRQ;
     sdr_params(2).rxfreq = RX_FRQ;   
     sdr_params(2).tdd_sched = ue_scheds(1);
-   
-    % Iris nodes objects
-    node_bs = iris_py(sdr_params(1));
-    node_ue = iris_py(sdr_params(2));
-    SAMP_FREQ = sdr_params(1).sample_rate;
     
-    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, "iris", [], sdr_params(1), sdr_params(2));
-
+    if USE_HUB
+        rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, [], sdr_params(1), sdr_params(2), hub_id);
+    else
+        rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, [], sdr_params(1), sdr_params(2), []);
+    end
 end
 rx_vec_iris = rx_vec_iris.';
 l_rx_dec=length(rx_vec_iris);
@@ -213,7 +235,6 @@ lts_corr = sum(m_filt,2);
 [rho_max, ipos] = max(lts_corr);
 
 % Find all correlation peaks
-lts_peaks = find(lts_corr(1:800) > LTS_CORR_THRESH*max(lts_corr));
 payload_ind = ipos +1;
 lts_ind = payload_ind - N_LTS_SYM*(N_SC + CP_LEN);
 
@@ -221,6 +242,8 @@ lts_ind = payload_ind - N_LTS_SYM*(N_SC + CP_LEN);
 rx_lts = rx_vec_iris(lts_ind : lts_ind+159,:);
 rx_lts_idx1 = -64+-FFT_OFFSET + (97:160);
 rx_lts_idx2 = -FFT_OFFSET + (97:160);
+% Just for two first brnaches: useful when 1x2 SIMO, to show the
+% improvement:
 rx_lts_b1 = [rx_lts(rx_lts_idx1,1)  rx_lts(rx_lts_idx2,1)];
 rx_lts_b2 = [rx_lts(rx_lts_idx1,2)  rx_lts(rx_lts_idx2,2)];
 
@@ -228,7 +251,7 @@ rx_lts_b2 = [rx_lts(rx_lts_idx1,2)  rx_lts(rx_lts_idx2,2)];
 rx_lts_b1_f = fft(rx_lts_b1);
 rx_lts_b2_f = fft(rx_lts_b2);
 
-% Channel Estimates of each branch 
+% Channel Estimates of two branches separately:  
 H0_b1 = rx_lts_b1_f ./ repmat(lts_f',1,N_LTS_SYM);
 H0_b2 = rx_lts_b2_f ./ repmat(lts_f',1,N_LTS_SYM);
 H_b1 = mean(H0_b1,2); 
@@ -236,7 +259,20 @@ H_b2 = mean(H0_b2,2);
 idx_0 = find(lts_f == 0);
 H_b1(idx_0,:) = 0;
 H_b2(idx_0,:) = 0;
-rx_H_est_2d = [H_b1 H_b2];
+
+% Channel Estimate of multiple branches:
+H_0_t = zeros(N_SC, N_LTS_SYM, N_BS_NODE);
+% Take N_SC samples from each rx_lts (we have sent two LTS)
+rx_lts_nsc = [rx_lts(rx_lts_idx1,:); rx_lts(rx_lts_idx2,:)];
+for ibs = 1:N_BS_NODE
+    H_0_t(:,:,ibs) = reshape(rx_lts_nsc(:,ibs),[],N_LTS_SYM);
+end
+H_0_f = fft(H_0_t, N_SC, 1);
+H_0 =  H_0_f./ repmat(lts_f.',1,N_LTS_SYM,N_BS_NODE);
+
+rx_H_est_2d = squeeze(mean(H_0,2));
+rx_H_est_2d(idx_0,:) = 0;
+%rx_H_est_2d = [H_b1 H_b2];
 
 %% Rx payload processing
 % Extract the payload samples (integer number of OFDM symbols following preamble)
@@ -268,6 +304,7 @@ syms_f_mat_2 = syms_f_mat_mrc(:,:,2);
 rx_H_est = reshape(rx_H_est_2d,N_SC,1,N_BS_NODE);       % Expand to a 3rd dimension to agree with the dimensions od syms_f_mat
 H_pow = sum(abs(conj(rx_H_est_2d).*rx_H_est_2d),2);
 H_pow = repmat(H_pow,1,N_OFDM_SYM);
+
 % Do yourselves: MRC equalization:
 syms_eq_mat_mrc =  sum( (repmat(conj(rx_H_est), 1, N_OFDM_SYM,1).* syms_f_mat_mrc), 3)./H_pow; % MRC equalization: combine The two branches and equalize. 
 
@@ -405,7 +442,7 @@ if(WRITE_PNG_FILES)
     print(gcf,sprintf('wl_ofdm_plots_%s_txIQ', example_mode_string), '-dpng', '-r96', '-painters')
 end
 
-% Rx signal
+% Rx signal (only two branches)
 cf = cf + 1;
 figure(cf);
 subplot(2,2,1);
@@ -454,7 +491,7 @@ end
 
 % Channel Estimates (MRC)
 cf = cf + 1;
-
+figure(cf); clf;
 rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
 rx_H_est_plot(SC_IND_DATA) = rx_H_est(SC_IND_DATA);
 rx_H_est_plot(SC_IND_PILOTS) = rx_H_est(SC_IND_PILOTS);
@@ -471,7 +508,7 @@ if(WRITE_PNG_FILES)
     print(gcf,sprintf('wl_ofdm_plots_%s_chanEst', example_mode_string), '-dpng', '-r96', '-painters')
 end
 
-%% Symbol constellation
+% Symbol constellation
 cf = cf + 1;
 figure(cf); clf;
 
@@ -519,7 +556,7 @@ if(WRITE_PNG_FILES)
 end
 
 
-% EVM & SNR
+%EVM & SNR
 cf = cf + 1;
 figure(cf); clf;
 
@@ -650,7 +687,7 @@ if(WRITE_PNG_FILES)
     print(gcf,sprintf('wl_ofdm_plots_%s_evm', example_mode_string), '-dpng', '-r96', '-painters')
 end
 
-%% BER SIM MOD
+% BER SIM MOD
 if SIM_MOD
     
     cf = cf+1;
@@ -669,7 +706,7 @@ if SIM_MOD
     title('Bit Error rate vs SNR');
 end
 
-%% Calculate Rx stats
+% Calculate Rx stats
 
 sym_errs = sum(tx_data ~= rx_data_mrc);
 bit_errs = length(find(dec2bin(bitxor(tx_data, rx_data_mrc),8) == '1'));

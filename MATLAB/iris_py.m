@@ -18,13 +18,14 @@ classdef iris_py < handle
         sdr_params;
         % pyhton object array. This array decribes 1 Iris board or 
         % a collection of Iris boards that belong to the same entity.E.g., a BS.
-        py_obj_array = {};       
-        
+        py_obj_array = {};
+        use_hub = 0;
+        py_obj_hub;
         % Parameters to feed python (pun very intended!)
         serial_ids;
-        n_chain;        % number of Iris boards in a chain
+        n_chain;         % number of Iris boards in a chain
 		sample_rate;
-		tx_freq;
+		tx_freq;q
 		rx_freq;
 		bw;
 		tx_gain;
@@ -32,12 +33,20 @@ classdef iris_py < handle
 		n_samp;
         tdd_sched;
         n_zpad_samp;    %number of zero-padding samples
+        n_frame = 10;
         
     end
     
     methods
-        function obj = iris_py(sdr_params)
+        function obj = iris_py(sdr_params, hub_id) % User must put 0 in hub_params in case hub is not used!
             if nargin > 0
+                if ~isempty(hub_id) 
+                    disp('Using hub with ID:');
+                    id_str = convertStringsToChars(hub_id)
+                    obj.py_obj_hub = py.hub_py.Hub_py( pyargs('serial_id',id_str));
+                    obj.use_hub = 1;
+                end
+                
                 obj.sdr_params = sdr_params;
                 
                 obj.serial_ids = sdr_params.id; 
@@ -48,6 +57,7 @@ classdef iris_py < handle
                 obj.tx_gain = sdr_params.txgain;
                 obj.rx_gain = sdr_params.rxgain;
                 obj.n_samp = sdr_params.n_samp;
+                obj.n_frame = sdr_params.n_frame;
                 obj.tdd_sched = sdr_params.tdd_sched; % This is an array
                 obj.n_zpad_samp = sdr_params.n_zpad_samp;
                 
@@ -57,20 +67,30 @@ classdef iris_py < handle
                         'tx_freq', obj.tx_freq, 'rx_freq', obj.rx_freq,...
                         'tx_gain',obj.tx_gain,'rx_gain',obj.rx_gain,...
                         'sample_rate',obj.sample_rate, 'n_samp',...
-                        obj.n_samp,'n_zpad_samp',obj.n_zpad_samp) ); 
+                        obj.n_samp,'n_zpad_samp',obj.n_zpad_samp) );%,...
+                        %'max_frames',obj.n_frame) ); 
                     
                     obj.py_obj_array(ipy,:) = {py_obj};
                 end
             end
         end
+        
         % NB: Need to redefine py_obj as array to be parsed in all the
         % functions that follow
         function sdrtrigger(obj, trig)
+            if ~obj.use_hub
             obj.py_obj_array{1}.set_trigger(pyargs('trig',trig)); % The trigger is set only on the fist node
+            else
+                obj.py_obj_hub.set_trigger(pyargs('trig',trig));
+            end
         end
         
          function sdrsync(obj, is_bs)
-            obj.py_obj_array{1}.sync_delays(pyargs('is_bs', is_bs)); 
+            if ~obj.use_hub
+                obj.py_obj_array{1}.sync_delays(pyargs('is_bs', is_bs));
+            else
+                obj.py_obj_hub.sync_delays();
+            end
          end
          
          function sdr_setcorr(obj)
@@ -127,14 +147,27 @@ classdef iris_py < handle
             end
         end
         
-        % Read n_samp data
+        % Read n_frame x n_samp data
         function [data, len] = sdrrx(obj, n_samp)
-            data = zeros(obj.n_chain, n_samp);
-            for ipy = 1:obj.n_chain
-                rcv_data = obj.py_obj_array{ipy}.recv_stream_tdd();
-                data(ipy,:) = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(rcv_data) ) ) ) + ...
-                    1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(rcv_data) ) ) );
+            data_raw = zeros(obj.n_chain, obj.n_frame*n_samp);  % Change this to max frame!
+            
+            for jf=1:obj.n_frame
+                %trigger beacon TX
+                trig = 1;
+                if ~obj.use_hub
+                    obj.py_obj_array{1}.set_trigger(pyargs('trig',trig)); % The trigger is set only on the fist node
+                else
+                    obj.py_obj_hub.set_trigger(pyargs('trig',trig));
+                    disp('trig hub!!!!')
+                end
+                
+                for ipy = 1:obj.n_chain
+                    rcv_data = obj.py_obj_array{ipy}.recv_stream_tdd();
+                    data_raw(ipy, (jf-1)*n_samp + 1: jf*n_samp) = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(rcv_data) ) ) ) + ...
+                        1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(rcv_data) ) ) );
+                end
             end
+            data = obj.get_best_frame(data_raw.', n_samp);
             len = length(data);
         end
         
@@ -144,6 +177,60 @@ classdef iris_py < handle
                 obj.py_obj_array{ipy}.close();
                 delete(obj.py_obj_array{ipy});
             end
+        end
+        
+        function [data] = get_best_frame(obj, data_frame, n_samp)
+            % FD LTS
+            lts_f = [0 1 -1 -1 1 1 -1 1 -1 1 -1 -1 -1 -1 -1 1 1 -1 ...
+                -1 1 -1 1 -1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 1 1 -1 -1 ...
+                1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1].';
+            % TD LTS
+            lts_t = ifft(lts_f, 64);
+            % Add CP and a second TD LTS
+            lts_cp = lts_t(33:end);
+            lts_t = [lts_cp; lts_t; lts_t];
+            
+            % Correlation through filtering
+            lts_corr_dr = zeros(size(data_frame));
+            unos = ones(size(lts_t));
+            a = 1;
+            for nc =1:size(data_frame,2)
+                v0 = filter(flipud(conj(lts_t)),a,data_frame(:,nc));
+                v1 = filter(unos,a,abs(data_frame(:,nc)).^2);
+                lts_corr_dr(:,nc) = (abs(v0).^2)./v1; % normalized correlation
+            end
+            % Sum accross antennas
+            lts_corr_sum = sum(lts_corr_dr,2);
+            % zero non-peaks:
+            lts_corr_sum(lts_corr_sum < 0.2) = 0.001;
+            
+            % Assume peak in the first 500 samples
+            lts_corr_frm = reshape(lts_corr_sum, [], obj.n_frame);
+            
+            if obj.n_chain == 1 && length(lts_corr_frm >= 300)
+                lts_corr_frm = lts_corr_frm(1:300,:);
+            elseif (obj.n_chain > 1) && length(lts_corr_frm >= 420)
+                lts_corr_frm = lts_corr_frm(1:420,:);
+            end
+            save my_data.mat lts_corr_dr lts_corr_frm
+            
+            % Avg corr value per frame
+            frm_avg_corr = sum(lts_corr_frm,1)./obj.n_chain
+            % Take index of maximum corr. value
+            [max_corr, m_idx] = max(frm_avg_corr);
+           
+            % Reshape data frame to n_samp-by-n_antenna-by-n_frame
+            data_split  = zeros(obj.n_samp, obj.n_chain,obj.n_frame);
+            for nf = 1:obj.n_frame
+                strt_idx = (nf-1)*obj.n_samp +1;
+                end_idx = nf*obj.n_samp;
+                data_split(:,:,nf) = data_frame(strt_idx :end_idx ,:);
+            end
+            %data_frame = reshape(data_frame,n_samp, [], obj.n_frame );        
+    
+            % Return the frame with the highest value 
+            data = data_split(:,:,m_idx).';
+            fprintf('Returning frame number %d with max mean correlation = %f \n',m_idx,max_corr);
         end
         
     end
