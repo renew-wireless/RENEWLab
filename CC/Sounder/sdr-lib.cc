@@ -18,6 +18,15 @@
 namespace plt = matplotlibcpp;
 
 static void
+reset_DATA_clk_domain(SoapySDR::Device* dev)
+{
+    // What does 29 mean?
+    dev->writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 1);
+    dev->writeRegister("IRIS30", RF_RST_REG, (1 << 29));
+    dev->writeRegister("IRIS30", RF_RST_REG, 0);
+}
+
+static void
 dev_init(SoapySDR::Device* dev, Config* _cfg, int ch)
 {
     dev->setBandwidth(SOAPY_SDR_RX, ch, (1 + 2 * _cfg->bbf_ratio) * _cfg->rate);
@@ -159,10 +168,7 @@ RadioConfig::RadioConfig(Config* cfg)
                 dev->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
             }
 
-            dev->writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 1);
-            dev->writeRegister("IRIS30", RF_RST_REG, (1 << 29));
-            dev->writeRegister("IRIS30", RF_RST_REG, 0);
-
+            reset_DATA_clk_domain(dev);
             radios[i].rxs = dev->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CF32, channels);
             radios[i].txs = dev->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CF32, channels);
         }
@@ -266,10 +272,7 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
         dev->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
     }
 
-    // resets the DATA_clk domain logic.
-    dev->writeRegister("IRIS30", 48, (1 << 29) | 0x1);
-    dev->writeRegister("IRIS30", 48, (1 << 29));
-    dev->writeRegister("IRIS30", 48, 0);
+    reset_DATA_clk_domain(dev);
     bsRadio->rxs = dev->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CS16, channels, sargs);
     bsRadio->txs = dev->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CS16, channels, sargs);
     remainingJobs--;
@@ -504,25 +507,21 @@ void RadioConfig::radioStop()
                 }
             }
             dev->writeSetting("TDD_MODE", "false");
-            dev->writeRegister("IRIS30", 48, (1 << 29) | 0x1);
-            dev->writeRegister("IRIS30", 48, (1 << 29));
-            dev->writeRegister("IRIS30", 48, 0);
+            reset_DATA_clk_domain(dev);
         }
     }
     if (_cfg->clPresent) {
         for (size_t i = 0; i < radios.size(); i++) {
-            auto device = radios[i].dev;
-            device->writeRegister("IRIS30", CORR_CONF, 0);
-            std::cout << "device " << i << " T=" << std::hex << SoapySDR::timeNsToTicks(device->getHardwareTime(""), _cfg->rate) << std::dec << std::endl;
+            auto dev = radios[i].dev;
+            dev->writeRegister("IRIS30", CORR_CONF, 0);
+            std::cout << "device " << i << " T=" << std::hex << SoapySDR::timeNsToTicks(dev->getHardwareTime(""), _cfg->rate) << std::dec << std::endl;
             for (int i = 0; i < _cfg->symbolsPerFrame; i++) {
-                device->writeRegister("RFCORE", SCH_ADDR_REG, i);
-                device->writeRegister("RFCORE", SCH_MODE_REG, 0);
+                dev->writeRegister("RFCORE", SCH_ADDR_REG, i);
+                dev->writeRegister("RFCORE", SCH_MODE_REG, 0);
             }
-            device->writeSetting("TDD_MODE", "false");
-            device->writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 1);
-            device->writeRegister("IRIS30", RF_RST_REG, (1 << 29));
-            device->writeRegister("IRIS30", RF_RST_REG, 0);
-            //SoapySDR::Device::unmake(device);
+            dev->writeSetting("TDD_MODE", "false");
+            reset_DATA_clk_domain(dev);
+            //SoapySDR::Device::unmake(dev);
         }
     }
 }
