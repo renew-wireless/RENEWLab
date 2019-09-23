@@ -59,12 +59,12 @@ Config::Config(const std::string& jsonfile)
         bsSdrCh = (bsChannel == "AB") ? 2 : 1;
         auto jBsFrames = tddConf.value("frame_schedule", json::array());
         frames.assign(jBsFrames.begin(), jBsFrames.end());
-        txgainA = tddConf.value("txgainA", 20);
-        rxgainA = tddConf.value("rxgainA", 20);
-        txgainB = tddConf.value("txgainB", 20);
-        rxgainB = tddConf.value("rxgainB", 20);
-        calTxGainA = tddConf.value("calTxGainA", 10);
-        calTxGainB = tddConf.value("calTxGainB", 10);
+        txgain[0] = tddConf.value("txgainA", 20);
+        rxgain[0] = tddConf.value("rxgainA", 20);
+        txgain[1] = tddConf.value("txgainB", 20);
+        rxgain[1] = tddConf.value("rxgainB", 20);
+        calTxGain[0] = tddConf.value("calTxGainA", 10);
+        calTxGain[1] = tddConf.value("calTxGainB", 10);
         sampleCalEn = tddConf.value("sample_calibrate", false);
         beamsweep = tddConf.value("beamsweep", false);
         beacon_ant = tddConf.value("beacon_antenna", 0);
@@ -130,13 +130,13 @@ Config::Config(const std::string& jsonfile)
         frame_mode = tddConfCl.value("frame_mode", "continuous_resync");
 
         auto jClTxgainA_vec = tddConfCl.value("txgainA", json::array());
-        clTxgainA_vec.assign(jClTxgainA_vec.begin(), jClTxgainA_vec.end());
+        clTxgain_vec[0].assign(jClTxgainA_vec.begin(), jClTxgainA_vec.end());
         auto jClRxgainA_vec = tddConfCl.value("rxgainA", json::array());
-        clRxgainA_vec.assign(jClRxgainA_vec.begin(), jClRxgainA_vec.end());
+        clRxgain_vec[0].assign(jClRxgainA_vec.begin(), jClRxgainA_vec.end());
         auto jClTxgainB_vec = tddConfCl.value("txgainB", json::array());
-        clTxgainB_vec.assign(jClTxgainB_vec.begin(), jClTxgainB_vec.end());
+        clTxgain_vec[1].assign(jClTxgainB_vec.begin(), jClTxgainB_vec.end());
         auto jClRxgainB_vec = tddConfCl.value("rxgainB", json::array());
-        clRxgainB_vec.assign(jClRxgainB_vec.begin(), jClRxgainB_vec.end());
+        clRxgain_vec[1].assign(jClRxgainB_vec.begin(), jClRxgainB_vec.end());
 
         auto jClFrames = tddConfCl.value("frame_schedule", json::array());
         assert(jClSdrs.size() == jClFrames.size());

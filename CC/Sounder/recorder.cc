@@ -240,16 +240,16 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         write_attribute(mainGroup, "BS_FRAME_SCHED", cfg->frames);
 
         // RX Gain RF channel A
-        write_attribute(mainGroup, "BS_RX_GAIN_A", cfg->rxgainA);
+        write_attribute(mainGroup, "BS_RX_GAIN_A", cfg->rxgain[0]);
 
         // TX Gain RF channel A
-        write_attribute(mainGroup, "BS_TX_GAIN_A", cfg->txgainA);
+        write_attribute(mainGroup, "BS_TX_GAIN_A", cfg->txgain[0]);
 
         // RX Gain RF channel B
-        write_attribute(mainGroup, "BS_RX_GAIN_B", cfg->rxgainB);
+        write_attribute(mainGroup, "BS_RX_GAIN_B", cfg->rxgain[1]);
 
         // TX Gain RF channel B
-        write_attribute(mainGroup, "BS_TX_GAIN_B", cfg->txgainB);
+        write_attribute(mainGroup, "BS_TX_GAIN_B", cfg->txgain[1]);
 
         // Beamsweep (true or false)
         write_attribute(mainGroup, "BS_BEAMSWEEP", cfg->beamsweep ? 1 : 0);
@@ -304,16 +304,16 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         write_attribute(mainGroup, "CL_AGC_EN", cfg->clAgcEn ? 1 : 0);
 
         // RX Gain RF channel A
-        write_attribute(mainGroup, "CL_RX_GAIN_A", cfg->clRxgainA_vec);
+        write_attribute(mainGroup, "CL_RX_GAIN_A", cfg->clRxgain_vec[0]);
 
         // TX Gain RF channel A
-        write_attribute(mainGroup, "CL_TX_GAIN_A", cfg->clTxgainA_vec);
+        write_attribute(mainGroup, "CL_TX_GAIN_A", cfg->clTxgain_vec[0]);
 
         // RX Gain RF channel B
-        write_attribute(mainGroup, "CL_RX_GAIN_B", cfg->clRxgainB_vec);
+        write_attribute(mainGroup, "CL_RX_GAIN_B", cfg->clRxgain_vec[1]);
 
         // TX Gain RF channel B
-        write_attribute(mainGroup, "CL_TX_GAIN_B", cfg->clTxgainB_vec);
+        write_attribute(mainGroup, "CL_TX_GAIN_B", cfg->clTxgain_vec[1]);
 
         // Client frame schedule (vec of strings)
         write_attribute(mainGroup, "CL_FRAME_SCHED", cfg->clFrames);
