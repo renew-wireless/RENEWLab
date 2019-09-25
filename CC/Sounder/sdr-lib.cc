@@ -113,7 +113,7 @@ RadioConfig::RadioConfig(Config* cfg)
     if (_cfg->clPresent) {
         //load channels
         std::vector<size_t> channels;
-        if (_cfg->clChannel == "A")
+        if (_cfg->bsChannel == "A")
             channels = { 0 };
         else if (cfg->bsChannel == "B") {
             channels = { 1 };
