@@ -56,7 +56,6 @@ Config::Config(const std::string& jsonfile)
         bsChannel = tddConf.value("channel", "A");
         if (bsChannel != "A" && bsChannel != "B" && bsChannel != "AB")
             throw std::invalid_argument("error channel config: not any of A/B/AB!\n");
-        bsSdrCh = (bsChannel == "AB") ? 2 : 1;
         auto jBsFrames = tddConf.value("frame_schedule", json::array());
         frames.assign(jBsFrames.begin(), jBsFrames.end());
         txgain[0] = tddConf.value("txgainA", 20);
@@ -76,7 +75,7 @@ Config::Config(const std::string& jsonfile)
         for (size_t i = 0; i < nCells; i++) {
             Utils::loadDevices(bs_sdr_file[i], bs_sdr_ids[i]);
             nBsSdrs[i] = bs_sdr_ids[i].size();
-            nBsAntennas[i] = bsSdrCh * nBsSdrs[i];
+            nBsAntennas[i] = bsChannel.length() * nBsSdrs[i];
         }
         Utils::loadDevices(hub_file, hub_ids);
         symbolsPerFrame = frames.at(0).size();
@@ -343,7 +342,7 @@ size_t Config::getNumAntennas()
 {
     if (!bsPresent)
         return 1;
-    return nBsSdrs[0] * bsSdrCh;
+    return nBsSdrs[0] * bsChannel.length();
 }
 
 Config::~Config() {}

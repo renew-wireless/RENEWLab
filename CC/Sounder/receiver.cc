@@ -130,7 +130,7 @@ void Receiver::loopRecv(ReceiverContext* context)
     // use token to speed up
     moodycamel::ProducerToken local_ptok(*message_queue_);
 
-    const int bsSdrCh = config_->bsSdrCh;
+    const int bsSdrCh = config_->bsChannel.length();
     int buffer_frame_num = rx_buffer[0].pkg_buf_inuse.size();
 
     // handle two channels at each radio
