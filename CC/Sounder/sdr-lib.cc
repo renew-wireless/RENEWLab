@@ -327,45 +327,44 @@ void RadioConfig::radioConfigure()
             dev->writeSetting("TDD_MODE", "true");
             dev->writeSetting("TDD_CONFIG", confString);
             // write beacons to FPGA buffers
-            {
-                if (!_cfg->beamsweep or nBsAntennas[0] == 1) {
-                    if (i * _cfg->bsSdrCh == _cfg->beacon_ant && _cfg->bsChannel == "A")
-                        dev->writeRegisters("TX_RAM_A", 0, _cfg->beacon);
-                    else if ((i * _cfg->bsSdrCh == _cfg->beacon_ant && _cfg->bsChannel == "B")
-                        || (_cfg->bsSdrCh == 2 and i * 2u + 1 == _cfg->beacon_ant))
-                        dev->writeRegisters("TX_RAM_B", 0, _cfg->beacon);
-                    else {
-                        std::vector<unsigned> zeros(_cfg->sampsPerSymbol, 0);
-                        dev->writeRegisters("TX_RAM_A", 0, zeros);
-                        dev->writeRegisters("TX_RAM_B", 0, zeros);
-                    }
-                    dev->writeRegister("RFCORE", 156, 0);
-                } else // beamsweep
-                {
-                    std::vector<unsigned> beacon_weights(nBsAntennas[0]);
-                    int hadamardLog = 8 * sizeof(nBsAntennas[0]) - __builtin_clz(nBsAntennas[0] - 1);
-                    int hadamardSize = 1 << hadamardLog;
-                    std::vector<std::vector<double>> hadamard_weights = CommsLib::getSequence(hadamardSize, CommsLib::HADAMARD);
-                    if (_cfg->bsChannel != "B")
-                        dev->writeRegisters("TX_RAM_A", 0, _cfg->beacon);
-                    if (_cfg->bsChannel != "A")
-                        dev->writeRegisters("TX_RAM_B", 0, _cfg->beacon);
-                    //int residue = hadamardSize - nBsAntennas[0];
-                    for (int j = 0; j < nBsAntennas[0]; j++)
-                        beacon_weights[j] = (unsigned)hadamard_weights[i * _cfg->bsSdrCh][j];
-                    if (_cfg->bsChannel != "B")
-                        dev->writeRegisters("TX_RAM_WGT_A", 0, beacon_weights);
-                    if (_cfg->bsChannel == "B")
-                        dev->writeRegisters("TX_RAM_WGT_B", 0, beacon_weights);
-                    if (_cfg->bsSdrCh == 2) {
-                        for (int j = 0; j < nBsAntennas[0]; j++)
-                            beacon_weights[j] = (unsigned)hadamard_weights[i * _cfg->bsSdrCh + 1][j];
-                        dev->writeRegisters("TX_RAM_WGT_B", 0, beacon_weights);
-                    }
-                    dev->writeRegister("RFCORE", 156, bsRadios[0].size());
-                    dev->writeRegister("RFCORE", 160, 1);
+
+            if (!_cfg->beamsweep or nBsAntennas[0] == 1) {
+                if (i * _cfg->bsSdrCh == _cfg->beacon_ant && _cfg->bsChannel == "A")
+                    dev->writeRegisters("TX_RAM_A", 0, _cfg->beacon);
+                else if ((i * _cfg->bsSdrCh == _cfg->beacon_ant && _cfg->bsChannel == "B")
+                    || (_cfg->bsSdrCh == 2 and i * 2u + 1 == _cfg->beacon_ant))
+                    dev->writeRegisters("TX_RAM_B", 0, _cfg->beacon);
+                else {
+                    std::vector<unsigned> zeros(_cfg->sampsPerSymbol, 0);
+                    dev->writeRegisters("TX_RAM_A", 0, zeros);
+                    dev->writeRegisters("TX_RAM_B", 0, zeros);
                 }
+                dev->writeRegister("RFCORE", 156, 0);
+            } else { // beamsweep
+                std::vector<unsigned> beacon_weights(nBsAntennas[0]);
+                int hadamardLog = 8 * sizeof(nBsAntennas[0]) - __builtin_clz(nBsAntennas[0] - 1);
+                int hadamardSize = 1 << hadamardLog;
+                std::vector<std::vector<double>> hadamard_weights = CommsLib::getSequence(hadamardSize, CommsLib::HADAMARD);
+                if (_cfg->bsChannel != "B")
+                    dev->writeRegisters("TX_RAM_A", 0, _cfg->beacon);
+                if (_cfg->bsChannel != "A")
+                    dev->writeRegisters("TX_RAM_B", 0, _cfg->beacon);
+                //int residue = hadamardSize - nBsAntennas[0];
+                for (int j = 0; j < nBsAntennas[0]; j++)
+                    beacon_weights[j] = (unsigned)hadamard_weights[i * _cfg->bsSdrCh][j];
+                if (_cfg->bsChannel != "B")
+                    dev->writeRegisters("TX_RAM_WGT_A", 0, beacon_weights);
+                if (_cfg->bsChannel == "B")
+                    dev->writeRegisters("TX_RAM_WGT_B", 0, beacon_weights);
+                if (_cfg->bsSdrCh == 2) {
+                    for (int j = 0; j < nBsAntennas[0]; j++)
+                        beacon_weights[j] = (unsigned)hadamard_weights[i * _cfg->bsSdrCh + 1][j];
+                    dev->writeRegisters("TX_RAM_WGT_B", 0, beacon_weights);
+                }
+                dev->writeRegister("RFCORE", 156, bsRadios[0].size());
+                dev->writeRegister("RFCORE", 160, 1);
             }
+
             dev->activateStream(bsRadios[0][i].rxs, flags, 0);
             dev->activateStream(bsRadios[0][i].txs);
             dev->setHardwareTime(0, "TRIGGER");
