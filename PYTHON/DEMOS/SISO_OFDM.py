@@ -46,6 +46,7 @@ import logging
 import csv
 import scipy.io as spio
 import pickle
+from macros import *
 from SoapySDR import *              # SOAPY_SDR_ constants
 from optparse import OptionParser
 from matplotlib import animation
@@ -57,6 +58,9 @@ from file_rdwr import *
 from type_conv import *
 from print_sensor import *
 from ofdmtxrx import *
+from init_fncs import *
+
+plt.style.use('ggplot')
 
 
 #########################################
@@ -68,13 +72,6 @@ FIG_LEN = 2**13     # SIM: 2400     # OTA: 2**13
 APPLY_CFO_CORR = 1
 APPLY_SFO_CORR = 1
 APPLY_PHASE_CORR = 1
-
-
-#########################################
-#                Registers              #
-#########################################
-# Reset
-RF_RST_REG = 48
 
 
 #########################################
@@ -174,8 +171,7 @@ def init():
     return line1, line2, line3, line4, line5, line6, line7, line8, line9, line10, line11, line12
 
 
-def animate(i, num_samps_rd, rxStream, sdr, ofdm_params, tx_struct, ota, ofdm_obj):
-
+def animate(i, num_samps_rd, rxStream, sdr, ofdm_params, tx_struct, ota, ofdm_obj, agc_en):
     global FIG_LEN, pkt_count, ax6
 
     pkt_count = pkt_count + 1
@@ -209,13 +205,34 @@ def animate(i, num_samps_rd, rxStream, sdr, ofdm_params, tx_struct, ota, ofdm_ob
 
     if ota:
         # Over-the-air Mode
+        flags = SOAPY_SDR_END_BURST
+        flags |= SOAPY_SDR_WAIT_TRIGGER
         sdr.activateStream(rxStream,
-            SOAPY_SDR_END_BURST,    # flags
+            flags,                  # flags
             0,                      # timeNs (dont care unless using SOAPY_SDR_HAS_TIME)
             buff0.size)             # numElems - this is the burst size
+
+        if agc_en:
+            sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 1)
+            sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 0)
+            sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 1)
+            sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0)
+
+        sdr.writeSetting("TRIGGER_GEN", "")
         sr = sdr.readStream(rxStream, [buff0, buff1], buff0.size)
         if sr.ret != buff0.size:
             print("Read RX burst of %d, requested %d" % (sr.ret, buff0.size))
+
+        # Retrieve RSSI computed in the FPGA
+        rssi_fpga = int(sdr.readRegister("IRIS30", FPGA_IRIS030_RD_MEASURED_RSSI))
+        # RX
+        lna_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA')       # ChanA (0)
+        tia_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'TIA')       # ChanA (0)
+        pga_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'PGA')       # ChanA (0)
+        lna1_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA1')     # ChanA (0)
+        lna2_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA2')     # ChanA (0)
+        attn_rd1 = sdr.getGain(SOAPY_SDR_RX, 0, 'ATTN')    # ChanA (0)
+        print("RSSI: {} \t LNA: {} \t TIA: {} \t PGA: {} \t LNA1: {} \t LNA2: {} \t ATTN1: {}".format(rssi_fpga, lna_rd, tia_rd, pga_rd, lna1_rd, lna2_rd, attn_rd1))
 
     else:
         # Simulation Mode
@@ -348,7 +365,7 @@ def animate(i, num_samps_rd, rxStream, sdr, ofdm_params, tx_struct, ota, ofdm_ob
 
 
 def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, ofdm_params, rx_gains,
-             num_samps_rd, ota, ofdm_obj):
+             num_samps_rd, ota, ofdm_obj, agc_en):
     """
     Setup transmitter, generate TX signal, and write data into RAM for TX
     """
@@ -360,6 +377,13 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
         infoTx = sdrTx.getHardwareInfo()
         sdrRx = SoapySDR.Device(dict(serial=serialRx))
         infoRx = sdrRx.getHardwareInfo()
+
+        if agc_en:
+            if freq > 3e9:
+                rssi_target_idx = 30
+            else:
+                rssi_target_idx = 30
+            agc_init(sdrRx, rssi_target_idx)
 
         # Reset
         sdrRx.writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 0x1)
@@ -376,25 +400,21 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
             txChannel = []
 
         # RF Parameters
-        for c in txChannel:
+        for c in [0, 1]: #txChannel:
             print("Writing settings for channel {}".format(c))
             sdrTx.setBandwidth(SOAPY_SDR_TX, c, rate)
-            sdrTx.setFrequency(SOAPY_SDR_TX, c, freq+bbfreq)
-            #sdrTx.setFrequency(SOAPY_SDR_TX, c, "RF", freq-.75*rate)
-            #sdrTx.setFrequency(SOAPY_SDR_TX, c, "BB", .75*rate)
+            sdrTx.setFrequency(SOAPY_SDR_TX, c, freq + bbfreq)
             sdrTx.setSampleRate(SOAPY_SDR_TX, c, rate)
             #if bbfreq > 0:
             #    sdrTx.setFrequency(SOAPY_SDR_TX, c, "BB", bbfreq)
             if "CBRS" in infoTx["frontend"]:
                 print("set CBRS front-end gains")
-                sdrTx.setGain(SOAPY_SDR_TX, c, 'ATTN', 0)   # {-18,-12,-6,0}
-            sdrTx.setGain(SOAPY_SDR_TX, c, "IAMP", 0)
+                sdrTx.setGain(SOAPY_SDR_TX, c, 'ATTN', -6)   # {-18,-12,-6,0}
             sdrTx.setGain(SOAPY_SDR_TX, c, "PAD", txgain)
+            sdrTx.setGain(SOAPY_SDR_TX, c, "IAMP", -12)
 
             sdrRx.setBandwidth(SOAPY_SDR_RX, c, rate)
             sdrRx.setFrequency(SOAPY_SDR_RX, c, freq)
-            #sdrRx.setFrequency(SOAPY_SDR_RX, c, "RF", freq-.75*rate)
-            #sdrRx.setFrequency(SOAPY_SDR_RX, c, "BB", .75*rate)
             sdrRx.setSampleRate(SOAPY_SDR_RX, c, rate)
             if "CBRS" in infoRx["frontend"]:
                 sdrRx.setGain(SOAPY_SDR_RX, c, 'LNA2', rx_gains[5])  # LO: [0|17], HI:[0|14]
@@ -411,6 +431,12 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
     else:
         # Simulation Mode
         sdrRx = []
+
+    if agc_en:
+        sdrRx.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_ENABLE, 1)
+        sdrRx.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, 1)
+        sdrRx.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 1)
+        sdrRx.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0)
 
     # Generate TX Signal
     # Preambles
@@ -469,7 +495,7 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
     # Start animation
     anim = animation.FuncAnimation(fig, animate,
                                    init_func=init,
-                                   fargs=(num_samps_rd, rxStream, sdrRx, ofdm_params, tx_struct, ota, ofdm_obj),
+                                   fargs=(num_samps_rd, rxStream, sdrRx, ofdm_params, tx_struct, ota, ofdm_obj, agc_en),
                                    frames=100,
                                    interval=100,
                                    blit=True)
@@ -486,24 +512,25 @@ def main():
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
     parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=40.0)
-    parser.add_option("--LNA", type="float", dest="LNA", help="LNA gain (dB) [0:1:30]", default=14.0)
+    parser.add_option("--LNA", type="float", dest="LNA", help="LNA gain (dB) [0:1:30]", default=10.0)
     parser.add_option("--TIA", type="float", dest="TIA", help="TIA gain (dB) [0, 3, 9, 12]", default=0.0)
     parser.add_option("--PGA", type="float", dest="PGA", help="PGA gain (dB) [-12:1:19]", default=0.0)
     parser.add_option("--LNA1", type="float", dest="LNA1", help="BRS/CBRS Front-end LNA1 gain stage [0:33] (dB)", default=33.0)
-    parser.add_option("--LNA2", type="float", dest="LNA2", help="BRS/CBRS Front-end LNA2 gain [0:17] (dB)", default=17.0)
+    parser.add_option("--LNA2", type="float", dest="LNA2", help="BRS/CBRS Front-end LNA2 gain [0:17] (dB)", default=14.0)
     parser.add_option("--ATTN", type="float", dest="ATTN", help="BRS/CBRS Front-end ATTN gain stage [-18:6:0] (dB)", default=-18.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=2.5e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=3.597e9)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
     parser.add_option("--nOFDMsym", type="int", dest="nOFDMsym", help="Number of OFDM symbols", default=20)
     parser.add_option("--ltsCpLen", type="int", dest="ltsCpLen", help="Length of Cyclic Prefix - LTS", default=32)
     parser.add_option("--dataCpLen", type="int", dest="dataCpLen", help="Length of Cyclic Prefix - Data", default=16)
     parser.add_option("--nSC", type="int", dest="nSC", help="# of subcarriers. Only supports 64 sc at the moment", default=64)
     parser.add_option("--fftOfset", type="int", dest="fftOffset", help="FFT Offset: # of CP samples for FFT", default=6)
-    parser.add_option("--modOrder", type="int", dest="modOrder", help="Modulation Order 2=BPSK/4=QPSK/16=16QAM/64=64QAM", default=64)
-    parser.add_option("--serialTx", type="string", dest="serialTx", help="Serial # of TX device", default="RF3E000060")
-    parser.add_option("--serialRx", type="string", dest="serialRx", help="Serial # of RX device", default="RF3E000145")
+    parser.add_option("--modOrder", type="int", dest="modOrder", help="Modulation Order 2=BPSK/4=QPSK/16=16QAM/64=64QAM", default=16)
+    parser.add_option("--serialTx", type="string", dest="serialTx", help="Serial # of TX device", default="RF3C000064")
+    parser.add_option("--serialRx", type="string", dest="serialRx", help="Serial # of RX device", default="RF3C000029")
     parser.add_option("--nSampsRead", type="int", dest="nSampsRead", help="# Samples to read", default=FIG_LEN)
     parser.add_option("--mode", type="string", dest="mode", help="Simulation vs Over-the-Air (i.e., SIM/OTA)", default="OTA")
+    parser.add_option("--agc_en", action="store_true", dest="agc_en", help="Flag to enable AGC", default=False)
     (options, args) = parser.parse_args()
 
     ofdm_params = [options.nOFDMsym, options.ltsCpLen, options.dataCpLen, options.nSC, options.modOrder, options.fftOffset]
@@ -554,6 +581,7 @@ def main():
         num_samps_rd=options.nSampsRead,
         ota=ota,
         ofdm_obj=ofdm_obj,
+        agc_en=options.agc_en,
     )
 
 
