@@ -31,6 +31,7 @@ public:
     void radioRx(void* const* buffs);
     int radioTx(size_t, const void* const* buffs, int flags, long long& frameTime);
     int radioRx(size_t, void* const* buffs, long long& frameTime);
+    void initAGC(SoapySDR::Device * iclSdrs);
     void sync_delays(int cellIdx);
 
     ~RadioConfig();
