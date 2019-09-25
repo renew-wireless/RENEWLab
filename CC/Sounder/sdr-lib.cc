@@ -170,7 +170,7 @@ RadioConfig::RadioConfig(Config* cfg)
             radios[i].txs = dev->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CF32, channels);
 
             if (_cfg->clAgcEn){
-                RadioConfig::initAGC(device);
+                RadioConfig::initAGC(dev);
             }
         }
     }
