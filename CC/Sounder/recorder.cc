@@ -234,7 +234,7 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         write_attribute(mainGroup, "BS_NUM_CELLS", (int)cfg->nCells);
 
         // How many RF channels per Iris board are enabled ("single" or "dual")
-        write_attribute(mainGroup, "BS_CH_PER_RADIO", (int)cfg->bsSdrCh);
+        write_attribute(mainGroup, "BS_CH_PER_RADIO", (int)cfg->bsChannel.length());
 
         // Frame schedule (vec of strings for now, this should change to matrix when we go to multi-cell)
         write_attribute(mainGroup, "BS_FRAME_SCHED", cfg->frames);

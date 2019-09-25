@@ -58,22 +58,8 @@ RadioConfig::RadioConfig(Config* cfg)
         bsRadios.resize(_cfg->nCells);
 
         for (unsigned int c = 0; c < _cfg->nCells; c++) {
-            //load channels
-            std::vector<size_t> channels;
-            if (_cfg->bsChannel == "A")
-                channels = { 0 };
-            else if (_cfg->bsChannel == "B")
-                channels = { 1 };
-            else if (_cfg->bsSdrCh == 2)
-                channels = { 0, 1 };
-            else {
-                std::cout << "Error! Supported number of channels 1 or 2, setting to 2!" << std::endl;
-                _cfg->bsSdrCh = 2;
-                channels = { 0, 1 };
-            }
-
             int radioNum = _cfg->nBsSdrs[c];
-            nBsAntennas[c] = radioNum * _cfg->bsSdrCh;
+            nBsAntennas[c] = radioNum * _cfg->bsChannel.length();
             std::cout << radioNum << " radios in cell " << c << std::endl;
             //isUE = _cfg->isUE;
             if (!_cfg->hub_ids.empty()) {
@@ -113,18 +99,12 @@ RadioConfig::RadioConfig(Config* cfg)
     if (_cfg->clPresent) {
         //load channels
         std::vector<size_t> channels;
-        if (_cfg->clChannel == "A")
+        if (_cfg->bsChannel == "A")
             channels = { 0 };
-        else if (cfg->bsChannel == "B") {
+        else if (cfg->bsChannel == "B")
             channels = { 1 };
-            std::cout << "selecting channel " << _cfg->bsChannel << "(" << std::to_string(channels[0]) << ")" << std::endl;
-        } else if (_cfg->clSdrCh == 2)
+        else
             channels = { 0, 1 };
-        else {
-            std::cout << "Error! Supported number of channels 1 or 2, setting to 2!" << std::endl;
-            _cfg->bsSdrCh = 2;
-            channels = { 0, 1 };
-        }
         radios.resize(_cfg->nClSdrs);
         for (size_t i = 0; i < radios.size(); i++) {
             auto dev = SoapySDR::Device::make("serial=" + _cfg->cl_sdr_ids.at(i) + ",timeout=10000000");
@@ -197,13 +177,8 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
         channels = { 0 };
     else if (_cfg->bsChannel == "B")
         channels = { 1 };
-    else if (_cfg->bsSdrCh == 2)
+    else
         channels = { 0, 1 };
-    else {
-        std::cout << "Error! Supported number of channels 1 or 2, setting to 2!" << std::endl;
-        _cfg->bsSdrCh = 2;
-        channels = { 0, 1 };
-    }
 
     SoapySDR::Kwargs args;
     SoapySDR::Kwargs sargs;
@@ -330,46 +305,48 @@ void RadioConfig::radioConfigure()
             dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
             dev->writeSetting("TDD_MODE", "true");
             dev->writeSetting("TDD_CONFIG", confString);
-            // write beacons to FPGA buffers
-            {
-                if (!_cfg->beamsweep or nBsAntennas[0] == 1) {
-                    if (i * _cfg->bsSdrCh == _cfg->beacon_ant && _cfg->bsChannel == "A")
-                        dev->writeRegisters("TX_RAM_A", 0, _cfg->beacon);
-                    else if ((i * _cfg->bsSdrCh == _cfg->beacon_ant && _cfg->bsChannel == "B")
-                        || (_cfg->bsSdrCh == 2 and i * 2u + 1 == _cfg->beacon_ant))
-                        dev->writeRegisters("TX_RAM_B", 0, _cfg->beacon);
-                    else {
-                        std::vector<unsigned> zeros(_cfg->sampsPerSymbol, 0);
-                        dev->writeRegisters("TX_RAM_A", 0, zeros);
-                        dev->writeRegisters("TX_RAM_B", 0, zeros);
-                    }
-                    dev->writeRegister("RFCORE", 156, 0);
-                } else // beamsweep
-                {
-                    std::vector<unsigned> beacon_weights(nBsAntennas[0]);
-                    int hadamardLog = 8 * sizeof(nBsAntennas[0]) - __builtin_clz(nBsAntennas[0] - 1);
-                    int hadamardSize = 1 << hadamardLog;
-                    std::vector<std::vector<double>> hadamard_weights = CommsLib::getSequence(hadamardSize, CommsLib::HADAMARD);
-                    if (_cfg->bsChannel != "B")
-                        dev->writeRegisters("TX_RAM_A", 0, _cfg->beacon);
-                    if (_cfg->bsChannel != "A")
-                        dev->writeRegisters("TX_RAM_B", 0, _cfg->beacon);
-                    //int residue = hadamardSize - nBsAntennas[0];
-                    for (int j = 0; j < nBsAntennas[0]; j++)
-                        beacon_weights[j] = (unsigned)hadamard_weights[i * _cfg->bsSdrCh][j];
-                    if (_cfg->bsChannel != "B")
-                        dev->writeRegisters("TX_RAM_WGT_A", 0, beacon_weights);
-                    if (_cfg->bsChannel == "B")
-                        dev->writeRegisters("TX_RAM_WGT_B", 0, beacon_weights);
-                    if (_cfg->bsSdrCh == 2) {
-                        for (int j = 0; j < nBsAntennas[0]; j++)
-                            beacon_weights[j] = (unsigned)hadamard_weights[i * _cfg->bsSdrCh + 1][j];
-                        dev->writeRegisters("TX_RAM_WGT_B", 0, beacon_weights);
-                    }
-                    dev->writeRegister("RFCORE", 156, bsRadios[0].size());
-                    dev->writeRegister("RFCORE", 160, 1);
+        }
+
+        // write beacons to FPGA buffers
+        if (!_cfg->beamsweep or nBsAntennas[0] == 1) {
+            std::vector<unsigned> zeros(_cfg->sampsPerSymbol, 0);
+            size_t ndx = 0;
+            for (size_t i = 0; i < bsRadios[0].size(); i++) {
+                SoapySDR::Device* dev = bsRadios[0][i].dev;
+                for (char const& c : _cfg->bsChannel) {
+                    std::string tx_ram = "TX_RAM_";
+                    std::vector<unsigned>& msg = ndx == _cfg->beacon_ant ? _cfg->beacon : zeros;
+                    dev->writeRegisters(tx_ram + c, 0, msg);
+                    ++ndx;
                 }
+                dev->writeRegister("RFCORE", 156, 0);
             }
+        } else { // beamsweep
+            std::vector<unsigned> beacon_weights(nBsAntennas[0]);
+            int hadamardLog = 8 * sizeof(nBsAntennas[0]) - __builtin_clz(nBsAntennas[0] - 1);
+            int hadamardSize = 1 << hadamardLog;
+            std::vector<std::vector<double>> hadamard_weights;
+            hadamard_weights = CommsLib::getSequence(hadamardSize, CommsLib::HADAMARD);
+            //int residue = hadamardSize - nBsAntennas[0];
+            size_t ndx = 0;
+            for (size_t i = 0; i < bsRadios[0].size(); i++) {
+                SoapySDR::Device* dev = bsRadios[0][i].dev;
+                for (char const& c : _cfg->bsChannel) {
+                    std::string tx_ram = "TX_RAM_";
+                    dev->writeRegisters(tx_ram + c, 0, _cfg->beacon);
+                    std::string tx_ram_wgt = "TX_RAM_WGT_";
+                    for (int j = 0; j < nBsAntennas[0]; j++)
+                        beacon_weights[j] = (unsigned)hadamard_weights[ndx][j];
+                    dev->writeRegisters(tx_ram_wgt + c, 0, beacon_weights);
+                    ++ndx;
+                }
+                dev->writeRegister("RFCORE", 156, bsRadios[0].size());
+                dev->writeRegister("RFCORE", 160, 1);
+            }
+        }
+
+        for (size_t i = 0; i < bsRadios[0].size(); i++) {
+            SoapySDR::Device* dev = bsRadios[0][i].dev;
             dev->activateStream(bsRadios[0][i].rxs, flags, 0);
             dev->activateStream(bsRadios[0][i].txs);
             dev->setHardwareTime(0, "TRIGGER");
@@ -627,7 +604,7 @@ void RadioConfig::collectCSI(bool& adjust)
 
     //std::vector<std::vector<std::complex<float>>> buff;
     std::vector<std::vector<std::complex<int16_t>>> buff;
-    //int ant = _cfg->bsSdrCh;
+    //int ant = _cfg->bsChannel.length();
     //int M = bsRadios[0].size() * ant;
     buff.resize(R * R);
     for (int i = 0; i < R; i++) {

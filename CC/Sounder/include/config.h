@@ -61,7 +61,6 @@ public:
     bool beamsweep;
     std::vector<size_t> nBsSdrs;
     std::vector<size_t> nBsAntennas;
-    size_t bsSdrCh;
     std::string bsChannel;
     std::vector<std::string> frames;
     std::string frame_mode;
