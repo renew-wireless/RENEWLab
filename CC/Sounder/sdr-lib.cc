@@ -149,7 +149,7 @@ RadioConfig::RadioConfig(Config* cfg)
             radios[i].rxs = dev->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CF32, channels);
             radios[i].txs = dev->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CF32, channels);
 
-            if (_cfg->clAgcEn){
+            if (_cfg->clAgcEn) {
                 RadioConfig::initAGC(dev);
             }
         }
@@ -323,11 +323,6 @@ void RadioConfig::radioConfigure()
             }
         } else { // beamsweep
             std::vector<unsigned> beacon_weights(nBsAntennas[0]);
-            int hadamardLog = 8 * sizeof(nBsAntennas[0]) - __builtin_clz(nBsAntennas[0] - 1);
-            int hadamardSize = 1 << hadamardLog;
-            std::vector<std::vector<double>> hadamard_weights;
-            hadamard_weights = CommsLib::getSequence(hadamardSize, CommsLib::HADAMARD);
-            //int residue = hadamardSize - nBsAntennas[0];
             size_t ndx = 0;
             for (size_t i = 0; i < bsRadios[0].size(); i++) {
                 SoapySDR::Device* dev = bsRadios[0][i].dev;
@@ -336,7 +331,7 @@ void RadioConfig::radioConfigure()
                     dev->writeRegisters(tx_ram + c, 0, _cfg->beacon);
                     std::string tx_ram_wgt = "TX_RAM_WGT_";
                     for (int j = 0; j < nBsAntennas[0]; j++)
-                        beacon_weights[j] = (unsigned)hadamard_weights[ndx][j];
+                        beacon_weights[j] = CommsLib::hadamard2(ndx, j);
                     dev->writeRegisters(tx_ram_wgt + c, 0, beacon_weights);
                     ++ndx;
                 }
@@ -743,29 +738,29 @@ void RadioConfig::collectCSI(bool& adjust)
     }
 }
 
-void RadioConfig::initAGC(SoapySDR::Device * iclSdr)
+void RadioConfig::initAGC(SoapySDR::Device* iclSdr)
 {
     /*
      * Initialize AGC parameters
      */
 
     // AGC Core
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, 0);         // Enable AGC Flag (set to 0 initially)
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 1);          // Reset AGC Flag
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_IQ_THRESH, 1000);            // Saturation Threshold: 10300 about -6dBm
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_NUM_SAMPS_SAT, 3);           // Number of samples needed to claim sat.
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_MAX_NUM_SAMPS_AGC, 100);      // Threshold at which AGC stops
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_WAIT_COUNT_THRESH, 20);     // Gain settle takes about 20 samps(value=20)
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_BIG_JUMP, 30);           // Drop gain at initial saturation detection
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_SMALL_JUMP, 2);          // Drop gain at subsequent sat. detections
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_RSSI_TARGET, 20);            // RSSI Target for AGC: ideally around 14 (3.6GHz) or 27 (2.5GHz)
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 0);          // Clear AGC reset flag
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, 0); // Enable AGC Flag (set to 0 initially)
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 1); // Reset AGC Flag
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_IQ_THRESH, 1000); // Saturation Threshold: 10300 about -6dBm
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_NUM_SAMPS_SAT, 3); // Number of samples needed to claim sat.
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_MAX_NUM_SAMPS_AGC, 100); // Threshold at which AGC stops
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_WAIT_COUNT_THRESH, 20); // Gain settle takes about 20 samps(value=20)
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_BIG_JUMP, 30); // Drop gain at initial saturation detection
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_SMALL_JUMP, 2); // Drop gain at subsequent sat. detections
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_RSSI_TARGET, 20); // RSSI Target for AGC: ideally around 14 (3.6GHz) or 27 (2.5GHz)
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 0); // Clear AGC reset flag
 
     // Packet Detect Core
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_THRESH, 0);          // RSSI value at which Pkt is detected
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NUM_SAMPS, 5);       // Number of samples needed to detect frame
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_ENABLE, 0);          // Enable packet detection flag
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0);       // Finished last frame? (set to 0 initially)
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_THRESH, 0); // RSSI value at which Pkt is detected
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NUM_SAMPS, 5); // Number of samples needed to detect frame
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_ENABLE, 0); // Enable packet detection flag
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0); // Finished last frame? (set to 0 initially)
 }
 
 void RadioConfig::drain_buffers(SoapySDR::Device* ibsSdrs, SoapySDR::Stream* istream, std::vector<void*> buffs, int symSamp)
