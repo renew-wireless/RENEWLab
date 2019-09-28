@@ -18,7 +18,16 @@
 namespace plt = matplotlibcpp;
 
 static void
-dev_init(SoapySDR::Device* dev, Config* _cfg, int ch)
+reset_DATA_clk_domain(SoapySDR::Device* dev)
+{
+    // What does 29 mean?
+    dev->writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 1);
+    dev->writeRegister("IRIS30", RF_RST_REG, (1 << 29));
+    dev->writeRegister("IRIS30", RF_RST_REG, 0);
+}
+
+static void
+dev_init(SoapySDR::Device* dev, Config* _cfg, int ch, double rxgain, double txgain)
 {
     dev->setBandwidth(SOAPY_SDR_RX, ch, (1 + 2 * _cfg->bbf_ratio) * _cfg->rate);
     dev->setBandwidth(SOAPY_SDR_TX, ch, (1 + 2 * _cfg->bbf_ratio) * _cfg->rate);
@@ -30,37 +39,29 @@ dev_init(SoapySDR::Device* dev, Config* _cfg, int ch)
     dev->setFrequency(SOAPY_SDR_RX, ch, "BB", _cfg->bbf_ratio * _cfg->rate);
     dev->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->freq - _cfg->bbf_ratio * _cfg->rate);
     dev->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->bbf_ratio * _cfg->rate);
+
+    // lime
+    dev->setGain(SOAPY_SDR_RX, ch, "LNA", rxgain);
+    dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0); //[0,12]
+    dev->setGain(SOAPY_SDR_RX, ch, "PGA", 0); //[-12,19]
+    dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 12); //[0,12]
+    dev->setGain(SOAPY_SDR_TX, ch, "PAD", txgain);
 }
 
 RadioConfig::RadioConfig(Config* cfg)
     : _cfg(cfg)
 {
-    SoapySDR::Kwargs args;
-    SoapySDR::Kwargs sargs;
     if (_cfg->bsPresent) {
         nBsAntennas.resize(_cfg->nCells);
         bsRadios.resize(_cfg->nCells);
 
         for (unsigned int c = 0; c < _cfg->nCells; c++) {
-            //load channels
-            std::vector<size_t> channels;
-            if (_cfg->bsChannel == "A")
-                channels = { 0 };
-            else if (_cfg->bsChannel == "B")
-                channels = { 1 };
-            else if (_cfg->bsSdrCh == 2)
-                channels = { 0, 1 };
-            else {
-                std::cout << "Error! Supported number of channels 1 or 2, setting to 2!" << std::endl;
-                _cfg->bsSdrCh = 2;
-                channels = { 0, 1 };
-            }
-
             int radioNum = _cfg->nBsSdrs[c];
-            nBsAntennas[c] = radioNum * _cfg->bsSdrCh;
+            nBsAntennas[c] = radioNum * _cfg->bsChannel.length();
             std::cout << radioNum << " radios in cell " << c << std::endl;
             //isUE = _cfg->isUE;
             if (!_cfg->hub_ids.empty()) {
+                SoapySDR::Kwargs args;
                 args["driver"] = "remote";
                 args["timeout"] = "1000000";
                 args["serial"] = _cfg->hub_ids.at(c);
@@ -97,18 +98,12 @@ RadioConfig::RadioConfig(Config* cfg)
     if (_cfg->clPresent) {
         //load channels
         std::vector<size_t> channels;
-        if (_cfg->clChannel == "A")
+        if (_cfg->bsChannel == "A")
             channels = { 0 };
-        else if (cfg->bsChannel == "B") {
+        else if (cfg->bsChannel == "B")
             channels = { 1 };
-            std::cout << "selecting channel " << _cfg->bsChannel << "(" << std::to_string(channels[0]) << ")" << std::endl;
-        } else if (_cfg->clSdrCh == 2)
+        else
             channels = { 0, 1 };
-        else {
-            std::cout << "Error! Supported number of channels 1 or 2, setting to 2!" << std::endl;
-            _cfg->bsSdrCh = 2;
-            channels = { 0, 1 };
-        }
         radios.resize(_cfg->nClSdrs);
         for (size_t i = 0; i < radios.size(); i++) {
             auto dev = SoapySDR::Device::make("serial=" + _cfg->cl_sdr_ids.at(i) + ",timeout=10000000");
@@ -117,40 +112,30 @@ RadioConfig::RadioConfig(Config* cfg)
 
             for (auto ch : { 0, 1 }) //channels)
             {
-                dev_init(dev, _cfg, ch);
-                // receive gains
+                double rxgain = _cfg->clRxgain_vec[ch][i]; //[0,30]
+                double txgain = _cfg->clTxgain_vec[ch][i]; //[0,52]
+                dev_init(dev, _cfg, ch, rxgain, txgain);
 
                 if (info["frontend"].find("CBRS") != std::string::npos) {
+                    // receive gains
                     dev->setGain(SOAPY_SDR_RX, ch, "ATTN", -12); //[-18,0]
                     dev->setGain(SOAPY_SDR_RX, ch, "LNA1", 30); //[0,33]
-                    if (cfg->freq < 3e9 && _cfg->freq > 2e9)
-                        dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //[0,17]
-                    else if (cfg->freq >= 3e9)
+                    if (cfg->freq >= 3e9)
                         dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 14); //[0,14]
-                }
+                    else if (_cfg->freq > 2e9)
+                        dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //[0,17]
 
-                // lime
-                dev->setGain(SOAPY_SDR_RX, ch, "LNA", _cfg->clRxgain_vec[ch][i]); //[0,30]
-                dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0); //[0,12]
-                dev->setGain(SOAPY_SDR_RX, ch, "PGA", 0); //[-12,19]
-
-                // transmit gains
-
-                if (info["frontend"].find("CBRS") != std::string::npos) {
+                    // transmit gains
                     dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //{-18,-12,-6,0}
-                    if (info["frontend"].find("CBRSc") != std::string::npos) // on revC front-end, it is safe to turn on PA2
-                    {
-                        if (cfg->freq < 3e9 && _cfg->freq > 2e9)
-                            dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //CBRS LO, [0|17]
-                        else if (cfg->freq >= 3e9)
+                    if (info["frontend"].find("CBRSc") != std::string::npos) {
+                        // on revC front-end, it is safe to turn on PA2
+                        if (cfg->freq >= 3e9)
                             dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //CBRS HI, [0|14]
+                        else if (_cfg->freq > 2e9)
+                            dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //CBRS LO, [0|17]
                     } else
                         dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|17]
                 }
-
-                // lime
-                dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 12); //[-12,12]
-                dev->setGain(SOAPY_SDR_TX, ch, "PAD", _cfg->clTxgain_vec[ch][i]); //[0,52]
             }
 
             for (auto ch : channels) {
@@ -159,12 +144,13 @@ RadioConfig::RadioConfig(Config* cfg)
                 dev->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
             }
 
-            dev->writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 1);
-            dev->writeRegister("IRIS30", RF_RST_REG, (1 << 29));
-            dev->writeRegister("IRIS30", RF_RST_REG, 0);
-
+            reset_DATA_clk_domain(dev);
             radios[i].rxs = dev->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CF32, channels);
             radios[i].txs = dev->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CF32, channels);
+
+            if (_cfg->clAgcEn) {
+                RadioConfig::initAGC(dev);
+            }
         }
     }
     std::cout << "radio init done!" << std::endl;
@@ -190,16 +176,10 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
         channels = { 0 };
     else if (_cfg->bsChannel == "B")
         channels = { 1 };
-    else if (_cfg->bsSdrCh == 2)
+    else
         channels = { 0, 1 };
-    else {
-        std::cout << "Error! Supported number of channels 1 or 2, setting to 2!" << std::endl;
-        _cfg->bsSdrCh = 2;
-        channels = { 0, 1 };
-    }
 
     SoapySDR::Kwargs args;
-    SoapySDR::Kwargs sargs;
     args["driver"] = "iris";
     args["timeout"] = "1000000";
     args["serial"] = _cfg->bs_sdr_ids[0][i];
@@ -212,52 +192,43 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
     SoapySDR::Kwargs info = dev->getHardwareInfo();
     for (auto ch : { 0, 1 }) //channels)
     {
-        dev_init(dev, _cfg, ch);
-        // receive gains
+        double rxgain = _cfg->rxgain[ch]; //[0,30]
+        double txgain = _cfg->txgain[ch]; //[0,30]
+        dev_init(dev, _cfg, ch, rxgain, txgain);
 
         if (info["frontend"].find("CBRS") != std::string::npos) {
+            // receive gains
             dev->setGain(SOAPY_SDR_RX, ch, "ATTN", -12); //[-18,0]
             dev->setGain(SOAPY_SDR_RX, ch, "LNA1", 33); //[0,33]
-            if (_cfg->freq <= 3e9)
-                dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 14); //HI[0,14]
-            else
+            if (_cfg->freq > 3e9)
                 dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //LO[0,17]
+            else
+                dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 14); //HI[0,14]
+
+            // transmit gains
+            if (_cfg->freq > 3e9) { // CBRS HI
+                dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //[-18,0] by 3
+                dev->setGain(SOAPY_SDR_TX, ch, "PA1", 15); //[0|13.7] no bypass
+                dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|14]   can bypass
+                dev->setGain(SOAPY_SDR_TX, ch, "PA3", 30); //[0|31]   no bypass
+            } else if (_cfg->freq > 2e9) { // CBRS LO
+                dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //[-18,0] by 3
+                dev->setGain(SOAPY_SDR_TX, ch, "PA1", 14); //[0|14] no bypass
+                dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|17]   can bypass.
+                // Can cause saturation or PA damage!! DO NOT USE IF NOT SURE!!!
+                dev->setGain(SOAPY_SDR_TX, ch, "PA3", 30); //[0|31.5]   no bypass
+            }
         }
         if (info["frontend"].find("UHF") != std::string::npos) {
+            // receive gains
             dev->setGain(SOAPY_SDR_RX, ch, "ATTN1", -6); //[-18,0]
             dev->setGain(SOAPY_SDR_RX, ch, "ATTN2", -12); //[-18,0]
             //dev->setGain(SOAPY_SDR_RX, ch, "LNA1", 30); //[0,33]
             //dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //[0,17]
-        }
 
-        // lime
-        dev->setGain(SOAPY_SDR_RX, ch, "LNA", _cfg->rxgain[ch]); //[0,30]
-        dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0); //[0,12]
-        dev->setGain(SOAPY_SDR_RX, ch, "PGA", 0); //[-12,19]
-
-        // transmit gains
-
-        if (info["frontend"].find("CBRS") != std::string::npos && _cfg->freq > 3e9) // CBRS HI
-        {
-            dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //[-18,0] by 3
-            dev->setGain(SOAPY_SDR_TX, ch, "PA1", 15); //[0|13.7] no bypass
-            dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|14]   can bypass
-            dev->setGain(SOAPY_SDR_TX, ch, "PA3", 30); //[0|31]   no bypass
-        }
-        if (info["frontend"].find("CBRS") != std::string::npos && _cfg->freq < 3e9 && _cfg->freq > 2e9) // CBRS LO
-        {
-            dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //[-18,0] by 3
-            dev->setGain(SOAPY_SDR_TX, ch, "PA1", 14); //[0|14] no bypass
-            dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|17]   can bypass. Can cause saturation or PA damage!! DO NOT USE IF NOT SURE!!!
-            dev->setGain(SOAPY_SDR_TX, ch, "PA3", 30); //[0|31.5]   no bypass
-        }
-        if (info["frontend"].find("UHF") != std::string::npos) {
+            // transmit gains
             dev->setGain(SOAPY_SDR_TX, ch, "ATTN", 0); //[-18,0] by 3
         }
-
-        // lime
-        dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 12); //[0,12]
-        dev->setGain(SOAPY_SDR_TX, ch, "PAD", _cfg->txgain[ch]); //[0,30]
     }
 
     for (auto ch : channels) {
@@ -266,10 +237,8 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
         dev->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
     }
 
-    // resets the DATA_clk domain logic.
-    dev->writeRegister("IRIS30", 48, (1 << 29) | 0x1);
-    dev->writeRegister("IRIS30", 48, (1 << 29));
-    dev->writeRegister("IRIS30", 48, 0);
+    SoapySDR::Kwargs sargs;
+    reset_DATA_clk_domain(dev);
     bsRadio->rxs = dev->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CS16, channels, sargs);
     bsRadio->txs = dev->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CS16, channels, sargs);
     remainingJobs--;
@@ -335,46 +304,43 @@ void RadioConfig::radioConfigure()
             dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
             dev->writeSetting("TDD_MODE", "true");
             dev->writeSetting("TDD_CONFIG", confString);
-            // write beacons to FPGA buffers
-            {
-                if (!_cfg->beamsweep or nBsAntennas[0] == 1) {
-                    if (i * _cfg->bsSdrCh == _cfg->beacon_ant && _cfg->bsChannel == "A")
-                        dev->writeRegisters("TX_RAM_A", 0, _cfg->beacon);
-                    else if ((i * _cfg->bsSdrCh == _cfg->beacon_ant && _cfg->bsChannel == "B")
-                        || (_cfg->bsSdrCh == 2 and i * 2u + 1 == _cfg->beacon_ant))
-                        dev->writeRegisters("TX_RAM_B", 0, _cfg->beacon);
-                    else {
-                        std::vector<unsigned> zeros(_cfg->sampsPerSymbol, 0);
-                        dev->writeRegisters("TX_RAM_A", 0, zeros);
-                        dev->writeRegisters("TX_RAM_B", 0, zeros);
-                    }
-                    dev->writeRegister("RFCORE", 156, 0);
-                } else // beamsweep
-                {
-                    std::vector<unsigned> beacon_weights(nBsAntennas[0]);
-                    int hadamardLog = 8 * sizeof(nBsAntennas[0]) - __builtin_clz(nBsAntennas[0] - 1);
-                    int hadamardSize = 1 << hadamardLog;
-                    std::vector<std::vector<double>> hadamard_weights = CommsLib::getSequence(hadamardSize, CommsLib::HADAMARD);
-                    if (_cfg->bsChannel != "B")
-                        dev->writeRegisters("TX_RAM_A", 0, _cfg->beacon);
-                    if (_cfg->bsChannel != "A")
-                        dev->writeRegisters("TX_RAM_B", 0, _cfg->beacon);
-                    //int residue = hadamardSize - nBsAntennas[0];
-                    for (int j = 0; j < nBsAntennas[0]; j++)
-                        beacon_weights[j] = (unsigned)hadamard_weights[i * _cfg->bsSdrCh][j];
-                    if (_cfg->bsChannel != "B")
-                        dev->writeRegisters("TX_RAM_WGT_A", 0, beacon_weights);
-                    if (_cfg->bsChannel == "B")
-                        dev->writeRegisters("TX_RAM_WGT_B", 0, beacon_weights);
-                    if (_cfg->bsSdrCh == 2) {
-                        for (int j = 0; j < nBsAntennas[0]; j++)
-                            beacon_weights[j] = (unsigned)hadamard_weights[i * _cfg->bsSdrCh + 1][j];
-                        dev->writeRegisters("TX_RAM_WGT_B", 0, beacon_weights);
-                    }
-                    dev->writeRegister("RFCORE", 156, bsRadios[0].size());
-                    dev->writeRegister("RFCORE", 160, 1);
+        }
+
+        // write beacons to FPGA buffers
+        if (!_cfg->beamsweep or nBsAntennas[0] == 1) {
+            std::vector<unsigned> zeros(_cfg->sampsPerSymbol, 0);
+            size_t ndx = 0;
+            for (size_t i = 0; i < bsRadios[0].size(); i++) {
+                SoapySDR::Device* dev = bsRadios[0][i].dev;
+                for (char const& c : _cfg->bsChannel) {
+                    std::string tx_ram = "TX_RAM_";
+                    std::vector<unsigned>& msg = ndx == _cfg->beacon_ant ? _cfg->beacon : zeros;
+                    dev->writeRegisters(tx_ram + c, 0, msg);
+                    ++ndx;
                 }
+                dev->writeRegister("RFCORE", 156, 0);
             }
+        } else { // beamsweep
+            std::vector<unsigned> beacon_weights(nBsAntennas[0]);
+            size_t ndx = 0;
+            for (size_t i = 0; i < bsRadios[0].size(); i++) {
+                SoapySDR::Device* dev = bsRadios[0][i].dev;
+                for (char const& c : _cfg->bsChannel) {
+                    std::string tx_ram = "TX_RAM_";
+                    dev->writeRegisters(tx_ram + c, 0, _cfg->beacon);
+                    std::string tx_ram_wgt = "TX_RAM_WGT_";
+                    for (int j = 0; j < nBsAntennas[0]; j++)
+                        beacon_weights[j] = CommsLib::hadamard2(ndx, j);
+                    dev->writeRegisters(tx_ram_wgt + c, 0, beacon_weights);
+                    ++ndx;
+                }
+                dev->writeRegister("RFCORE", 156, bsRadios[0].size());
+                dev->writeRegister("RFCORE", 160, 1);
+            }
+        }
+
+        for (size_t i = 0; i < bsRadios[0].size(); i++) {
+            SoapySDR::Device* dev = bsRadios[0][i].dev;
             dev->activateStream(bsRadios[0][i].rxs, flags, 0);
             dev->activateStream(bsRadios[0][i].txs);
             dev->setHardwareTime(0, "TRIGGER");
@@ -504,25 +470,21 @@ void RadioConfig::radioStop()
                 }
             }
             dev->writeSetting("TDD_MODE", "false");
-            dev->writeRegister("IRIS30", 48, (1 << 29) | 0x1);
-            dev->writeRegister("IRIS30", 48, (1 << 29));
-            dev->writeRegister("IRIS30", 48, 0);
+            reset_DATA_clk_domain(dev);
         }
     }
     if (_cfg->clPresent) {
         for (size_t i = 0; i < radios.size(); i++) {
-            auto device = radios[i].dev;
-            device->writeRegister("IRIS30", CORR_CONF, 0);
-            std::cout << "device " << i << " T=" << std::hex << SoapySDR::timeNsToTicks(device->getHardwareTime(""), _cfg->rate) << std::dec << std::endl;
+            auto dev = radios[i].dev;
+            dev->writeRegister("IRIS30", CORR_CONF, 0);
+            std::cout << "device " << i << " T=" << std::hex << SoapySDR::timeNsToTicks(dev->getHardwareTime(""), _cfg->rate) << std::dec << std::endl;
             for (int i = 0; i < _cfg->symbolsPerFrame; i++) {
-                device->writeRegister("RFCORE", SCH_ADDR_REG, i);
-                device->writeRegister("RFCORE", SCH_MODE_REG, 0);
+                dev->writeRegister("RFCORE", SCH_ADDR_REG, i);
+                dev->writeRegister("RFCORE", SCH_MODE_REG, 0);
             }
-            device->writeSetting("TDD_MODE", "false");
-            device->writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 1);
-            device->writeRegister("IRIS30", RF_RST_REG, (1 << 29));
-            device->writeRegister("IRIS30", RF_RST_REG, 0);
-            //SoapySDR::Device::unmake(device);
+            dev->writeSetting("TDD_MODE", "false");
+            reset_DATA_clk_domain(dev);
+            //SoapySDR::Device::unmake(dev);
         }
     }
 }
@@ -636,7 +598,7 @@ void RadioConfig::collectCSI(bool& adjust)
 
     //std::vector<std::vector<std::complex<float>>> buff;
     std::vector<std::vector<std::complex<int16_t>>> buff;
-    //int ant = _cfg->bsSdrCh;
+    //int ant = _cfg->bsChannel.length();
     //int M = bsRadios[0].size() * ant;
     buff.resize(R * R);
     for (int i = 0; i < R; i++) {
@@ -773,6 +735,31 @@ void RadioConfig::collectCSI(bool& adjust)
         SoapySDR::Device* dev = bsRadio->dev;
         RadioConfig::drain_buffers(dev, bsRadio->rxs, dummybuffs, _cfg->sampsPerSymbol);
     }
+}
+
+void RadioConfig::initAGC(SoapySDR::Device* iclSdr)
+{
+    /*
+     * Initialize AGC parameters
+     */
+
+    // AGC Core
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, 0); // Enable AGC Flag (set to 0 initially)
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 1); // Reset AGC Flag
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_IQ_THRESH, 1000); // Saturation Threshold: 10300 about -6dBm
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_NUM_SAMPS_SAT, 3); // Number of samples needed to claim sat.
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_MAX_NUM_SAMPS_AGC, 100); // Threshold at which AGC stops
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_WAIT_COUNT_THRESH, 20); // Gain settle takes about 20 samps(value=20)
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_BIG_JUMP, 30); // Drop gain at initial saturation detection
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_SMALL_JUMP, 2); // Drop gain at subsequent sat. detections
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_RSSI_TARGET, 20); // RSSI Target for AGC: ideally around 14 (3.6GHz) or 27 (2.5GHz)
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 0); // Clear AGC reset flag
+
+    // Packet Detect Core
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_THRESH, 0); // RSSI value at which Pkt is detected
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NUM_SAMPS, 5); // Number of samples needed to detect frame
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_ENABLE, 0); // Enable packet detection flag
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0); // Finished last frame? (set to 0 initially)
 }
 
 void RadioConfig::drain_buffers(SoapySDR::Device* ibsSdrs, SoapySDR::Stream* istream, std::vector<void*> buffs, int symSamp)
