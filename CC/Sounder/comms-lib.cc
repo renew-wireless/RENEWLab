@@ -20,6 +20,7 @@
 */
 
 #include "include/comms-lib.h"
+#include <queue>
 //#include <itpp/itbase.h>
 
 int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
@@ -58,30 +59,26 @@ int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
     std::vector<double> lts_corr = CommsLib::convolve(iq_sign, lts_sym_conj);
     double lts_limit = lts_thresh * *std::max_element(lts_corr.begin(), lts_corr.end());
 
-    // Find all peaks
-    std::vector<int> peaks;
+    // Find all peaks, and pairs that are lts_sym.size() samples apart
+    std::queue<int> peaks;
+    std::queue<int> valid_peaks;
     for (size_t i = 0; i < lts_corr.size(); i++) {
+        bool match = !peaks.empty() && i - peaks.front() == lts_sym.size();
         if (lts_corr[i] > lts_limit) {
             // Index of valid peaks
-            peaks.push_back(i);
+            peaks.push(i);
+            if (match)
+                valid_peaks.push(i);
         }
+        if (match)
+            peaks.pop();
     }
 
-    // Find peaks that are lts_sym.size() samples apart
-    std::vector<int> valid_peaks;
-    for (size_t i = 0; i < peaks.size(); i++) {
-        for (size_t j = 0; j < i; j++) {
-            int idx_diff = peaks[i] - peaks[j];
-            if (idx_diff == static_cast<int>(lts_sym.size())) {
-                valid_peaks.push_back(peaks[i]);
-            }
-        }
-    }
     // Use first LTS found
     if (valid_peaks.empty()) {
         best_peak = -1;
     } else {
-        best_peak = valid_peaks[0];
+        best_peak = valid_peaks.front();
     }
 
     return best_peak;
