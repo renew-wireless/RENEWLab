@@ -70,7 +70,7 @@ int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
     // Find peaks that are lts_sym.size() samples apart
     std::vector<int> valid_peaks;
     for (size_t i = 0; i < peaks.size(); i++) {
-        for (size_t j = 0; j < peaks.size(); j++) {
+        for (size_t j = 0; j < i; j++) {
             int idx_diff = peaks[i] - peaks[j];
             if (idx_diff == static_cast<int>(lts_sym.size())) {
                 valid_peaks.push_back(peaks[i]);
