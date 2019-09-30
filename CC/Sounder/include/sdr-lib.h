@@ -46,6 +46,7 @@ public:
     void initBSRadio(RadioConfigContext* context);
 
 private:
+    SoapySDR::Device* baseRadio(int cellId);
     void collectCSI(bool&);
     static void drain_buffers(SoapySDR::Device* ibsSdrs, SoapySDR::Stream* istream, std::vector<void*> buffs, int symSamp);
     Config* _cfg;
