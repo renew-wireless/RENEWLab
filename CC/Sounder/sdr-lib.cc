@@ -427,15 +427,19 @@ void RadioConfig::radioConfigure()
     std::cout << "Done with frame configuration!" << std::endl;
 }
 
+void RadioConfig::radioTrigger(void)
+{
+    if (hubs.empty()) {
+        bsRadios[0][0].dev->writeSetting("TRIGGER_GEN", "");
+    } else {
+        hubs[0]->writeSetting("TRIGGER_GEN", "");
+    }
+}
+
 void RadioConfig::radioStart()
 {
-    if (_cfg->bsPresent) {
-        if (hubs.empty()) {
-            bsRadios[0][0].dev->writeSetting("TRIGGER_GEN", "");
-        } else {
-            hubs[0]->writeSetting("TRIGGER_GEN", "");
-        }
-    }
+    if (_cfg->bsPresent)
+        radioTrigger();
 }
 
 void RadioConfig::readSensors()
@@ -574,10 +578,11 @@ void RadioConfig::collectCSI(bool& adjust)
         max_abs = max_abs > std::abs(samp) ? max_abs : std::abs(samp);
     }
 
+    pilot_cint16.resize(seqLen);
     for (int i = 0; i < seqLen; i++) {
-        pilot[0][i] = 0.25 * pilot[0][i] / max_abs;
-        pilot[1][i] = 0.25 * pilot[1][i] / max_abs;
-        pilot_cint16.push_back(std::complex<int16_t>((int16_t)(pilot[0][i] * 32767), (int16_t)(pilot[1][i] * 32767)));
+        auto re = 0.25 * pilot[0][i] / max_abs * 32767;
+        auto im = 0.25 * pilot[1][i] / max_abs * 32767;
+        pilot_cint16[i] = std::complex<int16_t>((int16_t)re, (int16_t)im);
     }
 
     // Prepend/Append vectors with prefix/postfix number of null samples
@@ -588,13 +593,15 @@ void RadioConfig::collectCSI(bool& adjust)
     // Transmitting from only one chain, create a null vector for chainB
     std::vector<std::complex<int16_t>> dummy_cint16(pilot_cint16.size(), 0);
 
-    std::vector<void*> txbuff0(2);
-    txbuff0[0] = pilot_cint16.data(); //pilot_cf32.data();
-    txbuff0[1] = dummy_cint16.data(); //zero_vec.data();
-
-    std::vector<void*> txbuff1(2);
-    txbuff1[0] = dummy_cint16.data(); //zero_vec.data();
-    txbuff1[1] = pilot_cint16.data(); //pilot_cf32.data();
+    int ch = (_cfg->bsChannel == "B") ? 1 : 0;
+    std::vector<void*> txbuff(2);
+    if (ch == 0) {
+        txbuff[0] = pilot_cint16.data(); //pilot_cf32.data();
+        txbuff[1] = dummy_cint16.data(); //zero_vec.data();
+    } else {
+        txbuff[0] = dummy_cint16.data(); //zero_vec.data();
+        txbuff[1] = pilot_cint16.data(); //pilot_cf32.data();
+    }
 
     //std::vector<std::vector<std::complex<float>>> buff;
     std::vector<std::vector<std::complex<int16_t>>> buff;
@@ -619,7 +626,6 @@ void RadioConfig::collectCSI(bool& adjust)
         RadioConfig::drain_buffers(dev, bsRadio->rxs, dummybuffs, _cfg->sampsPerSymbol);
     }
 
-    int ch = (_cfg->bsChannel == "B") ? 1 : 0;
     for (int i = 0; i < R; i++) {
         struct Radio* bsRadio = &bsRadios[0][i];
         SoapySDR::Device* dev = bsRadio->dev;
@@ -632,38 +638,39 @@ void RadioConfig::collectCSI(bool& adjust)
     long long txTime(0);
     long long rxTime(0);
     for (int i = 0; i < R; i++) {
-        struct Radio* bsRadio = &bsRadios[0][i];
-        SoapySDR::Device* dev = bsRadio->dev;
-        auto ref_sdr = dev;
-        int tx_flags = SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST;
-        int ret = ref_sdr->writeStream(bsRadio->txs, ch != 0 ? txbuff1.data() : txbuff0.data(), _cfg->sampsPerSymbol, tx_flags, txTime, 1000000);
-        if (ret < 0)
-            std::cout << "bad write\n";
+        // All write, or prepare to receive.
         for (int j = 0; j < R; j++) {
-            if (j == i)
-                continue;
-            int rx_flags = SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST;
-            ret = bsRadios[0][j].dev->activateStream(bsRadios[0][j].rxs, rx_flags, rxTime, _cfg->sampsPerSymbol);
-            if (ret < 0)
-                std::cout << "bad activate at node " << j << std::endl;
+            struct Radio* bsRadio = &bsRadios[0][j];
+            SoapySDR::Device* dev = bsRadio->dev;
+            int flags = SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST;
+            if (j == i) {
+                int ret = dev->writeStream(bsRadio->txs, txbuff.data(),
+                    _cfg->sampsPerSymbol, flags, txTime, 1000000);
+                if (ret < 0)
+                    std::cout << "bad write" << std::endl;
+            } else {
+                int ret = dev->activateStream(bsRadio->rxs, flags, rxTime,
+                    _cfg->sampsPerSymbol);
+                if (ret < 0)
+                    std::cout << "bad activate at node " << j << std::endl;
+            }
         }
 
-        if (hubs.empty())
-            bsRadios[0][0].dev->writeSetting("TRIGGER_GEN", "");
-        else
-            hubs[0]->writeSetting("TRIGGER_GEN", "");
+        radioTrigger();
 
+        // All but one receive.
         int flags = 0;
         for (int j = 0; j < R; j++) {
+            struct Radio* bsRadio = &bsRadios[0][j];
+            SoapySDR::Device* dev = bsRadio->dev;
             if (j == i)
                 continue;
             std::vector<void*> rxbuff(2);
             rxbuff[0] = buff[(i * R + j)].data();
             //rxbuff[1] = ant == 2 ? buff[(i*M+j)*ant+1].data() : dummyBuff.data();
             rxbuff[1] = dummyBuff0.data();
-            struct Radio* bsRadio = &bsRadios[0][j];
-            SoapySDR::Device* dev = bsRadio->dev;
-            ret = dev->readStream(bsRadio->rxs, rxbuff.data(), _cfg->sampsPerSymbol, flags, rxTime, 1000000);
+            int ret = dev->readStream(bsRadio->rxs, rxbuff.data(),
+                _cfg->sampsPerSymbol, flags, rxTime, 1000000);
             if (ret < 0)
                 std::cout << "bad read at node " << j << std::endl;
         }
@@ -676,12 +683,11 @@ void RadioConfig::collectCSI(bool& adjust)
     bool good_csi = true;
     for (int i = 0; i < R; i++) {
         std::vector<std::complex<double>> rx(_cfg->sampsPerSymbol);
-        if (i == ref_ant) {
-            std::transform(buff[ref_offset * R + i].begin(), buff[ref_offset * R + i].end(), rx.begin(), [](std::complex<int16_t> cf) { return std::complex<double>(cf.real() / 32768.0, cf.imag() / 32768.0); });
-        } else {
-            std::transform(buff[ref_ant * R + i].begin(), buff[ref_ant * R + i].end(), rx.begin(), [](std::complex<int16_t> cf) { return std::complex<double>(cf.real() / 32768.0, cf.imag() / 32768.0); });
-        }
-
+        int k = ((i == ref_ant) ? ref_offset : ref_ant) * R + i;
+        std::transform(buff[k].begin(), buff[k].end(), rx.begin(),
+            [](std::complex<int16_t> cf) {
+                return std::complex<double>(cf.real() / 32768.0, cf.imag() / 32768.0);
+            });
         int peak = CommsLib::findLTS(rx, seqLen);
         offset[i] = peak < 128 ? 0 : peak - 128;
         //std::cout << i << " " << offset[i] << std::endl;
@@ -703,23 +709,23 @@ void RadioConfig::collectCSI(bool& adjust)
     }
 
     // adjusting trigger delays based on lts peak index
+    adjust &= good_csi;
     if (adjust) {
-        if (good_csi) {
-            for (int i = 0; i < R; i++) {
-                struct Radio* bsRadio = &bsRadios[0][i];
-                SoapySDR::Device* dev = bsRadio->dev;
-                int delta = (offset[i] == 0) ? 0 : offset[ref_offset] - offset[i];
-                std::cout << "adjusting delay of node " << i << " by " << delta << std::endl;
-                int iter = delta < 0 ? -delta : delta;
-                for (int j = 0; j < iter; j++) {
-                    if (delta < 0)
-                        dev->writeSetting("ADJUST_DELAYS", "-1");
-                    else
-                        dev->writeSetting("ADJUST_DELAYS", "1");
-                }
+        for (int i = 0; i < R; i++) {
+            struct Radio* bsRadio = &bsRadios[0][i];
+            SoapySDR::Device* dev = bsRadio->dev;
+            // if offset[i] == 0, then good_csi is false and we never get here???
+            int delta = (offset[i] == 0) ? 0 : offset[ref_offset] - offset[i];
+            std::cout << "adjusting delay of node " << i << " by " << delta << std::endl;
+            while (delta < 0) {
+                dev->writeSetting("ADJUST_DELAYS", "-1");
+                ++delta;
             }
-        } else
-            adjust = false;
+            while (delta > 0) {
+                dev->writeSetting("ADJUST_DELAYS", "1");
+                --delta;
+            }
+        }
     }
 
     for (int i = 0; i < R; i++) {
@@ -728,11 +734,6 @@ void RadioConfig::collectCSI(bool& adjust)
         dev->deactivateStream(bsRadio->txs);
         dev->deactivateStream(bsRadio->rxs);
         dev->setGain(SOAPY_SDR_TX, ch, "PAD", _cfg->txgain[ch]); //[0,30]
-    }
-
-    for (int i = 0; i < R; i++) {
-        struct Radio* bsRadio = &bsRadios[0][i];
-        SoapySDR::Device* dev = bsRadio->dev;
         RadioConfig::drain_buffers(dev, bsRadio->rxs, dummybuffs, _cfg->sampsPerSymbol);
     }
 }

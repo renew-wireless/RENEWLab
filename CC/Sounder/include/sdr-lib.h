@@ -25,13 +25,14 @@ public:
     static void* initBSRadio_launch(void* in_context);
     void radioConfigure();
     void radioStart();
+    void radioTrigger();
     void radioStop();
     void readSensors();
     void radioTx(const void* const* buffs);
     void radioRx(void* const* buffs);
     int radioTx(size_t, const void* const* buffs, int flags, long long& frameTime);
     int radioRx(size_t, void* const* buffs, long long& frameTime);
-    void initAGC(SoapySDR::Device * iclSdrs);
+    void initAGC(SoapySDR::Device* iclSdrs);
     void sync_delays(int cellIdx);
 
     ~RadioConfig();
