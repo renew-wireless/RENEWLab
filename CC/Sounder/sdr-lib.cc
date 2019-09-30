@@ -429,7 +429,7 @@ void RadioConfig::radioConfigure()
 
 SoapySDR::Device* RadioConfig::baseRadio(int cellId)
 {
-    return (!hubs.empty() ? bsRadios[cellId][0].dev : hubs[cellId]);
+    return (hubs.empty() ? bsRadios[cellId][0].dev : hubs[cellId]);
 }
 
 void RadioConfig::radioTrigger(void)
