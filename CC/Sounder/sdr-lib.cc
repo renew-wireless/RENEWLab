@@ -427,13 +427,14 @@ void RadioConfig::radioConfigure()
     std::cout << "Done with frame configuration!" << std::endl;
 }
 
+SoapySDR::Device* RadioConfig::baseRadio(int cellId)
+{
+    return (!hubs.empty() ? bsRadios[cellId][0].dev : hubs[cellId]);
+}
+
 void RadioConfig::radioTrigger(void)
 {
-    if (hubs.empty()) {
-        bsRadios[0][0].dev->writeSetting("TRIGGER_GEN", "");
-    } else {
-        hubs[0]->writeSetting("TRIGGER_GEN", "");
-    }
+    baseRadio(0)->writeSetting("TRIGGER_GEN", "");
 }
 
 void RadioConfig::radioStart()
@@ -696,8 +697,10 @@ void RadioConfig::collectCSI(bool& adjust)
 
 #if DEBUG_PLOT
         std::vector<double> rx_I(_cfg->sampsPerSymbol);
-        std::transform(rx.begin(), rx.end(), rx_I.begin(), [](std::complex<double> cf) { return cf.real(); });
-
+        std::transform(rx.begin(), rx.end(), rx_I.begin(),
+            [](std::complex<double> cf) {
+                return cf.real();
+            });
         plt::figure_size(1200, 780);
         plt::plot(rx_I);
         plt::xlim(0, _cfg->sampsPerSymbol);
@@ -790,11 +793,7 @@ void RadioConfig::sync_delays(int cellIdx)
     /*
      * Compute Sync Delays
      */
-    if (!hubs.empty()) {
-        hubs[cellIdx]->writeSetting("SYNC_DELAYS", "");
-    } else {
-        bsRadios[cellIdx][0].dev->writeSetting("SYNC_DELAYS", "");
-    }
+    baseRadio(cellIdx)->writeSetting("SYNC_DELAYS", "");
 }
 
 RadioConfig::~RadioConfig()
