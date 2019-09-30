@@ -54,8 +54,6 @@ public:
     static int findLTS(const std::vector<std::complex<double>>& iq, int seqLen);
     static std::vector<double> convolve(std::vector<std::complex<double>> const& f, std::vector<std::complex<double>> const& g);
     static std::vector<std::complex<double>> csign(std::vector<std::complex<double>> iq);
-    static void meshgrid(std::vector<int> x_in, std::vector<int> y_in,
-        std::vector<std::vector<int>>& x, std::vector<std::vector<int>>& y);
     static inline int hadamard2(int i, int j) { return (__builtin_parity(i & j) != 0 ? -1 : 1); }
     //private:
     //    static inline float** init_qpsk();

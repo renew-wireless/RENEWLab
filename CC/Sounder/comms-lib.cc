@@ -41,14 +41,14 @@ int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
     lts_seq = CommsLib::getSequence(seqLen, LTS_SEQ);
 
     // Re-arrange into complex vector, flip, and compute conjugate
-    std::vector<std::complex<double>> lts_sym;
-    std::vector<std::complex<double>> lts_sym_conj;
-    for (int i = 0; i < 64; i++) {
+    std::vector<std::complex<double>> lts_sym(64);
+    std::vector<std::complex<double>> lts_sym_conj(lts_sym.size());
+    for (size_t i = 0; i < lts_sym.size(); i++) {
         // lts_seq is a 2x160 matrix (real/imag by seqLen=160 elements)
         // grab one symbol and flip around
-        lts_sym.push_back(std::complex<double>(lts_seq[0][seqLen - 1 - i], lts_seq[1][seqLen - 1 - i]));
+        lts_sym[i] = std::complex<double>(lts_seq[0][seqLen - 1 - i], lts_seq[1][seqLen - 1 - i]);
         // conjugate
-        lts_sym_conj.push_back(std::conj(lts_sym[i]));
+        lts_sym_conj[i] = std::conj(lts_sym[i]);
     }
 
     // Equivalent to numpy's sign function
@@ -56,25 +56,22 @@ int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
 
     // Convolution
     std::vector<double> lts_corr = CommsLib::convolve(iq_sign, lts_sym_conj);
+    double lts_limit = lts_thresh * *std::max_element(lts_corr.begin(), lts_corr.end());
 
     // Find all peaks
     std::vector<int> peaks;
     for (size_t i = 0; i < lts_corr.size(); i++) {
-        if (lts_corr[i] > (lts_thresh * *std::max_element(lts_corr.begin(), lts_corr.end()))) {
+        if (lts_corr[i] > lts_limit) {
             // Index of valid peaks
             peaks.push_back(i);
         }
     }
 
-    std::vector<std::vector<int>> x_vec(peaks.size());
-    std::vector<std::vector<int>> y_vec(peaks.size());
-    CommsLib::meshgrid(peaks, peaks, x_vec, y_vec);
-
-    // Find peaks that are 64 samples apart
+    // Find peaks that are lts_sym.size() samples apart
     std::vector<int> valid_peaks;
-    for (size_t i = 0; i < x_vec.size(); i++) {
-        for (size_t j = 0; j < x_vec[0].size(); j++) {
-            int idx_diff = y_vec[i][j] - x_vec[i][j];
+    for (size_t i = 0; i < peaks.size(); i++) {
+        for (size_t j = 0; j < peaks.size(); j++) {
+            int idx_diff = peaks[i] - peaks[j];
             if (idx_diff == static_cast<int>(lts_sym.size())) {
                 valid_peaks.push_back(peaks[i]);
             }
@@ -88,28 +85,6 @@ int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
     }
 
     return best_peak;
-}
-
-void CommsLib::meshgrid(std::vector<int> x_in, std::vector<int> y_in, std::vector<std::vector<int>>& x, std::vector<std::vector<int>>& y)
-{
-    /*
-     * Simplified version of numpy's meshgrid function. Input vectors must be of same length.
-     * Returns coordinate matrices from coordinate vectors.
-     */
-    int nx = x_in.size();
-    int ny = y_in.size();
-
-    if (nx != ny) {
-        throw std::invalid_argument(" Input vectors to meshgrid function must have same length. ");
-    }
-    for (int i = 0; i < nx; i++) {
-        for (int j = 0; j < ny; j++) {
-            x[i].push_back(x_in[j]);
-            y[i].push_back(y_in[i]);
-            //std::cout << "XXXX x[" << i << "][" << j << "]: " << x[i][j] << std::endl;
-            //std::cout << "YYYY y[" << i << "][" << j << "]: " << y[i][j] << std::endl;
-        }
-    }
 }
 
 std::vector<std::complex<double>> CommsLib::csign(std::vector<std::complex<double>> iq)
