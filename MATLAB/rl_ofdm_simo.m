@@ -23,7 +23,7 @@ end
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_MOD                 = 0;    
-N_BS_NODE = 16;
+N_BS_NODE = 32;
 N_UE = 1;
 
 if SIM_MOD
@@ -152,16 +152,11 @@ else
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
         
-%         b_ids = ["RF3E000134", "RF3E000191", "RF3E000171", "RF3E000105",...
-%             "RF3E000053", "RF3E000177", "RF3E000192", "RF3E000117",...
-%             "RF3E000183", "RF3E000152", "RF3E000123", "RF3E000178", "RF3E000113", "RF3E000176", "RF3E000132", "RF3E000108", ...
-%             "RF3E000143", "RF3E000160", "RF3E000025", "RF3E000034",...
-%             "RF3E000189", "RF3E000024", "RF3E000139", "RF3E000032", "RF3E000154", "RF3E000182", "RF3E000038", "RF3E000137", ...
-%             "RF3E000103", "RF3E000180", "RF3E000181", "RF3E000188"];
-        % IDs of the 4-node chains:
         b_ids = ["RF3E000134", "RF3E000191", "RF3E000171", "RF3E000105",...
             "RF3E000053", "RF3E000177", "RF3E000192", "RF3E000117",...
+            "RF3E000183", "RF3E000152", "RF3E000123", "RF3E000178", "RF3E000113", "RF3E000176", "RF3E000132", "RF3E000108", ...
             "RF3E000143", "RF3E000160", "RF3E000025", "RF3E000034",...
+            "RF3E000189", "RF3E000024", "RF3E000139", "RF3E000032", "RF3E000154", "RF3E000182", "RF3E000038", "RF3E000137", ...
             "RF3E000103", "RF3E000180", "RF3E000181", "RF3E000188"];
         
         hub_id = "FH4A000001";
@@ -224,28 +219,40 @@ l_rx_dec=length(rx_vec_iris);
 
 a = 1;
 unos = ones(size(preamble.'))';
+data_len = (N_OFDM_SYM)*(N_SC +CP_LEN);
+rx_lts_mat = double.empty();
+payload_ind = int32.empty();
+payload_rx = zeros(data_len,N_BS_NODE);
 m_filt = zeros(length(rx_vec_iris),N_BS_NODE);
 for ibs =1:N_BS_NODE
         v0 = filter(flipud(preamble'),a,rx_vec_iris(:,ibs));
         v1 = filter(unos,a,abs(rx_vec_iris(:,ibs)).^2);
         m_filt(:,ibs) = (abs(v0).^2)./v1; % normalized correlation
+        [~, max_idx] = max(m_filt(:,ibs));
+        % In case of bad correlatons:
+        if (max_idx + data_len) > length(rx_vec_iris) || (max_idx < 0) || (max_idx - length(preamble) < 0)
+            fprintf('Bad correlation at antenna %d max_idx = %d \n', ibs, max_idx);
+            % Real value doesn't matter since we have corrrupt data:
+            max_idx = length(rx_vec_iris)-data_len -1;
+            
+        end
+        
+        payload_ind(ibs) = max_idx +1;
+        lts_ind = payload_ind(ibs) - length(preamble);
+        pl_idx = payload_ind(ibs) : payload_ind(ibs) + data_len;
+        rx_lts_mat(:,ibs) = rx_vec_iris(lts_ind: lts_ind + length(preamble) -1, ibs );
+        payload_rx(1:length(pl_idx) -1,ibs) = rx_vec_iris(payload_ind(ibs) : payload_ind(ibs) + length(pl_idx) -2, ibs);
 end
-
+% Just for plotting
 lts_corr = sum(m_filt,2);
-[rho_max, ipos] = max(lts_corr);
-
-% Find all correlation peaks
-payload_ind = ipos +1;
-lts_ind = payload_ind - N_LTS_SYM*(N_SC + CP_LEN);
 
 % Extract LTS for channel estimate
-rx_lts = rx_vec_iris(lts_ind : lts_ind+159,:);
 rx_lts_idx1 = -64+-FFT_OFFSET + (97:160);
 rx_lts_idx2 = -FFT_OFFSET + (97:160);
-% Just for two first brnaches: useful when 1x2 SIMO, to show the
-% improvement:
-rx_lts_b1 = [rx_lts(rx_lts_idx1,1)  rx_lts(rx_lts_idx2,1)];
-rx_lts_b2 = [rx_lts(rx_lts_idx1,2)  rx_lts(rx_lts_idx2,2)];
+% Just for two first brnaches: useful when 1x2 SIMO. Just to illustrate
+% improvement of MRC over two branches:
+rx_lts_b1 = [rx_lts_mat(rx_lts_idx1,1)  rx_lts_mat(rx_lts_idx2,1)];
+rx_lts_b2 = [rx_lts_mat(rx_lts_idx1,2)  rx_lts_mat(rx_lts_idx2,2)];
 
 % Received LTSs for each branch.  
 rx_lts_b1_f = fft(rx_lts_b1);
@@ -263,7 +270,7 @@ H_b2(idx_0,:) = 0;
 % Channel Estimate of multiple branches:
 H_0_t = zeros(N_SC, N_LTS_SYM, N_BS_NODE);
 % Take N_SC samples from each rx_lts (we have sent two LTS)
-rx_lts_nsc = [rx_lts(rx_lts_idx1,:); rx_lts(rx_lts_idx2,:)];
+rx_lts_nsc = [rx_lts_mat(rx_lts_idx1,:); rx_lts_mat(rx_lts_idx2,:)];
 for ibs = 1:N_BS_NODE
     H_0_t(:,:,ibs) = reshape(rx_lts_nsc(:,ibs),[],N_LTS_SYM);
 end
@@ -272,25 +279,11 @@ H_0 =  H_0_f./ repmat(lts_f.',1,N_LTS_SYM,N_BS_NODE);
 
 rx_H_est_2d = squeeze(mean(H_0,2));
 rx_H_est_2d(idx_0,:) = 0;
-%rx_H_est_2d = [H_b1 H_b2];
+
 
 %% Rx payload processing
-% Extract the payload samples (integer number of OFDM symbols following preamble)
-if( (length(rx_vec_iris) - payload_ind ) > (N_SYM_SAMP * N_OFDM_SYM) )
-    payload_vec = rx_vec_iris(payload_ind : payload_ind + (N_SYM_SAMP * N_OFDM_SYM), :);
-else
-    payload_vec = rx_vec_iris(payload_ind : end,:);
-end
 
-missed_samps = (N_SC+CP_LEN) * N_OFDM_SYM - length(payload_vec); %sometimes it's below .
-
-if (missed_samps > 0) 
-    payload_vec = [payload_vec; zeros( missed_samps, N_BS_NODE)];
-elseif (missed_samps < 0)
-    payload_vec = payload_vec(1:end+missed_samps, :);
-end
-
-payload_mat = reshape(payload_vec, (N_SC+CP_LEN), N_OFDM_SYM, N_BS_NODE);
+payload_mat = reshape(payload_rx, (N_SC+CP_LEN), N_OFDM_SYM, N_BS_NODE);
 
 % Remove the cyclic prefix, keeping FFT_OFFSET samples of CP (on average)
  payload_mat_noCP = payload_mat(CP_LEN-FFT_OFFSET+(1:N_SC), :,:);
@@ -445,29 +438,19 @@ end
 % Rx signal (only two branches)
 cf = cf + 1;
 figure(cf);
-subplot(2,2,1);
-plot(real(rx_vec_iris(:,1)));
-axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
-grid on;
-title('Rx Waveform (I) 1');
+for sp = 1:N_BS_NODE
+    subplot(N_BS_NODE,2,2*(sp -1) + 1 );
+    plot(real(rx_vec_iris(:,sp)));
+    axis([0 length(rx_vec_iris(:,sp)) -TX_SCALE TX_SCALE])
+    grid on;
+    %title(sprintf('BS antenna %d Rx Waveform (I)', sp));
 
-subplot(2,2,2);
-plot(imag(rx_vec_iris(:,1)), 'color', sec_clr);
-axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
-grid on;
-title('Rx Waveform (Q) 1');
-
-subplot(2,2,3);
-plot(real(rx_vec_iris(:,2)));
-axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
-grid on;
-title('Rx Waveform (I) 2');
-
-subplot(2,2,4);
-plot(imag(rx_vec_iris(:,2)), 'color', sec_clr);
-axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
-grid on;
-title('Rx Waveform (Q) 2');
+    subplot(N_BS_NODE,2,2*sp);
+    plot(imag(rx_vec_iris(:,sp)), 'color' , sec_clr);
+    axis([0 length(rx_vec_iris(:,sp)) -TX_SCALE TX_SCALE]);
+    grid on;
+    %title(sprintf('BS antenna %d Rx Waveform (Q)', sp));
+end 
 
 if(WRITE_PNG_FILES)
     print(gcf,sprintf('wl_ofdm_plots_%s_rxIQ', example_mode_string), '-dpng', '-r96', '-painters')
@@ -480,7 +463,7 @@ lts_to_plot = lts_corr;
 plot(lts_to_plot, '.-b', 'LineWidth', 1);
 hold on;
 grid on;
-title('LTS Correlation and Threshold')
+title('LTS Correlation');
 xlabel('Sample Index')
 myAxis = axis();
 axis([1, 1000, myAxis(3), myAxis(4)])

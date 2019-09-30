@@ -51,8 +51,6 @@ dev_init(SoapySDR::Device* dev, Config* _cfg, int ch, double rxgain, double txga
 RadioConfig::RadioConfig(Config* cfg)
     : _cfg(cfg)
 {
-    SoapySDR::Kwargs args;
-    SoapySDR::Kwargs sargs;
     if (_cfg->bsPresent) {
         nBsAntennas.resize(_cfg->nCells);
         bsRadios.resize(_cfg->nCells);
@@ -63,6 +61,7 @@ RadioConfig::RadioConfig(Config* cfg)
             std::cout << radioNum << " radios in cell " << c << std::endl;
             //isUE = _cfg->isUE;
             if (!_cfg->hub_ids.empty()) {
+                SoapySDR::Kwargs args;
                 args["driver"] = "remote";
                 args["timeout"] = "1000000";
                 args["serial"] = _cfg->hub_ids.at(c);
@@ -181,7 +180,6 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
         channels = { 0, 1 };
 
     SoapySDR::Kwargs args;
-    SoapySDR::Kwargs sargs;
     args["driver"] = "iris";
     args["timeout"] = "1000000";
     args["serial"] = _cfg->bs_sdr_ids[0][i];
@@ -239,6 +237,7 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
         dev->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
     }
 
+    SoapySDR::Kwargs sargs;
     reset_DATA_clk_domain(dev);
     bsRadio->rxs = dev->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CS16, channels, sargs);
     bsRadio->txs = dev->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CS16, channels, sargs);
