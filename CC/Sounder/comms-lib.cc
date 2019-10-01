@@ -60,18 +60,10 @@ int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
     double lts_limit = lts_thresh * *std::max_element(lts_corr.begin(), lts_corr.end());
 
     // Find all peaks, and pairs that are lts_sym.size() samples apart
-    std::queue<int> peaks;
     std::queue<int> valid_peaks;
-    for (size_t i = 0; i < lts_corr.size(); i++) {
-        bool match = !peaks.empty() && i - peaks.front() == lts_sym.size();
-        if (lts_corr[i] > lts_limit) {
-            // Index of valid peaks
-            peaks.push(i);
-            if (match)
-                valid_peaks.push(i);
-        }
-        if (match)
-            peaks.pop();
+    for (size_t i = lts_sym.size(); i < lts_corr.size(); i++) {
+        if (lts_corr[i] > lts_limit && lts_corr[i - lts_sym.size()] > lts_limit)
+            valid_peaks.push(i);
     }
 
     // Use first LTS found
