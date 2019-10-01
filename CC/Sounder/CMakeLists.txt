@@ -36,5 +36,5 @@ message(STATUS "HDF5_LIBRARIES: ${HDF5_LIBRARIES}")
 include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS} ${PYTHON_INCLUDE_DIRS})
 
 add_executable(sounder main.cc config.cc receiver.cc recorder.cc sdr-lib.cc comms-lib.cc utils.cc signalHandler.cpp)
-target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe ${SoapySDR_LIBRARIES} ${HDF5_LIBRARIES} ${CMAKE_SOURCE_DIR}/lib/libmuFFT.a ${CMAKE_SOURCE_DIR}/lib/libmuFFT-sse.a ${CMAKE_SOURCE_DIR}/lib/libmuFFT-sse3.a ${CMAKE_SOURCE_DIR}/lib/libmuFFT-avx.a ${PYTHON_LIBRARIES})
+target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe ${SoapySDR_LIBRARIES} ${HDF5_LIBRARIES} ${CMAKE_SOURCE_DIR}/mufft/libmuFFT.a ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse.a ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse3.a ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-avx.a ${PYTHON_LIBRARIES})
 
