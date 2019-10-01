@@ -63,7 +63,7 @@ int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
     std::queue<int> valid_peaks;
     for (size_t i = lts_sym.size(); i < lts_corr.size(); i++) {
         if (lts_corr[i] > lts_limit && lts_corr[i - lts_sym.size()] > lts_limit)
-            valid_peaks.push(i);
+            valid_peaks.push(i - lts_sym.size());
     }
 
     // Use first LTS found
