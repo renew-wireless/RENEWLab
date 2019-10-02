@@ -192,8 +192,6 @@ def init(hub, bnodes, ref_ant, ampl, rate,
     prev_take = take
     cur_mean_ang = np.ndarray(shape=(num_ants, pilot_sc_num), dtype=float)
     cur_mean_mag = np.ndarray(shape=(num_ants, pilot_sc_num), dtype=float)
-    cur_var_ang = np.ndarray(shape=(num_ants, pilot_sc_num), dtype=float)
-    cur_var_mag = np.ndarray(shape=(num_ants, pilot_sc_num), dtype=float)
     prev_mean_ang = np.ndarray(shape=(num_ants, pilot_sc_num), dtype=float)
     prev_mean_mag = np.ndarray(shape=(num_ants, pilot_sc_num), dtype=float)
     first_mean_ang = np.ndarray(shape=(num_ants, pilot_sc_num), dtype=float)
@@ -284,36 +282,34 @@ def init(hub, bnodes, ref_ant, ampl, rate,
                     ang_buffer_shot = ang_buffer_list[-take_num:]
                     cur_mean_mag[m,p] = np.mean(mag_buffer_shot)
                     cur_mean_ang[m,p] = np.mean(ang_buffer_shot)
-                    cur_var_mag[m,p] = np.std(mag_buffer_shot)
-                    cur_var_ang[m,p] = np.std(ang_buffer_shot)
-                    if first:
-                        first_mean_mag[m,p] = cur_mean_mag[m,p]
-                        first_mean_ang[m,p] = cur_mean_ang[m,p]
-                        first = False
+            if first:
+                first_mean_mag = cur_mean_mag.copy()
+                first_mean_ang = cur_mean_ang.copy()
+                first = False
 
             mag_drift_last = cur_mean_mag - prev_mean_mag
             ang_drift_last = np.unwrap(cur_mean_ang - prev_mean_ang)
             mag_drift_start = cur_mean_mag - first_mean_mag
             ang_drift_start = np.unwrap(cur_mean_ang - first_mean_ang)
-            print("%d takes, %f secs elapsed:"%(take, cur_time-begin))
-            print("Mag Last Drift:")
-            print(mag_drift_last)
+            print("%d total takes, %d new takes, %f secs elapsed:"%(take, take_num, cur_time-begin))
+            print("Mag drift from last take:")
+            print(mag_drift_last[1:,:])
             print("")
-            print("Ang Last Drift:")
-            print(ang_drift_last)
+            print("Ang drift from last take:")
+            print(ang_drift_last[1:,:])
             print("")
-            print("Mag Drift from Start:")
-            print(mag_drift_start)
+            print("Mag drift from first take:")
+            print(mag_drift_start[1:,:])
             print("")
-            print("Ang Drift from Start:")
-            print(ang_drift_start)
+            print("Ang drift from first take:")
+            print(ang_drift_start[1:,:])
             print("")
             print("")
             print("")
             prev_time = cur_time
             prev_take = take
-            prev_mean_mag[m,p] = cur_mean_mag[m,p]
-            prev_mean_ang[m,p] = cur_mean_ang[m,p]
+            prev_mean_mag = cur_mean_mag.copy()
+            prev_mean_ang = cur_mean_ang.copy()
         take += 1
 
     for r,sdr in enumerate(bsdrs):
