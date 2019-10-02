@@ -53,7 +53,8 @@ def signal_handler(signum, frame):
 
 def init(hub, bnodes, ref_ant, ampl, rate,
         freq, txgain, rxgain, cyc_prefix, num_samps,
-        prefix_length, postfix_length, both_channels, plotter):
+        prefix_length, postfix_length, take_duration,
+        both_channels, plotter):
     """main function initializing all radios and performing calibration"""
 
     if hub != "":
@@ -145,7 +146,7 @@ def init(hub, bnodes, ref_ant, ampl, rate,
         sdr.activateStream(tx_streams[r])
 
     rx_samps = [[np.empty(sym_samps).astype(np.complex64) for r in range(num_ants)] for t in range(num_ants)]
-    csi = [[np.empty(fft_size).astype(np.complex64) for r in range(num_ants)] for t in range(num_ants)]
+    rx_f = [[np.empty(fft_size).astype(np.complex64) for r in range(num_ants)] for t in range(num_ants)]
     calib_mag = [np.empty(fft_size).astype(np.complex64) for r in range(num_ants)]
     calib_ang = [np.empty(fft_size).astype(np.complex64) for r in range(num_ants)]
     mag_buffer = [[collections.deque(maxlen=NUM_BUFFER_SAMPS) for i in range(pilot_sc_num)] for j in range(num_ants)]
@@ -186,30 +187,41 @@ def init(hub, bnodes, ref_ant, ampl, rate,
         lines22 = [[axes2[m,l].plot(range(sym_samps), sym_samps*[LTS_THRESH])[0] for m in range(num_ants)] for l in range(num_ants)] 
         fig2.show()
 
-    cround = 1
+    first = True
+    take = 0
+    prev_take = take
+    cur_mean_ang = np.ndarray(shape=(num_ants, pilot_sc_num), dtype=float)
+    cur_mean_mag = np.ndarray(shape=(num_ants, pilot_sc_num), dtype=float)
+    cur_var_ang = np.ndarray(shape=(num_ants, pilot_sc_num), dtype=float)
+    cur_var_mag = np.ndarray(shape=(num_ants, pilot_sc_num), dtype=float)
+    prev_mean_ang = np.ndarray(shape=(num_ants, pilot_sc_num), dtype=float)
+    prev_mean_mag = np.ndarray(shape=(num_ants, pilot_sc_num), dtype=float)
+    first_mean_ang = np.ndarray(shape=(num_ants, pilot_sc_num), dtype=float)
+    first_mean_mag = np.ndarray(shape=(num_ants, pilot_sc_num), dtype=float)
+
     signal.signal(signal.SIGINT, signal_handler)
     begin = time.time()
     prev_time = begin
-    while(RUNNING):
-        for m in range(num_sdrs):
-            ref_sdr = bsdrs[m]
+    while RUNNING:
+        for d in range(num_sdrs):
+            ref_sdr = bsdrs[d]
             flags = SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST
 
             # transmit pilot from node m
-            sr = ref_sdr.writeStream(tx_streams[m], [wb_pilot_pad, wbz], sym_samps, flags)
+            sr = ref_sdr.writeStream(tx_streams[d], [wb_pilot_pad, wbz], sym_samps, flags)
             if sr.ret == -1:
                 print("bad write")
             
             flags = SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST
             for r,sdr in enumerate(bsdrs):
-                if r != m: 
+                if r != d: 
                     sdr.activateStream(rx_streams[r], flags, 0, sym_samps)
 
             trig_dev.writeSetting("TRIGGER_GEN", "")
             
             for r,sdr in enumerate(bsdrs):
-                if r != m:
-                    sr = sdr.readStream(rx_streams[r], [rx_samps[m][r], dummy], sym_samps, timeoutUs=int(1e6))
+                if r != d:
+                    sr = sdr.readStream(rx_streams[r], [rx_samps[d][r], dummy], sym_samps, timeoutUs=int(1e6))
                     if sr.ret != sym_samps:
                         print("bad read %d"%sr.ret)
 
@@ -219,15 +231,16 @@ def init(hub, bnodes, ref_ant, ampl, rate,
             for p in range(num_ants):
                 if m != p:
                     rx_samps[m][p] -= np.mean(rx_samps[m][p])
-                    a0, _, _ = find_lts(rx_samps[m][p], thresh=LTS_THRESH, flip=True)
-                    offset = 0 if not a0 else a0 - len(lts_sym) + cp_len
+                    best_peak, _, _ = find_lts(rx_samps[m][p], thresh=LTS_THRESH, flip=True)
+                    offset = 0 if not best_peak else best_peak - len(lts_sym) + cp_len
                     if offset < 150:
-                        print("bad round, skip")
+                        print("bad take, skip")
                         bad_round = True
                         #break
-                    H1 = np.fft.fft(rx_samps[m][p][offset:offset+fft_size], fft_size, 0) 
-                    H2 = np.fft.fft(rx_samps[m][p][offset+fft_size:offset+2*fft_size], fft_size, 0)
-                    csi[m][p] = (H1+H2)/2
+                    rx_m_p = rx_samps[m][p]
+                    rx_f1 = np.fft.fft(rx_m_p[offset:offset+fft_size], fft_size, 0)
+                    rx_f2 = np.fft.fft(rx_m_p[offset+fft_size:offset+2*fft_size], fft_size, 0)
+                    rx_f[m][p] = (rx_f1+rx_f2)/2
 
                     if plotter:
                         lines20[m][p].set_ydata(np.real(rx_samps[m][p]))
@@ -242,8 +255,8 @@ def init(hub, bnodes, ref_ant, ampl, rate,
                 calib_mag[m] = np.ones(fft_size)
                 calib_ang[m] = np.zeros(fft_size)
             else: 
-                calib_mag[m] = np.divide(np.abs(csi[m][ref_ant]), np.abs(csi[ref_ant][m]))
-                calib_ang[m] = np.angle(csi[m][ref_ant]*np.conj(csi[ref_ant][m]))
+                calib_mag[m] = np.divide(np.abs(rx_f[m][ref_ant]), np.abs(rx_f[ref_ant][m]))
+                calib_ang[m] = np.angle(rx_f[m][ref_ant]*np.conj(rx_f[ref_ant][m]))
             for c in range(pilot_sc_num):
                 s = pilot_subcarriers[c]
                 mag_buffer[m][c].append(calib_mag[m][s])
@@ -260,15 +273,52 @@ def init(hub, bnodes, ref_ant, ampl, rate,
             fig2.canvas.draw()
             fig2.show()
 
-        cround += 1
         cur_time = time.time()
-        if (cur_time - prev_time > 3):
-            print("%d rounds, %f secs elapsed"%(cround, cur_time-begin))
-            prev_time = cur_time
+        if (cur_time - prev_time > take_duration):
+            take_num = take - prev_take
+            for m in range(num_ants):
+                for p in range(pilot_sc_num):
+                    mag_buffer_list = list(mag_buffer[m][p])
+                    ang_buffer_list = list(ang_buffer[m][p])
+                    mag_buffer_shot = mag_buffer_list[-take_num:]
+                    ang_buffer_shot = ang_buffer_list[-take_num:]
+                    cur_mean_mag[m,p] = np.mean(mag_buffer_shot)
+                    cur_mean_ang[m,p] = np.mean(ang_buffer_shot)
+                    cur_var_mag[m,p] = np.std(mag_buffer_shot)
+                    cur_var_ang[m,p] = np.std(ang_buffer_shot)
+                    if first:
+                        first_mean_mag[m,p] = cur_mean_mag[m,p]
+                        first_mean_ang[m,p] = cur_mean_ang[m,p]
+                        first = False
 
-    for r in range(len(bsdrs)):
-        bsdrs[r].closeStream(tx_streams[r])
-        bsdrs[r].closeStream(rx_streams[r])
+            mag_drift_last = cur_mean_mag - prev_mean_mag
+            ang_drift_last = np.unwrap(cur_mean_ang - prev_mean_ang)
+            mag_drift_start = cur_mean_mag - first_mean_mag
+            ang_drift_start = np.unwrap(cur_mean_ang - first_mean_ang)
+            print("%d takes, %f secs elapsed:"%(take, cur_time-begin))
+            print("Mag Last Drift:")
+            print(mag_drift_last)
+            print("")
+            print("Ang Last Drift:")
+            print(ang_drift_last)
+            print("")
+            print("Mag Drift from Start:")
+            print(mag_drift_start)
+            print("")
+            print("Ang Drift from Start:")
+            print(ang_drift_start)
+            print("")
+            print("")
+            print("")
+            prev_time = cur_time
+            prev_take = take
+            prev_mean_mag[m,p] = cur_mean_mag[m,p]
+            prev_mean_ang[m,p] = cur_mean_ang[m,p]
+        take += 1
+
+    for r,sdr in enumerate(bsdrs):
+        sdr.closeStream(tx_streams[r])
+        sdr.closeStream(rx_streams[r])
 
 def main():
     parser = OptionParser()
@@ -285,6 +335,7 @@ def main():
     parser.add_option("--num-samps", type="int", dest="num_samps", help="Number of samples in Symbol", default=400)
     parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)
     parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)
+    parser.add_option("--take-duration", type="float", dest="take_duration", help="measurement single take duration", default=5.0)
     parser.add_option("--both-channels", action="store_true", dest="both_channels", help="transmit from both channels",default=False)
     parser.add_option("--plot-samps", action="store_true", dest="plotter", help="plots all rx signals",default=False)
     (options, args) = parser.parse_args()
@@ -311,6 +362,7 @@ def main():
 	num_samps=options.num_samps,
         prefix_length=options.prefix_length,
         postfix_length=options.postfix_length,
+        take_duration=options.take_duration,
         both_channels=options.both_channels,
 	plotter=options.plotter
     )
