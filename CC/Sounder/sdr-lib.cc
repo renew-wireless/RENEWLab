@@ -44,7 +44,7 @@ dev_init(SoapySDR::Device* dev, Config* _cfg, int ch, double rxgain, double txga
     dev->setGain(SOAPY_SDR_RX, ch, "LNA", rxgain);
     dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0); //[0,12]
     dev->setGain(SOAPY_SDR_RX, ch, "PGA", 0); //[-12,19]
-    dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 12); //[0,12]
+    dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 0); //[0,12]
     dev->setGain(SOAPY_SDR_TX, ch, "PAD", txgain);
 }
 
@@ -118,12 +118,14 @@ RadioConfig::RadioConfig(Config* cfg)
 
                 if (info["frontend"].find("CBRS") != std::string::npos) {
                     // receive gains
-                    dev->setGain(SOAPY_SDR_RX, ch, "ATTN", -12); //[-18,0]
                     dev->setGain(SOAPY_SDR_RX, ch, "LNA1", 30); //[0,33]
-                    if (cfg->freq >= 3e9)
+                    if (cfg->freq >= 3e9) {
+                        dev->setGain(SOAPY_SDR_RX, ch, "ATTN", 0); //[-18,0]
                         dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 14); //[0,14]
-                    else if (_cfg->freq > 2e9)
+                    } else if (_cfg->freq > 2e9) {
+                        dev->setGain(SOAPY_SDR_RX, ch, "ATTN", -12); //[-18,0]
                         dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //[0,17]
+                    }
 
                     // transmit gains
                     dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //{-18,-12,-6,0}
