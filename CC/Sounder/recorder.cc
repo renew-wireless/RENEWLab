@@ -263,6 +263,9 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         // Number of symbols in a frame
         write_attribute(mainGroup, "BS_FRAME_LEN", cfg->symbolsPerFrame);
 
+        // Number of uplink symbols per frame
+        write_attribute(mainGroup, "UL_SYMS", (int)cfg->ulSymsPerFrame);
+
         // ******* Clients ******** //
         // Data subcarriers
         write_attribute(mainGroup, "OFDM_DATA_SC", cfg->data_ind);
@@ -297,36 +300,34 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         // Number of Clients
         write_attribute(mainGroup, "CL_NUM", (int)cfg->nClSdrs);
 
-        // Client antenna polarization
-        write_attribute(mainGroup, "CL_CH_PER_RADIO", cfg->clSdrCh);
+        if (cfg->clPresent) {
+            // Client antenna polarization
+            write_attribute(mainGroup, "CL_CH_PER_RADIO", cfg->clSdrCh);
 
-        // Client AGC enable flag
-        write_attribute(mainGroup, "CL_AGC_EN", cfg->clAgcEn ? 1 : 0);
+            // Client AGC enable flag
+            write_attribute(mainGroup, "CL_AGC_EN", cfg->clAgcEn ? 1 : 0);
 
-        // RX Gain RF channel A
-        write_attribute(mainGroup, "CL_RX_GAIN_A", cfg->clRxgain_vec[0]);
+            // RX Gain RF channel A
+            write_attribute(mainGroup, "CL_RX_GAIN_A", cfg->clRxgain_vec[0]);
 
-        // TX Gain RF channel A
-        write_attribute(mainGroup, "CL_TX_GAIN_A", cfg->clTxgain_vec[0]);
+            // TX Gain RF channel A
+            write_attribute(mainGroup, "CL_TX_GAIN_A", cfg->clTxgain_vec[0]);
 
-        // RX Gain RF channel B
-        write_attribute(mainGroup, "CL_RX_GAIN_B", cfg->clRxgain_vec[1]);
+            // RX Gain RF channel B
+            write_attribute(mainGroup, "CL_RX_GAIN_B", cfg->clRxgain_vec[1]);
 
-        // TX Gain RF channel B
-        write_attribute(mainGroup, "CL_TX_GAIN_B", cfg->clTxgain_vec[1]);
+            // TX Gain RF channel B
+            write_attribute(mainGroup, "CL_TX_GAIN_B", cfg->clTxgain_vec[1]);
 
-        // Client frame schedule (vec of strings)
-        write_attribute(mainGroup, "CL_FRAME_SCHED", cfg->clFrames);
+            // Client frame schedule (vec of strings)
+            write_attribute(mainGroup, "CL_FRAME_SCHED", cfg->clFrames);
 
-        // Set of client SDR IDs (vec of strings)
-        write_attribute(mainGroup, "CL_SDR_ID", cfg->cl_sdr_ids);
+            // Set of client SDR IDs (vec of strings)
+            write_attribute(mainGroup, "CL_SDR_ID", cfg->cl_sdr_ids);
 
-        // Data modulation
-        write_attribute(mainGroup, "CL_MODULATION", cfg->clDataMod);
-
-        // Number of uplink symbols per frame
-        write_attribute(mainGroup, "UL_SYMS", (int)cfg->ulSymsPerFrame);
-
+            // Data modulation
+            write_attribute(mainGroup, "CL_MODULATION", cfg->clDataMod);
+        }
         // ********************* //
 
         pilot_prop.close();

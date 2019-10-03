@@ -5,6 +5,11 @@ This folder includes a library of code for running channel sounding
 experiments with an RENEW base station hardware. To run, follow steps below:
 
 ```shell
+cd mufft
+git submodule update --init
+cmake ./
+make -j
+cd ../
 cmake ./
 make -j
 ./sounder files/tddconfig.json
