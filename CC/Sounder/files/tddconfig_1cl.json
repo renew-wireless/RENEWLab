@@ -3,8 +3,8 @@
 		 "cells" : 1,
 		 "sdr_id" : ["files/iris_serials.txt"],
 		 "hub_id" : "files/hub_serials.txt",
-		 "frequency" : 2.5e9,
-		 "channel" : "AB",
+		 "frequency" : 3.6e9,
+		 "channel" : "A",
 		 "rxgainA" : 20,
 		 "txgainA" : 40,
 		 "rxgainB" : 20,
@@ -23,14 +23,14 @@
 		 "beamsweep" : true,
                  "sample_calibrate" : true,
 		 "beacon_antenna" : 0,
-		 "pilot_seq" : "lts-full"
+		 "pilot_seq" : "lts-half"
 	},
 
 	"Clients" : {
 		 "sdr_id" : [
-		     "RF3E000145"
+		     "RF3C000045"
 		 ],
-		 "frequency" : 2.5e9,
+		 "frequency" : 3.6e9,
 		 "channel" : "A",
 		 "agc_en" : false,
 		 "rxgainA" : [20],
@@ -48,7 +48,7 @@
 		 "prefix" : 82,
 		 "postfix" : 68,
 		 "beacon_seq" : "gold_ifft",
-		 "pilot_seq" : "lts-full",
+		 "pilot_seq" : "lts-half",
 		 "modulation" : "16QAM"
 	}
 }

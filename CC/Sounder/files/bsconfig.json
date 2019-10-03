@@ -1,10 +1,10 @@
 {
 	"BaseStations" : {
 		 "cells" : 1,
-		 "sdr_id" : ["files/iris_serials.txt"],
+		 "sdr_id" : ["files/iris_serials1.txt"],
 		 "hub_id" : "files/hub_serials.txt",
-		 "frequency" : 2.5e9,
-		 "channel" : "AB",
+		 "frequency" : 3.6e9,
+		 "channel" : "A",
 		 "rxgainA" : 20,
 		 "txgainA" : 40,
 		 "rxgainB" : 20,
