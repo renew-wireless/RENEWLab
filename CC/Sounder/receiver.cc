@@ -162,9 +162,11 @@ void Receiver::loopRecv(ReceiverContext* context)
         }
         // receive data
         for (int it = radio_start; it < radio_end; it++) {
+            Package* pkg[bsSdrCh];
             void* samp[bsSdrCh];
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
-                samp[ch] = buffer + 4 * sizeof(int) + (cursor + ch) * config_->getPackageLength();
+                pkg[ch] = (Package*)(buffer + (cursor + ch) * config_->getPackageLength());
+                samp[ch] = pkg[ch]->data;
             }
             long long frameTime;
             if (radioconfig_->radioRx(it, samp, frameTime) < 0) {
@@ -177,16 +179,14 @@ void Receiver::loopRecv(ReceiverContext* context)
             int ant_id = it * bsSdrCh;
 #if DEBUG_PRINT
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
-                Package* pkg = (Package*)(buffer + (cursor + ch) * config_->getPackageLength());
                 printf("receive thread %d, frame %d, symbol %d, ant %d samples: %d %d %d %d %d %d %d %d ...\n",
                     tid, frame_id, symbol_id, ant_id + ch,
-                    pkg->data[1], pkg->data[2], pkg->data[3], pkg->data[4],
-                    pkg->data[5], pkg->data[6], pkg->data[7], pkg->data[8]);
+                    pkg[ch]->data[1], pkg[ch]->data[2], pkg[ch]->data[3], pkg[ch]->data[4],
+                    pkg[ch]->data[5], pkg[ch]->data[6], pkg[ch]->data[7], pkg[ch]->data[8]);
             }
 #endif
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
-                new (buffer + (cursor + ch) * config_->getPackageLength())
-                    Package(frame_id, symbol_id, 0, ant_id + ch);
+                new (pkg[ch]) Package(frame_id, symbol_id, 0, ant_id + ch);
                 // move ptr & set status to full
                 pkg_buf_inuse[cursor + ch] = true; // has data, after it is read it should be set to 0
                 // push EVENT_RX_SYMBOL event into the queue
