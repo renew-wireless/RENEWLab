@@ -560,7 +560,7 @@ herr_t Recorder::record(int, int offset)
     char* cur_ptr_buffer = rx_buffer_[buffer_id].buffer.data() + offset * cfg->getPackageLength();
     struct Package* pkg = (struct Package*)cur_ptr_buffer;
 #if DEBUG_PRINT
-    printf("record frame %d, symbol %d, cell %d, ant %d samples: %d %d %d %d %d %d %d %d ....\n",
+    printf("record            frame %d, symbol %d, cell %d, ant %d samples: %d %d %d %d %d %d %d %d ....\n",
         pkg->frame_id, pkg->symbol_id, pkg->cell_id, pkg->ant_id,
         pkg->data[1], pkg->data[2], pkg->data[3], pkg->data[4],
         pkg->data[5], pkg->data[6], pkg->data[7], pkg->data[8]);

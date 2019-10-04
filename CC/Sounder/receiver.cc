@@ -179,8 +179,8 @@ void Receiver::loopRecv(ReceiverContext* context)
             int ant_id = it * bsSdrCh;
 #if DEBUG_PRINT
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
-                printf("receive thread %d, frame %d, symbol %d, ant %d samples: %d %d %d %d %d %d %d %d ...\n",
-                    tid, frame_id, symbol_id, ant_id + ch,
+                printf("receive thread %d, frame %d, symbol %d, cell %d, ant %d samples: %d %d %d %d %d %d %d %d ...\n",
+                    tid, frame_id, symbol_id, 0, ant_id + ch,
                     pkg[ch]->data[1], pkg[ch]->data[2], pkg[ch]->data[3], pkg[ch]->data[4],
                     pkg[ch]->data[5], pkg[ch]->data[6], pkg[ch]->data[7], pkg[ch]->data[8]);
             }
