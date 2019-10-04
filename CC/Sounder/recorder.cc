@@ -383,6 +383,7 @@ void Recorder::openHDF5()
 #if DEBUG_PRINT
     hsize_t IQ = 2 * cfg->sampsPerSymbol;
     int cndims_pilot = 0;
+    int ndims = pilot_filespace.getSimpleExtentNdims();
     if (H5D_CHUNKED == pilot_prop.getLayout())
         cndims_pilot = pilot_prop.getChunk(ndims, cdims_pilot);
     using std::cout;
@@ -391,9 +392,10 @@ void Recorder::openHDF5()
         frame_number_pilot, cfg->nCells,
         cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
     };
-    cout << "New Pilot Dataset Dimension " << ndims << ",";
+    cout << "New Pilot Dataset Dimension: [";
     cout << dims_pilot[0] << "," << dims_pilot[1] << ",";
-    cout << dims_pilot[2] << "," << dims_pilot[3] << "," << IQ < std::endl;
+    cout << dims_pilot[2] << "," << dims_pilot[3] << ",";
+    cout << IQ << "]" << std::endl;
 #endif
     pilot_filespace.close();
     // Get Dataset for DATA (If Enabled) and check the shape of it
@@ -558,9 +560,8 @@ herr_t Recorder::record(int, int offset)
     char* cur_ptr_buffer = rx_buffer_[buffer_id].buffer.data() + offset * cfg->getPackageLength();
     struct Package* pkg = (struct Package*)cur_ptr_buffer;
 #if DEBUG_PRINT
-    printf("record process frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n",
-        pkg->frame_id, pkg->symbol_id, pkg->cell_id, pkg->ant_id);
-    printf("record samples: %d %d %d %d %d %d %d %d ....\n",
+    printf("record frame %d, symbol %d, cell %d, ant %d samples: %d %d %d %d %d %d %d %d ....\n",
+        pkg->frame_id, pkg->symbol_id, pkg->cell_id, pkg->ant_id,
         pkg->data[1], pkg->data[2], pkg->data[3], pkg->data[4],
         pkg->data[5], pkg->data[6], pkg->data[7], pkg->data[8]);
 #endif

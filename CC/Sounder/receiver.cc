@@ -176,12 +176,13 @@ void Receiver::loopRecv(ReceiverContext* context)
             int symbol_id = (int)((frameTime >> 16) & 0xFFFF);
             int ant_id = it * bsSdrCh;
 #if DEBUG_PRINT
-            Package* pkg = (Package*)(buffer + cursor * config_->getPackageLength());
-            printf("receive thread %d, frame_id %d, symbol_id %d, cell_id %d, ant_id %d\n",
-                tid, frame_id, symbol_id, cell_id, ant_id);
-            printf("receive samples: %d %d %d %d %d %d %d %d ...\n",
-                pkg->data[1], pkg->data[2], pkg->data[3], pkg->data[4],
-                pkg->data[5], pkg->data[6], pkg->data[7], pkg->data[8]);
+            for (auto ch = 0; ch < bsSdrCh; ++ch) {
+                Package* pkg = (Package*)(buffer + (cursor + ch) * config_->getPackageLength());
+                printf("receive thread %d, frame %d, symbol %d, ant %d samples: %d %d %d %d %d %d %d %d ...\n",
+                    tid, frame_id, symbol_id, ant_id + ch,
+                    pkg->data[1], pkg->data[2], pkg->data[3], pkg->data[4],
+                    pkg->data[5], pkg->data[6], pkg->data[7], pkg->data[8]);
+            }
 #endif
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
                 new (buffer + (cursor + ch) * config_->getPackageLength())
@@ -193,7 +194,7 @@ void Receiver::loopRecv(ReceiverContext* context)
                 package_message.event_type = EVENT_RX_SYMBOL;
                 // data records the position of this packet in the buffer & tid of this socket
                 // (so that task thread could know which buffer it should visit)
-                package_message.data = cursor + tid * buffer_frame_num;
+                package_message.data = cursor + ch + tid * buffer_frame_num;
                 if (!message_queue_->enqueue(local_ptok, package_message)) {
                     printf("socket message enqueue failed\n");
                     exit(0);

@@ -216,7 +216,7 @@ Config::Config(const std::string& jsonfile)
 
         pilot = Utils::cint16_to_uint32(pilot_ci16, false, "QI");
 #if DEBUG_PRINT
-        for (int j = 0; j < pilot.size(); j++) {
+        for (size_t j = 0; j < pilot.size(); j++) {
             std::cout << "Pilot[" << j << "]: \t " << pilot_ci16[j] << std::endl;
         }
 #endif
@@ -285,13 +285,13 @@ Config::Config(const std::string& jsonfile)
                 txdata_freq_dom.push_back(data_freq_dom);
             }
 #if DEBUG_PRINT
-            for (int i = 0; i < txdata.size(); i++) {
-                for (int j = 0; j < txdata[i].size(); j++) {
+            for (size_t i = 0; i < txdata.size(); i++) {
+                for (size_t j = 0; j < txdata[i].size(); j++) {
                     std::cout << "Values[" << i << "][" << j << "]: \t " << txdata[i][j] << std::endl;
                 }
             }
-            for (int i = 0; i < txdata_freq_dom.size(); i++) {
-                for (int j = 0; j < txdata_freq_dom[i].size(); j++) {
+            for (size_t i = 0; i < txdata_freq_dom.size(); i++) {
+                for (size_t j = 0; j < txdata_freq_dom[i].size(); j++) {
                     std::cout << "FREQ DOMAIN Values[" << i << "][" << j << "]: \t " << txdata_freq_dom[i][j] << std::endl;
                 }
             }
@@ -353,9 +353,6 @@ int Config::getClientId(int frame_id, int symbol_id)
     int fid = frame_id % frames.size();
     it = find(pilotSymbols[fid].begin(), pilotSymbols[fid].end(), symbol_id);
     if (it != pilotSymbols[fid].end()) {
-#if DEBUG_PRINT
-        printf("getClientId(%d, %d) = %d\n", frame_id, symbol_id, it - pilotSymbols[fid].begin());
-#endif
         return it - pilotSymbols[fid].begin();
     }
     return -1;
@@ -367,9 +364,6 @@ int Config::getUlSFIndex(int frame_id, int symbol_id)
     int fid = frame_id % frames.size();
     it = find(ULSymbols[fid].begin(), ULSymbols[fid].end(), symbol_id);
     if (it != ULSymbols[fid].end()) {
-#if DEBUG_PRINT
-        printf("getUlSFIndexId(%d, %d) = %d\n", frame_id, symbol_id, it - ULSymbols[fid].begin());
-#endif
         return it - ULSymbols[fid].begin();
     }
     return -1;
