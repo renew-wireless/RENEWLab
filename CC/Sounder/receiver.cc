@@ -153,15 +153,15 @@ void Receiver::loopRecv(ReceiverContext* context)
 
     printf("receiver thread %d has %d radios\n", tid, radio_end - radio_start);
 
-    for (int cursor = 0; config_->running;
-         cursor += bsSdrCh, cursor %= buffer_frame_num) {
-        // if buffer is full, exit
-        if (pkg_buf_inuse[cursor]) {
-            printf("thread %d buffer full\n", tid);
-            exit(0);
-        }
+    int cursor = 0;
+    while (config_->running) {
         // receive data
         for (int it = radio_start; it < radio_end; it++) {
+            // if buffer is full, exit
+            if (pkg_buf_inuse[cursor]) {
+                printf("thread %d buffer full\n", tid);
+                exit(0);
+            }
             Package* pkg[bsSdrCh];
             void* samp[bsSdrCh];
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
@@ -200,6 +200,8 @@ void Receiver::loopRecv(ReceiverContext* context)
                     exit(0);
                 }
             }
+            cursor += bsSdrCh;
+            cursor %= buffer_frame_num;
         }
     }
 }
