@@ -43,14 +43,13 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, n_frm_st=0, do_corr=False):
     plt.close("all")
     data = hdf5.data
     metadata = hdf5.metadata
-    samples = hdf5.samples
-        
+    pilot_samples = hdf5.pilot_samples
+    uplink_samples = hdf5.uplink_samples
 
     # Check which data we have available
     data_types_avail = []
     pilots_avail = bool(data['Pilot_Samples'])
     ul_data_avail = bool(data['UplinkData'])
-    offset = int(np.squeeze(data['Attributes']['PREFIX_LEN']))
 
     if pilots_avail:
         data_types_avail.append("PILOTS")
@@ -64,14 +63,15 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, n_frm_st=0, do_corr=False):
         raise Exception(' **** No pilots or uplink data found **** ')
 
     # Retrieve attributes
-    freq = np.squeeze(data['Attributes']['FREQ'])
-    rate = np.squeeze(data['Attributes']['RATE'])
-    symbol_length = np.squeeze(data['Attributes']['SYMBOL_LEN'])
-    num_cl = np.squeeze(data['Attributes']['CL_NUM'])
-    cp = np.squeeze(data['Attributes']['CP_LEN'])
-    prefix_len = np.squeeze(data['Attributes']['PREFIX_LEN'])
-    postfix_len = np.squeeze(data['Attributes']['POSTFIX_LEN'])
+    freq = np.squeeze(metadata['FREQ'])
+    rate = np.squeeze(metadata['RATE'])
+    symbol_length = np.squeeze(metadata['SYMBOL_LEN'])
+    num_cl = np.squeeze(metadata['CL_NUM'])
+    cp = np.squeeze(metadata['CP_LEN'])
+    prefix_len = np.squeeze(metadata['PREFIX_LEN'])
+    postfix_len = np.squeeze(metadata['POSTFIX_LEN'])
     z_padding = prefix_len + postfix_len
+    offset = int(np.squeeze(metadata['PREFIX_LEN']))
 
     print(" symbol_length = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}".format(symbol_length, cp, prefix_len, postfix_len, z_padding))
    
@@ -99,13 +99,13 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, n_frm_st=0, do_corr=False):
     for idx, ftype in enumerate(data_types_avail):
         if ftype == "PILOTS":
             axes[0, idx].set_title('PILOTS - Cell 0')
-            samples = data['Pilot_Samples']['Samples']
+            samples = pilot_samples 
             num_cl_tmp = num_cl  # number of UEs to plot data for
 
         elif ftype == "UL_DATA":
 
             axes[0, idx].set_title('UPLINK DATA - Cell 0')
-            samples = data['UplinkData']['Samples']
+            samples = uplink_samples
             num_cl_tmp = samples.shape[2]  # number of UEs to plot data for
 
         # Compute CSI from IQ samples
@@ -123,19 +123,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, n_frm_st=0, do_corr=False):
         #else: return 
         cellCSI = csi[:, 0, :, :, :, :]     # First cell
         userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
-        #print("====================== OLD STATS: ========================")
         corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2) ) )
-        #best_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.99]
-        #good_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.95]
-        #bad_frames = [i for i in pilot_frames if corr_total[i, 0] > 0.9 and corr_total[i, 0] <= 0.94]
-        #worst_frames = [i for i in pilot_frames if corr_total[i, 0] < 0.9]
-        #print("Good frames len: %d" % len(pilot_frames))
-        #print("Amplitude of reference frame %d is %f" % (ref_frame, amps[ref_frame]))
-        #print("num of best frames %d" % len(best_frames))
-        #print("num of good frames %d" % len(good_frames))
-        #print("num of bad frames   %d" % len(bad_frames))
-        #print("num of worst frames   %d" % len(worst_frames))
-        #print("===========================================================")
         
         # Compute CSI from IQ samples
         # Samps: #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Samples
@@ -207,27 +195,12 @@ def main():
     if n_frames_to_inspect == 0:
         print("WARNING: No frames_to_inspect given. Will process the whole dataset.") 
        
-    if frame_to_plot < 0:
-        frame_to_plot = 0
-        print("WARNING: Gave negative value for frame _to_plot, set it to {}".format(frame_to_plot))
-    if ref_ant < 0:
-        ref_ant = 0
-        print("WARNING: Gave negative value for ref_ant, set it to {}.".format(ref_ant))
-    if n_frames_to_inspect == 0:
-        print("WARNING: No frames_to_inspect given. Will process the whole dataset.")
-    if n_frames_to_inspect < 0:
-        n_frames_to_inspect = 1
-        print("WARNING: Gave negative/zero value for n_frames_to_inspect, set it to {}.".format(n_frames_to_inspect))               
-                
     if frame_to_plot > n_frames_to_inspect:
         print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames: frame_to_plot:{} >  n_frames_to_inspect:{}. ".format(
                 frame_to_plot, n_frames_to_inspect))
         print("Setting the frame to inspect to 0")
         frame_to_plot = 0
-    if fr_strt < 0:
-        fr_strt = 0
-        print("WARNING: Gave negative value for start_of_frames, set it to {}.".format(fr_strt))
-                               
+ 
     if (frame_to_plot > fr_strt + n_frames_to_inspect) or (frame_to_plot < fr_strt) :
         print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames +  or at an index smaller than the required start of the frames: frame_to_plot:{} > n_frames_to_inspect:{} or frame_to_plot:{} <  fr_strt:{}. ".format(
                 frame_to_plot, n_frames_to_inspect, frame_to_plot, fr_strt))
@@ -238,8 +211,9 @@ def main():
         
     # Instantiate
     hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
-    hdf5.get_hdf5()
-    hdf5.parse_hdf5()
+    hdf5.open_hdf5()
+    hdf5.get_data()
+    hdf5.get_metadata()
 
     # Check which data we have available
     data_types_avail = []
@@ -256,9 +230,6 @@ def main():
     # Empty structure
     if not data_types_avail:
         raise Exception(' **** No pilots or uplink data found **** ')
-
-    hdf5.get_attributes()
-    hdf5.get_samples(data_types_avail)
 
     if not do_corr:
         x = verify_hdf5(hdf5, frame_to_plot, ref_ant, fr_strt)
