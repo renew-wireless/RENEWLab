@@ -22,21 +22,17 @@ struct Radio {
 class RadioConfig {
 public:
     RadioConfig(Config* cfg);
-    static void* initBSRadio_launch(void* in_context);
-    void radioConfigure();
-    void radioStart();
-    void radioTrigger();
-    void radioStop();
-    void readSensors();
+    ~RadioConfig();
     void radioTx(const void* const* buffs);
     void radioRx(void* const* buffs);
     int radioTx(size_t, const void* const* buffs, int flags, long long& frameTime);
     int radioRx(size_t, void* const* buffs, long long& frameTime);
-    void initAGC(SoapySDR::Device* iclSdrs);
-    void sync_delays(int cellIdx);
-
-    ~RadioConfig();
+    void radioStart();
+    void radioStop();
+    void radioConfigure();
     std::vector<struct Radio> radios;
+
+private:
     // use for create pthread
     struct RadioConfigContext {
         RadioConfig* ptr;
@@ -45,7 +41,12 @@ public:
     };
     void initBSRadio(RadioConfigContext* context);
 
-private:
+    static void* initBSRadio_launch(void* in_context);
+    void readSensors();
+
+    void radioTrigger();
+    void initAGC(SoapySDR::Device* iclSdrs);
+    void sync_delays(int cellIdx);
     SoapySDR::Device* baseRadio(int cellId);
     void collectCSI(bool&);
     static void drain_buffers(SoapySDR::Device* ibsSdrs, SoapySDR::Stream* istream, std::vector<void*> buffs, int symSamp);
