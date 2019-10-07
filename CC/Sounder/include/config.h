@@ -11,15 +11,8 @@
 #ifndef CONFIG_HEADER
 #define CONFIG_HEADER
 
-#include "macros.h"
-#include "utils.h"
-#include <algorithm>
+#include <atomic>
 #include <complex.h>
-#include <fstream> // std::ifstream
-#include <iostream>
-#include <stdexcept>
-#include <stdio.h> /* for fprintf */
-#include <unistd.h>
 #include <vector>
 #ifdef JSON
 #include <nlohmann/json.hpp>

@@ -10,6 +10,9 @@
 */
 
 #include "include/receiver.h"
+#include "include/macros.h"
+#include "include/utils.h"
+#include <unistd.h>
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;

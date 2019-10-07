@@ -10,6 +10,7 @@
 
 #include "include/sdr-lib.h"
 #include "include/comms-lib.h"
+#include "include/macros.h"
 #include "include/matplotlibcpp.h"
 
 #include <fstream>

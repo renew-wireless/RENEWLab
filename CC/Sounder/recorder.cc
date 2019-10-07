@@ -9,7 +9,9 @@
 */
 
 #include "include/recorder.h"
+#include "include/macros.h"
 #include "include/signalHandler.hpp"
+#include "include/utils.h"
 
 // buffer length of each rx thread
 const int Recorder::SAMPLE_BUFFER_FRAME_NUM = 80;

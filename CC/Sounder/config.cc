@@ -10,6 +10,8 @@
 
 #include "include/config.h"
 #include "include/comms-lib.h"
+#include "include/macros.h"
+#include "include/utils.h"
 
 Config::Config(const std::string& jsonfile)
 {
