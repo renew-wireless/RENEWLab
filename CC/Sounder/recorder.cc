@@ -37,9 +37,11 @@ Recorder::Recorder(Config* cfg)
     if (rx_thread_num > 0) {
         // initialize rx buffers
         rx_buffer_ = new SampleBuffer[rx_thread_num];
+        int intsize = sizeof(std::atomic_int);
+        int arraysize = (buffer_chunk_size + intsize - 1) / intsize;
         for (int i = 0; i < rx_thread_num; i++) {
             rx_buffer_[i].buffer.resize(buffer_chunk_size * cfg->getPackageLength());
-            rx_buffer_[i].pkg_buf_inuse.resize(buffer_chunk_size);
+            rx_buffer_[i].pkg_buf_inuse = new std::atomic_int[arraysize];
         }
     }
 
@@ -462,6 +464,8 @@ void Recorder::closeHDF5()
 
 Recorder::~Recorder()
 {
+    for (size_t i = 0; i < cfg->rx_thread_num; i++)
+        delete[] rx_buffer_[i].pkg_buf_inuse;
     delete[] rx_buffer_;
 }
 
@@ -676,6 +680,8 @@ herr_t Recorder::record(int, int offset)
 clean_exit:
 
     // after finish
-    rx_buffer_[buffer_id].pkg_buf_inuse[offset] = false; // now empty
+    int bit = 1 << offset % sizeof(std::atomic_int);
+    int offs = offset / sizeof(std::atomic_int);
+    std::atomic_fetch_and(&rx_buffer_[buffer_id].pkg_buf_inuse[offs], ~bit); // now empty
     return 0;
 }

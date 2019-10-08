@@ -55,7 +55,7 @@ struct Package {
 
 struct SampleBuffer {
     std::vector<char> buffer;
-    std::vector<bool> pkg_buf_inuse;
+    std::atomic_int* pkg_buf_inuse;
 };
 
 //std::atomic_int thread_count(0);

@@ -12,6 +12,7 @@
 #include "include/receiver.h"
 #include "include/macros.h"
 #include "include/utils.h"
+#include <atomic>
 #include <unistd.h>
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -73,8 +74,6 @@ std::vector<pthread_t> Receiver::startClientThreads()
 
 std::vector<pthread_t> Receiver::startRecvThreads(SampleBuffer* rx_buffer, unsigned in_core_id)
 {
-    assert(rx_buffer[0].buffer.size() == config_->getPackageLength() * rx_buffer[0].pkg_buf_inuse.size());
-    assert(rx_buffer[0].pkg_buf_inuse.size() != 0);
     assert(rx_buffer[0].buffer.size() != 0);
 
     std::vector<pthread_t> created_threads;
@@ -144,11 +143,11 @@ void Receiver::loopRecv(ReceiverContext* context)
     moodycamel::ProducerToken local_ptok(*message_queue_);
 
     const int bsSdrCh = config_->bsChannel.length();
-    int buffer_chunk_size = rx_buffer[0].pkg_buf_inuse.size();
+    int buffer_chunk_size = rx_buffer[0].buffer.size() / config_->getPackageLength();
 
     // handle two channels at each radio
     // this is assuming buffer_chunk_size is at least 2
-    std::vector<bool>& pkg_buf_inuse = rx_buffer[tid].pkg_buf_inuse;
+    std::atomic_int* pkg_buf_inuse = rx_buffer[tid].pkg_buf_inuse;
     char* buffer = rx_buffer[tid].buffer.data();
     int num_radios = config_->nBsSdrs[0];
     int radio_start = tid * num_radios / thread_num_;
@@ -160,11 +159,6 @@ void Receiver::loopRecv(ReceiverContext* context)
     while (config_->running) {
         // receive data
         for (int it = radio_start; it < radio_end; it++) {
-            // if buffer is full, exit
-            if (pkg_buf_inuse[cursor]) {
-                printf("thread %d buffer full\n", tid);
-                exit(0);
-            }
             Package* pkg[bsSdrCh];
             void* samp[bsSdrCh];
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
@@ -189,9 +183,18 @@ void Receiver::loopRecv(ReceiverContext* context)
             }
 #endif
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
-                new (pkg[ch]) Package(frame_id, symbol_id, 0, ant_id + ch);
                 // move ptr & set status to full
-                pkg_buf_inuse[cursor + ch] = true; // has data, after it is read it should be set to 0
+
+                int bit = 1 << cursor % sizeof(std::atomic_int);
+                int offs = cursor / sizeof(std::atomic_int);
+                int old = std::atomic_fetch_or(&pkg_buf_inuse[offs], bit); // now full
+                // if buffer was full, exit
+                if (old & bit) {
+                    printf("thread %d buffer full\n", tid);
+                    exit(0);
+                }
+                // has data, after it is read it should be set to 0
+                new (pkg[ch]) Package(frame_id, symbol_id, 0, ant_id + ch);
                 // push EVENT_RX_SYMBOL event into the queue
                 Event_data package_message;
                 package_message.event_type = EVENT_RX_SYMBOL;
@@ -202,9 +205,9 @@ void Receiver::loopRecv(ReceiverContext* context)
                     printf("socket message enqueue failed\n");
                     exit(0);
                 }
+                cursor++;
+                cursor %= buffer_chunk_size;
             }
-            cursor += bsSdrCh;
-            cursor %= buffer_chunk_size;
         }
     }
 }
