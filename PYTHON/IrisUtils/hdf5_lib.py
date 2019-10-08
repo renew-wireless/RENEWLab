@@ -4,7 +4,7 @@
 
  Library handling recorded hdf5 file from channel sounding (see Sounder/).
 
- Author(s): 
+ Author(s):
              C. Nicolas Barati: nicobarati@rice.edu
              Oscar Bejarano: obejarano@rice.edu
              Rahman Doost-Mohammady: doost@rice.edu
@@ -51,6 +51,34 @@ class hdf5_lib:
                 sys.exit(0)
         # return self.h5file
 
+    def log2csi_hdf5(self, filename, offset=0):
+        """Convert raw IQ log to CSI.
+
+        Converts input Argos HDF5 trace to frequency domain CSI and writes it to the same filename with -csi appended.
+
+        Args: filename of log
+
+        Returns: None
+
+        """
+        symbol_len = int(self.h5file.attrs['SYMBOL_LEN'])
+        num_cl = int(self.h5file.attrs['CL_NUM'])
+
+        #compute CSI for each user and get a nice numpy array
+        #Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier
+        #also, iq samples nic(Last 'user' is noise.)ely chunked out, same dims, but subcarrier is sample.
+        csi,iq = samps2csi(pilot_samples, num_cl, symbol_len, offset=offset)
+
+        # create hdf5 file to dump csi to
+        h5f = h5py.File(filename[:-5]+'-csi.hdf5', 'w')
+        h5f.create_dataset('csi', data=csi)
+        #todo: copy gains
+        #todo check if file exists os.path.isfile(fname) if f in glob.glob(f):
+        for k in h5log.attrs:
+                h5f.attrs[k] = h5log.attrs[k]
+        h5f.close()
+        h5log.close()
+
     def get_data(self):
         """
         Parse file to retrieve metadata and data.
@@ -94,17 +122,17 @@ class hdf5_lib:
                         # dataset = np.array(item[k].value)  # dataset.value has been deprecated. dataset[()] instead
                         dtst_ptr = item[(k)]
                         n_frm = np.abs(self.n_frm_end - self.n_frm_st)
-                    
+
                         # check if the number fof requested frames and, upper and lower bounds make sense
                         # also check if end_frame > strt_frame:
                         if (n_frm > 0 and self.n_frm_st >=0 and (self.n_frm_end >= 0 and self.n_frm_end > self.n_frm_st) ):
                             dataset = np.array(dtst_ptr[self.n_frm_st:self.n_frm_end,...])
                         else:
                             #if previous if Flase, do as usual:
-                            print("WARNING: No frames_to_inspect given and/or boundries don't make sense. Will process the whole dataset.") 
+                            print("WARNING: No frames_to_inspect given and/or boundries don't make sense. Will process the whole dataset.")
                             dataset = np.array(dtst_ptr)
                             self.n_frm_end = self.n_frm_st + dataset.shape[0]
-                    
+
                         if type(dataset) is np.ndarray:
                             if dataset.size != 0:
                                 if type(dataset[0]) is np.bytes_:
@@ -116,10 +144,10 @@ class hdf5_lib:
             else:
                 raise Exception("No datasets found")
 
-        if bool(self.data['Pilot_Samples']): 
+        if bool(self.data['Pilot_Samples']):
             self.pilot_samples = self.data['Pilot_Samples']['Samples']
 
-        if bool(self.data['UplinkData']): 
+        if bool(self.data['UplinkData']):
                 self.uplink_samples = self.data['UplinkData']['Samples']
 
         return self.data
@@ -192,37 +220,37 @@ class hdf5_lib:
         return self.metadata
 
     def csi_from_pilots(self, pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0, frame_to_plot=0, ref_ant=0):
-        """ 
+        """
         Finds the end of the pilots' frames, finds all the lts indices relative to that.
-        Divides the data with lts sequences, calculates csi per lts, csi per frame, csi total.  
+        Divides the data with lts sequences, calculates csi per lts, csi per frame, csi total.
         """
         print("********************* csi_from_pilots(): *********************")
-    
+
         # Reviewing options and vars:
         show_plot = True
         debug = False
         test_mf = False
         write_to_file = True
         legacy = False
-    
+
         # dimensions of pilots_dump
         n_frame = pilots_dump.shape[0]      # no. of captured frames
         n_cell = pilots_dump.shape[1]       # no. of cells
         n_ue = pilots_dump.shape[2]         # no. of UEs
         n_ant = pilots_dump.shape[3]        # no. of BS antennas
         n_iq = pilots_dump.shape[4]         # no. of IQ samples per frame
-    
+
         if debug:
             print("input : z_padding = {}, fft_size={}, cp={}, frm_st_idx = {}, frame_to_plot = {}, ref_ant={}".format(
                 z_padding, fft_size, cp, frm_st_idx, frame_to_plot, ref_ant))
             print("n_frame = {}, n_cell = {}, n_ue = {}, n_ant = {}, n_iq = {}".format(
                 n_frame, n_cell, n_ue, n_ant, n_iq))
-    
+
         if ((n_iq % 2) != 0):
             print("Size of iq samples:".format(n_iq))
             raise Exception(
                 ' **** The length of iq samples per frames HAS to be an even number! **** ')
-    
+
         n_cmpx = n_iq // 2  # no. of complex samples
         # no. of complex samples in a P subframe without pre- and post- fixes
         n_csamp = n_cmpx - z_padding
@@ -235,11 +263,11 @@ class hdf5_lib:
             idx_e = np.arange(0, n_iq, 2)       # even indices: real part of iq
             # odd  indices: imaginary part of iq
             idx_o = np.arange(1, n_iq, 2)
-    
+
         # make a new data structure where the iq samples become complex numbers
         cmpx_pilots = (pilots_dump[:, :, :, :, idx_e] +
                        1j*pilots_dump[:, :, :, :, idx_o])*2**-15
-    
+
         # take a time-domain lts sequence, concatenate more copies, flip, conjugate
         lts_t, lts_f = generate_training_seq(preamble_type='lts', seq_length=[
         ], cp=32, upsample=1, reps=[])    # TD LTS sequences (x2.5), FD LTS sequences
@@ -255,14 +283,14 @@ class hdf5_lib:
         lts_seq_conj = np.conjugate(lts_seq)
         # length of the local LTS seq.
         l_lts_fc = len(lts_seq_conj)
-    
+
         if debug:
             print("cmpx_pilots.shape = {}, lts_t.shape = {}".format(
                 cmpx_pilots.shape, lts_t.shape))
             #print("idx_e= {}, idx_o= {}".format(idx_e, idx_o))
             print("n_cmpx = {}, n_csamp = {}, n_lts = {}, k_lts = {}, lts_seq_conj.shape = {}".format(
                 n_cmpx, n_csamp, n_lts, k_lts, lts_seq_conj.shape))
-    
+
         # debug/ testing
         if debug:
             z_pre = np.zeros(82, dtype='complex64')
@@ -270,7 +298,7 @@ class hdf5_lib:
             lts_t_rep = np.tile(lts_tmp, k_lts)
             lts_t_rep_tst = np.append(z_pre, lts_t_rep)
             lts_t_rep_tst = np.append(lts_t_rep_tst, z_post)
-    
+
             if test_mf:
                 w = np.random.normal(0, 0.1/2, len(lts_t_rep_tst)) + \
                     1j*np.random.normal(0, 0.1/2, len(lts_t_rep_tst))
@@ -279,37 +307,37 @@ class hdf5_lib:
                     lts_t_rep_tst, (n_frame, cmpx_pilots.shape[1], cmpx_pilots.shape[2], cmpx_pilots.shape[3], 1))
                 print("if test_mf: Shape of lts_t_rep_tst: {} , cmpx_pilots.shape = {}".format(
                     lts_t_rep_tst.shape, cmpx_pilots.shape))
-    
+
         # normalized matched filter
         a = 1
         unos = np.ones(l_lts_fc)
         v0 = signal.lfilter(lts_seq_conj, a, cmpx_pilots, axis=4)
         v1 = signal.lfilter(unos, a, (abs(cmpx_pilots)**2), axis=4)
         m_filt = (np.abs(v0)**2)/v1
-    
+
         # clean up nan samples: replace nan with -1
         nan_indices = np.argwhere(np.isnan(m_filt))
         m_filt[np.isnan(m_filt)] = -0.5  # the only negative value in m_filt
-    
+
         if write_to_file:
             # write the nan_indices into a file
             np.savetxt("nan_indices.txt", nan_indices, fmt='%i')
-    
+
         if debug:
             print("Shape of truncated complex pilots: {} , l_lts_fc = {}, v0.shape = {}, v1.shape = {}, m_filt.shape = {}".
                   format(cmpx_pilots.shape, l_lts_fc, v0.shape, v1.shape, m_filt.shape))
-    
+
         rho_max = np.amax(m_filt, axis=4)         # maximum peak per SF per antenna
         rho_min = np.amin(m_filt, axis=4)        # minimum peak per SF per antenna
         ipos = np.argmax(m_filt, axis=4)          # positons of the max peaks
         sf_start = ipos - l_lts_fc + 1             # start of every received SF
         # get rid of negative indices in case of an incorrect peak
         sf_start = np.where(sf_start < 0, 0, sf_start)
-    
+
         # get the pilot samples from the cmpx_pilots array and reshape for k_lts LTS pilots:
         pilots_rx_t = np.empty(
             [n_frame, n_cell, n_ue, n_ant, k_lts * n_lts], dtype='complex64')
-    
+
         indexing_start = time.time()
         for i in range(n_frame):
             for j in range(n_cell):
@@ -318,7 +346,7 @@ class hdf5_lib:
                         pilots_rx_t[i, j, k, l, :] = cmpx_pilots[i, j, k, l,
                                                                  sf_start[i, j, k, l]:  sf_start[i, j, k, l] + (k_lts * n_lts)]
         indexing_end = time.time()
-    
+
         # *************** This fancy indexing is slower than the for loop! **************
     #    aaa= np.reshape(cmpx_pilots, (n_frame*n_cell* n_ue * n_ant, n_cmpx))
     #    idxx = np.expand_dims(sf_start.flatten(), axis=1)
@@ -333,21 +361,21 @@ class hdf5_lib:
     #    if debug:
     #       print("Shape of: aaa  = {}, bb: {}, cc: {}, flattened sf_start: {}\n".format(aaa.shape, bb.shape, cc.shape, sf_start.flatten().shape))
     #       print("Indexing time 2: %f \n" % ( indexing_end2 -indexing_start2) )
-    
+
         if debug:
             print("Shape of: pilots_rx_t before truncation: {}\n".format(
                 pilots_rx_t.shape))
-    
+
         pilots_rx_t = np.reshape(
             pilots_rx_t, (n_frame, n_cell, n_ue, n_ant, k_lts, n_lts))
         pilots_rx_t = np.delete(pilots_rx_t, range(fft_size, n_lts), 5)
-    
+
         if debug:
             print("Indexing time: %f \n" % (indexing_end - indexing_start))
             print("Shape of: pilots_rx_t = {}\n".format(pilots_rx_t.shape))
             print("Shape of: rho_max = {}, rho_min = {}, ipos = {}, sf_start = {}".format(
                 rho_max.shape, rho_min.shape, ipos.shape, sf_start.shape))
-    
+
         # take fft and get the raw CSI matrix (no averaging)
         # align SCs based on how they were Tx-ec
         lts_f_shft = np.fft.fftshift(lts_f)
@@ -362,12 +390,12 @@ class hdf5_lib:
         csi = pilots_rx_f / lts_f_nzsc
         # unecessary step: just to make it in accordance to lts_f as returned by generate_training_seq()
         csi = np.fft.fftshift(csi, 5)
-    
+
         if debug:
             print(">>>> number of NaN indices = {} NaN indices =\n{}".format(
                 nan_indices.shape, nan_indices))
             print("Shape of: csi = {}\n".format(csi.shape))
-    
+
         # plot something to see if it worked!
         if show_plot:
             fig = plt.figure()
@@ -377,10 +405,10 @@ class hdf5_lib:
                 'channel_analysis:csi_from_pilots(): Re of Rx pilot - ref frame {} and ref ant. {} (UE 0)'.format(frame_to_plot, ref_ant))
             if debug:
                 print("cmpx_pilots.shape = {}".format(cmpx_pilots.shape))
-    
+
             ax1.plot(
                 np.real(cmpx_pilots[frame_to_plot - frm_st_idx, 0, 0, ref_ant, :]))
-    
+
             if debug:
                 loc_sec = lts_t_rep_tst
             else:
@@ -394,7 +422,7 @@ class hdf5_lib:
             ax2.set_title(
                 'channel_analysis:csi_from_pilots(): Local LTS sequence zero padded')
             ax2.plot(loc_sec)
-    
+
             ax3 = fig.add_subplot(3, 1, 3)
             ax3.grid(True)
             ax3.set_title(
@@ -402,37 +430,37 @@ class hdf5_lib:
             ax3.stem(m_filt[frame_to_plot - frm_st_idx, 0, 0, ref_ant, :])
             ax3.set_xlabel('Samples')
             # plt.show()
-    
+
         print("********************* ******************** *********************\n")
         return csi, m_filt, sf_start, cmpx_pilots, k_lts, n_lts
          # add frame_start for plot indexing!
 
     def frame_sanity(self, match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_ant=0, cp=16):
-        """ 
+        """
         Creates a map of the frames per antenna. 3 categories: Good frames, bad frames, probably partial frames.
         Good frames are those where all k_lts peaks are present and spaced n_lts samples apart.
-        Bad frames are those with random peaks. 
+        Bad frames are those with random peaks.
         Potentially partial frames are those with some peaks at the right positions.
         This is a random event. Some frames may have accidentally some peaks at the right places.
         First the largest peak is detected, peaks at +1/-1 (probably due to multipath) and +CP/-CP samples are cleared out.
         Then, the positions of the largest k_lts peaks are determined.
-        Finally, the function checks if these k_lts peaks are at the correct n_lts offstes.  
+        Finally, the function checks if these k_lts peaks are at the correct n_lts offstes.
         Disclaimer: This function is good only for a high SNR scenario!
         """
-        
+
         debug = False
         dtct_eal_tx = True                  # Detect early transmission: further processing if this is desired
         n_frame = match_filt.shape[0]       # no. of captured frames
         n_cell = match_filt.shape[1]        # no. of cells
-        n_ue = match_filt.shape[2]          # no. of UEs 
+        n_ue = match_filt.shape[2]          # no. of UEs
         n_ant = match_filt.shape[3]         # no. of BS antennas
         n_corr = match_filt.shape[4]        # no. of corr. samples
-        
+
         if debug:
             print("frame_sanity(): n_frame = {}, n_cell = {}, n_ue = {}, n_ant = {}, n_corr = {}, k_lts = {}".format(
             n_frame, n_cell, n_ue, n_ant, n_corr, k_lts) )
-        
-    
+
+
         # clean up the matched filter of extra peaks:
         mf_amax = np.argmax(match_filt, axis = -1)
         base_arr = np.arange(0,k_lts*n_lts, n_lts)
@@ -440,12 +468,12 @@ class hdf5_lib:
             for j in range(n_cell):
                 for k in range(n_ue):
                     for l in range(n_ant):
-                        mfa = mf_amax[i,j,k,l] 
+                        mfa = mf_amax[i,j,k,l]
                        # NB: addition: try to detect early packets: TEST it!
                         if dtct_eal_tx:
                             sim_thrsh  = 0.95 # similarity threshold bewtween two consequitive peaks
                             for ik in range(k_lts):
-                                mf_prev = match_filt[i,j,k,l, (mfa - n_lts) if (mfa - n_lts) >= 0 else 0] 
+                                mf_prev = match_filt[i,j,k,l, (mfa - n_lts) if (mfa - n_lts) >= 0 else 0]
                                 if 1 - np.abs(match_filt[i,j,k,l, mfa] -  mf_prev)/match_filt[i,j,k,l, mfa] >= sim_thrsh:
                                     mfa = (mfa - n_lts) if (mfa - n_lts) >= 0 else 0
                                 else:
@@ -453,7 +481,7 @@ class hdf5_lib:
                         # NB: addition: Clean everything right of the largest peak.
                         match_filt[i,j,k,l, mfa+1:] = 0         # we don't care about the peaks after the largest.
                         # misleading peaks seem to apear at +- argmax and argmax -1/+1/+2 CP and 29-30
-                        for m in range(base_arr.shape[0]):                        
+                        for m in range(base_arr.shape[0]):
                             adj_idx1 = (mfa - 1) - base_arr[m]
                             adj_idx2 = (mfa + 1) - base_arr[m]
                             cp_idx1 = (mfa + cp) - base_arr[m]
@@ -471,14 +499,14 @@ class hdf5_lib:
                             if (idx_30 >=0) and (idx_30 < n_corr) and (idx_29 >=0) and (idx_29 < n_corr):
                                 match_filt[i,j,k,l,idx_30] = 0
                                 match_filt[i,j,k,l,idx_29] = 0
-                                
+
         # get the k_lts largest peaks and their position
         k_max = np.sort(match_filt, axis = -1)[:,:,:,:, -k_lts:]
         k_amax =np.argsort(match_filt, axis = -1)[:,:,:,:, -k_lts:]
         # If the frame is good, the largerst peak is at the last place of k_amax
         lst_pk_idx = np.expand_dims(k_amax[:,:,:,:,-1], axis = 4)
         lst_pk_idx = np.tile(lst_pk_idx, (1,1,1,1,base_arr.shape[0]))
-        # create an array with indices n_lts apart from each other relative to lst_pk_idx 
+        # create an array with indices n_lts apart from each other relative to lst_pk_idx
         pk_idx = lst_pk_idx - np.tile(base_arr[::-1], (n_frame, n_cell, n_ue, n_ant,1))
         #subtract. In case of a good frame their should only be zeros in every postion
         idx_diff = k_amax - pk_idx
@@ -488,23 +516,23 @@ class hdf5_lib:
         #NB:
         zetas = frame_map*n_lts
         f_st = mf_amax - zetas
-            
-        if debug: 
+
+        if debug:
             print("f_st = {}".format(f_st[frame_to_plot - st_frame,0,0,:]))
             print("frame_sanity(): Shape of k_max.shape = {}, k_amax.shape = {}, lst_pk_idx.shape = {}".format(
                     k_max.shape, k_amax.shape, lst_pk_idx.shape) )
             print("frame_sanity(): k_amax = {}".format(k_amax))
             print("frame_sanity(): frame_map.shape = {}\n".format(frame_map.shape))
-            print(k_amax[frame_to_plot - st_frame,0,0,plt_ant,:])  
-            print(idx_diff[frame_to_plot - st_frame,0,0,plt_ant,:])    
-        
+            print(k_amax[frame_to_plot - st_frame,0,0,plt_ant,:])
+            print(idx_diff[frame_to_plot - st_frame,0,0,plt_ant,:])
+
         frame_map[frame_map == 1] = -1
         frame_map[frame_map >= (k_lts -1)] = 1
         frame_map[frame_map > 1] = 0
         if debug:
-            print("frame_sanity(): frame_map = \n{}".format(frame_map)) 
+            print("frame_sanity(): frame_map = \n{}".format(frame_map))
             print(frame_to_plot - st_frame)
-        
+
         #print results:
         n_rf = frame_map.size
         n_gf = frame_map[frame_map == 1].size
@@ -514,6 +542,6 @@ class hdf5_lib:
         print("Out of total {} received frames: \nGood frames: {}\nBad frames: {}\nProbably Partially received or corrupt: {}".format(
                 n_rf, n_gf, n_bf, n_pr,))
         print("===================== ============================= ============")
-        
+
         return match_filt, frame_map, f_st
 
