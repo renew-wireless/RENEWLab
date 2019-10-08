@@ -144,10 +144,10 @@ void Receiver::loopRecv(ReceiverContext* context)
     moodycamel::ProducerToken local_ptok(*message_queue_);
 
     const int bsSdrCh = config_->bsChannel.length();
-    int buffer_frame_num = rx_buffer[0].pkg_buf_inuse.size();
+    int buffer_chunk_size = rx_buffer[0].pkg_buf_inuse.size();
 
     // handle two channels at each radio
-    // this is assuming buffer_frame_num is at least 2
+    // this is assuming buffer_chunk_size is at least 2
     std::vector<bool>& pkg_buf_inuse = rx_buffer[tid].pkg_buf_inuse;
     char* buffer = rx_buffer[tid].buffer.data();
     int num_radios = config_->nBsSdrs[0];
@@ -197,14 +197,14 @@ void Receiver::loopRecv(ReceiverContext* context)
                 package_message.event_type = EVENT_RX_SYMBOL;
                 // data records the position of this packet in the buffer & tid of this socket
                 // (so that task thread could know which buffer it should visit)
-                package_message.data = cursor + ch + tid * buffer_frame_num;
+                package_message.data = cursor + ch + tid * buffer_chunk_size;
                 if (!message_queue_->enqueue(local_ptok, package_message)) {
                     printf("socket message enqueue failed\n");
                     exit(0);
                 }
             }
             cursor += bsSdrCh;
-            cursor %= buffer_frame_num;
+            cursor %= buffer_chunk_size;
         }
     }
 }
