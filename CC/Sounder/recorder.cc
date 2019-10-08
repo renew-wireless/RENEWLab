@@ -555,9 +555,9 @@ void Recorder::taskThread(EventHandlerContext* context)
 // do Crop
 herr_t Recorder::record(int, int offset)
 {
-    int buffer_frame_num = cfg->symbolsPerFrame * SAMPLE_BUFFER_FRAME_NUM * cfg->getNumAntennas();
-    int buffer_id = offset / buffer_frame_num;
-    offset = offset - buffer_id * buffer_frame_num;
+    size_t buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas();
+    int buffer_id = offset / buffer_chunk_size;
+    offset = offset - buffer_id * buffer_chunk_size;
     // read info
     char* cur_ptr_buffer = rx_buffer_[buffer_id].buffer.data() + offset * cfg->getPackageLength();
     struct Package* pkg = (struct Package*)cur_ptr_buffer;
