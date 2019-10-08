@@ -48,8 +48,8 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, n_frm_st=0, deep_inspect=Fals
 
     # Check which data we have available
     data_types_avail = []
-    pilots_avail = bool(data['Pilot_Samples'])
-    ul_data_avail = bool(data['UplinkData'])
+    pilots_avail = len(pilot_samples) > 0
+    ul_data_avail = len(uplink_samples) > 0
 
     if pilots_avail:
         data_types_avail.append("PILOTS")
@@ -374,9 +374,6 @@ def main():
 
     # Instantiate
     hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
-    hdf5.open_hdf5()
-    hdf5.get_data()
-    hdf5.get_metadata()
 
     if verify:
         verify_hdf5(hdf5, ref_frame, ref_ant, fr_strt, deep_inspect)

@@ -36,6 +36,9 @@ class hdf5_lib:
         self.uplink_samples = []
         self.n_frm_st = n_fr_insp_st                                # index of last frame
         self.n_frm_end = self.n_frm_st + n_frames_to_inspect    # index of last frame in the range of n_frames_to_inspect
+        self.open_hdf5()
+        self.get_data()
+        self.get_metadata()
 
     def open_hdf5(self):
         """
@@ -61,8 +64,8 @@ class hdf5_lib:
         Returns: None
 
         """
-        symbol_len = int(self.h5file.attrs['SYMBOL_LEN'])
-        num_cl = int(self.h5file.attrs['CL_NUM'])
+        symbol_len = int(self.h5file['Data'].attrs['SYMBOL_LEN'])
+        num_cl = int(self.h5file['Data'].attrs['CL_NUM'])
 
         #compute CSI for each user and get a nice numpy array
         #Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier
@@ -106,49 +109,16 @@ class hdf5_lib:
                 dims_data[3] = number of antennas (at BS)
                 dims_data[4] = samples per symbol * 2 (IQ)
         """
-        g = self.h5file
-        prefix = ''
-        self.data = collections.defaultdict(lambda: collections.defaultdict(dict))
-        for key in g.keys():
-            item = g[key]
-            path = '{}/{}'.format(prefix, key)
-            keys = [i for i in item.keys()]
-            if isinstance(item[keys[0]], h5py.Dataset):  # test for dataset
-                # Path
-                self.data['path'] = path
-                # Pilot and UplinkData Samples
-                for k in keys:
-                    if not isinstance(item[k], h5py.Group):
-                        # dataset = np.array(item[k].value)  # dataset.value has been deprecated. dataset[()] instead
-                        dtst_ptr = item[(k)]
-                        n_frm = np.abs(self.n_frm_end - self.n_frm_st)
 
-                        # check if the number fof requested frames and, upper and lower bounds make sense
-                        # also check if end_frame > strt_frame:
-                        if (n_frm > 0 and self.n_frm_st >=0 and (self.n_frm_end >= 0 and self.n_frm_end > self.n_frm_st) ):
-                            dataset = np.array(dtst_ptr[self.n_frm_st:self.n_frm_end,...])
-                        else:
-                            #if previous if Flase, do as usual:
-                            print("WARNING: No frames_to_inspect given and/or boundries don't make sense. Will process the whole dataset.")
-                            dataset = np.array(dtst_ptr)
-                            self.n_frm_end = self.n_frm_st + dataset.shape[0]
-
-                        if type(dataset) is np.ndarray:
-                            if dataset.size != 0:
-                                if type(dataset[0]) is np.bytes_:
-                                    dataset = [a.decode('ascii') for a in dataset]
-
-                        # Store samples
-                        self.data[k]['Samples'] = dataset
-
-            else:
-                raise Exception("No datasets found")
+        self.data = self.h5file['Data']
 
         if bool(self.data['Pilot_Samples']):
-            self.pilot_samples = self.data['Pilot_Samples']['Samples']
+            self.pilot_samples = self.data['Pilot_Samples'][self.n_frm_st:self.n_frm_end,...]
 
-        if bool(self.data['UplinkData']):
-                self.uplink_samples = self.data['UplinkData']['Samples']
+        if len(self.data.keys()) > 1:
+            print("looking into UplinkData")
+            if bool(self.data['UplinkData']):
+                self.uplink_samples = self.data['UplinkData'][self.n_frm_st:self.n_frm_end,...]
 
         return self.data
 
