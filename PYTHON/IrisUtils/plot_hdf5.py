@@ -80,7 +80,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, n_frm_st=0, deep_inspect=Fals
     if deep_inspect:
         csi_from_pilots_start = time.time()
         csi_mat, match_filt, sub_fr_strt, cmpx_pilots, k_lts, n_lts = hdf5.csi_from_pilots(
-            pilot_samples, z_padding, frm_st_idx=n_frm_st, ref_frame=frm_plt, ref_ant=ant_i)
+            pilot_samples, z_padding, frm_st_idx=n_frm_st, frame_to_plot=frm_plt, ref_ant=ant_i)
         csi_from_pilots_end = time.time()
 
         frame_sanity_start = time.time()
@@ -110,7 +110,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, n_frm_st=0, deep_inspect=Fals
         # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
         # For correlation use a fft size of 64
         print("*verify_hdf5(): Calling samps2csi with fft_size = 64, offset = {}, bound = cp = 0 *".format(offset))
-        csi, samps = samps2csi(samples, num_cl_tmp, symbol_length, fft_size=64, offset=offset, bound=0, cp=0)
+        csi, samps = hdf5.samps2csi(samples, num_cl_tmp, symbol_length, fft_size=64, offset=offset, bound=0, cp=0)
 
         # Correlation (Debug plot useful for checking sync)
         amps = np.mean(np.abs(samps[:, 0, 0, 0, 0, :]), axis=1)
@@ -128,7 +128,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, n_frm_st=0, deep_inspect=Fals
         # For looking at the whole picture, use a fft size of whole symbol_length as fft window (for visualization),
         # and no offset
         print("*verify_hdf5():Calling samps2csi *AGAIN*(?) with fft_size = symbol_length, no offset*")
-        csi, samps = samps2csi(samples, num_cl_tmp, symbol_length, fft_size=symbol_length, offset=0, bound=0, cp=0)
+        csi, samps = hdf5.samps2csi(samples, num_cl_tmp, symbol_length, fft_size=symbol_length, offset=0, bound=0, cp=0)
 
         # Verify default_frame does not exceed max number of collected frames
         ref_frame = min(default_frame - n_frm_st, samps.shape[0])
@@ -270,7 +270,7 @@ def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0):
     # compute CSI for each user and get a nice numpy array
     # Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier
     #also, iq samples nicely chunked out, same dims, but subcarrier is sample.
-    csi, _ = samps2csi(pilot_samples, num_cl, symbol_length, offset=offset)
+    csi, _ = hdf5.samps2csi(pilot_samples, num_cl, symbol_length, offset=offset)
     csi = csi[:, cell, :, :, :, :]
     # zoom in too look at behavior around peak (and reduce processing time)
     if zoom > 0:
