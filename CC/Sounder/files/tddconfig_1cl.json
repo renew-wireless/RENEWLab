@@ -14,7 +14,7 @@
 		     "BGPGUGGGGGGGGGGGGGGG"
 		 ],
 		 "max_frame" : 4000,
-		 "subframe_size" : 400,
+		 "subframe_size" : 640,
 		 "fft_size" : 64,
 		 "cp_size" : 16,
 		 "prefix" : 82,
@@ -42,7 +42,7 @@
 		     "GDPGUGGGGGGGGGGGGGGG"
 		 ],
 		 "frame_mode" : "continuous_resync",
-		 "subframe_size" : 400,
+		 "subframe_size" : 640,
 		 "fft_size" : 64,
 		 "cp_size" : 16,
 		 "prefix" : 82,
