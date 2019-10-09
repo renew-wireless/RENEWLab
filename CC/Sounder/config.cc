@@ -182,15 +182,31 @@ Config::Config(const std::string& jsonfile)
 
         std::vector<std::vector<std::complex<float>>> txdata_freq_dom_conf = txdata_freq_dom;
 
+
+        // Generate Beacon STS Sequence + GOLD Sequence
         srand(time(NULL));
         std::vector<std::vector<double>> gold_ifft = CommsLib::getSequence(128, CommsLib::GOLD_IFFT);
-        beacon_ci16.resize(256);
+        std::vector<std::vector<double>> sts_seq = CommsLib::getSequence(0, CommsLib::STS_SEQ);
+        int stsSymLen = sts_seq[0].size();
+        int stsReps = 15;
+        int stsLen = stsReps * stsSymLen;  // length of entire STS sequence
+        int beaconLen = 256 + stsLen;
+        beacon_ci16.resize(beaconLen);     // OBCH: Original gold_ifft(256)+10repsSTS(160)
+        // Populate gold sequence (two reps, 128 each)
         for (int i = 0; i < 128; i++) {
-            beacon_ci16[i] = std::complex<int16_t>((int16_t)(gold_ifft[0][i] * 32768), (int16_t)(gold_ifft[1][i] * 32768));
-            beacon_ci16[i + 128] = beacon_ci16[i];
+            beacon_ci16[stsLen + i] = std::complex<int16_t>((int16_t)(gold_ifft[0][i] * 32768), (int16_t)(gold_ifft[1][i] * 32768));
+            beacon_ci16[stsLen + i + 128] = beacon_ci16[stsLen + i];
         }
+
+        // Populate STS (stsReps repetitions)
+        for (int i = 0; i < stsReps; i++) {
+            for (int j = 0; j < stsSymLen; j++) {
+                beacon_ci16[stsSymLen*i + j] = std::complex<int16_t>((int16_t)(sts_seq[0][j] * 32768), (int16_t)(sts_seq[1][j] * 32768));
+            }
+        }
+
         std::vector<std::complex<int16_t>> pre0(prefix, 0);
-        std::vector<std::complex<int16_t>> post0(sampsPerSymbol - 256 - prefix, 0);
+        std::vector<std::complex<int16_t>> post0(sampsPerSymbol - beaconLen - prefix, 0);
         beacon_ci16.insert(beacon_ci16.begin(), pre0.begin(), pre0.end());
         beacon_ci16.insert(beacon_ci16.end(), post0.begin(), post0.end());
 
