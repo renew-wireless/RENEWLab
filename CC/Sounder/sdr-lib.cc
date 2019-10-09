@@ -201,12 +201,14 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
 
         if (info["frontend"].find("CBRS") != std::string::npos) {
             // receive gains
-            dev->setGain(SOAPY_SDR_RX, ch, "ATTN", -12); //[-18,0]
             dev->setGain(SOAPY_SDR_RX, ch, "LNA1", 33); //[0,33]
-            if (_cfg->freq > 3e9)
+            if (_cfg->freq > 3e9) {
+                dev->setGain(SOAPY_SDR_RX, ch, "ATTN", 0); //[-18,0]
                 dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //LO[0,17]
-            else
+            } else {
+                dev->setGain(SOAPY_SDR_RX, ch, "ATTN", -12); //[-18,0]
                 dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 14); //HI[0,14]
+            }
 
             // transmit gains
             if (_cfg->freq > 3e9) { // CBRS HI
