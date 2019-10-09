@@ -70,7 +70,7 @@ class hdf5_lib:
         #compute CSI for each user and get a nice numpy array
         #Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier
         #also, iq samples nic(Last 'user' is noise.)ely chunked out, same dims, but subcarrier is sample.
-        csi,iq = self.samps2csi(pilot_samples, num_cl, symbol_len, offset=offset)
+        csi,iq = samps2csi(pilot_samples, num_cl, symbol_len, offset=offset)
 
         # create hdf5 file to dump csi to
         h5f = h5py.File(filename[:-5]+'-csi.hdf5', 'w')
@@ -163,6 +163,8 @@ class hdf5_lib:
             ofdm_data_time = []  # np.zeros((num_cl, 320)).astype(complex)
             for clIdx in range(num_cl):
                 this_str = 'OFDM_DATA_TIME_CL' + str(clIdx)
+                if not this_str in self.metadata.keys():
+                    continue
                 data_per_cl = np.squeeze(self.metadata[this_str])
                 # some_list[start:stop:step]
                 if np.any(data_per_cl):
@@ -177,6 +179,8 @@ class hdf5_lib:
             ofdm_data = []  # np.zeros((num_cl, 320)).astype(complex)
             for clIdx in range(num_cl):
                 this_str = 'OFDM_DATA_CL' + str(clIdx)
+                if not this_str in self.metadata.keys():
+                    continue
                 data_per_cl = np.squeeze(self.metadata[this_str])
                 # some_list[start:stop:step]
                 if np.any(data_per_cl):
@@ -189,8 +193,8 @@ class hdf5_lib:
 
         return self.metadata
 
-
-    def samps2csi(self, samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0):
+    @staticmethod
+    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0):
         """Convert an Argos HDF5 log file with raw IQ in to CSI.
         Asumes 802.11 style LTS used for trace collection.
     
@@ -246,8 +250,8 @@ class hdf5_lib:
             csi = np.delete(csi, [0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63], 5)
         return csi, iq
 
-
-    def samps2csi_large(self, samps, num_users, samps_per_user=224, offset=47, chunk_size=1000):
+    @staticmethod
+    def samps2csi_large(samps, num_users, samps_per_user=224, offset=47, chunk_size=1000):
         """Wrapper function for samps2csi_main for to speed up large logs by leveraging data-locality. Chunk_size may need to be adjusted based on your computer."""
     
         if samps.shape[0] > chunk_size:
@@ -260,16 +264,17 @@ class hdf5_lib:
                 (samps.shape[0], num_users, 2, samps.shape[1], 64), dtype='complex64')
             chunk_num = samps.shape[0]//chunk_size
             for i in range(chunk_num):
-                csi[i*chunk_size:i*chunk_size+chunk_size], iq[i*chunk_size:i*chunk_size+chunk_size] = self.samps2csi(
+                csi[i*chunk_size:i*chunk_size+chunk_size], iq[i*chunk_size:i*chunk_size+chunk_size] = samps2csi(
                     samps[i*chunk_size:(i*chunk_size+chunk_size), :, :, :], num_users, samps_per_user=samps_per_user)
-            csi[chunk_num*chunk_size:], iq[chunk_num*chunk_size:] = self.samps2csi(
+            csi[chunk_num*chunk_size:], iq[chunk_num*chunk_size:] = samps2csi(
                 samps[chunk_num*chunk_size:, :, :, :], num_users, samps_per_user=samps_per_user)
         else:
-            csi, iq = self.samps2csi(
+            csi, iq = samps2csi(
                 samps, num_users, samps_per_user=samps_per_user, offset=offset)
         return csi, iq
 
-    def csi_from_pilots(self, pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0, frame_to_plot=0, ref_ant=0):
+    @staticmethod
+    def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0, frame_to_plot=0, ref_ant=0):
         """
         Finds the end of the pilots' frames, finds all the lts indices relative to that.
         Divides the data with lts sequences, calculates csi per lts, csi per frame, csi total.
@@ -485,7 +490,8 @@ class hdf5_lib:
         return csi, m_filt, sf_start, cmpx_pilots, k_lts, n_lts
          # add frame_start for plot indexing!
 
-    def frame_sanity(self, match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_ant=0, cp=16):
+    @staticmethod
+    def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_ant=0, cp=16):
         """
         Creates a map of the frames per antenna. 3 categories: Good frames, bad frames, probably partial frames.
         Good frames are those where all k_lts peaks are present and spaced n_lts samples apart.
