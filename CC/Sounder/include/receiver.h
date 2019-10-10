@@ -101,9 +101,6 @@ public:
 
 private:
     Config* config_;
-    struct sockaddr_in servaddr_; /* server address */
-    int* socket_;
-
     RadioConfig* radioconfig_;
 
     int thread_num_;
