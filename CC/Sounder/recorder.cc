@@ -42,6 +42,7 @@ Recorder::Recorder(Config* cfg)
         for (int i = 0; i < rx_thread_num; i++) {
             rx_buffer_[i].buffer.resize(buffer_chunk_size * cfg->getPackageLength());
             rx_buffer_[i].pkg_buf_inuse = new std::atomic_int[arraysize];
+            std::fill_n(rx_buffer_[i].pkg_buf_inuse, arraysize, 0);
         }
     }
 
