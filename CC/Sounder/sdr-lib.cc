@@ -744,38 +744,57 @@ void RadioConfig::collectCSI(bool& adjust)
     }
 }
 
-void RadioConfig::initAGC(SoapySDR::Device * iclSdr)
+void RadioConfig::initAGC(SoapySDR::Device* iclSdr)
 {
     /*
      * Initialize AGC parameters
      */
     // OBCH
-    int en = (int) _cfg->clAgcEn;
+    int en = (int)_cfg->clAgcEn;
     // AGC Core
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, 0);           // Enable AGC Flag (set to 0 initially)
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 1);            // Reset AGC Flag
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_IQ_THRESH, 8000);              // Saturation Threshold: 10300 about -6dBm
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_NUM_SAMPS_SAT, 3);             // Number of samples needed to claim sat.
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_MAX_NUM_SAMPS_AGC, 10);        // Threshold at which AGC stops
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_WAIT_COUNT_THRESH, 20);        // Gain settle takes about 20 samps(value=20)
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_BIG_JUMP, 30);             // Drop gain at initial saturation detection
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_SMALL_JUMP, 3);            // Drop gain at subsequent sat. detections
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_RSSI_TARGET, 14);              // RSSI Target for AGC: ideally around 14 (3.6GHz) or 27 (2.5GHz)
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_TEST_GAIN_SETTINGS, 0);    // Disable
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 0);            // Clear AGC reset flag
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, en);          // Enable AGC
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_GAIN_INIT, _cfg->clAgcGainInit); // Initialize gains to this value
+    // Enable AGC Flag (set to 0 initially)
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, 0);
+    // Reset AGC Flag
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 1);
+    // Saturation Threshold: 10300 about -6dBm
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_IQ_THRESH, 8000);
+    // Number of samples needed to claim sat.
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_NUM_SAMPS_SAT, 3);
+    // Threshold at which AGC stops
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_MAX_NUM_SAMPS_AGC, 10);
+    // Gain settle takes about 20 samps(value=20)
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_WAIT_COUNT_THRESH, 20);
+    // Drop gain at initial saturation detection
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_BIG_JUMP, 30);
+    // Drop gain at subsequent sat. detections
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_SMALL_JUMP, 3);
+    // RSSI Target for AGC: ideally around 14 (3.6GHz) or 27 (2.5GHz)
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_RSSI_TARGET, 14);
+    // Disable
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_TEST_GAIN_SETTINGS, 0);
+    // Clear AGC reset flag
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 0);
+    // Enable AGC
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, en);
+    // Initialize gains to this value
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_GAIN_INIT,
+        _cfg->clAgcGainInit);
 
     // Packet Detect Core
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_THRESH, 500);         // RSSI value at which Pkt is detected
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NUM_SAMPS, 5);         // Number of samples needed to detect frame
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_ENABLE, 1);            // Enable packet detection flag
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, en);        // trigger first one if enabled
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0);         // clear
-
+    // RSSI value at which Pkt is detected
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_THRESH, 500);
+    // Number of samples needed to detect frame
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NUM_SAMPS, 5);
+    // Enable packet detection flag
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_ENABLE, 1);
+    // trigger first one if enabled
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, en);
+    // clear
+    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0);
 }
 
-void RadioConfig::drain_buffers(SoapySDR::Device* ibsSdrs, SoapySDR::Stream* istream, std::vector<void*> buffs, int symSamp)
+void RadioConfig::drain_buffers(SoapySDR::Device* ibsSdrs,
+    SoapySDR::Stream* istream, std::vector<void*> buffs, int symSamp)
 {
     /*
      *  "Drain" rx buffers during initialization

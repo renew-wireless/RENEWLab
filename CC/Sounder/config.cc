@@ -127,7 +127,7 @@ Config::Config(const std::string& jsonfile)
             throw std::invalid_argument("error channel config: not any of A/B/AB!\n");
         clSdrCh = (clChannel == "AB") ? 2 : 1;
         clAgcEn = tddConfCl.value("agc_en", false);
-        clAgcGainInit = tddConfCl.value("agc_gain_init", 70);  // 0 to 108
+        clAgcGainInit = tddConfCl.value("agc_gain_init", 70); // 0 to 108
         clDataMod = tddConfCl.value("modulation", "QPSK");
         frame_mode = tddConfCl.value("frame_mode", "continuous_resync");
 
@@ -183,16 +183,15 @@ Config::Config(const std::string& jsonfile)
 
         std::vector<std::vector<std::complex<float>>> txdata_freq_dom_conf = txdata_freq_dom;
 
-
         // Generate Beacon STS Sequence + GOLD Sequence
         srand(time(NULL));
         std::vector<std::vector<double>> gold_ifft = CommsLib::getSequence(128, CommsLib::GOLD_IFFT);
         std::vector<std::vector<double>> sts_seq = CommsLib::getSequence(0, CommsLib::STS_SEQ);
         int stsSymLen = sts_seq[0].size();
         int stsReps = 15;
-        int stsLen = stsReps * stsSymLen;  // length of entire STS sequence
+        int stsLen = stsReps * stsSymLen; // length of entire STS sequence
         int beaconLen = 256 + stsLen;
-        beacon_ci16.resize(beaconLen);     // OBCH: Original gold_ifft(256)+10repsSTS(160)
+        beacon_ci16.resize(beaconLen); // OBCH: Original gold_ifft(256)+10repsSTS(160)
         // Populate gold sequence (two reps, 128 each)
         for (int i = 0; i < 128; i++) {
             beacon_ci16[stsLen + i] = std::complex<int16_t>((int16_t)(gold_ifft[0][i] * 32768), (int16_t)(gold_ifft[1][i] * 32768));
@@ -201,7 +200,9 @@ Config::Config(const std::string& jsonfile)
         // Populate STS (stsReps repetitions)
         for (int i = 0; i < stsReps; i++) {
             for (int j = 0; j < stsSymLen; j++) {
-                beacon_ci16[stsSymLen*i + j] = std::complex<int16_t>((int16_t)(sts_seq[0][j] * 32768), (int16_t)(sts_seq[1][j] * 32768));
+                int16_t re = sts_seq[0][j] * 32768;
+                int16_t im = sts_seq[1][j] * 32768;
+                beacon_ci16[stsSymLen * i + j] = std::complex<int16_t>(re, im);
             }
         }
 
