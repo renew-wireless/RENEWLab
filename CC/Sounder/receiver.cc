@@ -265,7 +265,7 @@ void Receiver::clientTxRx(dev_profile* context)
 
     while (config_->running) {
         clock_gettime(CLOCK_MONOTONIC, &tv2);
-        double diff = (tv2.tv_sec * 1e9 + tv2.tv_nsec - tv.tv_sec * 1e9 - tv.tv_nsec) / 1e9;
+        double diff = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e9;
         if (diff > 2) {
             int total_trigs = device->readRegister("IRIS30", 92);
             std::cout << "new triggers: " << total_trigs - all_trigs << ", total: " << total_trigs << std::endl;
