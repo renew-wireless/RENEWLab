@@ -30,7 +30,6 @@ public:
     void radioStart();
     void radioStop();
     void radioConfigure();
-    void initAGC(SoapySDR::Device * iclSdrs, bool);
     std::vector<struct Radio> radios;
 
 private:

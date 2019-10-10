@@ -33,6 +33,7 @@
 		 "frequency" : 3.6e9,
 		 "channel" : "A",
 		 "agc_en" : false,
+                 "agc_gain_init": 70,
 		 "rxgainA" : [20],
 		 "txgainA" : [40],
 		 "rxgainB" : [20],

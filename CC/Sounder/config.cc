@@ -127,6 +127,7 @@ Config::Config(const std::string& jsonfile)
             throw std::invalid_argument("error channel config: not any of A/B/AB!\n");
         clSdrCh = (clChannel == "AB") ? 2 : 1;
         clAgcEn = tddConfCl.value("agc_en", false);
+        clAgcGainInit = tddConfCl.value("agc_gain_init", 70);  // 0 to 108
         clDataMod = tddConfCl.value("modulation", "QPSK");
         frame_mode = tddConfCl.value("frame_mode", "continuous_resync");
 
@@ -197,7 +198,6 @@ Config::Config(const std::string& jsonfile)
             beacon_ci16[stsLen + i] = std::complex<int16_t>((int16_t)(gold_ifft[0][i] * 32768), (int16_t)(gold_ifft[1][i] * 32768));
             beacon_ci16[stsLen + i + 128] = beacon_ci16[stsLen + i];
         }
-
         // Populate STS (stsReps repetitions)
         for (int i = 0; i < stsReps; i++) {
             for (int j = 0; j < stsSymLen; j++) {

@@ -73,6 +73,7 @@ public:
     int clSdrCh;
     std::string clChannel;
     bool clAgcEn;
+    int clAgcGainInit;
     std::string clDataMod;
     std::vector<int> data_ind;
     std::vector<uint32_t> coeffs;
