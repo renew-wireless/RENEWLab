@@ -26,13 +26,6 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-typedef unsigned short ushort;
-
-struct complex_float {
-    float real;
-    float imag;
-};
-
 struct Event_data {
     int event_type;
     int data;
