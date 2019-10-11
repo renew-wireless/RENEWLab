@@ -12,6 +12,9 @@
 #include "include/comms-lib.h"
 #include "include/macros.h"
 #include "include/matplotlibcpp.h"
+#include <SoapySDR/Errors.hpp>
+#include <SoapySDR/Formats.hpp>
+#include <SoapySDR/Time.hpp>
 
 #include <fstream>
 #include <iostream>
@@ -497,28 +500,22 @@ void RadioConfig::radioStop()
     }
 }
 
+struct Radio* RadioConfig::getRadio(int i)
+{
+    return (&radios[i]);
+}
+
 void RadioConfig::radioTx(const void* const* buffs)
 {
-    int flags = 0;
     long long frameTime(0);
     for (size_t i = 0; i < bsRadios[0].size(); i++) {
-        struct Radio* bsRadio = &bsRadios[0][i];
-        SoapySDR::Device* dev = bsRadio->dev;
-        dev->writeStream(bsRadio->txs, buffs, _cfg->sampsPerSymbol, flags, frameTime, 1000000);
+        bsRadios[0][i].xmit(buffs, _cfg->sampsPerSymbol, 0, frameTime);
     }
 }
 
 int RadioConfig::radioTx(size_t r /*radio id*/, const void* const* buffs, int flags, long long& frameTime)
 {
-    if (flags == 1)
-        flags = SOAPY_SDR_HAS_TIME;
-    else if (flags == 2)
-        flags = SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST;
-    //long long frameTime(0);
-
-    struct Radio* bsRadio = &bsRadios[0][r];
-    SoapySDR::Device* dev = bsRadio->dev;
-    int w = dev->writeStream(bsRadios[0][r].txs, buffs, _cfg->sampsPerSymbol, flags, frameTime, 1000000);
+    int w = bsRadios[0][r].xmit(buffs, _cfg->sampsPerSymbol, flags, frameTime);
 #if DEBUG_RADIO
     size_t chanMask;
     long timeoutUs(0);
@@ -530,29 +527,23 @@ int RadioConfig::radioTx(size_t r /*radio id*/, const void* const* buffs, int fl
 
 void RadioConfig::radioRx(void* const* buffs)
 {
-    int flags = 0;
     long long frameTime(0);
     for (size_t i = 0; i < bsRadios[0].size(); i++) {
         void* const* buff = buffs + (i * 2);
-        struct Radio* bsRadio = &bsRadios[0][i];
-        SoapySDR::Device* dev = bsRadio->dev;
-        dev->readStream(bsRadio->rxs, buff, _cfg->sampsPerSymbol, flags, frameTime, 1000000);
+        bsRadios[0][i].recv(buff, _cfg->sampsPerSymbol, 0, frameTime);
     }
 }
 
 int RadioConfig::radioRx(size_t r /*radio id*/, void* const* buffs, long long& frameTime)
 {
-    int flags = 0;
     if (r < bsRadios[0].size()) {
         long long frameTimeNs = 0;
-        struct Radio* bsRadio = &bsRadios[0][r];
-        SoapySDR::Device* dev = bsRadio->dev;
 
-        int ret = dev->readStream(bsRadio->rxs, buffs, _cfg->sampsPerSymbol, flags, frameTimeNs, 1000000);
+        int ret = bsRadios[0][r].recv(buffs, _cfg->sampsPerSymbol, 0, frameTimeNs);
         frameTime = frameTimeNs; //SoapySDR::timeNsToTicks(frameTimeNs, _rate);
 #if DEBUG_RADIO
         if (ret != _cfg->sampsPerSymbol)
-            std::cout << "readStream returned " << ret << " from radio " << r << ", Expected " << _cfg->sampsPerSymbol << std::endl;
+            std::cout << "recv returned " << ret << " from radio " << r << ", Expected " << _cfg->sampsPerSymbol << std::endl;
         else
             std::cout << "radio " << r << "received " << ret << std::endl;
 #endif
@@ -646,14 +637,12 @@ void RadioConfig::collectCSI(bool& adjust)
         for (int j = 0; j < R; j++) {
             struct Radio* bsRadio = &bsRadios[0][j];
             SoapySDR::Device* dev = bsRadio->dev;
-            int flags = SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST;
             if (j == i) {
-                int ret = dev->writeStream(bsRadio->txs, txbuff.data(),
-                    _cfg->sampsPerSymbol, flags, txTime, 1000000);
+                int ret = bsRadios[0][j].xmit(txbuff.data(), _cfg->sampsPerSymbol, 3, txTime);
                 if (ret < 0)
                     std::cout << "bad write" << std::endl;
             } else {
-                int ret = dev->activateStream(bsRadio->rxs, flags, rxTime,
+                int ret = dev->activateStream(bsRadio->rxs, 0, rxTime,
                     _cfg->sampsPerSymbol);
                 if (ret < 0)
                     std::cout << "bad activate at node " << j << std::endl;
@@ -663,18 +652,15 @@ void RadioConfig::collectCSI(bool& adjust)
         radioTrigger();
 
         // All but one receive.
-        int flags = 0;
         for (int j = 0; j < R; j++) {
-            struct Radio* bsRadio = &bsRadios[0][j];
-            SoapySDR::Device* dev = bsRadio->dev;
             if (j == i)
                 continue;
             std::vector<void*> rxbuff(2);
             rxbuff[0] = buff[(i * R + j)].data();
             //rxbuff[1] = ant == 2 ? buff[(i*M+j)*ant+1].data() : dummyBuff.data();
             rxbuff[1] = dummyBuff0.data();
-            int ret = dev->readStream(bsRadio->rxs, rxbuff.data(),
-                _cfg->sampsPerSymbol, flags, rxTime, 1000000);
+            int ret = bsRadios[0][j].recv(rxbuff.data(),
+                _cfg->sampsPerSymbol, 0, rxTime);
             if (ret < 0)
                 std::cout << "bad read at node " << j << std::endl;
         }
@@ -841,4 +827,28 @@ Radio::~Radio(void)
     dev->deactivateStream(txs);
     dev->closeStream(txs);
     SoapySDR::Device::unmake(dev);
+}
+
+int Radio::recv(void* const* buffs, int samples, int flags, long long& frameTime)
+{
+    return dev->readStream(rxs, buffs, samples, flags, frameTime, 1000000);
+}
+
+int Radio::xmit(const void* const* buffs, int samples, int flags, long long& frameTime)
+{
+    int soapyFlags[] = {
+        0,
+        SOAPY_SDR_HAS_TIME,
+        SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST,
+        SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST
+    };
+    int r = dev->writeStream(txs, buffs, samples, soapyFlags[flags], frameTime, 1000000);
+    if (r != samples)
+        std::cerr << "unexpected writeStream error " << SoapySDR::errToStr(r) << std::endl;
+    return (r);
+}
+
+int Radio::getTriggers(void) const
+{
+    return (dev->readRegister("IRIS30", 92));
 }

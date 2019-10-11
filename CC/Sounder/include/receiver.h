@@ -73,7 +73,6 @@ public:
         int txStartSym;
         unsigned txFrameDelta;
         double rate;
-        struct Radio* radio;
         std::string data_file;
         int core;
         Receiver* ptr;

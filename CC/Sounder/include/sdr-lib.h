@@ -1,8 +1,5 @@
 #include "config.h"
 #include <SoapySDR/Device.hpp>
-#include <SoapySDR/Errors.hpp>
-#include <SoapySDR/Formats.hpp>
-#include <SoapySDR/Time.hpp>
 #include <chrono>
 #include <complex>
 #include <csignal>
@@ -17,6 +14,9 @@ struct Radio {
     SoapySDR::Stream* rxs;
     SoapySDR::Stream* txs;
     ~Radio(void);
+    int recv(void* const* buffs, int samples, int flags, long long& frameTime);
+    int xmit(const void* const* buffs, int samples, int flags, long long& frameTime);
+    int getTriggers(void) const;
 };
 
 class RadioConfig {
@@ -27,12 +27,13 @@ public:
     void radioRx(void* const* buffs);
     int radioTx(size_t, const void* const* buffs, int flags, long long& frameTime);
     int radioRx(size_t, void* const* buffs, long long& frameTime);
+    struct Radio* getRadio(int i);
     void radioStart();
     void radioStop();
     void radioConfigure();
-    std::vector<struct Radio> radios;
 
 private:
+    std::vector<struct Radio> radios;
     // use for create pthread
     struct RadioConfigContext {
         RadioConfig* ptr;

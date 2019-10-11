@@ -46,6 +46,7 @@ std::vector<pthread_t> Receiver::startClientThreads()
         unsigned frameTimeDelta = (unsigned)(std::ceil(TIME_DELTA / frameTime));
         std::cout << "Frame time delta " << frameTimeDelta << std::endl;
 
+        client_threads.resize(config_->nClSdrs);
         for (unsigned int i = 0; i < config_->nClSdrs; i++) {
             pthread_t cl_thread_;
             // record the thread id
@@ -57,7 +58,6 @@ std::vector<pthread_t> Receiver::startClientThreads()
             profile->rxSyms = config_->clDLSymbols[i].size();
             profile->txStartSym = config_->clULSymbols[i].empty() ? 0 : config_->clULSymbols[i][0];
             profile->txFrameDelta = frameTimeDelta;
-            profile->radio = &radioconfig_->radios[i];
             profile->core = i + 1 + config_->rx_thread_num + config_->task_thread_num;
             profile->ptr = this;
             // start socket thread
@@ -65,7 +65,7 @@ std::vector<pthread_t> Receiver::startClientThreads()
                 perror("socket client thread create failed");
                 exit(0);
             }
-            client_threads.push_back(cl_thread_);
+            client_threads[i] = cl_thread_;
         }
     }
 
@@ -161,6 +161,21 @@ void Receiver::loopRecv(ReceiverContext* context)
         for (int it = radio_start; it < radio_end; it++) {
             Package* pkg[bsSdrCh];
             void* samp[bsSdrCh];
+
+            // Set buffer status(es) to full; fail if full already
+            for (auto ch = 0; ch < bsSdrCh; ++ch) {
+                int bit = 1 << (cursor + ch) % sizeof(std::atomic_int);
+                int offs = (cursor + ch) / sizeof(std::atomic_int);
+                int old = std::atomic_fetch_or(&pkg_buf_inuse[offs], bit); // now full
+                // if buffer was full, exit
+                if ((old & bit) != 0) {
+                    printf("thread %d buffer full\n", tid);
+                    exit(0);
+                }
+                // Reserved until marked empty by consumer.
+            }
+
+            // Receive data into buffers
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
                 pkg[ch] = (Package*)(buffer + (cursor + ch) * config_->getPackageLength());
                 samp[ch] = pkg[ch]->data;
@@ -183,17 +198,6 @@ void Receiver::loopRecv(ReceiverContext* context)
             }
 #endif
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
-                // move ptr & set status to full
-
-                int bit = 1 << cursor % sizeof(std::atomic_int);
-                int offs = cursor / sizeof(std::atomic_int);
-                int old = std::atomic_fetch_or(&pkg_buf_inuse[offs], bit); // now full
-                // if buffer was full, exit
-                if (old & bit) {
-                    printf("thread %d buffer full\n", tid);
-                    exit(0);
-                }
-                // has data, after it is read it should be set to 0
                 new (pkg[ch]) Package(frame_id, symbol_id, 0, ant_id + ch);
                 // push EVENT_RX_SYMBOL event into the queue
                 Event_data package_message;
@@ -222,10 +226,6 @@ void* Receiver::clientTxRx_launch(void* in_context)
 
 void Receiver::clientTxRx(dev_profile* context)
 {
-    struct Radio* radio = context->radio;
-    SoapySDR::Device* device = radio->dev;
-    SoapySDR::Stream* rxStream = radio->rxs;
-    SoapySDR::Stream* txStream = radio->txs;
     int tid = context->tid;
     int txSyms = context->txSyms;
     int rxSyms = context->rxSyms;
@@ -263,11 +263,12 @@ void Receiver::clientTxRx(dev_profile* context)
     struct timespec tv, tv2;
     clock_gettime(CLOCK_MONOTONIC, &tv);
 
+    struct Radio* radio = radioconfig_->getRadio(tid);
     while (config_->running) {
         clock_gettime(CLOCK_MONOTONIC, &tv2);
         double diff = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e9;
         if (diff > 2) {
-            int total_trigs = device->readRegister("IRIS30", 92);
+            int total_trigs = radio->getTriggers();
             std::cout << "new triggers: " << total_trigs - all_trigs << ", total: " << total_trigs << std::endl;
             all_trigs = total_trigs;
             tv = tv2;
@@ -279,7 +280,7 @@ void Receiver::clientTxRx(dev_profile* context)
         bool receiveErrors = false;
         for (int i = 0; i < rxSyms; i++) {
             int flags(0);
-            int r = device->readStream(rxStream, rxbuff.data(), NUM_SAMPS, flags, rxTime, 1000000);
+            int r = radio->recv(rxbuff.data(), NUM_SAMPS, flags, rxTime);
             if (r == NUM_SAMPS) {
                 if (i == 0)
                     firstRxTime = rxTime;
@@ -293,23 +294,14 @@ void Receiver::clientTxRx(dev_profile* context)
             continue; // just go to the next frame
 
         // transmit loop
-        int flags = SOAPY_SDR_HAS_TIME;
         txTime = firstRxTime & 0xFFFFFFFF00000000;
         txTime += ((long long)txFrameDelta << 32);
         txTime += ((long long)txStartSym << 16);
         //printf("rxTime %llx, txTime %llx \n", firstRxTime, txTime);
-        if (!config_->running)
-            flags |= SOAPY_SDR_END_BURST; //end burst on last iter
         for (int i = 0; i < txSyms; i++) {
-            //if (i == txSyms - 1)
-            flags |= SOAPY_SDR_END_BURST;
-            int r = device->writeStream(txStream, txbuff.data(), NUM_SAMPS, flags, txTime, 1000000);
-            if (r == NUM_SAMPS) {
+            int r = radio->xmit(txbuff.data(), NUM_SAMPS, 2, txTime);
+            if (r == NUM_SAMPS)
                 txTime += 0x10000;
-            } else {
-                std::cerr << "unexpected writeStream error " << SoapySDR::errToStr(r) << std::endl;
-                //goto cleanup;
-            }
         }
     }
 }
