@@ -1,6 +1,6 @@
-#include "include/sdr-lib.h"
 #include "include/comms-lib.h"
 #include "include/macros.h"
+#include "include/sdr-lib.h"
 
 std::vector<std::complex<float>> RadioConfig::snoopSamples(size_t r, size_t channel, size_t readSize)
 {
@@ -28,46 +28,39 @@ std::vector<std::complex<float>> RadioConfig::snoopSamples(SoapySDR::Device* dev
     return samps;
 }
 
-void RadioConfig::adjustRxCalibrationGains(size_t referenceRadio, size_t channel, double fftBin)
+void RadioConfig::adjustCalibrationGains(std::vector<SoapySDR::Device*> rxDevs, SoapySDR::Device* txDev, size_t channel, double fftBin)
 {
     double targetLevel = -10;
     double attnMax = -18;
     size_t N = 1024;
-    std::vector<float> win = CommsLib::hannWindowFunction(N);
+    size_t rxDevsSize = rxDevs.size();
+    auto win = CommsLib::hannWindowFunction(N);
     const auto windowGain = CommsLib::windowFunctionPower(win);
     // reset all gains
-    struct Radio* refBsRadio = &bsRadios[0][referenceRadio];
-    SoapySDR::Device* refBsDev = refBsRadio->dev;
     for (size_t ch = 0; ch < 2; ch++) {
-        refBsDev->setGain(SOAPY_SDR_TX, ch, "PA2", 0);
-        refBsDev->setGain(SOAPY_SDR_TX, ch, "PAD", 0);
-        refBsDev->setGain(SOAPY_SDR_TX, ch, "IAMP", 0);
-        refBsDev->setGain(SOAPY_SDR_TX, ch, "ATTN", attnMax);
+        txDev->setGain(SOAPY_SDR_TX, ch, "PA2", 0);
+        txDev->setGain(SOAPY_SDR_TX, ch, "PAD", 0);
+        txDev->setGain(SOAPY_SDR_TX, ch, "IAMP", 0);
+        txDev->setGain(SOAPY_SDR_TX, ch, "ATTN", attnMax);
     }
-    for (size_t r = 0; r < _cfg->nBsSdrs[0]; r++) {
-        if (r == referenceRadio)
-            continue;
-        struct Radio* bsRadio = &bsRadios[0][r];
-        SoapySDR::Device* dev = bsRadio->dev;
+    for (size_t r = 0; r < rxDevsSize; r++) {
         for (size_t ch = 0; ch < 2; ch++) {
-            dev->setGain(SOAPY_SDR_RX, ch, "LNA", 0);
-            dev->setGain(SOAPY_SDR_RX, ch, "PGA", 0);
-            dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0);
-            dev->setGain(SOAPY_SDR_RX, ch, "ATTN", attnMax);
+            rxDevs[r]->setGain(SOAPY_SDR_RX, ch, "LNA", 0);
+            rxDevs[r]->setGain(SOAPY_SDR_RX, ch, "PGA", 0);
+            rxDevs[r]->setGain(SOAPY_SDR_RX, ch, "TIA", 0);
+            rxDevs[r]->setGain(SOAPY_SDR_RX, ch, "ATTN", attnMax);
         }
     }
-    refBsDev->setGain(SOAPY_SDR_TX, channel, "PAD", 40);
+    txDev->setGain(SOAPY_SDR_TX, channel, "PAD", 40);
     usleep(1000);
 
     float maxToneLevel = -200;
-    std::vector<bool> adjustedRadios(_cfg->nBsSdrs[0], 0);
-    std::vector<float> toneLevels(_cfg->nBsSdrs[0], 0);
+    std::vector<bool> adjustedRadios(rxDevsSize, 0);
+    std::vector<float> toneLevels(rxDevsSize, 0);
     size_t remainingRadios = adjustedRadios.size();
-    for (size_t r = 0; r < _cfg->nBsSdrs[0]; r++) {
-        if (r == referenceRadio)
-            continue;
-        const auto samps = this->snoopSamples(r, channel, N);
-        float toneLevel = CommsLib::measureTone(samps, win, windowGain, fftBin, N);
+    for (size_t r = 0; r < rxDevsSize; r++) {
+        const auto samps = RadioConfig::snoopSamples(rxDevs[r], channel, N);
+        auto toneLevel = CommsLib::measureTone(samps, win, windowGain, fftBin, N);
         if (toneLevel >= targetLevel) {
             adjustedRadios[r] = true;
             remainingRadios--;
@@ -76,27 +69,26 @@ void RadioConfig::adjustRxCalibrationGains(size_t referenceRadio, size_t channel
         if (toneLevel > maxToneLevel)
             maxToneLevel = toneLevel;
     }
+
     std::string nextGainStage;
-    if (remainingRadios == _cfg->nBsSdrs[0]) {
+    if (remainingRadios == rxDevsSize) {
         // if all need adjustment, try bumping up tx gain first
-        refBsDev->setGain(SOAPY_SDR_TX, channel, "ATTN", (targetLevel - maxToneLevel) + attnMax);
+        txDev->setGain(SOAPY_SDR_TX, channel, "ATTN", (targetLevel - maxToneLevel) + attnMax);
         nextGainStage = "ATTN";
     } else {
-        for (size_t r = 0; r < _cfg->nBsSdrs[0]; r++) {
+        for (size_t r = 0; r < rxDevsSize; r++) {
             if (adjustedRadios[r])
                 continue;
-            struct Radio* bsRadio = &bsRadios[0][r];
-            SoapySDR::Device* dev = bsRadio->dev;
-            dev->setGain(SOAPY_SDR_RX, channel, "ATTN", (targetLevel - toneLevels[r]) + attnMax);
+            rxDevs[r]->setGain(SOAPY_SDR_RX, channel, "ATTN", (targetLevel - toneLevels[r]) + attnMax);
         }
         nextGainStage = "LNA";
     }
     usleep(1000);
 
-    for (size_t r = 0; r < _cfg->nBsSdrs[0]; r++) {
-        if (r == referenceRadio || adjustedRadios[r])
+    for (size_t r = 0; r < rxDevsSize; r++) {
+        if (adjustedRadios[r])
             continue;
-        std::vector<std::complex<float>> samps = this->snoopSamples(r, channel, N);
+        const auto samps = RadioConfig::snoopSamples(rxDevs[r], channel, N);
         float toneLevel = CommsLib::measureTone(samps, win, windowGain, fftBin, N);
         if (toneLevel >= targetLevel) {
             adjustedRadios[r] = true;
@@ -112,20 +104,18 @@ void RadioConfig::adjustRxCalibrationGains(size_t referenceRadio, size_t channel
         minGain = attnMax;
 
     // adjust next gain stage
-    for (size_t r = 0; r < _cfg->nBsSdrs[0]; r++) {
-        if (r == referenceRadio || adjustedRadios[r])
+    for (size_t r = 0; r < rxDevsSize; r++) {
+        if (adjustedRadios[r])
             continue;
-        struct Radio* bsRadio = &bsRadios[0][r];
-        SoapySDR::Device* dev = bsRadio->dev;
-        dev->setGain(SOAPY_SDR_RX, channel, nextGainStage, (targetLevel - toneLevels[r]) + minGain);
+        rxDevs[r]->setGain(SOAPY_SDR_RX, channel, nextGainStage, (targetLevel - toneLevels[r]) + minGain);
     }
     usleep(1000);
 
-    for (size_t r = 0; r < _cfg->nBsSdrs[0]; r++) {
-        if (r == referenceRadio || adjustedRadios[r])
+    for (size_t r = 0; r < rxDevsSize; r++) {
+        if (adjustedRadios[r])
             continue;
-        std::vector<std::complex<float>> samps = this->snoopSamples(r, channel, N);
-        float toneLevel = CommsLib::measureTone(samps, win, windowGain, fftBin, N);
+        const auto samps = RadioConfig::snoopSamples(rxDevs[r], channel, N);
+        auto toneLevel = CommsLib::measureTone(samps, win, windowGain, fftBin, N);
         if (toneLevel > targetLevel) {
             adjustedRadios[r] = true;
             remainingRadios--;
@@ -137,19 +127,17 @@ void RadioConfig::adjustRxCalibrationGains(size_t referenceRadio, size_t channel
         return;
 
     // adjust next gain stage
-    for (size_t r = 0; r < _cfg->nBsSdrs[0]; r++) {
-        if (r == referenceRadio || adjustedRadios[r])
+    for (size_t r = 0; r < rxDevsSize; r++) {
+        if (adjustedRadios[r])
             continue;
-        struct Radio* bsRadio = &bsRadios[0][r];
-        SoapySDR::Device* dev = bsRadio->dev;
-        dev->setGain(SOAPY_SDR_RX, channel, "LNA", (targetLevel - toneLevels[r]));
+        rxDevs[r]->setGain(SOAPY_SDR_RX, channel, "LNA", (targetLevel - toneLevels[r]));
     }
     usleep(1000);
 
-    for (size_t r = 0; r < _cfg->nBsSdrs[0]; r++) {
-        if (r == referenceRadio || adjustedRadios[r])
+    for (size_t r = 0; r < rxDevsSize; r++) {
+        if (adjustedRadios[r])
             continue;
-        std::vector<std::complex<float>> samps = this->snoopSamples(r, channel, N);
+        auto samps = RadioConfig::snoopSamples(rxDevs[r], channel, N);
         float toneLevel = CommsLib::measureTone(samps, win, windowGain, fftBin, N);
         if (toneLevel > targetLevel) {
             adjustedRadios[r] = true;
@@ -158,10 +146,10 @@ void RadioConfig::adjustRxCalibrationGains(size_t referenceRadio, size_t channel
         toneLevels[r] = toneLevel;
     }
 
-    std::cout << _cfg->nBsSdrs[0] - 1 - remainingRadios << " radios reached target level" << std::endl;
+    std::cout << rxDevsSize - 1 - remainingRadios << " radios reached target level" << std::endl;
 }
 
-void RadioConfig::setIQBalance(SoapySDR::Device *dev, size_t channel, int direction, int gcorr, int iqcorr)
+void RadioConfig::setIQBalance(SoapySDR::Device* dev, size_t channel, int direction, int gcorr, int iqcorr)
 {
     auto gcorri = (gcorr < 0) ? 2047 - std::abs(gcorr) : 2047;
     auto gcorrq = (gcorr > 0) ? 2047 - std::abs(gcorr) : 2047;
@@ -171,14 +159,14 @@ void RadioConfig::setIQBalance(SoapySDR::Device *dev, size_t channel, int direct
     dev->setIQBalance(direction, channel, IQcorr);
 }
 
-void RadioConfig::dciqMinimize(SoapySDR::Device * dev, size_t channel, int direction, double rxCenterTone, double txCenterTone)
+void RadioConfig::dciqMinimize(SoapySDR::Device* targetDev, SoapySDR::Device* refDev, size_t channel, int direction, double rxCenterTone, double txCenterTone)
 {
     size_t N = 1024;
     std::vector<float> win = CommsLib::hannWindowFunction(N);
     const auto windowGain = CommsLib::windowFunctionPower(win);
 
-    dev->setIQBalance(direction, channel, 0.0);
-    dev->setDCOffset(direction, channel, 0.0);
+    targetDev->setIQBalance(direction, channel, 0.0);
+    targetDev->setDCOffset(direction, channel, 0.0);
 
     //match the internal fixed point representation for DC correction
     const int fixedScale = (direction == SOAPY_SDR_RX) ? 64 : 128;
@@ -186,11 +174,11 @@ void RadioConfig::dciqMinimize(SoapySDR::Device * dev, size_t channel, int direc
     //measure initial
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(GAIN_SETTLE_TIME_MS));
-        const auto samps = snoopSamples(dev, channel, N);
+        const auto samps = snoopSamples(refDev, channel, N);
         const auto measDCLevel = CommsLib::measureTone(samps, win, windowGain, rxCenterTone, N);
         const auto measImbalanceLevel = CommsLib::measureTone(samps, win, windowGain, rxCenterTone - txCenterTone, N);
         const auto desiredToneLevel = CommsLib::measureTone(samps, win, windowGain, rxCenterTone + txCenterTone, N);
-	std::cout << "dciqMinimize initial: dcLvl=" << measDCLevel << " dB, imLvl=" << measImbalanceLevel << " dB, toneLevel=" << desiredToneLevel << "dB" << std::endl;
+        std::cout << "dciqMinimize initial: dcLvl=" << measDCLevel << " dB, imLvl=" << measImbalanceLevel << " dB, toneLevel=" << desiredToneLevel << "dB" << std::endl;
     }
 
     //look through each correction arm twice
@@ -208,11 +196,11 @@ void RadioConfig::dciqMinimize(SoapySDR::Device * dev, size_t channel, int direc
         for (int i = start; i < stop; i += step) {
             //try I or Q arm based on iteration
             const auto dcCorr = ((iter % 2) == 0) ? std::complex<double>(bestDcCorr.real(), double(i) / fixedScale) : std::complex<double>(double(i) / fixedScale, bestDcCorr.imag());
-            dev->setDCOffset(direction, channel, dcCorr);
+            targetDev->setDCOffset(direction, channel, dcCorr);
 
             //measure the efficacy
             std::this_thread::sleep_for(std::chrono::milliseconds(GAIN_SETTLE_TIME_MS));
-            const auto samps = snoopSamples(dev, channel, N);
+            const auto samps = snoopSamples(refDev, channel, N);
             const auto measDcLevel = CommsLib::measureTone(samps, win, windowGain, rxCenterTone, N);
 
             //save desired results
@@ -223,7 +211,7 @@ void RadioConfig::dciqMinimize(SoapySDR::Device * dev, size_t channel, int direc
         }
     }
 
-    dev->setDCOffset(direction, channel, bestDcCorr);
+    targetDev->setDCOffset(direction, channel, bestDcCorr);
 
     //correct IQ imbalance
     float minImbalanceLevel(0);
@@ -241,11 +229,11 @@ void RadioConfig::dciqMinimize(SoapySDR::Device * dev, size_t channel, int direc
         for (int i = start; i < stop; i += step) {
             const int gcorr = ((iter % 2) == 0) ? i : bestgcorr;
             const int iqcorr = ((iter % 2) == 1) ? i : bestiqcorr;
-	    RadioConfig::setIQBalance(dev, direction, channel, gcorr, iqcorr);
+            RadioConfig::setIQBalance(targetDev, direction, channel, gcorr, iqcorr);
 
             //measure the efficacy
             std::this_thread::sleep_for(std::chrono::milliseconds(GAIN_SETTLE_TIME_MS));
-            const auto samps = snoopSamples(dev, channel, N);
+            const auto samps = snoopSamples(refDev, channel, N);
             const auto measImbalanceLevel = CommsLib::measureTone(samps, win, windowGain, rxCenterTone - txCenterTone, N);
 
             //save desired results
@@ -258,45 +246,109 @@ void RadioConfig::dciqMinimize(SoapySDR::Device * dev, size_t channel, int direc
     }
 
     //apply the ideal correction
-    RadioConfig::setIQBalance(dev, direction, channel, bestgcorr, bestiqcorr);
+    RadioConfig::setIQBalance(targetDev, direction, channel, bestgcorr, bestiqcorr);
 
     //measure corrections
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(GAIN_SETTLE_TIME_MS));
-        const auto samps = snoopSamples(dev, channel, N);
+        const auto samps = snoopSamples(refDev, channel, N);
         const auto measDCLevel = CommsLib::measureTone(samps, win, windowGain, rxCenterTone, N);
         const auto measImbalanceLevel = CommsLib::measureTone(samps, win, windowGain, rxCenterTone - txCenterTone, N);
         const auto desiredToneLevel = CommsLib::measureTone(samps, win, windowGain, rxCenterTone + txCenterTone, N);
-	std::cout << "dciqMinimize final: dcLvl=" << measDCLevel << " dB, imLvl=" << measImbalanceLevel << " dB, toneLevel=" << desiredToneLevel << "dB" << std::endl;
+        std::cout << "dciqMinimize final: dcLvl=" << measDCLevel << " dB, imLvl=" << measImbalanceLevel << " dB, toneLevel=" << desiredToneLevel << "dB" << std::endl;
     }
 }
 
 void RadioConfig::dciqCalibrationProc(size_t channel)
 {
-    size_t referenceRadio = _cfg->nBsSdrs[0] / 2;
-    double toneOfs = _cfg->rate / 7;
-    // Start with calibrating the rx paths on all radios using a reference radio
-    struct Radio* refBsRadio = &bsRadios[0][referenceRadio];
-    SoapySDR::Device* refBsDev = refBsRadio->dev;
-    refBsDev->setFrequency(SOAPY_SDR_TX, channel, "RF", _cfg->freq + toneOfs);
-    refBsDev->setFrequency(SOAPY_SDR_TX, channel, "BB", 0);
-    refBsDev->writeSetting(SOAPY_SDR_TX, channel, "TSP_TSG_CONST", std::to_string(1 << 14));
-    for (size_t r = 0; r < _cfg->nBsSdrs[0]; r++) {
+    double sampleRate = _cfg->rate;
+    double centerRfFreq = _cfg->freq;
+    double toneBBFreq = sampleRate / 7;
+    size_t radioSize = _cfg->nBsSdrs[0];
+
+    size_t referenceRadio = radioSize / 2;
+    struct Radio* refRadio = &bsRadios[0][referenceRadio];
+    SoapySDR::Device* refDev = refRadio->dev;
+
+    /* 
+     * Start with calibrating the rx paths on all radios using a reference radio
+     */
+    refDev->setFrequency(SOAPY_SDR_TX, channel, "RF", centerRfFreq + toneBBFreq);
+    refDev->setFrequency(SOAPY_SDR_TX, channel, "BB", 0);
+    refDev->writeSetting(SOAPY_SDR_TX, channel, "TSP_TSG_CONST", std::to_string(1 << 14));
+    std::vector<SoapySDR::Device*> allButRefDevs;
+    for (size_t r = 0; r < radioSize; r++) {
         if (r == referenceRadio)
             continue;
         struct Radio* bsRadio = &bsRadios[0][r];
         SoapySDR::Device* dev = bsRadio->dev;
         dev->setFrequency(SOAPY_SDR_RX, channel, "BB", 0);
         dev->setDCOffsetMode(SOAPY_SDR_RX, channel, false);
+        allButRefDevs.push_back(dev);
     }
-    this->adjustRxCalibrationGains(referenceRadio, channel, toneOfs/_cfg->rate);
 
-    for (size_t r = 0; r < _cfg->nBsSdrs[0]; r++) {
-        if (r == referenceRadio)
-            continue;
-        struct Radio* bsRadio = &bsRadios[0][r];
-        SoapySDR::Device* dev = bsRadio->dev;
-	RadioConfig::dciqMinimize(dev, channel, SOAPY_SDR_RX, 0.0, toneOfs/_cfg->rate);
+    // Tune rx gains for calibration on all radios except reference radio
+    // Tune tx gain on reference radio
+    RadioConfig::adjustCalibrationGains(allButRefDevs, refDev, channel, toneBBFreq / sampleRate);
+
+    // Minimize Rx DC offset and IQ Imbalance on all receiving radios
+    for (size_t r = 0; r < radioSize - 1; r++) {
+        RadioConfig::dciqMinimize(allButRefDevs[r], allButRefDevs[r], channel, SOAPY_SDR_RX, 0.0, toneBBFreq / sampleRate);
+    }
+
+    /* 
+     * Calibrate the rx path of the reference radio
+     */
+    std::vector<SoapySDR::Device*> refDevContainer;
+    refDevContainer.push_back(refDev);
+    SoapySDR::Device* refRefDev = allButRefDevs[referenceRadio - 1];
+
+    refRefDev->setFrequency(SOAPY_SDR_TX, channel, "RF", centerRfFreq + toneBBFreq);
+    refRefDev->setFrequency(SOAPY_SDR_TX, channel, "BB", 0);
+    refRefDev->writeSetting(SOAPY_SDR_TX, channel, "TSP_TSG_CONST", std::to_string(1 << 14));
+    refDev->setFrequency(SOAPY_SDR_RX, channel, "BB", 0);
+    refDev->setDCOffsetMode(SOAPY_SDR_RX, channel, false);
+
+    // Tune rx gain for calibraion on reference radio
+    // Tune tx gain on neighboring radio to reference radio
+    RadioConfig::adjustCalibrationGains(refDevContainer, refRefDev, channel, toneBBFreq / sampleRate);
+    RadioConfig::dciqMinimize(refDev, refDev, channel, SOAPY_SDR_RX, 0.0, toneBBFreq / sampleRate);
+
+    /* 
+     * Calibrate the tx path of the reference radio
+     */
+    double txToneBBFreq = sampleRate / 21;
+    std::vector<SoapySDR::Device*> refRefDevContainer;
+    refRefDevContainer.push_back(refRefDev);
+
+    refRefDev->setFrequency(SOAPY_SDR_RX, channel, "RF", centerRfFreq - toneBBFreq);
+    refRefDev->setFrequency(SOAPY_SDR_RX, channel, "BB", 0);
+    refDev->setFrequency(SOAPY_SDR_TX, channel, "BB", txToneBBFreq);
+    refDev->writeSetting(SOAPY_SDR_TX, channel, "TSP_TSG_CONST", std::to_string(1 << 14));
+
+    // Tune tx gain for calibraion on reference antenna
+    // Tune rx gain on neighboring radio to reference radio
+    RadioConfig::adjustCalibrationGains(refRefDevContainer, refDev, channel, (toneBBFreq + txToneBBFreq) / sampleRate);
+    RadioConfig::dciqMinimize(refDev, refRefDev, channel, SOAPY_SDR_TX, toneBBFreq / sampleRate, txToneBBFreq / sampleRate);
+
+    // kill TX on ref at the end
+    refDev->writeSetting(SOAPY_SDR_TX, channel, "TSP_TSG_CONST", "NONE");
+    refDev->setFrequency(SOAPY_SDR_TX, channel, "BB", 0);
+
+    /* 
+     * Now calibrate the tx paths on all other radios using the reference radio
+     */
+    refDev->setFrequency(SOAPY_SDR_RX, channel, "RF", centerRfFreq - toneBBFreq);
+    refDev->setFrequency(SOAPY_SDR_RX, channel, "BB", 0);
+    for (size_t r = 0; r < radioSize - 1; r++) {
+        allButRefDevs[r]->setFrequency(SOAPY_SDR_TX, channel, "BB", txToneBBFreq);
+        allButRefDevs[r]->writeSetting(SOAPY_SDR_TX, channel, "TSP_TSG_CONST", std::to_string(1 << 14));
+        // Tune tx gain for calibraion of the current radio
+        // Tune rx gain on the reference radio
+        RadioConfig::adjustCalibrationGains(refDevContainer, allButRefDevs[r], channel, (toneBBFreq + txToneBBFreq) / sampleRate);
+        RadioConfig::dciqMinimize(allButRefDevs[r], refDev, channel, SOAPY_SDR_TX, toneBBFreq / sampleRate, txToneBBFreq / sampleRate);
+        allButRefDevs[r]->writeSetting(SOAPY_SDR_TX, channel, "TSP_TSG_CONST", "NONE");
+        allButRefDevs[r]->setFrequency(SOAPY_SDR_TX, channel, "BB", 0);
     }
 }
 
