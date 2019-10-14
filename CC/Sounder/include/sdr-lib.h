@@ -14,7 +14,7 @@ struct Radio {
     SoapySDR::Stream* rxs;
     SoapySDR::Stream* txs;
     ~Radio(void);
-    int recv(void* const* buffs, int samples, int flags, long long& frameTime);
+    int recv(void* const* buffs, int samples, long long& frameTime);
     int xmit(const void* const* buffs, int samples, int flags, long long& frameTime);
     int getTriggers(void) const;
 };

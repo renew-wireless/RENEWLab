@@ -279,8 +279,7 @@ void Receiver::clientTxRx(dev_profile* context)
         long long firstRxTime(0);
         bool receiveErrors = false;
         for (int i = 0; i < rxSyms; i++) {
-            int flags(0);
-            int r = radio->recv(rxbuff.data(), NUM_SAMPS, flags, rxTime);
+            int r = radio->recv(rxbuff.data(), NUM_SAMPS, rxTime);
             if (r == NUM_SAMPS) {
                 if (i == 0)
                     firstRxTime = rxTime;

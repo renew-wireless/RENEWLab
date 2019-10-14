@@ -530,7 +530,7 @@ void RadioConfig::radioRx(void* const* buffs)
     long long frameTime(0);
     for (size_t i = 0; i < bsRadios[0].size(); i++) {
         void* const* buff = buffs + (i * 2);
-        bsRadios[0][i].recv(buff, _cfg->sampsPerSymbol, 0, frameTime);
+        bsRadios[0][i].recv(buff, _cfg->sampsPerSymbol, frameTime);
     }
 }
 
@@ -539,7 +539,7 @@ int RadioConfig::radioRx(size_t r /*radio id*/, void* const* buffs, long long& f
     if (r < bsRadios[0].size()) {
         long long frameTimeNs = 0;
 
-        int ret = bsRadios[0][r].recv(buffs, _cfg->sampsPerSymbol, 0, frameTimeNs);
+        int ret = bsRadios[0][r].recv(buffs, _cfg->sampsPerSymbol, frameTimeNs);
         frameTime = frameTimeNs; //SoapySDR::timeNsToTicks(frameTimeNs, _rate);
 #if DEBUG_RADIO
         if (ret != _cfg->sampsPerSymbol)
@@ -660,7 +660,7 @@ void RadioConfig::collectCSI(bool& adjust)
             //rxbuff[1] = ant == 2 ? buff[(i*M+j)*ant+1].data() : dummyBuff.data();
             rxbuff[1] = dummyBuff0.data();
             int ret = bsRadios[0][j].recv(rxbuff.data(),
-                _cfg->sampsPerSymbol, 0, rxTime);
+                _cfg->sampsPerSymbol, rxTime);
             if (ret < 0)
                 std::cout << "bad read at node " << j << std::endl;
         }
@@ -829,8 +829,9 @@ Radio::~Radio(void)
     SoapySDR::Device::unmake(dev);
 }
 
-int Radio::recv(void* const* buffs, int samples, int flags, long long& frameTime)
+int Radio::recv(void* const* buffs, int samples, long long& frameTime)
 {
+    int flags(0);
     return dev->readStream(rxs, buffs, samples, flags, frameTime, 1000000);
 }
 
