@@ -40,9 +40,11 @@ private:
         int tid;
         int cell;
     };
-    void initBSRadio(RadioConfigContext* context);
+    void initBSRadioPreCal(RadioConfigContext* context);
+    void initBSRadioPostCal(RadioConfigContext* context);
 
-    static void* initBSRadio_launch(void* in_context);
+    static void* initBSRadioPreCal_launch(void* in_context);
+    static void* initBSRadioPostCal_launch(void* in_context);
     void readSensors();
 
     void radioTrigger();
