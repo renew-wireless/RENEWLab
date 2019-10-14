@@ -843,7 +843,8 @@ int Radio::xmit(const void* const* buffs, int samples, int flags, long long& fra
         SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST,
         SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST
     };
-    int r = dev->writeStream(txs, buffs, samples, soapyFlags[flags], frameTime, 1000000);
+    int flag_args = soapyFlags[flags];
+    int r = dev->writeStream(txs, buffs, samples, flag_args, frameTime, 1000000);
     if (r != samples)
         std::cerr << "unexpected writeStream error " << SoapySDR::errToStr(r) << std::endl;
     return (r);
