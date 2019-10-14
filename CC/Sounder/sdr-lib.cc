@@ -615,11 +615,8 @@ void RadioConfig::collectCSI(bool& adjust)
     dummybuffs[0] = dummyBuff0.data();
     dummybuffs[1] = dummyBuff1.data();
 
-    for (int i = 0; i < R; i++) {
-        Radio* bsRadio = &bsRadios[0][i];
-        SoapySDR::Device* dev = bsRadio->dev;
-        RadioConfig::drain_buffers(dev, bsRadio->rxs, dummybuffs, _cfg->sampsPerSymbol);
-    }
+    for (int i = 0; i < R; i++)
+        bsRadios[0][i].drain_buffers(dummybuffs, _cfg->sampsPerSymbol);
 
     for (int i = 0; i < R; i++) {
         Radio* bsRadio = &bsRadios[0][i];
@@ -726,7 +723,7 @@ void RadioConfig::collectCSI(bool& adjust)
         dev->deactivateStream(bsRadio->txs);
         dev->deactivateStream(bsRadio->rxs);
         dev->setGain(SOAPY_SDR_TX, ch, "PAD", _cfg->txgain[ch]); //[0,30]
-        RadioConfig::drain_buffers(dev, bsRadio->rxs, dummybuffs, _cfg->sampsPerSymbol);
+        bsRadio->drain_buffers(dummybuffs, _cfg->sampsPerSymbol);
     }
 }
 
@@ -779,14 +776,11 @@ void RadioConfig::initAGC(SoapySDR::Device* iclSdr)
     iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0);
 }
 
-void RadioConfig::drain_buffers(SoapySDR::Device* ibsSdrs,
-    SoapySDR::Stream* istream, std::vector<void*> buffs, int symSamp)
+void Radio::drain_buffers(std::vector<void*> buffs, int symSamp)
 {
     /*
      *  "Drain" rx buffers during initialization
      *  Input:
-     *      ibsSdrs - Current Iris board
-     *      istream - Current SoapySDR stream
      *      buffs   - Vector to which we will write received IQ samples
      *      symSamp - Number of samples
      *
@@ -796,7 +790,7 @@ void RadioConfig::drain_buffers(SoapySDR::Device* ibsSdrs,
     long long frameTime = 0;
     int flags = 0, r = 0, i = 0;
     while (r != -1) {
-        r = ibsSdrs->readStream(istream, buffs.data(), symSamp, flags, frameTime, 0);
+        r = dev->readStream(rxs, buffs.data(), symSamp, flags, frameTime, 0);
         i++;
     }
     //std::cout << "Number of reads needed to drain: " << i << std::endl;

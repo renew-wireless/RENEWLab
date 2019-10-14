@@ -21,6 +21,7 @@ public:
     int recv(void* const* buffs, int samples, long long& frameTime);
     int xmit(const void* const* buffs, int samples, int flags, long long& frameTime);
     int getTriggers(void) const;
+    void drain_buffers(std::vector<void*> buffs, int symSamp);
 };
 
 class RadioConfig {
@@ -54,7 +55,6 @@ private:
     void sync_delays(int cellIdx);
     SoapySDR::Device* baseRadio(int cellId);
     void collectCSI(bool&);
-    static void drain_buffers(SoapySDR::Device* ibsSdrs, SoapySDR::Stream* istream, std::vector<void*> buffs, int symSamp);
     Config* _cfg;
     std::vector<SoapySDR::Device*> hubs;
     std::vector<std::vector<Radio>> bsRadios; // [cell, iris]
