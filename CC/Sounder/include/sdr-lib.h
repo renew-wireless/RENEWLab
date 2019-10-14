@@ -30,6 +30,7 @@ public:
     void radioStart();
     void radioStop();
     void radioConfigure();
+    void dciqCalibrationProc(size_t);
     std::vector<struct Radio> radios;
 
 private:
@@ -50,10 +51,16 @@ private:
     SoapySDR::Device* baseRadio(int cellId);
     void collectCSI(bool&);
     static void drain_buffers(SoapySDR::Device* ibsSdrs, SoapySDR::Stream* istream, std::vector<void*> buffs, int symSamp);
+    static void dciqMinimize(SoapySDR::Device *, size_t, int, double, double);
+    static void setIQBalance(SoapySDR::Device *, size_t, int, int, int);
+    void adjustRxCalibrationGains(size_t, size_t, double);
+    std::vector<std::complex<float>> snoopSamples(size_t, size_t, size_t);
+    static std::vector<std::complex<float>> snoopSamples(SoapySDR::Device *, size_t, size_t);
     Config* _cfg;
     std::vector<SoapySDR::Device*> hubs;
     std::vector<std::vector<struct Radio>> bsRadios; // [cell, iris]
     std::vector<int> nBsAntennas;
+    std::vector<int> nBsRadios;
 #if 0
     std::vector<SoapySDR::Device*> clSdrs;
     std::vector<SoapySDR::Stream*> clTxStreams;
