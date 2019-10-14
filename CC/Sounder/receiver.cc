@@ -263,7 +263,7 @@ void Receiver::clientTxRx(dev_profile* context)
     struct timespec tv, tv2;
     clock_gettime(CLOCK_MONOTONIC, &tv);
 
-    struct Radio* radio = radioconfig_->getRadio(tid);
+    Radio* radio = radioconfig_->getRadio(tid);
     while (config_->running) {
         clock_gettime(CLOCK_MONOTONIC, &tv2);
         double diff = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e9;

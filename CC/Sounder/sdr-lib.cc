@@ -187,7 +187,7 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
     args["driver"] = "iris";
     args["timeout"] = "1000000";
     args["serial"] = _cfg->bs_sdr_ids[0][i];
-    struct Radio* bsRadio = &bsRadios[c][i];
+    Radio* bsRadio = &bsRadios[c][i];
     SoapySDR::Device* dev = bsRadio->dev = (SoapySDR::Device::make(args));
     //use the TRX antenna port for both tx and rx
     for (auto ch : channels)
@@ -500,7 +500,7 @@ void RadioConfig::radioStop()
     }
 }
 
-struct Radio* RadioConfig::getRadio(int i)
+Radio* RadioConfig::getRadio(int i)
 {
     return (&radios[i]);
 }
@@ -616,13 +616,13 @@ void RadioConfig::collectCSI(bool& adjust)
     dummybuffs[1] = dummyBuff1.data();
 
     for (int i = 0; i < R; i++) {
-        struct Radio* bsRadio = &bsRadios[0][i];
+        Radio* bsRadio = &bsRadios[0][i];
         SoapySDR::Device* dev = bsRadio->dev;
         RadioConfig::drain_buffers(dev, bsRadio->rxs, dummybuffs, _cfg->sampsPerSymbol);
     }
 
     for (int i = 0; i < R; i++) {
-        struct Radio* bsRadio = &bsRadios[0][i];
+        Radio* bsRadio = &bsRadios[0][i];
         SoapySDR::Device* dev = bsRadio->dev;
         dev->setGain(SOAPY_SDR_TX, ch, "PAD", _cfg->calTxGain[ch]);
         dev->writeSetting("TDD_CONFIG", "{\"tdd_enabled\":false}");
@@ -635,7 +635,7 @@ void RadioConfig::collectCSI(bool& adjust)
     for (int i = 0; i < R; i++) {
         // All write, or prepare to receive.
         for (int j = 0; j < R; j++) {
-            struct Radio* bsRadio = &bsRadios[0][j];
+            Radio* bsRadio = &bsRadios[0][j];
             SoapySDR::Device* dev = bsRadio->dev;
             if (j == i) {
                 int ret = bsRadios[0][j].xmit(txbuff.data(), _cfg->sampsPerSymbol, 3, txTime);
@@ -704,7 +704,7 @@ void RadioConfig::collectCSI(bool& adjust)
     adjust &= good_csi;
     if (adjust) {
         for (int i = 0; i < R; i++) {
-            struct Radio* bsRadio = &bsRadios[0][i];
+            Radio* bsRadio = &bsRadios[0][i];
             SoapySDR::Device* dev = bsRadio->dev;
             // if offset[i] == 0, then good_csi is false and we never get here???
             int delta = (offset[i] == 0) ? 0 : offset[ref_offset] - offset[i];
@@ -721,7 +721,7 @@ void RadioConfig::collectCSI(bool& adjust)
     }
 
     for (int i = 0; i < R; i++) {
-        struct Radio* bsRadio = &bsRadios[0][i];
+        Radio* bsRadio = &bsRadios[0][i];
         SoapySDR::Device* dev = bsRadio->dev;
         dev->deactivateStream(bsRadio->txs);
         dev->deactivateStream(bsRadio->rxs);
