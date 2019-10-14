@@ -110,7 +110,10 @@ RadioConfig::RadioConfig(Config* cfg)
             channels = { 0, 1 };
         radios.resize(_cfg->nClSdrs);
         for (size_t i = 0; i < radios.size(); i++) {
-            auto dev = SoapySDR::Device::make("serial=" + _cfg->cl_sdr_ids.at(i) + ",timeout=10000000");
+            SoapySDR::Kwargs args;
+            args["timeout"] = "1000000";
+            args["serial"] = _cfg->cl_sdr_ids.at(i);
+            auto dev = SoapySDR::Device::make(args);
             radios[i].dev = dev;
             SoapySDR::Kwargs info = dev->getHardwareInfo();
 
