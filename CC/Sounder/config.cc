@@ -40,6 +40,9 @@ Config::Config(const std::string& jsonfile)
     if (bsPresent) {
         freq = tddConf.value("frequency", 3.6e9);
         rate = tddConf.value("rate", 5e6);
+        nco = tddConf.value("nco_frequency", 0.75 * rate);
+	bwFilter = rate + 2 * nco;
+	radioRfFreq = freq - nco; 
         int samps = tddConf.value("subframe_size", 0);
         prefix = tddConf.value("prefix", 0);
         postfix = tddConf.value("postfix", 0);
@@ -151,6 +154,8 @@ Config::Config(const std::string& jsonfile)
         if (!bsPresent) {
             freq = tddConfCl.value("frequency", 3.6e9);
             rate = tddConfCl.value("rate", 5e6);
+            nco = tddConf.value("nco_frequency", 0.75 * rate);
+	    radioRfFreq = freq - nco; 
             int samps = tddConfCl.value("subframe_size", 0);
             prefix = tddConfCl.value("prefix", 0);
             postfix = tddConfCl.value("postfix", 0);
@@ -163,7 +168,6 @@ Config::Config(const std::string& jsonfile)
             symbolsPerFrame = clFrames.at(0).size();
         }
     }
-    bbf_ratio = 0.75;
 
     // Signal Generation
     if (bsPresent or clPresent) {

@@ -30,16 +30,16 @@ reset_DATA_clk_domain(SoapySDR::Device* dev)
 static void
 dev_init(SoapySDR::Device* dev, Config* _cfg, int ch, double rxgain, double txgain)
 {
-    dev->setBandwidth(SOAPY_SDR_RX, ch, (1 + 2 * _cfg->bbf_ratio) * _cfg->rate);
-    dev->setBandwidth(SOAPY_SDR_TX, ch, (1 + 2 * _cfg->bbf_ratio) * _cfg->rate);
+    dev->setBandwidth(SOAPY_SDR_RX, ch, _cfg->bwFilter);
+    dev->setBandwidth(SOAPY_SDR_TX, ch, _cfg->bwFilter);
 
     dev->setSampleRate(SOAPY_SDR_RX, ch, _cfg->rate);
     dev->setSampleRate(SOAPY_SDR_TX, ch, _cfg->rate);
 
-    dev->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->freq - _cfg->bbf_ratio * _cfg->rate);
-    dev->setFrequency(SOAPY_SDR_RX, ch, "BB", _cfg->bbf_ratio * _cfg->rate);
-    dev->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->freq - _cfg->bbf_ratio * _cfg->rate);
-    dev->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->bbf_ratio * _cfg->rate);
+    dev->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->radioRfFreq);
+    dev->setFrequency(SOAPY_SDR_RX, ch, "BB", _cfg->nco);
+    dev->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->radioRfFreq);
+    dev->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->nco);
 
     // lime
     dev->setGain(SOAPY_SDR_RX, ch, "LNA", rxgain);
@@ -119,7 +119,6 @@ RadioConfig::RadioConfig(Config* cfg)
 
                 if (info["frontend"].find("CBRS") != std::string::npos) {
                     // receive gains
-                    dev->setGain(SOAPY_SDR_RX, ch, "LNA1", 30); //[0,33]
                     if (cfg->freq >= 3e9) {
                         dev->setGain(SOAPY_SDR_RX, ch, "ATTN", 0); //[-18,0]
                         dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 14); //[0,14]
@@ -199,7 +198,6 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
 
         if (info["frontend"].find("CBRS") != std::string::npos) {
             // receive gains
-            dev->setGain(SOAPY_SDR_RX, ch, "LNA1", 33); //[0,33]
             if (_cfg->freq > 3e9) {
                 dev->setGain(SOAPY_SDR_RX, ch, "ATTN", 0); //[-18,0]
                 dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //LO[0,17]
@@ -211,15 +209,11 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
             // transmit gains
             if (_cfg->freq > 3e9) { // CBRS HI
                 dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //[-18,0] by 3
-                dev->setGain(SOAPY_SDR_TX, ch, "PA1", 15); //[0|13.7] no bypass
                 dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|14]   can bypass
-                dev->setGain(SOAPY_SDR_TX, ch, "PA3", 30); //[0|31]   no bypass
             } else if (_cfg->freq > 2e9) { // CBRS LO
                 dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //[-18,0] by 3
-                dev->setGain(SOAPY_SDR_TX, ch, "PA1", 14); //[0|14] no bypass
                 dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|17]   can bypass.
                 // Can cause saturation or PA damage!! DO NOT USE IF NOT SURE!!!
-                dev->setGain(SOAPY_SDR_TX, ch, "PA3", 30); //[0|31.5]   no bypass
             }
         }
         if (info["frontend"].find("UHF") != std::string::npos) {
