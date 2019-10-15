@@ -113,8 +113,8 @@ RadioConfig::RadioConfig(Config* cfg)
             SoapySDR::Kwargs args;
             args["timeout"] = "1000000";
             args["serial"] = _cfg->cl_sdr_ids.at(i);
-            auto dev = SoapySDR::Device::make(args);
-            radios[i].dev = dev;
+            radios[i].init(args, SOAPY_SDR_CF32, channels);
+            auto dev = radios[i].dev;
             SoapySDR::Kwargs info = dev->getHardwareInfo();
 
             for (auto ch : { 0, 1 }) //channels)
@@ -153,10 +153,6 @@ RadioConfig::RadioConfig(Config* cfg)
                 dev->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
             }
 
-            reset_DATA_clk_domain(dev);
-            radios[i].rxs = dev->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CF32, channels);
-            radios[i].txs = dev->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CF32, channels);
-
             RadioConfig::initAGC(dev);
         }
     }
@@ -190,8 +186,8 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
     args["driver"] = "iris";
     args["timeout"] = "1000000";
     args["serial"] = _cfg->bs_sdr_ids[0][i];
-    Radio* bsRadio = &bsRadios[c][i];
-    SoapySDR::Device* dev = bsRadio->dev = (SoapySDR::Device::make(args));
+    bsRadios[c][i].init(args, SOAPY_SDR_CS16, channels);
+    SoapySDR::Device* dev = bsRadios[c][i].dev;
     //use the TRX antenna port for both tx and rx
     for (auto ch : channels)
         dev->setAntenna(SOAPY_SDR_RX, ch, "TRX");
@@ -245,11 +241,6 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
         //dev->writeSetting(SOAPY_SDR_TX, ch, "CALIBRATE", "");
         dev->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
     }
-
-    SoapySDR::Kwargs sargs;
-    reset_DATA_clk_domain(dev);
-    bsRadio->rxs = dev->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CS16, channels, sargs);
-    bsRadio->txs = dev->setupStream(SOAPY_SDR_TX, SOAPY_SDR_CS16, channels, sargs);
     remainingJobs--;
 }
 
@@ -815,6 +806,15 @@ RadioConfig::~RadioConfig()
                 SoapySDR::Device::unmake(hubs[i]);
         }
     }
+}
+
+void Radio::init(const SoapySDR::Kwargs& args, const char soapyFmt[],
+    const std::vector<size_t>& channels)
+{
+    dev = SoapySDR::Device::make(args);
+    rxs = dev->setupStream(SOAPY_SDR_RX, soapyFmt, channels);
+    txs = dev->setupStream(SOAPY_SDR_TX, soapyFmt, channels);
+    reset_DATA_clk_domain(dev);
 }
 
 Radio::~Radio(void)
