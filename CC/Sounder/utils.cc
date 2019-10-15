@@ -43,23 +43,23 @@ std::vector<std::complex<float>> Utils::doubletocfloat(std::vector<std::vector<d
     return out;
 }
 
-std::vector<std::complex<double>> Utils::uint32tocdouble(std::vector<uint32_t> in,
+std::vector<std::complex<float>> Utils::uint32tocfloat(std::vector<uint32_t> in,
     const std::string& order)
 {
     int len = in.size();
-    std::vector<std::complex<double>> out(len, 0);
+    std::vector<std::complex<float>> out(len, 0);
     for (size_t i = 0; i < in.size(); i++) {
         int16_t arr_hi_int = (int16_t)(in[i] >> 16);
         int16_t arr_lo_int = (int16_t)(in[i] & 0x0FFFF);
 
-        double arr_hi = (double)arr_hi_int / 32768.0;
-        double arr_lo = (double)arr_lo_int / 32768.0;
+        float arr_hi = (float)arr_hi_int / 32768.0;
+        float arr_lo = (float)arr_lo_int / 32768.0;
 
         if (order == "IQ") {
-            std::complex<double> csamp(arr_hi, arr_lo);
+            std::complex<float> csamp(arr_hi, arr_lo);
             out[i] = csamp;
         } else if (order == "QI") {
-            std::complex<double> csamp(arr_lo, arr_hi);
+            std::complex<float> csamp(arr_lo, arr_hi);
             out[i] = csamp;
         }
     }

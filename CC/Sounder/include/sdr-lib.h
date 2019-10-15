@@ -53,10 +53,9 @@ private:
     SoapySDR::Device* baseRadio(int cellId);
     void collectCSI(bool&);
     static void drain_buffers(SoapySDR::Device* ibsSdrs, SoapySDR::Stream* istream, std::vector<void*> buffs, int symSamp);
-    static void dciqMinimize(SoapySDR::Device *, SoapySDR::Device *, size_t, int, double, double);
-    static void setIQBalance(SoapySDR::Device *, size_t, int, int, int);
-    static void adjustCalibrationGains(std::vector<SoapySDR::Device *>, SoapySDR::Device *, size_t, double);
-    std::vector<std::complex<float>> snoopSamples(size_t, size_t, size_t);
+    static void dciqMinimize(SoapySDR::Device *, SoapySDR::Device *, int, size_t, double, double);
+    static void setIQBalance(SoapySDR::Device *, int, size_t, int, int);
+    static void adjustCalibrationGains(std::vector<SoapySDR::Device *>, SoapySDR::Device *, size_t, double, bool plot = false);
     static std::vector<std::complex<float>> snoopSamples(SoapySDR::Device *, size_t, size_t);
     Config* _cfg;
     std::vector<SoapySDR::Device*> hubs;

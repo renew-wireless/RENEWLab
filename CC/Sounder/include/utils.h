@@ -40,7 +40,7 @@ public:
 
     static std::vector<std::complex<int16_t>> double_to_int16(std::vector<std::vector<double>> in);
     static std::vector<std::complex<float>> doubletocfloat(std::vector<std::vector<double>> in);
-    static std::vector<std::complex<double>> uint32tocdouble(std::vector<uint32_t> in,
+    static std::vector<std::complex<float>> uint32tocfloat(std::vector<uint32_t> in,
         const std::string& order);
     static std::vector<uint32_t> cint16_to_uint32(std::vector<std::complex<int16_t>> in, bool conj,
         const std::string& order);

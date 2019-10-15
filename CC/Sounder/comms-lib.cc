@@ -162,26 +162,30 @@ std::vector<float> CommsLib::hannWindowFunction(size_t fftSize)
 double CommsLib::windowFunctionPower(std::vector<float> const& win)
 {
     double windowPower = (0);
+    size_t N = win.size();
     for (size_t n = 0; n < win.size(); n++) {
         windowPower += std::norm(win[n]);
     }
-    return windowPower;
+    windowPower = std::sqrt(windowPower/N);
+    return 20*std::log10(N*windowPower);
 }
 
 template <typename T>
 T CommsLib::findTone(std::vector<T> const& magnitude, double winGain, double fftBin, size_t fftSize, const size_t delta)
 {
     /*
-     * Find the tone level at a specific window in the input Power Spectrum
+     * Find the tone level at a specific interval in the input Power Spectrum
+     * fftBins assumed interval is [-0.5, 0.5] which is coverted to [0, fftSize-1]
      */
-    size_t first = std::max<size_t>(0, std::lround(fftBin + 0.5) * fftSize - delta);
-    size_t last = std::min<size_t>(fftSize - 1, std::lround(fftBin + 0.5) * fftSize + delta);
+    // make sure we don't exceed array bounds
+    size_t first = std::max<size_t>(0, std::lround((fftBin + 0.5) * fftSize) - delta);
+    size_t last = std::min<size_t>(fftSize - 1, std::lround((fftBin + 0.5) * fftSize) + delta);
     T refLevel = magnitude[last];
     for (size_t n = first; n < last; n++) {
         if (magnitude[n] > refLevel)
             refLevel = magnitude[n];
     }
-    return 10 * std::log10(std::max(refLevel, T(1e-20))) - winGain;
+    return 10 * std::max(std::log10(refLevel), (T)(-20.0)) - (T)winGain;
 }
 
 float CommsLib::measureTone(std::vector<std::complex<float>> const& samps, std::vector<float> const& win, double winGain, double fftBin, size_t fftSize, const size_t delta)

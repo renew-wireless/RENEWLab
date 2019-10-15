@@ -67,6 +67,7 @@ public:
     double rxgain[2];
     double calTxGain[2];
     bool sampleCalEn;
+    bool imbalanceCalEn;
     std::string trace_file;
 
     // Clients features
