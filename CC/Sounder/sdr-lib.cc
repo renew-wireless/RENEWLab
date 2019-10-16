@@ -246,7 +246,6 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
 
 void RadioConfig::radioConfigure()
 {
-    int flags = 0;
     if (_cfg->bsPresent) {
 
         if (_cfg->sampleCalEn) {
@@ -341,8 +340,8 @@ void RadioConfig::radioConfigure()
 
         for (size_t i = 0; i < bsRadios[0].size(); i++) {
             SoapySDR::Device* dev = bsRadios[0][i]->dev;
-            dev->activateStream(bsRadios[0][i]->rxs, flags, 0);
-            dev->activateStream(bsRadios[0][i]->txs);
+            bsRadios[0][i]->activateRecv();
+            bsRadios[0][i]->activateXmit();
             dev->setHardwareTime(0, "TRIGGER");
         }
     }
@@ -415,8 +414,8 @@ void RadioConfig::radioConfigure()
             if (_cfg->clSdrCh == 2)
                 dev->writeRegisters("TX_RAM_B", 2048, _cfg->pilot);
 
-            dev->activateStream(radios[i]->rxs);
-            dev->activateStream(radios[i]->txs);
+            radios[i]->activateRecv();
+            radios[i]->activateXmit();
 
             if (_cfg->bsChannel != "B") // A or AB
                 dev->writeRegister("IRIS30", CORR_CONF, 0x11);
@@ -618,7 +617,7 @@ void RadioConfig::collectCSI(bool& adjust)
         dev->setGain(SOAPY_SDR_TX, ch, "PAD", _cfg->calTxGain[ch]);
         dev->writeSetting("TDD_CONFIG", "{\"tdd_enabled\":false}");
         dev->writeSetting("TDD_MODE", "false");
-        dev->activateStream(bsRadio->txs);
+        bsRadios[0][i]->activateXmit();
     }
 
     long long txTime(0);
@@ -626,15 +625,12 @@ void RadioConfig::collectCSI(bool& adjust)
     for (int i = 0; i < R; i++) {
         // All write, or prepare to receive.
         for (int j = 0; j < R; j++) {
-            Radio* bsRadio = bsRadios[0][j];
-            SoapySDR::Device* dev = bsRadio->dev;
             if (j == i) {
                 int ret = bsRadios[0][j]->xmit(txbuff.data(), _cfg->sampsPerSymbol, 3, txTime);
                 if (ret < 0)
                     std::cout << "bad write" << std::endl;
             } else {
-                int ret = dev->activateStream(bsRadio->rxs, 0, rxTime,
-                    _cfg->sampsPerSymbol);
+                int ret = bsRadios[0][j]->activateRecv(rxTime, _cfg->sampsPerSymbol);
                 if (ret < 0)
                     std::cout << "bad activate at node " << j << std::endl;
             }
@@ -714,8 +710,8 @@ void RadioConfig::collectCSI(bool& adjust)
     for (int i = 0; i < R; i++) {
         Radio* bsRadio = bsRadios[0][i];
         SoapySDR::Device* dev = bsRadio->dev;
-        dev->deactivateStream(bsRadio->txs);
-        dev->deactivateStream(bsRadio->rxs);
+        bsRadio->deactivateRecv();
+        bsRadio->deactivateXmit();
         dev->setGain(SOAPY_SDR_TX, ch, "PAD", _cfg->txgain[ch]); //[0,30]
         bsRadio->drain_buffers(dummybuffs, _cfg->sampsPerSymbol);
     }
@@ -826,9 +822,9 @@ Radio::Radio(const SoapySDR::Kwargs& args, const char soapyFmt[],
 
 Radio::~Radio(void)
 {
-    dev->deactivateStream(rxs);
+    deactivateRecv();
+    deactivateXmit();
     dev->closeStream(rxs);
-    dev->deactivateStream(txs);
     dev->closeStream(txs);
     SoapySDR::Device::unmake(dev);
 }
@@ -837,6 +833,16 @@ int Radio::recv(void* const* buffs, int samples, long long& frameTime)
 {
     int flags(0);
     return dev->readStream(rxs, buffs, samples, flags, frameTime, 1000000);
+}
+
+int Radio::activateRecv(const long long rxTime, const size_t numSamps)
+{
+    return dev->activateStream(rxs, 0, rxTime, numSamps);
+}
+
+void Radio::deactivateRecv(void)
+{
+    dev->deactivateStream(rxs);
 }
 
 int Radio::xmit(const void* const* buffs, int samples, int flags, long long& frameTime)
@@ -852,6 +858,16 @@ int Radio::xmit(const void* const* buffs, int samples, int flags, long long& fra
     if (r != samples)
         std::cerr << "unexpected writeStream error " << SoapySDR::errToStr(r) << std::endl;
     return (r);
+}
+
+void Radio::activateXmit(void)
+{
+    dev->activateStream(txs);
+}
+
+void Radio::deactivateXmit(void)
+{
+    dev->deactivateStream(txs);
 }
 
 int Radio::getTriggers(void) const
