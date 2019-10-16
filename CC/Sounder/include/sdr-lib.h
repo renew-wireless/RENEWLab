@@ -17,7 +17,7 @@ private:
     friend class RadioConfig;
 
 public:
-    void init(const SoapySDR::Kwargs& args, const char soapyFmt[], const std::vector<size_t>& channels);
+    Radio(const SoapySDR::Kwargs& args, const char soapyFmt[], const std::vector<size_t>& channels);
     ~Radio(void);
     int recv(void* const* buffs, int samples, long long& frameTime);
     int xmit(const void* const* buffs, int samples, int flags, long long& frameTime);
@@ -39,7 +39,7 @@ public:
     void radioConfigure();
 
 private:
-    std::vector<Radio> radios;
+    std::vector<Radio*> radios;
     // use for create pthread
     struct RadioConfigContext {
         RadioConfig* ptr;
@@ -58,7 +58,7 @@ private:
     void collectCSI(bool&);
     Config* _cfg;
     std::vector<SoapySDR::Device*> hubs;
-    std::vector<std::vector<Radio>> bsRadios; // [cell, iris]
+    std::vector<std::vector<Radio*>> bsRadios; // [cell, iris]
     std::vector<int> nBsAntennas;
 #if 0
     std::vector<SoapySDR::Device*> clSdrs;
