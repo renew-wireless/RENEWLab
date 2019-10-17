@@ -40,7 +40,6 @@ public:
     Radio* getRadio(int i);
     void radioStart();
     void radioStop();
-    void radioConfigure();
 
 private:
     std::vector<Radio*> radios;
@@ -63,7 +62,6 @@ private:
     Config* _cfg;
     std::vector<SoapySDR::Device*> hubs;
     std::vector<std::vector<Radio*>> bsRadios; // [cell, iris]
-    std::vector<int> nBsAntennas;
 #if 0
     std::vector<SoapySDR::Device*> clSdrs;
     std::vector<SoapySDR::Stream*> clTxStreams;

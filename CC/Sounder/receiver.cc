@@ -19,17 +19,13 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 Receiver::Receiver(int n_rx_threads, Config* config, moodycamel::ConcurrentQueue<Event_data>* in_queue)
+    : config_(config)
+    , radioconfig_(new RadioConfig(config))
+    , thread_num_(n_rx_threads)
+    , message_queue_(in_queue)
 {
-    this->config_ = config;
-    radioconfig_ = new RadioConfig(this->config_);
-
-    thread_num_ = n_rx_threads;
-
     /* initialize random seed: */
     srand(time(NULL));
-
-    message_queue_ = in_queue;
-    radioconfig_->radioConfigure();
 }
 
 Receiver::~Receiver()
