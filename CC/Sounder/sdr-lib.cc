@@ -97,7 +97,7 @@ RadioConfig::RadioConfig(Config* cfg)
             while (threadCount > 0)
                 ;
             // Measure Sync Delays now!
-            sync_delays(0);
+            sync_delays(c);
         }
 
         if (_cfg->sampleCalEn) {
