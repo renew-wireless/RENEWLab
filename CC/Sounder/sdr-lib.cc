@@ -28,6 +28,7 @@ static void
 dev_init(SoapySDR::Device* dev, Config* _cfg, int ch, double rxgain, double txgain, std::string feType, bool preCalibration)
 {
     // these params are sufficient to set befor DC offset and IQ imbalance calibration
+    dev->setAntenna(SOAPY_SDR_RX, ch, "TRX");
     dev->setBandwidth(SOAPY_SDR_RX, ch, _cfg->bwFilter);
     dev->setBandwidth(SOAPY_SDR_TX, ch, _cfg->bwFilter);
 
@@ -79,7 +80,6 @@ dev_init(SoapySDR::Device* dev, Config* _cfg, int ch, double rxgain, double txga
             dev->setGain(SOAPY_SDR_TX, ch, "ATTN", 0); //[-18,0] by 3
         }
 
-        dev->setAntenna(SOAPY_SDR_RX, ch, "TRX");
         dev->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
     }
 }
@@ -163,7 +163,7 @@ RadioConfig::RadioConfig(Config* cfg)
         std::vector<size_t> channels;
         if (_cfg->bsChannel == "A")
             channels = { 0 };
-        else if (cfg->bsChannel == "B")
+        else if (_cfg->bsChannel == "B")
             channels = { 1 };
         else
             channels = { 0, 1 };
@@ -214,6 +214,14 @@ void RadioConfig::initBSRadioPreCal(RadioConfigContext* context)
     int c = context->cell;
     //delete context;
 
+    std::vector<size_t> channels;
+    if (_cfg->bsChannel == "A")
+        channels = { 0 };
+    else if (_cfg->bsChannel == "B")
+        channels = { 1 };
+    else
+        channels = { 0, 1 };
+
     SoapySDR::Kwargs args;
     args["driver"] = "iris";
     args["timeout"] = "1000000"; // pretty conservative value for iris discovery timeout!
@@ -222,14 +230,15 @@ void RadioConfig::initBSRadioPreCal(RadioConfigContext* context)
     SoapySDR::Device* dev = bsRadio->dev = (SoapySDR::Device::make(args));
 
     SoapySDR::Kwargs info = dev->getHardwareInfo();
-    for (auto ch : { 0, 1 }) //channels)
+    for (auto ch : channels)
     {
-        double rxgain = _cfg->rxgain[ch]; //[0,30]
-        double txgain = _cfg->txgain[ch]; //[0,30]
+        double rxgain = _cfg->rxgain[ch];
+        double txgain = _cfg->txgain[ch];
         dev_init(dev, _cfg, ch, rxgain, txgain, info["frontend"], true);
     }
 
     reset_DATA_clk_domain(dev);
+
     remainingJobs--;
 }
 
@@ -251,10 +260,10 @@ void RadioConfig::initBSRadioPostCal(RadioConfigContext* context)
     struct Radio* bsRadio = &bsRadios[c][i];
     SoapySDR::Device* dev = bsRadio->dev;
     SoapySDR::Kwargs info = dev->getHardwareInfo();
-    for (auto ch : { 0, 1 }) //channels)
+    for (auto ch : channels)
     {
-        double rxgain = _cfg->rxgain[ch]; //[0,30]
-        double txgain = _cfg->txgain[ch]; //[0,30]
+        double rxgain = _cfg->rxgain[ch];
+        double txgain = _cfg->txgain[ch];
         dev_init(dev, _cfg, ch, rxgain, txgain, info["frontend"], false);
     }
 

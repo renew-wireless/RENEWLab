@@ -132,20 +132,16 @@ std::vector<float> CommsLib::magnitudeFFT(std::vector<std::complex<float>> const
 
     std::vector<std::complex<float>> fftSamps = CommsLib::FFT(preFFT, fftSize);
 
-    // In-place FFT Shift
-    std::vector<std::complex<float>>::iterator it = fftSamps.begin();
-    for (size_t n = 0; n < fftSize / 2; n++) {
-        std::complex<float> samp = fftSamps.front();
-        it = fftSamps.erase(it);
-        fftSamps.push_back(samp);
-    }
-
     // compute magnitudes
     std::vector<float> fftMag;
     fftMag.reserve(fftSize);
-    for (size_t n = 0; n < fftSize; n++) {
+    for (size_t n = fftSize / 2; n < fftSize; n++) {
         fftMag.push_back(std::norm(fftSamps[n]));
     }
+    for (size_t n = 0; n < fftSize / 2; n++) {
+        fftMag.push_back(std::norm(fftSamps[n]));
+    }
+    std::reverse(fftMag.begin(), fftMag.end()); // not sure why we need reverse here, but this seems to give the right spectrum
     return fftMag;
 }
 
@@ -153,7 +149,7 @@ std::vector<float> CommsLib::hannWindowFunction(size_t fftSize)
 {
     std::vector<float> winFcn;
     for (size_t n = 0; n < fftSize; n++) {
-        const float w_n = (1 - std::cos(float(2 * M_PI * n) / float(fftSize - 1))) / 2;
+        const float w_n = (1 - std::cos(float(2 * M_PI * n) / float(fftSize))) / 2;
         winFcn.push_back(w_n);
     }
     return winFcn;
