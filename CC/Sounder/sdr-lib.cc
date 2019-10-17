@@ -59,7 +59,7 @@ RadioConfig::RadioConfig(Config* cfg)
         std::vector<int> nBsAntennas(_cfg->nCells);
         bsRadios.resize(_cfg->nCells);
 
-        for (unsigned int c = 0; c < _cfg->nCells; c++) {
+        for (size_t c = 0; c < _cfg->nCells; c++) {
             int radioNum = _cfg->nBsSdrs[c];
             nBsAntennas[c] = radioNum * _cfg->bsChannel.length();
             std::cout << radioNum << " radios in cell " << c << std::endl;
@@ -426,7 +426,8 @@ SoapySDR::Device* RadioConfig::baseRadio(int cellId)
 
 void RadioConfig::radioTrigger(void)
 {
-    baseRadio(0)->writeSetting("TRIGGER_GEN", "");
+    for (size_t c = 0; c < _cfg->nCells; c++)
+        baseRadio(c)->writeSetting("TRIGGER_GEN", "");
 }
 
 void RadioConfig::radioStart()
