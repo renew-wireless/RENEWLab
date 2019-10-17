@@ -14,7 +14,8 @@ private:
     SoapySDR::Device* dev;
     SoapySDR::Stream* rxs;
     SoapySDR::Stream* txs;
-    friend class RadioConfig;
+    friend class ClientRadioSet;
+    friend class BaseRadioSet;
 
 public:
     Radio(const SoapySDR::Kwargs& args, const char soapyFmt[], const std::vector<size_t>& channels);
@@ -29,40 +30,52 @@ public:
     void drain_buffers(std::vector<void*> buffs, int symSamp);
 };
 
-class RadioConfig {
+class ClientRadioSet {
 public:
-    RadioConfig(Config* cfg);
-    ~RadioConfig();
+    ClientRadioSet(Config* cfg);
+    ~ClientRadioSet(void);
+    Radio* getRadio(int i);
+    void radioStop(void);
+
+private:
+    void initAGC(SoapySDR::Device* iclSdrs);
+    Config* _cfg;
+    std::vector<Radio*> radios;
+};
+
+class BaseRadioSet {
+public:
+    BaseRadioSet(Config* cfg);
+    ~BaseRadioSet(void);
     void radioTx(const void* const* buffs);
     void radioRx(void* const* buffs);
     int radioTx(size_t, const void* const* buffs, int flags, long long& frameTime);
     int radioRx(size_t, void* const* buffs, long long& frameTime);
-    Radio* getRadio(int i);
-    void radioStart();
-    void radioStop();
+    void radioStart(void);
+    void radioStop(void);
 
 private:
-    std::vector<Radio*> radios;
     // use for create pthread
-    struct RadioConfigContext {
-        RadioConfig* rc;
+    struct BaseRadioContext {
+        BaseRadioSet* brs;
         std::atomic_int* threadCount;
         int tid;
         int cell;
     };
-    void initBSRadio(RadioConfigContext* context);
+    void init(BaseRadioContext* context);
 
-    static void* initBSRadio_launch(void* in_context);
-    void readSensors();
+    static void* init_launch(void* in_context);
+    void readSensors(void);
 
-    void radioTrigger();
-    void initAGC(SoapySDR::Device* iclSdrs);
+    void radioTrigger(void);
     void sync_delays(int cellIdx);
     SoapySDR::Device* baseRadio(int cellId);
     void collectCSI(bool&);
     Config* _cfg;
     std::vector<SoapySDR::Device*> hubs;
     std::vector<std::vector<Radio*>> bsRadios; // [cell, iris]
+};
+
 #if 0
     std::vector<SoapySDR::Device*> clSdrs;
     std::vector<SoapySDR::Stream*> clTxStreams;
@@ -74,4 +87,3 @@ private:
     std::vector<uint32_t> dummy_uint32;
     int nClAntennas;
 #endif
-};

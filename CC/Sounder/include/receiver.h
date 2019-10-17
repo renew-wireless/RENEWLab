@@ -93,7 +93,8 @@ public:
 
 private:
     Config* config_;
-    RadioConfig* radioconfig_;
+    ClientRadioSet* clientRadioSet_;
+    BaseRadioSet* baseRadioSet_;
 
     int thread_num_;
     // pointer of message_queue_
