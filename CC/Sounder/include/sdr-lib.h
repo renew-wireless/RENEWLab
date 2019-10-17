@@ -45,7 +45,8 @@ private:
     std::vector<Radio*> radios;
     // use for create pthread
     struct RadioConfigContext {
-        RadioConfig* ptr;
+        RadioConfig* rc;
+        std::atomic_int* threadCount;
         int tid;
         int cell;
     };
@@ -73,5 +74,4 @@ private:
     std::vector<uint32_t> dummy_uint32;
     int nClAntennas;
 #endif
-    std::atomic<int> remainingJobs;
 };

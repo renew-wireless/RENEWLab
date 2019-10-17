@@ -73,13 +73,14 @@ RadioConfig::RadioConfig(Config* cfg)
             }
 
             bsRadios[c].resize(radioNum);
-            remainingJobs = radioNum;
+            std::atomic_int threadCount = ATOMIC_VAR_INIT(radioNum);
             for (int i = 0; i < radioNum; i++) {
                 //args["serial"] = _cfg->bs_sdr_ids[c][i];
                 //args["timeout"] = "1000000";
                 //bsSdrs[c].push_back(SoapySDR::Device::make(args));
                 RadioConfigContext* context = new RadioConfigContext;
-                context->ptr = this;
+                context->rc = this;
+                context->threadCount = &threadCount;
                 context->tid = i;
                 context->cell = c;
 #ifdef THREADED_INIT
@@ -93,7 +94,7 @@ RadioConfig::RadioConfig(Config* cfg)
 #endif
             }
 
-            while (remainingJobs > 0)
+            while (threadCount > 0)
                 ;
             // Measure Sync Delays now!
             sync_delays(0);
@@ -335,7 +336,7 @@ RadioConfig::RadioConfig(Config* cfg)
 void* RadioConfig::initBSRadio_launch(void* in_context)
 {
     RadioConfigContext* context = (RadioConfigContext*)in_context;
-    RadioConfig* rc = context->ptr;
+    RadioConfig* rc = context->rc;
     rc->initBSRadio(context);
     return 0;
 }
@@ -344,6 +345,7 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
 {
     int i = context->tid;
     int c = context->cell;
+    std::atomic_int* threadCount = context->threadCount;
     delete context;
 
     //load channels
@@ -414,7 +416,7 @@ void RadioConfig::initBSRadio(RadioConfigContext* context)
         //dev->writeSetting(SOAPY_SDR_TX, ch, "CALIBRATE", "");
         dev->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
     }
-    remainingJobs--;
+    (*threadCount)--;
 }
 
 SoapySDR::Device* RadioConfig::baseRadio(int cellId)
