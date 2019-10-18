@@ -209,7 +209,7 @@ void Receiver::loopRecv(ReceiverContext* context)
                 package_message.event_type = EVENT_RX_SYMBOL;
                 // data records the position of this packet in the buffer & tid of this socket
                 // (so that task thread could know which buffer it should visit)
-                package_message.data = cursor + ch + tid * buffer_chunk_size;
+                package_message.data = cursor + tid * buffer_chunk_size;
                 if (!message_queue_->enqueue(local_ptok, package_message)) {
                     printf("socket message enqueue failed\n");
                     exit(0);
