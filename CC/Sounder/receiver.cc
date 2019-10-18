@@ -20,8 +20,8 @@ pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 Receiver::Receiver(int n_rx_threads, Config* config, moodycamel::ConcurrentQueue<Event_data>* in_queue)
     : config_(config)
-    , clientRadioSet_(new ClientRadioSet(config))
-    , baseRadioSet_(new BaseRadioSet(config))
+    , clientRadioSet_(config->clPresent ? new ClientRadioSet(config) : NULL)
+    , baseRadioSet_(config->bsPresent ? new BaseRadioSet(config) : NULL)
     , thread_num_(n_rx_threads)
     , message_queue_(in_queue)
 {
@@ -31,10 +31,14 @@ Receiver::Receiver(int n_rx_threads, Config* config, moodycamel::ConcurrentQueue
 
 Receiver::~Receiver()
 {
-    baseRadioSet_->radioStop();
-    delete baseRadioSet_;
-    clientRadioSet_->radioStop();
-    delete clientRadioSet_;
+    if (baseRadioSet_ != NULL) {
+        baseRadioSet_->radioStop();
+        delete baseRadioSet_;
+    }
+    if (clientRadioSet_ != NULL) {
+        clientRadioSet_->radioStop();
+        delete clientRadioSet_;
+    }
 }
 
 std::vector<pthread_t> Receiver::startClientThreads()
@@ -106,7 +110,8 @@ void Receiver::completeRecvThreads(const std::vector<pthread_t>& recv_thread)
 
 void Receiver::go()
 {
-    baseRadioSet_->radioStart(); // hardware trigger
+    if (baseRadioSet_ != NULL)
+        baseRadioSet_->radioStart(); // hardware trigger
 }
 
 void* Receiver::loopRecv_launch(void* in_context)
@@ -180,6 +185,7 @@ void Receiver::loopRecv(ReceiverContext* context)
                 samp[ch] = pkg[ch]->data;
             }
             long long frameTime;
+            assert(baseRadioSet_ != NULL);
             if (baseRadioSet_->radioRx(it, samp, frameTime) < 0) {
                 config_->running = false;
                 break;
@@ -262,6 +268,7 @@ void Receiver::clientTxRx(dev_profile* context)
     struct timespec tv, tv2;
     clock_gettime(CLOCK_MONOTONIC, &tv);
 
+    assert(clientRadioSet_ != NULL);
     Radio* radio = clientRadioSet_->getRadio(tid);
     while (config_->running) {
         clock_gettime(CLOCK_MONOTONIC, &tv2);
