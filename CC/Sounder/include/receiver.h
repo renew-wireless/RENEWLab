@@ -26,13 +26,6 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-typedef unsigned short ushort;
-
-struct complex_float {
-    float real;
-    float imag;
-};
-
 struct Event_data {
     int event_type;
     int data;
@@ -80,7 +73,6 @@ public:
         int txStartSym;
         unsigned txFrameDelta;
         double rate;
-        struct Radio* radio;
         std::string data_file;
         int core;
         Receiver* ptr;
@@ -101,7 +93,8 @@ public:
 
 private:
     Config* config_;
-    RadioConfig* radioconfig_;
+    ClientRadioSet* clientRadioSet_;
+    BaseRadioSet* baseRadioSet_;
 
     int thread_num_;
     // pointer of message_queue_
