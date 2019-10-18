@@ -398,7 +398,7 @@ void BaseRadioSet::dciqCalibrationProc(size_t channel)
     // must set TX "RF" Freq to make sure, we continue using the same LO for rx cal
     refRefDev->setFrequency(SOAPY_SDR_TX, channel, "RF", centerRfFreq);
     refRefDev->setFrequency(SOAPY_SDR_RX, channel, "RF", centerRfFreq);
-    refRefDev->setFrequency(SOAPY_SDR_RX, channel, "BB", toneBBFreq); // Should this be nagative if we need centerRfFreq-toneBBFreq at true center?
+    refRefDev->setFrequency(SOAPY_SDR_RX, channel, "BB", -toneBBFreq); // Should this be nagative if we need centerRfFreq-toneBBFreq at true center?
     refDev->setFrequency(SOAPY_SDR_TX, channel, "RF", centerRfFreq);
     refDev->setFrequency(SOAPY_SDR_TX, channel, "BB", txToneBBFreq);
     refDev->writeSetting(SOAPY_SDR_TX, channel, "TSP_TSG_CONST", std::to_string(1 << 14));
@@ -420,7 +420,7 @@ void BaseRadioSet::dciqCalibrationProc(size_t channel)
      */
     std::cout << "Calibrating Tx Channel of the Reference Radio\n";
     // refDev->setFrequency(SOAPY_SDR_RX, channel, "RF", centerRfFreq);
-    refDev->setFrequency(SOAPY_SDR_RX, channel, "BB", toneBBFreq); // Should this be nagative if we need centerRfFreq-toneBBFreq at true center?
+    refDev->setFrequency(SOAPY_SDR_RX, channel, "BB", -toneBBFreq); // Should this be nagative if we need centerRfFreq-toneBBFreq at true center?
     for (size_t r = 0; r < radioSize - 1; r++) {
         allButRefDevs[r]->setFrequency(SOAPY_SDR_TX, channel, "RF", centerRfFreq);
         allButRefDevs[r]->setFrequency(SOAPY_SDR_TX, channel, "BB", txToneBBFreq);

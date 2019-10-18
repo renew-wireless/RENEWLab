@@ -15,7 +15,6 @@
 #include <SoapySDR/Formats.hpp>
 #include <SoapySDR/Time.hpp>
 
-
 static void
 reset_DATA_clk_domain(SoapySDR::Device* dev)
 {
@@ -109,6 +108,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
 
         initAGC(dev);
     }
+
     int ueTrigOffset = 505; //_cfg->prefix + 256 + _cfg->postfix + 17 + _cfg->prefix;
     int sf_start = ueTrigOffset / _cfg->sampsPerSymbol;
     int sp_start = ueTrigOffset % _cfg->sampsPerSymbol;
@@ -273,7 +273,6 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         int radioNum = _cfg->nBsSdrs[c];
         nBsAntennas[c] = radioNum * _cfg->bsChannel.length();
         std::cout << radioNum << " radios in cell " << c << std::endl;
-        //isUE = _cfg->isUE;
         if (!_cfg->hub_ids.empty()) {
             SoapySDR::Kwargs args;
             args["driver"] = "remote";
@@ -306,11 +305,17 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
 
         while (threadCount > 0)
             ;
+
+        // Perform DC Offset & IQ Imbalance Calibration
+        if (_cfg->imbalanceCalEn) {
+            if (_cfg->bsChannel.find("A") != std::string::npos)
+                dciqCalibrationProc(0);
+            if (_cfg->bsChannel.find("B") != std::string::npos)
+                dciqCalibrationProc(1);
+        }
+
         threadCount = ATOMIC_VAR_INIT(radioNum);
         for (int i = 0; i < radioNum; i++) {
-            //args["serial"] = _cfg->bs_sdr_ids[c][i];
-            //args["timeout"] = "1000000";
-            //bsSdrs[c].push_back(SoapySDR::Device::make(args));
             BaseRadioContext* context = new BaseRadioContext;
             context->brs = this;
             context->threadCount = &threadCount;
@@ -323,7 +328,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
                 exit(0);
             }
 #else
-            init(context);
+            configure(context);
 #endif
         }
 
