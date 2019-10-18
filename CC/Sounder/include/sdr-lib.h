@@ -49,8 +49,8 @@ public:
     ~BaseRadioSet(void);
     void radioTx(const void* const* buffs);
     void radioRx(void* const* buffs);
-    int radioTx(size_t, const void* const* buffs, int flags, long long& frameTime);
-    int radioRx(size_t, void* const* buffs, long long& frameTime);
+    int radioTx(size_t radio_id, const void* const* buffs, int flags, long long& frameTime);
+    int radioRx(size_t radio_id, void* const* buffs, long long& frameTime);
     void radioStart(void);
     void radioStop(void);
 
