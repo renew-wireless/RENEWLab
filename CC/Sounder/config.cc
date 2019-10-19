@@ -155,7 +155,7 @@ Config::Config(const std::string& jsonfile)
         if (!bsPresent) {
             freq = tddConfCl.value("frequency", 3.6e9);
             rate = tddConfCl.value("rate", 5e6);
-            nco = tddConf.value("nco_frequency", 0.75 * rate);
+            nco = tddConfCl.value("nco_frequency", 0.75 * rate);
             radioRfFreq = freq - nco;
             int samps = tddConfCl.value("subframe_size", 0);
             prefix = tddConfCl.value("prefix", 0);
