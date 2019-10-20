@@ -1,7 +1,7 @@
 {
 	"BaseStations" : {
 		 "cells" : 1,
-		 "sdr_id" : ["files/iris_serials.txt"],
+		 "sdr_id" : ["files/iris_serials5.txt"],
 		 "hub_id" : "files/hub_serials.txt",
 		 "frequency" : 3.6e9,
 		 "channel" : "A",
@@ -14,7 +14,7 @@
 		     "BGPPGGGGGGGGGGGGGGGG"
 		 ],
 		 "max_frame" : 0,
-		 "subframe_size" : 400,
+		 "subframe_size" : 640,
 		 "fft_size" : 64,
 		 "cp_size" : 16,
 		 "prefix" : 82,
@@ -29,7 +29,7 @@
 	"Clients" : {
 		 "sdr_id" : [
 		     "RF3C000045",
-		     "RF3C000025"
+		     "RF3C000029"
 		 ],
 		 "frequency" : 3.6e9,
 		 "channel" : "A",
@@ -44,7 +44,7 @@
                      "GGGPGGGGGGGGGGGGGGGG"
 		 ],
 		 "frame_mode" : "continuous_resync",
-		 "subframe_size" : 400,
+		 "subframe_size" : 640,
 		 "fft_size" : 64,
 		 "cp_size" : 16,
 		 "prefix" : 82,

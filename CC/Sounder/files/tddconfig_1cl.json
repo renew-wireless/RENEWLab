@@ -1,7 +1,7 @@
 {
 	"BaseStations" : {
 		 "cells" : 1,
-		 "sdr_id" : ["files/iris_serials.txt"],
+		 "sdr_id" : ["files/iris_serials_new.txt"],
 		 "hub_id" : "files/hub_serials.txt",
 		 "frequency" : 3.6e9,
 		 "channel" : "A",
@@ -28,7 +28,7 @@
 
 	"Clients" : {
 		 "sdr_id" : [
-		     "RF3C000045"
+		     "RF3E000375"
 		 ],
 		 "frequency" : 3.6e9,
 		 "channel" : "A",

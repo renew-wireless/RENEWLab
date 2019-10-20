@@ -9,7 +9,7 @@
 		 "txgainB" : [40],
 		 "rate" : 5e6,
 		 "fft_size" : 64,
-		 "subframe_size" : 400,
+		 "subframe_size" : 640,
 		 "cp_size" : 16,
 		 "prefix" : 82,
 		 "postfix" : 68,
@@ -21,7 +21,7 @@
 		 "modulation" : "QPSK",
 		 "pilot_seq" : "lts-half",
 		 "sdr_id" : [
-		     "RF3C000045"
+		     "RF3E000375"
 		 ]
 	}
 }
