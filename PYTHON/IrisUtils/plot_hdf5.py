@@ -262,7 +262,7 @@ def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0):
     rate = float(metadata['RATE'])
     symbol_num = int(metadata['BS_FRAME_LEN'])
     timestep = symbol_length*symbol_num/rate
-    num_cl = int(metadata['CL_NUM'])
+    num_cl = int(metadata['CL_NUM'])-1
     cp = int(metadata['CP_LEN'])
     prefix_len = int(metadata['PREFIX_LEN'])
     postfix_len = int(metadata['POSTFIX_LEN'])
@@ -271,7 +271,7 @@ def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0):
     # compute CSI for each user and get a nice numpy array
     # Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier
     #also, iq samples nicely chunked out, same dims, but subcarrier is sample.
-    csi, _ = hdf5_lib.samps2csi(pilot_samples, num_cl, symbol_length, offset=offset)
+    csi, _ = hdf5_lib.samps2csi(pilot_samples, num_cl+1, symbol_length, offset=offset)
     csi = csi[:, cell, :, :, :, :]
     # zoom in too look at behavior around peak (and reduce processing time)
     if zoom > 0:
@@ -301,6 +301,8 @@ def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0):
     # zfcap_total,zfcap_u,zfcap_sc,zfSINR,zfcap_su_sc,zfcap_su_u,zfSNR
     zf = calCapacity(userCSI, noise, zfbws, downlink=downlink)
 
+    _, demmel = calDemmel(userCSI)
+
     # plot stuff
     # Multiuser Conjugate
     plt.figure(1000*pl, figsize=(50, 10))
@@ -327,6 +329,15 @@ def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0):
     # plt.ylim([0,2])
     plt.xlabel('Time (s)')
     plt.ylabel('SUBF Capacity Conj (bps/Hz)')
+    plt.show()
+
+    # demmel number
+    plt.figure(1000*pl+3, figsize=(50, 10))
+    plt.plot(
+            np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], demmel[:, 7])
+    # plt.ylim([0,2])
+    plt.xlabel('Time (s)')
+    plt.ylabel('Demmel condition number, Subcarrier 7')
     plt.show()
     pl += 1
 
