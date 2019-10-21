@@ -1,5 +1,5 @@
 /*
-
+ Helper functions for signal processing and communications
  Generate training sequence for pilots and preambles.
 
  Supports:
@@ -122,6 +122,73 @@ std::vector<double> CommsLib::convolve(std::vector<std::complex<double>> const& 
     return out;
 }
 
+std::vector<float> CommsLib::magnitudeFFT(std::vector<std::complex<float>> const& samps, std::vector<float> const& win, size_t fftSize)
+{
+    std::vector<std::complex<float>> preFFT(samps.size());
+
+    for (size_t n = 0; n < fftSize; n++) {
+        preFFT[n] = samps[n] * win[n];
+    }
+
+    std::vector<std::complex<float>> fftSamps = CommsLib::FFT(preFFT, fftSize);
+
+    // compute magnitudes
+    std::vector<float> fftMag;
+    fftMag.reserve(fftSize);
+    for (size_t n = fftSize / 2; n < fftSize; n++) {
+        fftMag.push_back(std::norm(fftSamps[n]));
+    }
+    for (size_t n = 0; n < fftSize / 2; n++) {
+        fftMag.push_back(std::norm(fftSamps[n]));
+    }
+    std::reverse(fftMag.begin(), fftMag.end()); // not sure why we need reverse here, but this seems to give the right spectrum
+    return fftMag;
+}
+
+std::vector<float> CommsLib::hannWindowFunction(size_t fftSize)
+{
+    std::vector<float> winFcn;
+    for (size_t n = 0; n < fftSize; n++) {
+        const float w_n = (1 - std::cos(float(2 * M_PI * n) / float(fftSize))) / 2;
+        winFcn.push_back(w_n);
+    }
+    return winFcn;
+}
+
+double CommsLib::windowFunctionPower(std::vector<float> const& win)
+{
+    double windowPower = (0);
+    size_t N = win.size();
+    for (size_t n = 0; n < win.size(); n++) {
+        windowPower += std::norm(win[n]);
+    }
+    windowPower = std::sqrt(windowPower/N);
+    return 20*std::log10(N*windowPower);
+}
+
+template <typename T>
+T CommsLib::findTone(std::vector<T> const& magnitude, double winGain, double fftBin, size_t fftSize, const size_t delta)
+{
+    /*
+     * Find the tone level at a specific interval in the input Power Spectrum
+     * fftBins assumed interval is [-0.5, 0.5] which is coverted to [0, fftSize-1]
+     */
+    // make sure we don't exceed array bounds
+    size_t first = std::max<size_t>(0, std::lround((fftBin + 0.5) * fftSize) - delta);
+    size_t last = std::min<size_t>(fftSize - 1, std::lround((fftBin + 0.5) * fftSize) + delta);
+    T refLevel = magnitude[last];
+    for (size_t n = first; n < last; n++) {
+        if (magnitude[n] > refLevel)
+            refLevel = magnitude[n];
+    }
+    return 10 * std::max(std::log10(refLevel), (T)(-20.0)) - (T)winGain;
+}
+
+float CommsLib::measureTone(std::vector<std::complex<float>> const& samps, std::vector<float> const& win, double winGain, double fftBin, size_t fftSize, const size_t delta)
+{
+    return findTone(magnitudeFFT(samps, win, fftSize), winGain, fftBin, fftSize, delta);
+}
+
 std::vector<int> CommsLib::getDataSc(int fftSize)
 {
     std::vector<int> data_sc;
@@ -157,22 +224,22 @@ std::vector<std::vector<int>> CommsLib::getPilotSc(int fftSize)
     return pilot_sc;
 }
 
-std::vector<std::complex<float>> CommsLib::IFFT(std::vector<std::complex<float>> in, int fftsize)
+std::vector<std::complex<float>> CommsLib::IFFT(std::vector<std::complex<float>> in, int fftSize)
 {
     std::vector<std::complex<float>> out(in.size());
 
-    void* fft_in = mufft_alloc(fftsize * sizeof(std::complex<float>));
-    void* fft_out = mufft_alloc(fftsize * sizeof(std::complex<float>));
-    mufft_plan_1d* mufftplan = mufft_create_plan_1d_c2c(fftsize, MUFFT_INVERSE, MUFFT_FLAG_CPU_ANY);
+    void* fft_in = mufft_alloc(fftSize * sizeof(std::complex<float>));
+    void* fft_out = mufft_alloc(fftSize * sizeof(std::complex<float>));
+    mufft_plan_1d* mufftplan = mufft_create_plan_1d_c2c(fftSize, MUFFT_INVERSE, MUFFT_FLAG_CPU_ANY);
 
-    memcpy(fft_in, in.data(), fftsize * sizeof(std::complex<float>));
+    memcpy(fft_in, in.data(), fftSize * sizeof(std::complex<float>));
     mufft_execute_plan_1d(mufftplan, fft_out, fft_in);
-    memcpy(out.data(), fft_out, fftsize * sizeof(std::complex<float>));
+    memcpy(out.data(), fft_out, fftSize * sizeof(std::complex<float>));
     //for (int i = 0; i < fftsize; i++) out[i] /= fftsize;
     float max_val = 0;
     //int max_ind = 0;
     float scale = 0.5;
-    for (int i = 0; i < fftsize; i++) {
+    for (int i = 0; i < fftSize; i++) {
         if (std::abs(out[i]) > max_val) {
             max_val = std::abs(out[i]);
             //max_ind = i;
@@ -180,7 +247,7 @@ std::vector<std::complex<float>> CommsLib::IFFT(std::vector<std::complex<float>>
     }
     std::cout << "IFFT output is normalized with " << std::to_string(max_val) << std::endl;
     //std::cout << "max sample is " << std::to_string(out[max_ind].real()) << "+1j*" << std::to_string(out[max_ind].imag()) << std::endl;
-    for (int i = 0; i < fftsize; i++)
+    for (int i = 0; i < fftSize; i++)
         out[i] /= (max_val / scale);
 
     mufft_free_plan_1d(mufftplan);
@@ -189,17 +256,17 @@ std::vector<std::complex<float>> CommsLib::IFFT(std::vector<std::complex<float>>
     return out;
 }
 
-std::vector<std::complex<float>> CommsLib::FFT(std::vector<std::complex<float>> in, int fftsize)
+std::vector<std::complex<float>> CommsLib::FFT(std::vector<std::complex<float>> in, int fftSize)
 {
     std::vector<std::complex<float>> out(in.size());
 
-    void* fft_in = mufft_alloc(fftsize * sizeof(std::complex<float>));
-    void* fft_out = mufft_alloc(fftsize * sizeof(std::complex<float>));
-    mufft_plan_1d* mufftplan = mufft_create_plan_1d_c2c(fftsize, MUFFT_FORWARD, MUFFT_FLAG_CPU_ANY);
+    void* fft_in = mufft_alloc(fftSize * sizeof(std::complex<float>));
+    void* fft_out = mufft_alloc(fftSize * sizeof(std::complex<float>));
+    mufft_plan_1d* mufftplan = mufft_create_plan_1d_c2c(fftSize, MUFFT_FORWARD, MUFFT_FLAG_CPU_ANY);
 
-    memcpy(fft_in, in.data(), fftsize * sizeof(std::complex<float>));
+    memcpy(fft_in, in.data(), fftSize * sizeof(std::complex<float>));
     mufft_execute_plan_1d(mufftplan, fft_out, fft_in);
-    memcpy(out.data(), fft_out, fftsize * sizeof(std::complex<float>));
+    memcpy(out.data(), fft_out, fftSize * sizeof(std::complex<float>));
 
     mufft_free_plan_1d(mufftplan);
     mufft_free(fft_in);

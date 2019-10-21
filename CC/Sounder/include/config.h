@@ -28,8 +28,10 @@ public:
     // common features
 
     double freq;
-    double bbf_ratio;
+    double nco; // baseband frequency controlled by NCO
     double rate;
+    double radioRfFreq; // RF frequency set on the radio after NCO adjustments
+    double bwFilter;
     int sampsPerSymbol;
     int prefix;
     int postfix;
@@ -65,6 +67,7 @@ public:
     double rxgain[2];
     double calTxGain[2];
     bool sampleCalEn;
+    bool imbalanceCalEn;
     std::string trace_file;
 
     // Clients features

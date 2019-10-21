@@ -40,6 +40,9 @@ Config::Config(const std::string& jsonfile)
     if (bsPresent) {
         freq = tddConf.value("frequency", 3.6e9);
         rate = tddConf.value("rate", 5e6);
+        nco = tddConf.value("nco_frequency", 0.75 * rate);
+        bwFilter = rate + 2 * nco;
+        radioRfFreq = freq - nco;
         int samps = tddConf.value("subframe_size", 0);
         prefix = tddConf.value("prefix", 0);
         postfix = tddConf.value("postfix", 0);
@@ -67,6 +70,7 @@ Config::Config(const std::string& jsonfile)
         calTxGain[0] = tddConf.value("calTxGainA", 10);
         calTxGain[1] = tddConf.value("calTxGainB", 10);
         sampleCalEn = tddConf.value("sample_calibrate", false);
+        imbalanceCalEn = tddConf.value("imbalance_calibrate", false);
         beamsweep = tddConf.value("beamsweep", false);
         beacon_ant = tddConf.value("beacon_antenna", 0);
         max_frame = tddConf.value("max_frame", 0);
@@ -151,6 +155,8 @@ Config::Config(const std::string& jsonfile)
         if (!bsPresent) {
             freq = tddConfCl.value("frequency", 3.6e9);
             rate = tddConfCl.value("rate", 5e6);
+            nco = tddConfCl.value("nco_frequency", 0.75 * rate);
+            radioRfFreq = freq - nco;
             int samps = tddConfCl.value("subframe_size", 0);
             prefix = tddConfCl.value("prefix", 0);
             postfix = tddConfCl.value("postfix", 0);
@@ -163,7 +169,6 @@ Config::Config(const std::string& jsonfile)
             symbolsPerFrame = clFrames.at(0).size();
         }
     }
-    bbf_ratio = 0.75;
 
     // Signal Generation
     if (bsPresent or clPresent) {
@@ -207,6 +212,12 @@ Config::Config(const std::string& jsonfile)
         }
 
         std::vector<std::complex<int16_t>> pre0(prefix, 0);
+        if (sampsPerSymbol < beaconLen + prefix + postfix) {
+            std::cout << "Subframe size too small!"
+                      << " Try increasing to at least "
+                      << beaconLen << std::endl;
+            exit(0);
+        }
         std::vector<std::complex<int16_t>> post0(sampsPerSymbol - beaconLen - prefix, 0);
         beacon_ci16.insert(beacon_ci16.begin(), pre0.begin(), pre0.end());
         beacon_ci16.insert(beacon_ci16.end(), post0.begin(), post0.end());

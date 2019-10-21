@@ -23,6 +23,7 @@
 #include <string.h> /* for memcpy */
 #include <unistd.h>
 #include <vector>
+#include <thread>
 
 class CommsLib {
 public:
@@ -55,6 +56,12 @@ public:
     static std::vector<double> convolve(std::vector<std::complex<double>> const& f, std::vector<std::complex<double>> const& g);
     static std::vector<std::complex<double>> csign(std::vector<std::complex<double>> iq);
     static inline int hadamard2(int i, int j) { return (__builtin_parity(i & j) != 0 ? -1 : 1); }
+    static std::vector<float> magnitudeFFT(std::vector<std::complex<float>> const&, std::vector<float> const&, size_t);
+    static std::vector<float> hannWindowFunction(size_t);
+    static double windowFunctionPower(std::vector<float> const&);
+    template <typename T>
+    static T findTone(std::vector<T> const&, double, double, size_t, const size_t delta = 10);
+    static float measureTone(std::vector<std::complex<float>> const&, std::vector<float> const&, double, double, size_t, const size_t delta = 10);
     //private:
     //    static inline float** init_qpsk();
     //    static inline float** init_qam16();

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <fstream>
 #include <string>
 
 class Radio {
@@ -18,7 +19,7 @@ private:
     friend class BaseRadioSet;
 
 public:
-    Radio(const SoapySDR::Kwargs& args, const char soapyFmt[], const std::vector<size_t>& channels);
+    Radio(const SoapySDR::Kwargs& args, const char soapyFmt[], const std::vector<size_t>& channels, double rate);
     ~Radio(void);
     int recv(void* const* buffs, int samples, long long& frameTime);
     int activateRecv(const long long rxTime = 0, const size_t numSamps = 0);
@@ -63,27 +64,23 @@ private:
         int cell;
     };
     void init(BaseRadioContext* context);
+    void configure(BaseRadioContext* context);
 
     static void* init_launch(void* in_context);
-    void readSensors(void);
+    static void* configure_launch(void* in_context);
 
     void radioTrigger(void);
     void sync_delays(int cellIdx);
     SoapySDR::Device* baseRadio(int cellId);
     void collectCSI(bool&);
+    static void dciqMinimize(SoapySDR::Device*, SoapySDR::Device*, int, size_t, double, double);
+    static void setIQBalance(SoapySDR::Device*, int, size_t, int, int);
+    static void adjustCalibrationGains(std::vector<SoapySDR::Device*>, SoapySDR::Device*, size_t, double, bool plot = false);
+    static std::vector<std::complex<float>> snoopSamples(SoapySDR::Device*, size_t, size_t);
+    void dciqCalibrationProc(size_t);
+    void readSensors(void);
+
     Config* _cfg;
     std::vector<SoapySDR::Device*> hubs;
     std::vector<std::vector<Radio*>> bsRadios; // [cell, iris]
 };
-
-#if 0
-    std::vector<SoapySDR::Device*> clSdrs;
-    std::vector<SoapySDR::Stream*> clTxStreams;
-    std::vector<SoapySDR::Stream*> clRxStreams;
-    SoapySDR::Device* ref;
-    SoapySDR::Stream* refRxStream;
-    std::vector<std::complex<int16_t>> buff;
-    std::vector<uint32_t> pilot_uint32;
-    std::vector<uint32_t> dummy_uint32;
-    int nClAntennas;
-#endif

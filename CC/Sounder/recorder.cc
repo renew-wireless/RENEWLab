@@ -389,14 +389,14 @@ void Recorder::openHDF5()
     hsize_t IQ = 2 * cfg->sampsPerSymbol;
     int cndims_pilot = 0;
     int ndims = pilot_filespace.getSimpleExtentNdims();
-    if (H5D_CHUNKED == pilot_prop.getLayout())
-        cndims_pilot = pilot_prop.getChunk(ndims, cdims_pilot);
-    using std::cout;
-    cout << "dim pilot chunk = " << cndims_pilot << std::endl;
     hsize_t dims_pilot[] = {
         frame_number_pilot, cfg->nCells,
         cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
     };
+    if (H5D_CHUNKED == pilot_prop.getLayout())
+        cndims_pilot = pilot_prop.getChunk(ndims, dims_pilot);
+    using std::cout;
+    cout << "dim pilot chunk = " << cndims_pilot << std::endl;
     cout << "New Pilot Dataset Dimension: [";
     cout << dims_pilot[0] << "," << dims_pilot[1] << ",";
     cout << dims_pilot[2] << "," << dims_pilot[3] << ",";
