@@ -25,7 +25,8 @@ reset_DATA_clk_domain(SoapySDR::Device* dev)
 }
 
 static void
-dev_init(SoapySDR::Device* dev, Config* _cfg, int ch, double rxgain, double txgain, std::string feType)
+dev_init(SoapySDR::Device* dev, Config* _cfg, int ch, double rxgain, double txgain,
+    const std::string& feType)
 {
     // these params are sufficient to set befor DC offset and IQ imbalance calibration
     dev->setAntenna(SOAPY_SDR_RX, ch, "TRX");
@@ -312,13 +313,13 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
 
         // Perform DC Offset & IQ Imbalance Calibration
         if (_cfg->imbalanceCalEn) {
-            if (_cfg->bsChannel.find("A") != std::string::npos)
+            if (_cfg->bsChannel.find('A') != std::string::npos)
                 dciqCalibrationProc(0);
-            if (_cfg->bsChannel.find("B") != std::string::npos)
+            if (_cfg->bsChannel.find('B') != std::string::npos)
                 dciqCalibrationProc(1);
         }
 
-        threadCount = ATOMIC_VAR_INIT(radioNum);
+        threadCount = radioNum;
         for (int i = 0; i < radioNum; i++) {
             BaseRadioContext* context = new BaseRadioContext;
             context->brs = this;
