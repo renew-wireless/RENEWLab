@@ -90,13 +90,18 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         channels = { 1 };
     else
         channels = { 0, 1 };
-    radios.resize(_cfg->nClSdrs);
+    radios.reserve(_cfg->nClSdrs);
     for (size_t i = 0; i < _cfg->nClSdrs; i++) {
         SoapySDR::Kwargs args;
         args["timeout"] = "1000000";
         args["serial"] = _cfg->cl_sdr_ids.at(i);
-        radios[i] = new Radio(args, SOAPY_SDR_CF32, channels, _cfg->rate);
-        auto dev = radios[i]->dev;
+        try {
+            radios.push_back(new Radio(args, SOAPY_SDR_CF32, channels, _cfg->rate));
+        } catch (std::runtime_error) {
+            std::cerr << "Ignoring serial " << _cfg->cl_sdr_ids.at(i) << std::endl;
+            continue;
+        }
+        auto dev = radios.back()->dev;
         SoapySDR::Kwargs info = dev->getHardwareInfo();
 
         for (auto ch : { 0, 1 }) //channels)
@@ -109,14 +114,15 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
 
         initAGC(dev);
     }
+    radios.shrink_to_fit();
 
     int ueTrigOffset = 505; //_cfg->prefix + 256 + _cfg->postfix + 17 + _cfg->prefix;
     int sf_start = ueTrigOffset / _cfg->sampsPerSymbol;
     int sp_start = ueTrigOffset % _cfg->sampsPerSymbol;
 
     std::vector<std::string> tddSched;
-    tddSched.resize(_cfg->nClSdrs);
-    for (size_t i = 0; i < _cfg->nClSdrs; i++) {
+    tddSched.resize(radios.size());
+    for (size_t i = 0; i < radios.size(); i++) {
         tddSched[i] = _cfg->clFrames[i];
         for (size_t s = 0; s < _cfg->clFrames[i].size(); s++) {
             char c = _cfg->clFrames[i].at(s);
@@ -132,7 +138,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         std::cout << "Client " << i << " schedule: " << tddSched[i] << std::endl;
     }
 
-    for (size_t i = 0; i < _cfg->nClSdrs; i++) {
+    for (size_t i = 0; i < radios.size(); i++) {
         auto dev = radios[i]->dev;
         dev->writeRegister("IRIS30", CORR_CONF, 0x1);
         for (int k = 0; k < 128; k++)
@@ -194,13 +200,13 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
 
 ClientRadioSet::~ClientRadioSet(void)
 {
-    for (size_t i = 0; i < _cfg->nClSdrs; i++)
+    for (size_t i = 0; i < radios.size(); i++)
         delete radios[i];
 }
 
 void ClientRadioSet::radioStop(void)
 {
-    for (size_t i = 0; i < _cfg->nClSdrs; i++) {
+    for (size_t i = 0; i < radios.size(); i++) {
         auto dev = radios[i]->dev;
         dev->writeRegister("IRIS30", CORR_CONF, 0);
         std::cout << "device " << i << " T=" << std::hex << SoapySDR::timeNsToTicks(dev->getHardwareTime(""), _cfg->rate) << std::dec << std::endl;
