@@ -145,13 +145,22 @@ std::vector<float> CommsLib::magnitudeFFT(std::vector<std::complex<float>> const
     return fftMag;
 }
 
+// Take ffsSize samples of (1 - cos(x)) / 2 from 0 up to 2pi
 std::vector<float> CommsLib::hannWindowFunction(size_t fftSize)
 {
-    std::vector<float> winFcn;
-    for (size_t n = 0; n < fftSize; n++) {
-        const float w_n = (1 - std::cos(float(2 * M_PI * n) / float(fftSize))) / 2;
-        winFcn.push_back(w_n);
+    std::vector<float> winFcn(1, 0);
+    double step = 2 * M_PI / fftSize;
+
+    // Compute the samples for the first half.
+    for (size_t n = 1; n < fftSize / 2; n++) {
+        winFcn.push_back((1 - std::cos(step * n)) / 2);
     }
+    // If a sample lies at the center, just use (1-cos(pi))/2 == 1.
+    if (fftSize % 2 == 0)
+        winFcn.push_back(1);
+    // The second half is a mirror image of the first, so just copy.
+    for (size_t n = fftSize / 2 + 1; n < fftSize; n++)
+        winFcn.push_back(winFcn[fftSize - n]);
     return winFcn;
 }
 
@@ -162,8 +171,8 @@ double CommsLib::windowFunctionPower(std::vector<float> const& win)
     for (size_t n = 0; n < win.size(); n++) {
         windowPower += std::norm(win[n]);
     }
-    windowPower = std::sqrt(windowPower/N);
-    return 20*std::log10(N*windowPower);
+    windowPower = std::sqrt(windowPower / N);
+    return 20 * std::log10(N * windowPower);
 }
 
 template <typename T>
