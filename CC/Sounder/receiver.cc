@@ -137,11 +137,13 @@ void Receiver::loopRecv(ReceiverContext* context)
     }
 
     // Use mutex to sychronize data receiving across threads
-    pthread_mutex_lock(&mutex);
-    printf("Recv Thread %d: waiting for release\n", tid);
+    if (config_->nClSdrs > 0) {
+        pthread_mutex_lock(&mutex);
+        printf("Recv Thread %d: waiting for release\n", tid);
 
-    pthread_cond_wait(&cond, &mutex);
-    pthread_mutex_unlock(&mutex); // unlocking for all other threads
+        pthread_cond_wait(&cond, &mutex);
+        pthread_mutex_unlock(&mutex); // unlocking for all other threads
+    }
 
     // use token to speed up
     moodycamel::ProducerToken local_ptok(*message_queue_);
