@@ -321,7 +321,7 @@ void BaseRadioSet::dciqCalibrationProc(size_t channel)
     size_t radioSize = _cfg->nBsSdrs[0];
 
     size_t referenceRadio = radioSize / 2;
-    struct Radio* refRadio = bsRadios[0][referenceRadio];
+    Radio* refRadio = bsRadios[0][referenceRadio];
     SoapySDR::Device* refDev = refRadio->dev;
 
     /* 
