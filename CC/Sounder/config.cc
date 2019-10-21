@@ -214,9 +214,9 @@ Config::Config(const std::string& jsonfile)
         std::vector<std::complex<int16_t>> pre0(prefix, 0);
         if (sampsPerSymbol < beaconLen + prefix + postfix) {
             std::cout << "Subframe size too small!"
-                      << " Try increasing to at least "
+                      << " Increasing to "
                       << beaconLen << std::endl;
-            exit(0);
+            sampsPerSymbol = beaconLen + prefix + postfix;
         }
         std::vector<std::complex<int16_t>> post0(sampsPerSymbol - beaconLen - prefix, 0);
         beacon_ci16.insert(beacon_ci16.begin(), pre0.begin(), pre0.end());
