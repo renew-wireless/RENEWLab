@@ -520,15 +520,32 @@ void BaseRadioSet::configure(BaseRadioContext* context)
     (*threadCount)--;
 }
 
-SoapySDR::Device* BaseRadioSet::baseRadio(int cellId)
+SoapySDR::Device* BaseRadioSet::baseRadio(size_t cellId)
 {
-    return (hubs.empty() ? bsRadios[cellId][0]->dev : hubs[cellId]);
+    if (cellId < hubs.size())
+        return (hubs[cellId]);
+    if (cellId < bsRadios.size() && bsRadios[cellId].size() > 0)
+        return bsRadios[cellId][0]->dev;
+    return NULL;
+}
+
+void BaseRadioSet::sync_delays(int cellIdx)
+{
+    /*
+     * Compute Sync Delays
+     */
+    SoapySDR::Device* base = baseRadio(cellIdx);
+    if (base != NULL)
+        base->writeSetting("SYNC_DELAYS", "");
 }
 
 void BaseRadioSet::radioTrigger(void)
 {
-    for (size_t c = 0; c < _cfg->nCells; c++)
-        baseRadio(c)->writeSetting("TRIGGER_GEN", "");
+    for (size_t c = 0; c < _cfg->nCells; c++) {
+        SoapySDR::Device* base = baseRadio(c);
+        if (base != NULL)
+            base->writeSetting("TRIGGER_GEN", "");
+    }
 }
 
 void BaseRadioSet::radioStart()
@@ -636,14 +653,6 @@ void Radio::drain_buffers(std::vector<void*> buffs, int symSamp)
         i++;
     }
     //std::cout << "Number of reads needed to drain: " << i << std::endl;
-}
-
-void BaseRadioSet::sync_delays(int cellIdx)
-{
-    /*
-     * Compute Sync Delays
-     */
-    baseRadio(cellIdx)->writeSetting("SYNC_DELAYS", "");
 }
 
 Radio::Radio(const SoapySDR::Kwargs& args, const char soapyFmt[],
