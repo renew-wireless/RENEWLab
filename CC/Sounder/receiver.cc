@@ -137,7 +137,7 @@ void Receiver::loopRecv(ReceiverContext* context)
     }
 
     // Use mutex to sychronize data receiving across threads
-    if (config_->nClSdrs > 0) {
+    if (config_->nClSdrs > 0 && config_->nBsSdrs[0] > 0) {
         pthread_mutex_lock(&mutex);
         printf("Recv Thread %d: waiting for release\n", tid);
 
