@@ -317,6 +317,19 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         while (threadCount > 0)
             ;
 
+        // Strip out broken radios.
+        for (int i = 0; i < radioNum; i++) {
+            if (bsRadios[c][i] == NULL) {
+                while (bsRadios[c][radioNum - 1] == NULL) {
+                    bsRadios[c].pop_back();
+                    --radioNum;
+                }
+                if (i < radioNum)
+                    std::swap(bsRadios[c][i], bsRadios[c][--radioNum]);
+            }
+        }
+        _cfg->nBsSdrs[c] = radioNum;
+
         // Perform DC Offset & IQ Imbalance Calibration
         if (_cfg->imbalanceCalEn) {
             if (_cfg->bsChannel.find('A') != std::string::npos)
@@ -486,7 +499,13 @@ void BaseRadioSet::init(BaseRadioContext* context)
     args["driver"] = "iris";
     args["timeout"] = "1000000";
     args["serial"] = _cfg->bs_sdr_ids[c][i];
-    bsRadios[c][i] = new Radio(args, SOAPY_SDR_CS16, channels, _cfg->rate);
+    try {
+        bsRadios[c][i] = new Radio(args, SOAPY_SDR_CS16, channels, _cfg->rate);
+    } catch (std::runtime_error) {
+        std::cerr << "Ignoring iris " << _cfg->bs_sdr_ids[c][i] << std::endl;
+        bsRadios[c][i] = NULL;
+    }
+
     (*threadCount)--;
 }
 
