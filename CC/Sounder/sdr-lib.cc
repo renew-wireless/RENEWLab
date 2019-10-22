@@ -120,22 +120,6 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
     int sf_start = ueTrigOffset / _cfg->sampsPerSymbol;
     int sp_start = ueTrigOffset % _cfg->sampsPerSymbol;
 
-    std::vector<std::string> tddSched;
-    tddSched.resize(radios.size());
-    for (size_t i = 0; i < radios.size(); i++) {
-        tddSched[i] = _cfg->clFrames[i];
-        for (size_t s = 0; s < _cfg->clFrames[i].size(); s++) {
-            char c = _cfg->clFrames[i].at(s);
-            if (c == 'B')
-                tddSched[i].replace(s, 1, "G");
-            else if (c == 'U')
-                tddSched[i].replace(s, 1, "T");
-            else if (c == 'D')
-                tddSched[i].replace(s, 1, "R");
-        }
-        std::cout << "Client " << i << " schedule: " << tddSched[i] << std::endl;
-    }
-
     for (size_t i = 0; i < radios.size(); i++) {
         auto dev = radios[i]->dev;
         dev->writeRegister("IRIS30", CORR_CONF, 0x1);
@@ -150,6 +134,17 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         for (int k = 0; k < 128; k++)
             dev->writeRegister("ARGCOE", k * 4, _cfg->coeffs[k]);
 
+        std::string tddSched = _cfg->clFrames[i];
+        for (size_t s = 0; s < _cfg->clFrames[i].size(); s++) {
+            char c = _cfg->clFrames[i].at(s);
+            if (c == 'B')
+                tddSched.replace(s, 1, "G");
+            else if (c == 'U')
+                tddSched.replace(s, 1, "T");
+            else if (c == 'D')
+                tddSched.replace(s, 1, "R");
+        }
+        std::cout << "Client " << i << " schedule: " << tddSched << std::endl;
 #ifdef JSON
         json conf;
         conf["tdd_enabled"] = true;
