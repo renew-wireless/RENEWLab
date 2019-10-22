@@ -128,8 +128,6 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
             char c = _cfg->clFrames[i].at(s);
             if (c == 'B')
                 tddSched[i].replace(s, 1, "G");
-            else if (c == 'P')
-                tddSched[i].replace(s, 1, "P");
             else if (c == 'U')
                 tddSched[i].replace(s, 1, "T");
             else if (c == 'D')
