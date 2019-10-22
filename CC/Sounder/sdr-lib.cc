@@ -173,13 +173,12 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
         dev->writeSetting("TDD_MODE", "true");
         // write beacons to FPGA buffers
-        if (_cfg->bsChannel != "B")
-            dev->writeRegisters("TX_RAM_A", 0, _cfg->pilot);
-        if (_cfg->bsChannel == "B")
-            dev->writeRegisters("TX_RAM_B", 0, _cfg->pilot);
-        if (_cfg->clSdrCh == 2)
-            dev->writeRegisters("TX_RAM_B", 2048, _cfg->pilot);
-
+        int val = 0;
+        for (char const& c : _cfg->bsChannel) {
+            std::string tx_ram = "TX_RAM_";
+            dev->writeRegisters(tx_ram + c, val, _cfg->beacon);
+            val += 2048;
+        }
         radios[i]->activateRecv();
         radios[i]->activateXmit();
 
@@ -213,9 +212,26 @@ void ClientRadioSet::radioStop(void)
     }
 }
 
-Radio* ClientRadioSet::getRadio(int i)
+int ClientRadioSet::triggers(int i)
 {
-    return (radios[i]);
+    return (radios[i]->getTriggers());
+}
+
+int ClientRadioSet::radioRx(size_t radio_id, void* const* buffs, int numSamps, long long& frameTime)
+{
+    if (radio_id < radios.size()) {
+        long long frameTimeNs = 0;
+        int ret = radios[radio_id]->recv(buffs, numSamps, frameTimeNs);
+        frameTime = frameTimeNs; //SoapySDR::timeNsToTicks(frameTimeNs, _rate);
+        return ret;
+    }
+    std::cout << "invalid radio id " << radio_id << std::endl;
+    return 0;
+}
+
+int ClientRadioSet::radioTx(size_t radio_id, const void* const* buffs, int numSamps, int flags, long long& frameTime)
+{
+    return radios[radio_id]->xmit(buffs, numSamps, flags, frameTime);
 }
 
 void ClientRadioSet::initAGC(SoapySDR::Device* iclSdr)
@@ -342,9 +358,9 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
             context->tid = i;
             context->cell = c;
 #ifdef THREADED_INIT
-            pthread_t init_thread_;
-            if (pthread_create(&init_thread_, NULL, BaseRadioSet::configure_launch, context) != 0) {
-                perror("init thread create failed");
+            pthread_t configure_thread_;
+            if (pthread_create(&configure_thread_, NULL, BaseRadioSet::configure_launch, context) != 0) {
+                perror("configure thread create failed");
                 exit(0);
             }
 #else
