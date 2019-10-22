@@ -320,14 +320,17 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         // Strip out broken radios.
         for (int i = 0; i < radioNum; i++) {
             if (bsRadios[c][i] == NULL) {
-                while (bsRadios[c][radioNum - 1] == NULL) {
-                    bsRadios[c].pop_back();
+                while (radioNum != 0 && bsRadios[c][radioNum - 1] == NULL) {
                     --radioNum;
+                    bsRadios[c].pop_back();
                 }
-                if (i < radioNum)
-                    std::swap(bsRadios[c][i], bsRadios[c][--radioNum]);
+                if (i < radioNum) {
+                    bsRadios[c][i] = bsRadios[c][--radioNum];
+                    bsRadios[c].pop_back();
+                }
             }
         }
+        bsRadios[c].shrink_to_fit();
         _cfg->nBsSdrs[c] = radioNum;
 
         // Perform DC Offset & IQ Imbalance Calibration
