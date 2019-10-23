@@ -2,6 +2,8 @@
  Copyright (c) 2018-2019, Rice University 
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
  Author(s): Rahman Doost-Mohamamdy: doost@rice.edu
+            Doug Moore: dougm@rice.edu
+	    Oscar Bejarano: ob4@rice.edu
  
 ---------------------------------------------------------------------
  Initializes and Configures Radios in the massive-MIMO base station 
@@ -18,10 +20,7 @@
 static void
 reset_DATA_clk_domain(SoapySDR::Device* dev)
 {
-    // What does 29 mean?
-    dev->writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 1);
-    dev->writeRegister("IRIS30", RF_RST_REG, (1 << 29));
-    dev->writeRegister("IRIS30", RF_RST_REG, 0);
+    dev->writeSetting("RESET_DATA_LOGIC", "");
 }
 
 static void
@@ -103,14 +102,14 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         {
             double rxgain = _cfg->clRxgain_vec[ch][i]; //[0,30]
             double txgain = _cfg->clTxgain_vec[ch][i]; //[0,52]
-            // No client calibration for now!
             dev_init(dev, _cfg, ch, rxgain, txgain, info["frontend"]);
         }
 
         initAGC(dev);
     }
 
-    int ueTrigOffset = 505; //_cfg->prefix + 256 + _cfg->postfix + 17 + _cfg->prefix;
+    //beaconSize + 82 (BS FE delay) + 68 (path delay) + 17 (correlator delay) + 82 (Client FE Delay)
+    int ueTrigOffset = _cfg->beaconSize + 249; 
     int sf_start = ueTrigOffset / _cfg->sampsPerSymbol;
     int sp_start = ueTrigOffset % _cfg->sampsPerSymbol;
 
@@ -122,8 +121,6 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
             char c = _cfg->clFrames[i].at(s);
             if (c == 'B')
                 tddSched[i].replace(s, 1, "G");
-            else if (c == 'P')
-                tddSched[i].replace(s, 1, "P");
             else if (c == 'U')
                 tddSched[i].replace(s, 1, "T");
             else if (c == 'D')
@@ -134,17 +131,10 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
 
     for (size_t i = 0; i < _cfg->nClSdrs; i++) {
         auto dev = radios[i]->dev;
-        dev->writeRegister("IRIS30", CORR_CONF, 0x1);
-        for (int k = 0; k < 128; k++)
-            dev->writeRegister("ARGCOE", k * 4, 0);
+        std::string corrConfString = "{\"corr_enabled\":true,\"corr_threshold\":" + std::to_string(1) + "}";
+        dev->writeSetting("CORR_CONFIG", corrConfString);
         usleep(100000);
-
-        dev->writeRegister("IRIS30", 64, 1); // reset faros_corr
-        dev->writeRegister("IRIS30", 64, 0); // unreset faros_corr
-        dev->writeRegister("IRIS30", 92, 1); // threshold is left-shifted by this many bits
-
-        for (int k = 0; k < 128; k++)
-            dev->writeRegister("ARGCOE", k * 4, _cfg->coeffs[k]);
+        dev->writeRegisters("CORR_COE", 0, _cfg->coeffs);
 
 #ifdef JSON
         json conf;
@@ -152,10 +142,9 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         conf["frame_mode"] = _cfg->frame_mode;
         int max_frame_ = (int)(2.0 / ((_cfg->sampsPerSymbol * _cfg->symbolsPerFrame) / _cfg->rate));
         conf["max_frame"] = max_frame_;
+        //std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;
         if (_cfg->clSdrCh == 2)
             conf["dual_pilot"] = true;
-        //std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;
-
         conf["frames"] = json::array();
         conf["frames"].push_back(tddSched[i]);
         conf["symbol_size"] = _cfg->sampsPerSymbol;
@@ -179,15 +168,12 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         if (_cfg->bsChannel == "B")
             dev->writeRegisters("TX_RAM_B", 0, _cfg->pilot);
         if (_cfg->clSdrCh == 2)
-            dev->writeRegisters("TX_RAM_B", 2048, _cfg->pilot);
+            dev->writeRegisters("TX_RAM_B", 0, _cfg->pilot);
 
         radios[i]->activateRecv();
         radios[i]->activateXmit();
 
-        if (_cfg->bsChannel != "B") // A or AB
-            dev->writeRegister("IRIS30", CORR_CONF, 0x11);
-        else
-            dev->writeRegister("IRIS30", CORR_CONF, 0x31);
+        dev->writeSetting("CORR_START", (_cfg->bsChannel == "B") ? "B" : "A");
     }
     std::cout << __func__ << " done!" << std::endl;
 }
@@ -200,17 +186,17 @@ ClientRadioSet::~ClientRadioSet(void)
 
 void ClientRadioSet::radioStop(void)
 {
+    std::string corrConfStr = "{\"corr_enabled\":false}";
+    std::string tddConfStr = "{\"tdd_enabled\":false}";
     for (size_t i = 0; i < _cfg->nClSdrs; i++) {
         auto dev = radios[i]->dev;
-        dev->writeRegister("IRIS30", CORR_CONF, 0);
-        std::cout << "device " << i << " T=" << std::hex << SoapySDR::timeNsToTicks(dev->getHardwareTime(""), _cfg->rate) << std::dec << std::endl;
-        for (int i = 0; i < _cfg->symbolsPerFrame; i++) {
-            dev->writeRegister("RFCORE", SCH_ADDR_REG, i);
-            dev->writeRegister("RFCORE", SCH_MODE_REG, 0);
-        }
+        dev->writeSetting("CORR_CONFIG", corrConfStr);
+        const auto timeStamp = SoapySDR::timeNsToTicks(dev->getHardwareTime(""), _cfg->rate);
+        std::cout << "device " << i << ": Frame=" << (timeStamp >> 32)
+                  << ", Symbol=" << ((timeStamp && 0xFFFFFFFF) >> 16) << std::endl;
+        dev->writeSetting("TDD_CONFIG", tddConfStr);
         dev->writeSetting("TDD_MODE", "false");
         reset_DATA_clk_domain(dev);
-        //SoapySDR::Device::unmake(dev);
     }
 }
 
@@ -219,53 +205,22 @@ Radio* ClientRadioSet::getRadio(int i)
     return (radios[i]);
 }
 
-void ClientRadioSet::initAGC(SoapySDR::Device* iclSdr)
+void ClientRadioSet::initAGC(SoapySDR::Device* dev)
 {
     /*
      * Initialize AGC parameters
      */
-    // OBCH
-    int en = (int)_cfg->clAgcEn;
-    // AGC Core
-    // Enable AGC Flag (set to 0 initially)
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, 0);
-    // Reset AGC Flag
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 1);
-    // Saturation Threshold: 10300 about -6dBm
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_IQ_THRESH, 8000);
-    // Number of samples needed to claim sat.
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_NUM_SAMPS_SAT, 3);
-    // Threshold at which AGC stops
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_MAX_NUM_SAMPS_AGC, 10);
-    // Gain settle takes about 20 samps(value=20)
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_WAIT_COUNT_THRESH, 20);
-    // Drop gain at initial saturation detection
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_BIG_JUMP, 30);
-    // Drop gain at subsequent sat. detections
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_SMALL_JUMP, 3);
-    // RSSI Target for AGC: ideally around 14 (3.6GHz) or 27 (2.5GHz)
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_RSSI_TARGET, 14);
-    // Disable
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_TEST_GAIN_SETTINGS, 0);
-    // Clear AGC reset flag
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 0);
-    // Enable AGC
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, en);
-    // Initialize gains to this value
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_GAIN_INIT,
-        _cfg->clAgcGainInit);
-
-    // Packet Detect Core
-    // RSSI value at which Pkt is detected
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_THRESH, 500);
-    // Number of samples needed to detect frame
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NUM_SAMPS, 5);
-    // Enable packet detection flag
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_ENABLE, 1);
-    // trigger first one if enabled
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, en);
-    // clear
-    iclSdr->writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0);
+#ifdef JSON
+    json conf;
+    conf["agc_enabled"] = _cfg->clAgcEn;
+    conf["agc_gain_init"] = _cfg->clAgcGainInit;
+    std::string confString = conf.dump();
+#else
+    std::string confString = "{\"agc_enabled\":"+_cfg->clAgcEn ? "true" : "false";
+    confString += ",\"agc_gain_init\":" + std::to_string(_cfg->clAgcGainInit);
+    confString += "}";
+#endif
+    dev->writeSetting("AGC_CONFIG", confString);
 }
 
 BaseRadioSet::BaseRadioSet(Config* cfg)
@@ -277,6 +232,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
     for (size_t c = 0; c < _cfg->nCells; c++) {
         int radioNum = _cfg->nBsSdrs[c];
         nBsAntennas[c] = radioNum * _cfg->bsChannel.length();
+
         std::cout << radioNum << " radios in cell " << c << std::endl;
         if (!_cfg->hub_ids.empty()) {
             SoapySDR::Kwargs args;
@@ -289,9 +245,6 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         bsRadios[c].resize(radioNum);
         std::atomic_int threadCount = ATOMIC_VAR_INIT(radioNum);
         for (int i = 0; i < radioNum; i++) {
-            //args["serial"] = _cfg->bs_sdr_ids[c][i];
-            //args["timeout"] = "1000000";
-            //bsSdrs[c].push_back(SoapySDR::Device::make(args));
             BaseRadioContext* context = new BaseRadioContext;
             context->brs = this;
             context->threadCount = &threadCount;
@@ -360,18 +313,17 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
 
     std::vector<std::string> _tddSched;
     _tddSched.resize(_cfg->frames.size());
+    // change symbol letter to Soapy equivalent
     for (unsigned int f = 0; f < _cfg->frames.size(); f++) {
         _tddSched[f] = _cfg->frames[f];
         for (size_t s = 0; s < _cfg->frames[f].size(); s++) {
             char c = _cfg->frames[f].at(s);
-            if (c == 'B')
-                _tddSched[f].replace(s, 1, "P");
-            else if (c == 'P')
-                _tddSched[f].replace(s, 1, "R");
+            if (c == 'P')
+                _tddSched[f].replace(s, 1, "R"); // uplink pilots
             else if (c == 'U')
-                _tddSched[f].replace(s, 1, "R");
+                _tddSched[f].replace(s, 1, "R"); // uplink data
             else if (c == 'D')
-                _tddSched[f].replace(s, 1, "T");
+                _tddSched[f].replace(s, 1, "T"); // downlink data
         }
         std::cout << _tddSched[f] << std::endl;
     }
@@ -401,36 +353,23 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
     }
 
     // write beacons to FPGA buffers
-    if (!_cfg->beamsweep or nBsAntennas[0] == 1) {
-        std::vector<unsigned> zeros(_cfg->sampsPerSymbol, 0);
-        size_t ndx = 0;
-        for (size_t i = 0; i < bsRadios[0].size(); i++) {
-            SoapySDR::Device* dev = bsRadios[0][i]->dev;
-            for (char const& c : _cfg->bsChannel) {
-                std::string tx_ram = "TX_RAM_";
-                std::vector<unsigned>& msg = ndx == _cfg->beacon_ant ? _cfg->beacon : zeros;
-                dev->writeRegisters(tx_ram + c, 0, msg);
-                ++ndx;
-            }
-            dev->writeRegister("RFCORE", 156, 0);
-        }
-    } else { // beamsweep
-        std::vector<unsigned> beacon_weights(nBsAntennas[0]);
-        size_t ndx = 0;
-        for (size_t i = 0; i < bsRadios[0].size(); i++) {
-            SoapySDR::Device* dev = bsRadios[0][i]->dev;
-            for (char const& c : _cfg->bsChannel) {
-                std::string tx_ram = "TX_RAM_";
-                dev->writeRegisters(tx_ram + c, 0, _cfg->beacon);
-                std::string tx_ram_wgt = "TX_RAM_WGT_";
+    std::vector<unsigned> zeros(_cfg->sampsPerSymbol, 0);
+    size_t ndx = 0;
+    for (size_t i = 0; i < bsRadios[0].size(); i++) {
+        SoapySDR::Device* dev = bsRadios[0][i]->dev;
+        dev->writeRegisters("BEACON_RAM", 0, _cfg->beacon);
+        for (char const& c : _cfg->bsChannel) {
+            bool isBeaconAntenna = !_cfg->beamsweep && ndx == _cfg->beacon_ant; 
+            std::vector<unsigned> beacon_weights(nBsAntennas[0], isBeaconAntenna ? 1 : 0);
+            std::string tx_ram_wgt = "BEACON_RAM_WGT_";
+	    if (_cfg->beamsweep) {
                 for (int j = 0; j < nBsAntennas[0]; j++)
                     beacon_weights[j] = CommsLib::hadamard2(ndx, j);
-                dev->writeRegisters(tx_ram_wgt + c, 0, beacon_weights);
-                ++ndx;
-            }
-            dev->writeRegister("RFCORE", 156, bsRadios[0].size());
-            dev->writeRegister("RFCORE", 160, 1);
+	    }
+            dev->writeRegisters(tx_ram_wgt + c, 0, beacon_weights);
+            ++ndx;
         }
+        dev->writeSetting("BEACON_START", std::to_string(bsRadios[0].size()));
     }
 
     for (size_t i = 0; i < bsRadios[0].size(); i++) {
@@ -554,16 +493,10 @@ void BaseRadioSet::readSensors()
 
 void BaseRadioSet::radioStop(void)
 {
+    std::string tddConfStr = "{\"tdd_enabled\":false}";
     for (size_t i = 0; i < bsRadios[0].size(); i++) {
         SoapySDR::Device* dev = bsRadios[0][i]->dev;
-        // write schedule
-        for (unsigned int j = 0; j < _cfg->frames.size(); j++) {
-            for (int k = 0; k < _cfg->symbolsPerFrame; k++) // symnum <= 256
-            {
-                dev->writeRegister("RFCORE", SCH_ADDR_REG, j * 256 + k);
-                dev->writeRegister("RFCORE", SCH_MODE_REG, 0);
-            }
-        }
+        dev->writeSetting("TDD_CONFIG", tddConfStr);
         dev->writeSetting("TDD_MODE", "false");
         reset_DATA_clk_domain(dev);
     }
@@ -711,5 +644,5 @@ void Radio::deactivateXmit(void)
 
 int Radio::getTriggers(void) const
 {
-    return (dev->readRegister("IRIS30", 92));
+    return std::stoi(dev->readSetting("TRIGGER_NUM"));
 }

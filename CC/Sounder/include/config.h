@@ -52,6 +52,9 @@ public:
     std::string ref_sdr;
     std::vector<std::vector<std::string>> bs_sdr_ids;
     std::vector<std::string> hub_ids;
+    std::vector<uint32_t> beacon;
+    std::vector<std::complex<int16_t>> beacon_ci16;
+    int beaconSize;
     size_t beacon_ant;
     bool beamsweep;
     std::vector<size_t> nBsSdrs;
@@ -81,8 +84,6 @@ public:
     std::vector<int> data_ind;
     std::vector<uint32_t> coeffs;
     std::vector<std::complex<int16_t>> coeffs_ci16;
-    std::vector<uint32_t> beacon;
-    std::vector<std::complex<int16_t>> beacon_ci16;
     std::vector<std::complex<int16_t>> pilot_ci16;
     std::vector<uint32_t> pilot;
     std::vector<std::vector<int>> pilot_sc;

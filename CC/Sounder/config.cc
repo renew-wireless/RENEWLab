@@ -195,8 +195,8 @@ Config::Config(const std::string& jsonfile)
         int stsSymLen = sts_seq[0].size();
         int stsReps = 15;
         int stsLen = stsReps * stsSymLen; // length of entire STS sequence
-        int beaconLen = 256 + stsLen;
-        beacon_ci16.resize(beaconLen); // OBCH: Original gold_ifft(256)+10repsSTS(160)
+        beaconSize = 256 + stsLen;
+        beacon_ci16.resize(beaconSize); // OBCH: Original gold_ifft(256)+10repsSTS(160)
         // Populate gold sequence (two reps, 128 each)
         for (int i = 0; i < 128; i++) {
             beacon_ci16[stsLen + i] = std::complex<int16_t>((int16_t)(gold_ifft[0][i] * 32768), (int16_t)(gold_ifft[1][i] * 32768));
@@ -212,13 +212,13 @@ Config::Config(const std::string& jsonfile)
         }
 
         std::vector<std::complex<int16_t>> pre0(prefix, 0);
-        if (sampsPerSymbol < beaconLen + prefix + postfix) {
+        if (sampsPerSymbol < beaconSize + prefix + postfix) {
             std::cout << "Subframe size too small!"
                       << " Try increasing to at least "
-                      << beaconLen << std::endl;
+                      << beaconSize << std::endl;
             exit(0);
         }
-        std::vector<std::complex<int16_t>> post0(sampsPerSymbol - beaconLen - prefix, 0);
+        std::vector<std::complex<int16_t>> post0(sampsPerSymbol - beaconSize - prefix, 0);
         beacon_ci16.insert(beacon_ci16.begin(), pre0.begin(), pre0.end());
         beacon_ci16.insert(beacon_ci16.end(), post0.begin(), post0.end());
 
