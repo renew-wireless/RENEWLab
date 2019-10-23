@@ -84,7 +84,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         //std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;
 
         conf["frames"] = json::array();
-        conf["frames"].push_back(tddSched[i]);
+        conf["frames"].push_back(tddSched);
         conf["symbol_size"] = _cfg->sampsPerSymbol;
         std::string confString = conf.dump();
 #else
@@ -92,7 +92,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         confString += "\"symbol_size\":" + std::to_string(_cfg->sampsPerSymbol);
         if (_cfg->clSdrCh == 2)
             confString += "\"dual_pilot\":true,";
-        confString += ",\"frames\":[\"" + tddSched[i] + "\"]}";
+        confString += ",\"frames\":[\"" + tddSched + "\"]}";
         std::cout << confString << std::endl;
 #endif
         dev->writeSetting("TDD_CONFIG", confString);
