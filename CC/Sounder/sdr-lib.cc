@@ -12,6 +12,7 @@
 #include "include/Radio.h"
 #include "include/comms-lib.h"
 #include "include/macros.h"
+#include "include/utils.h"
 #include <SoapySDR/Errors.hpp>
 #include <SoapySDR/Formats.hpp>
 #include <SoapySDR/Time.hpp>
@@ -232,14 +233,7 @@ void BaseRadioSet::init(BaseRadioContext* context)
     std::atomic_int* threadCount = context->threadCount;
     delete context;
 
-    std::vector<size_t> channels;
-    if (_cfg->bsChannel == "A")
-        channels = { 0 };
-    else if (_cfg->bsChannel == "B")
-        channels = { 1 };
-    else
-        channels = { 0, 1 };
-
+    auto channels = Utils::strToChannels(_cfg->bsChannel);
     SoapySDR::Kwargs args;
     args["driver"] = "iris";
     args["timeout"] = "1000000";
@@ -270,14 +264,7 @@ void BaseRadioSet::configure(BaseRadioContext* context)
     delete context;
 
     //load channels
-    std::vector<size_t> channels;
-    if (_cfg->bsChannel == "A")
-        channels = { 0 };
-    else if (_cfg->bsChannel == "B")
-        channels = { 1 };
-    else
-        channels = { 0, 1 };
-
+    auto channels = Utils::strToChannels(_cfg->bsChannel);
     Radio* bsRadio = bsRadios[c][i];
     SoapySDR::Device* dev = bsRadio->dev;
     SoapySDR::Kwargs info = dev->getHardwareInfo();

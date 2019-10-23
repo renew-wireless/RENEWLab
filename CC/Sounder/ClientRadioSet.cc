@@ -2,6 +2,7 @@
 #include "include/Radio.h"
 #include "include/comms-lib.h"
 #include "include/macros.h"
+#include "include/utils.h"
 #include <SoapySDR/Errors.hpp>
 #include <SoapySDR/Formats.hpp>
 #include <SoapySDR/Time.hpp>
@@ -10,13 +11,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
     : _cfg(cfg)
 {
     //load channels
-    std::vector<size_t> channels;
-    if (_cfg->bsChannel == "A")
-        channels = { 0 };
-    else if (cfg->bsChannel == "B")
-        channels = { 1 };
-    else
-        channels = { 0, 1 };
+    auto channels = Utils::strToChannels(_cfg->clChannel);
     radios.reserve(_cfg->nClSdrs);
     for (size_t i = 0; i < _cfg->nClSdrs; i++) {
         SoapySDR::Kwargs args;

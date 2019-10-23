@@ -24,6 +24,18 @@ int pin_to_core(int core_id)
     return pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
 }
 
+std::vector<size_t> Utils::strToChannels(const std::string& channel)
+{
+    std::vector<size_t> channels;
+    if (channel == "A")
+        channels = { 0 };
+    else if (channel == "B")
+        channels = { 1 };
+    else
+        channels = { 0, 1 };
+    return (channels);
+}
+
 std::vector<std::complex<int16_t>> Utils::double_to_int16(std::vector<std::vector<double>> in)
 {
     int len = in[0].size();
