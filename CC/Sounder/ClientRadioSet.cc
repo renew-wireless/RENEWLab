@@ -2,7 +2,6 @@
 #include "include/Radio.h"
 #include "include/comms-lib.h"
 #include "include/macros.h"
-#include "include/sdr-lib.h"
 #include <SoapySDR/Errors.hpp>
 #include <SoapySDR/Formats.hpp>
 #include <SoapySDR/Time.hpp>

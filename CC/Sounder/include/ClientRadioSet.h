@@ -1,14 +1,5 @@
 #include "config.h"
 #include <SoapySDR/Device.hpp>
-#include <chrono>
-#include <complex>
-#include <csignal>
-#include <cstddef>
-#include <cstdint>
-#include <cstdlib>
-#include <fstream>
-#include <iostream>
-#include <string>
 
 class Radio;
 
