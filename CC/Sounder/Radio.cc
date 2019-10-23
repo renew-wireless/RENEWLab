@@ -3,6 +3,60 @@
 #include <SoapySDR/Errors.hpp>
 #include <iostream>
 
+void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain,
+    const std::string& feType)
+{
+    // these params are sufficient to set before DC offset and IQ imbalance calibration
+    dev->setAntenna(SOAPY_SDR_RX, ch, "TRX");
+    dev->setBandwidth(SOAPY_SDR_RX, ch, _cfg->bwFilter);
+    dev->setBandwidth(SOAPY_SDR_TX, ch, _cfg->bwFilter);
+
+    dev->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->radioRfFreq);
+    dev->setFrequency(SOAPY_SDR_RX, ch, "BB", _cfg->nco);
+    dev->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->radioRfFreq);
+    dev->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->nco);
+
+    // lime
+    dev->setGain(SOAPY_SDR_RX, ch, "LNA", rxgain);
+    dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0); //[0,12]
+    dev->setGain(SOAPY_SDR_RX, ch, "PGA", 0); //[-12,19]
+    dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 0); //[0,12]
+    dev->setGain(SOAPY_SDR_TX, ch, "PAD", txgain);
+
+    // Set Front-end gains based on type
+    // TODO: replace these with one gain setting
+    if (feType.find("CBRS") != std::string::npos) {
+        // receive gains
+        if (_cfg->freq > 3e9) { // CBRS HI Band
+            dev->setGain(SOAPY_SDR_RX, ch, "ATTN", 0); //[-18,0]
+            dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 14); //[0,14]
+        } else { // CBRS LO Band
+            dev->setGain(SOAPY_SDR_RX, ch, "ATTN", -12); //[-18,0]
+            dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //[0,17]
+        }
+
+        // transmit gains
+        if (_cfg->freq > 3e9) { // CBRS HI Band
+            dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //[-18,0] by 3
+            // Setting PA2 can cause saturation or even damage!! DO NOT USE IF NOT SURE!!!
+            dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|14]   can bypass
+        } else if (_cfg->freq > 2e9) { // CBRS LO Band
+            dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //[-18,0] by 3
+            dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|17]   can bypass.
+        }
+    }
+    if (feType.find("UHF") != std::string::npos) {
+        // receive gains
+        dev->setGain(SOAPY_SDR_RX, ch, "ATTN1", -6); //[-18,0]
+        dev->setGain(SOAPY_SDR_RX, ch, "ATTN2", -12); //[-18,0]
+
+        // transmit gains
+        dev->setGain(SOAPY_SDR_TX, ch, "ATTN", 0); //[-18,0] by 3
+    }
+
+    dev->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
+}
+
 void Radio::drain_buffers(std::vector<void*> buffs, int symSamp)
 {
     /*
