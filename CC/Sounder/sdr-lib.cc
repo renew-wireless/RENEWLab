@@ -133,7 +133,6 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         auto dev = radios[i]->dev;
         std::string corrConfString = "{\"corr_enabled\":true,\"corr_threshold\":" + std::to_string(1) + "}";
         dev->writeSetting("CORR_CONFIG", corrConfString);
-        usleep(100000);
         dev->writeRegisters("CORR_COE", 0, _cfg->coeffs);
 
 #ifdef JSON
@@ -644,5 +643,5 @@ void Radio::deactivateXmit(void)
 
 int Radio::getTriggers(void) const
 {
-    return std::stoi(dev->readSetting("TRIGGER_NUM"));
+    return std::stoi(dev->readSetting("TRIGGER_COUNT"));
 }
