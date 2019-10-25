@@ -86,53 +86,10 @@ from generate_sequence import *
 
 
 #########################################
-#                Registers              #
-#########################################
-# CORR THRESHOLDING REGS
-CORR_THRESHOLD = 92
-CORR_RST = 64
-#CORR_SCNT = 0x8
-CORR_CONF = 60
-
-""" Registers """
-# TDD Register Set
-RF_RST_REG = 48
-TDD_CONF_REG = 120
-SCH_ADDR_REG = 136
-SCH_MODE_REG = 140
-TX_GAIN_CTRL = 88
-
-# AGC registers Set
-FPGA_IRIS030_WR_AGC_ENABLE_FLAG = 232
-FPGA_IRIS030_WR_AGC_RESET_FLAG = 236
-FPGA_IRIS030_WR_IQ_THRESH = 240
-FPGA_IRIS030_WR_NUM_SAMPS_SAT = 244
-FPGA_IRIS030_WR_MAX_NUM_SAMPS_AGC = 248
-FPGA_IRIS030_WR_RSSI_TARGET = 252
-FPGA_IRIS030_WR_WAIT_COUNT_THRESH = 256
-FPGA_IRIS030_WR_AGC_SMALL_JUMP = 260
-FPGA_IRIS030_WR_AGC_BIG_JUMP = 264
-FPGA_IRIS030_WR_AGC_TEST_GAIN_SETTINGS = 268
-FPGA_IRIS030_WR_AGC_LNA_IN = 272
-FPGA_IRIS030_WR_AGC_TIA_IN = 276
-FPGA_IRIS030_WR_AGC_PGA_IN = 280
-
-# RSSI register Set
-FPGA_IRIS030_RD_MEASURED_RSSI = 284
-
-# Packet Detect Register Set
-FPGA_IRIS030_WR_PKT_DET_THRESH = 288
-FPGA_IRIS030_WR_PKT_DET_NUM_SAMPS = 292
-FPGA_IRIS030_WR_PKT_DET_ENABLE = 296
-FPGA_IRIS030_WR_PKT_DET_NEW_FRAME = 300
-
-
-#########################################
 #            Global Parameters          #
 #########################################
 running = True
 record = True
-exit_plot = False
 bsdr = None
 msdr = None
 txStreamM = None
@@ -155,7 +112,7 @@ def tx_thread(sdr, rate, txStream, rxStream, waveTx, numSamps, numSyms, txSymNum
         if txSymNum == 0:
             continue
         sr = sdr.readStream(rxStream, [waveRxA, waveRxB], numSamps)
-        print("CL: readStream returned %d" % sr.ret)
+        #print("CL: readStream returned %d" % sr.ret)
         if sr.ret > 0:
             txTime = sr.timeNs & 0xFFFFFFFF00000000
             txTime += (0x000000000 + (startSymbol << 16))
@@ -200,7 +157,7 @@ def rx_thread(sdr, rxStream, numSamps, txSymNum, both_channels):
         # print("LNA: {}, \t TIA:{}, \t PGA:{}".format(readLNA, readTIA, readPGA))
         for j in range(pilotSymNum):
             sr = sdr.readStream(rxStream, [waveRxA, waveRxB], numSamps)
-            print("BS: readStream returned %d" % sr.ret)
+            #print("BS: readStream returned %d" % sr.ret)
             if sr.ret < 0 or sr.ret > numSamps:
                 print("BS - BAD: readStream returned %d"%sr.ret)
             for i, a in enumerate(waveRxA):
@@ -232,33 +189,13 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
     bsdr = SoapySDR.Device(dict(serial=serial1))
     msdr = SoapySDR.Device(dict(serial=serial2))
 
-    for i, sdr in enumerate([bsdr, msdr]):
-        # AGC SETUP (Init)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, 0)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 1)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 0)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_IQ_THRESH, 10300)        # 10300 about -6dBm
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_NUM_SAMPS_SAT, 3)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_MAX_NUM_SAMPS_AGC, 20)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_WAIT_COUNT_THRESH, 160)  # gain settle takes about 20 samps (val=20)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_RSSI_TARGET, 14)         # ideally around 14
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_SMALL_JUMP, 5)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_BIG_JUMP, 15)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_TEST_GAIN_SETTINGS, 0)
-
-        # PACKET DETECT SETUP
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_THRESH, 0)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NUM_SAMPS, 5)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_ENABLE, 0)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0)
-
     # Some default sample rates
     for i, sdr in enumerate([bsdr, msdr]):
         info = sdr.getHardwareInfo()
         print("%s settings on device %d" % (info["frontend"], i))
         for ch in [0, 1]:
-            sdr.setBandwidth(SOAPY_SDR_TX, ch, 3*rate)
-            sdr.setBandwidth(SOAPY_SDR_RX, ch, 3*rate)
+            sdr.setBandwidth(SOAPY_SDR_TX, ch, 2.5*rate)
+            sdr.setBandwidth(SOAPY_SDR_RX, ch, 2.5*rate)
             sdr.setSampleRate(SOAPY_SDR_TX, ch, rate)
             sdr.setSampleRate(SOAPY_SDR_RX, ch, rate)
             #sdr.setFrequency(SOAPY_SDR_TX, ch, freq)
@@ -270,7 +207,7 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
             if "CBRS" in info["frontend"]:
                 sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', -6)  # {-18,-12,-6,0}
             sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)   # [0,52]
-            sdr.setGain(SOAPY_SDR_TX, ch, "IAMP", 12)
+            sdr.setGain(SOAPY_SDR_TX, ch, "IAMP", 0)
 
             if "CBRS" in info["frontend"]:
                 sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', -6)   # {-18,-12,-6,0}
@@ -300,15 +237,11 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
             if calibrate:
                 sdr.writeSetting(SOAPY_SDR_RX, ch, "CALIBRATE", 'SKLK')
 
-        sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 0x1)
-        sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29))
-        sdr.writeRegister("IRIS30", RF_RST_REG, 0)
+        sdr.writeSetting("RESET_DATA_LOGIC", "")
 
     # pdb.set_trace()
-    msdr.writeRegister("IRIS30", TX_GAIN_CTRL, 0)  
     if use_trig:
         bsdr.writeSetting("SYNC_DELAYS", "")
-        # bsdr.writeSetting("FPGA_DIQ_MODE", "PATTERN")
 
     # Packet size
     symSamp = numSamps + prefix_length + postfix_length
@@ -326,12 +259,10 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
     if record:
         rxStreamB = bsdr.setupStream(SOAPY_SDR_RX, SOAPY_SDR_CS16, [0, 1])
 
-    for i, sdr in enumerate([bsdr, msdr]):
-        # ENABLE PKT DETECT AND AGC
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_ENABLE, agc_en)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, agc_en)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 1)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0)
+    tpc_conf = {"tpc_enabled" : False}
+    msdr.writeSetting("TPC_CONFIG", json.dumps(tpc_conf))
+    agc_conf = {"agc_enabled" : agc_en}
+    msdr.writeSetting("AGC_CONFIG", json.dumps(agc_conf))
 
     # preambles to be sent from BS and correlated against in UE
     # the base station may upsample, but the mobiles won't
@@ -350,79 +281,83 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
     wbz = np.array([0]*(symSamp), np.complex64)
     wb_pilot1 = np.concatenate([pad1, wb_pilot, pad2])
     wb_pilot2 = wbz  # wb_pilot1 if both_channels else wbz
-    bcnz = np.array([0]*(symSamp-prefix_length-len(beacon)), np.complex64)  
-    beacon1 = np.concatenate([pad1, beacon*ampl, bcnz])
-    beacon2 = wbz  # beacon1 if both_channels else wbz
+    bcnz = np.array([0]*(symSamp-prefix_length-len(beacon)), np.complex64)
 
-    bsched = "PGR"+''.join("G"*(numSyms-txSymNum-4))+''.join("R"*txSymNum)+"G" 
+    if both_channels:
+        beacon_weights = hadamard(2)
+    else:
+        beacon_weights = np.eye(2, dtype=np.uint32)
+    beacon_weights = beacon_weights.astype(np.uint32)
+
+    bsched = "BGR"+''.join("G"*(numSyms-txSymNum-4))+''.join("R"*txSymNum)+"G"
     msched = "GGP"+''.join("G"*(numSyms-txSymNum-4))+''.join("T"*txSymNum)+"G"
     if both_channels:
-        bsched = "PGRR"+''.join("G"*(numSyms-txSymNum-5))+''.join("R"*txSymNum)+"G" 
+        bsched = "BGRR"+''.join("G"*(numSyms-txSymNum-5))+''.join("R"*txSymNum)+"G"
         msched = "GGPP"+''.join("G"*(numSyms-txSymNum-5))+''.join("T"*txSymNum)+"G"
-    print("Node 1 schedule %s " % bsched) 
-    print("Node 2 schedule %s " % msched)
-    bconf = {"tdd_enabled": True, "frame_mode": "free_running", "symbol_size": symSamp, "frames": [bsched]}
-    mconf = {"tdd_enabled": True, "frame_mode": "free_running" if use_trig else "triggered" if wait_trigger else "continuous_resync", "dual_pilot": both_channels, "symbol_size" : symSamp, "frames": [msched]}
+
+    print("Iris 1 schedule %s " % bsched) 
+    print("Iris 2 schedule %s " % msched)
+
+    bconf = {"tdd_enabled": True,
+             "frame_mode": "free_running",
+             "symbol_size": symSamp,
+             "frames": [bsched],
+             "beacon_offset" : prefix_length,
+             "max_frames" : 0}
+    mconf = {"tdd_enabled": True,
+             "frame_mode": "free_running" if use_trig else "triggered" if wait_trigger else "continuous_resync",
+             "dual_pilot": both_channels,
+             "symbol_size" : symSamp,
+             "frames": [msched],
+             "max_frames" : 0}
+
     bsdr.writeSetting("TDD_CONFIG", json.dumps(bconf))
     msdr.writeSetting("TDD_CONFIG", json.dumps(mconf))
 
+    bsdr.writeRegisters("BEACON_RAM", 0, cfloat2uint32(beacon, order='QI').tolist())
+    bsdr.writeRegisters("BEACON_RAM_WGT_A", 0, beacon_weights[0].tolist())
+    bsdr.writeRegisters("BEACON_RAM_WGT_B", 0, beacon_weights[1].tolist())
+    numAnt = 2 if both_channels else 1
+    bsdr.writeSetting("BEACON_START", str(numAnt))
+
     for sdr in [bsdr, msdr]:
         sdr.writeSetting("TX_SW_DELAY", str(30))
+        sdr.writeSetting("TDD_MODE", "true")
 
     if not use_trig:
-        msdr.writeRegister("IRIS30", CORR_CONF, int("00004001", 16))  # enable the correlator, with zeros as inputs
-        for i in range(128):
-            msdr.writeRegister("ARGCOE", i*4, 0)
-        time.sleep(0.1)
-        #msdr.writeRegister("ARGCOR", CORR_THRESHOLD, int(threshold))
-        #msdr.writeRegister("ARGCOR", CORR_RST, 0x1)  # reset corr
-        #msdr.writeRegister("ARGCOR", CORR_RST, 0x0)  # unrst corr
-        msdr.writeRegister("IRIS30", CORR_RST, 0x1)  # reset corr
-        msdr.writeRegister("IRIS30", CORR_RST, 0x0)  # unrst corr
-        msdr.writeRegister("IRIS30", CORR_THRESHOLD, int(np.log2(threshold)))
-        for i in range(128):
-            msdr.writeRegister("ARGCOE", i*4, int(coe[i]))
-        if auto_tx_gain:
-            max_gain = int(txgain)
-            min_gain = max(0, max_gain-15)
-            gain_reg = 0xF000 | (max_gain & 0x3F) << 6 | (min_gain & 0x3F)
-            print("gain reg 0x%X" % gain_reg)
-            # [15] en, [14] mode, [13:12] step, [11:6] stop, [5:0] start
-            msdr.writeRegister("IRIS30", TX_GAIN_CTRL, gain_reg)
+        corr_conf = {"corr_enabled" : True, "corr_threshold" : threshold}
+        msdr.writeSetting("CORR_CONFIG", json.dumps(corr_conf))
+        msdr.writeRegisters("CORR_COE", 0, coe.tolist())
 
         # DEV: ueTrigTime = 153 (prefix_length=0), CBRS: ueTrigTime = 235 (prefix_length=82), tx_advance=prefix_length,
         # corr delay is 17 cycles
-        ueTrigTime = prefix_length + len(beacon) + postfix_length + 17 + tx_advance 
+        ueTrigTime = prefix_length + len(beacon) + postfix_length + 17 + tx_advance + 150
         sf_start = ueTrigTime // symSamp
         sp_start = ueTrigTime % symSamp
         print("UE starting symbol and sample count (%d, %d)" % (sf_start, sp_start))
         # make sure to set this after TDD mode is enabled "writeSetting("TDD_CONFIG", ..."
         msdr.setHardwareTime(SoapySDR.ticksToTimeNs((sf_start << 16) | sp_start, rate), "TRIGGER")
 
-    msdr.writeSetting("TDD_MODE", "true")
-    bsdr.writeSetting("TDD_MODE", "true")
+    if auto_tx_gain:
+        tcp_conf = {"tpc_enabled" : True,
+                    "max_gain" : int(tx_gain),
+                    "min_gain" : max(0, max_gain-12)}
+        msdr.writeSetting("TPC_CONFIG", json.dumps(tpc_conf))
 
-    replay_addr = 0
-    bsdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(beacon1, order='QI').tolist())
-    bsdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(beacon2, order='QI').tolist())
-
-    msdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(wb_pilot1, order='QI').tolist())
-    msdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(wbz, order='QI').tolist())
+    msdr.writeRegisters("TX_RAM_A", 0, cfloat2uint32(wb_pilot1, order='QI').tolist())
     if both_channels:
-        msdr.writeRegisters("TX_RAM_A", replay_addr+2048, cfloat2uint32(wbz, order='QI').tolist())
-        msdr.writeRegisters("TX_RAM_B", replay_addr+2048, cfloat2uint32(wb_pilot2, order='QI').tolist())
+        msdr.writeRegisters("TX_RAM_B", 0, cfloat2uint32(wb_pilot2, order='QI').tolist())
 
-    if not use_trig:    
-        msdr.writeRegister("IRIS30", CORR_CONF, int("00004011", 16))  # enable the correlator, with inputs from adc
+    if not use_trig:
+        msdr.writeSetting("CORR_START", "A")
 
-    signal.signal(signal.SIGINT, partial(signal_handler, rate, numSyms, txSymNum))
+    signal.signal(signal.SIGINT, partial(signal_handler, rate, numSyms, use_trig))
     bsdr.writeSetting("TRIGGER_GEN", "")
     txth = threading.Thread(target=tx_thread, args=(msdr, rate, txStreamM, rxStreamM, nb_data, symSamp, numSyms, txSymNum, numSyms-txSymNum-1))
     txth.start()
     if record:
         rxth = threading.Thread(target=rx_thread, args=(bsdr, rxStreamB, symSamp, txSymNum, both_channels))
         rxth.start()
-    #signal.pause()
     num_trig = 0
     while True:
         time.sleep(1)
@@ -431,71 +366,32 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
         num_trig = t
 
 
-def signal_handler(rate, numSyms, txSymNum, signal, frame):
-    global bsdr, msdr, running, txStreamM, rxStreamB, exit_plot
-    msdr.writeRegister("IRIS30", CORR_CONF, 0)  # stop mobile correlator first, to prevent from the tdd manager going
-    msdr.writeRegister("IRIS30", TX_GAIN_CTRL, 0)  
+def signal_handler(rate, numSyms, use_trig, signal, frame):
+    global bsdr, msdr, running, txStreamM, rxStreamB
+    corr_conf = {"corr_enabled" : False}
+    if not use_trig:
+        msdr.writeSetting("CORR_CONFIG", json.dumps(corr_conf))
+    tpc_conf = {"tpc_enabled" : False}
+    msdr.writeSetting("TPC_CONFIG", json.dumps(tpc_conf))
     # stop tx/rx threads
     running = False
 
     print("printing number of frames")
     print("NB 0x%X" % SoapySDR.timeNsToTicks(bsdr.getHardwareTime(""), rate))
     print("UE 0x%X" % SoapySDR.timeNsToTicks(msdr.getHardwareTime(""), rate))
-    # print("UE SCNT: 0x%X" % msdr.readRegister("ARGCOR", CORR_SCNT))
     # ADC_rst, stops the tdd time counters
+    tdd_conf = {"tdd_enabled" : False}
     for sdr in [bsdr, msdr]:
-        sdr.writeRegister("IRIS30", RF_RST_REG, (1<<29)| 0x1)
-        sdr.writeRegister("IRIS30", RF_RST_REG, (1<<29))
-        sdr.writeRegister("IRIS30", RF_RST_REG, 0)
-    for i in range(numSyms):
-        msdr.writeRegister("RFCORE", SCH_ADDR_REG, i)  # subframe 0
-        msdr.writeRegister("RFCORE", SCH_MODE_REG, 0)  # 01 replay
-        bsdr.writeRegister("RFCORE", SCH_ADDR_REG, i)  # subframe 0
-        bsdr.writeRegister("RFCORE", SCH_MODE_REG, 0)  # 01 replay
-    bsdr.writeRegister("RFCORE", TDD_CONF_REG, 0) 
-    msdr.writeRegister("RFCORE", TDD_CONF_REG, 0) 
-    msdr.writeSetting("TDD_MODE", "false")
-    bsdr.writeSetting("TDD_MODE", "false")
+        sdr.writeSetting("RESET_DATA_LOGIC", "")
+        sdr.writeSetting("TDD_CONFIG", json.dumps(tdd_conf))
+        sdr.writeSetting("TDD_MODE", "false")
 
-    for i, sdr in enumerate([bsdr, msdr]):
-        # Reset
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, 0)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 0)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 0)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_IQ_THRESH, 0)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_NUM_SAMPS_SAT, 0)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_MAX_NUM_SAMPS_AGC, 0)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_WAIT_COUNT_THRESH, 0)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_RSSI_TARGET, 0)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_SMALL_JUMP, 0)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_BIG_JUMP, 0)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_TEST_GAIN_SETTINGS, 0)
-
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_THRESH, 0)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NUM_SAMPS, 5)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_ENABLE, 0)
-        sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0)
+    agc_conf = {"agc_enabled" : False}
+    msdr.writeSetting("AGC_CONFIG", json.dumps(agc_conf))
 
     bsdr = None
     msdr = None
 
-    if exit_plot:
-        fig_len = 256
-        pilot = np.zeros(fig_len)
-        rxdata = np.zeros(fig_len)
-        fig = plt.figure(figsize=(20, 8), dpi=100)
-        ax1 = fig.add_subplot(2, 1, 1)
-        ax2 = fig.add_subplot(2, 1, 2)
-        pilot = uint32tocfloat(read_from_file("data_out/rxpilot_sounder", leng=fig_len, offset=0))
-        ax1.plot(np.real(pilot), label='pilot i')
-        ax1.plot(np.imag(pilot), label='pilot q')
-
-        if txSymNum > 0:
-            rxdata = uint32tocfloat(read_from_file("data_out/rxdata_sounder", leng=fig_len, offset=0))
-        ax2.plot(np.real(rxdata), label='rx data i')
-        ax2.plot(np.imag(rxdata), label='rx data q')
-
-        plt.show()
     sys.exit(0)
 
 
@@ -507,20 +403,20 @@ def main():
     parser.add_option("--serial1", type="string", dest="serial1", help="serial number of the master device", default="RF3E000134")
     parser.add_option("--serial2", type="string", dest="serial2", help="serial number of the slave device", default="RF3E000060")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=52.0)
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) - only used if agc disabled", default=14.0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=40.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) - only used if agc disabled", default=21.0)
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=2.5e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)     # to compensate for front-end group delay
     parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)  # to compensate for rf path delay
     parser.add_option("--numSyms", type="int", dest="numSyms", help="Number of symbols in one sub-frame", default=20)
     parser.add_option("--txSymNum", type="int", dest="txSymNum", help="Number of tx sub-frames in one frame", default=0)
-    parser.add_option("--corr-threshold", type="int", dest="threshold", help="Correlator Threshold Value", default=2)
+    parser.add_option("--corr-threshold", type="int", dest="threshold", help="Correlator Threshold Value", default=1)
     parser.add_option("--ue-tx-advance", type="int", dest="tx_advance", help="sample advance for tx vs rx", default=68)
     parser.add_option("--both-channels", action="store_true", dest="both_channels", help="transmit from both channels", default=False)
     parser.add_option("--calibrate", action="store_true", dest="calibrate", help="transmit from both channels", default=False)
     parser.add_option("--use-trig", action="store_true", dest="use_trig", help="uses chain triggers for synchronization", default=False)
-    parser.add_option("--wait-trigger", action="store_true", dest="wait_trigger", help="wait for a trigger to start a frame", default=True)
+    parser.add_option("--wait-trigger", action="store_true", dest="wait_trigger", help="wait for a trigger to start a frame", default=False)
     parser.add_option("--auto-tx-gain", action="store_true", dest="auto_tx_gain", help="automatically go over tx gains", default=False)
     parser.add_option("--record", action="store_true", dest="record", help="record received pilots and data", default=False)
     parser.add_option("--agc-enable", action="store_true", dest="agc_en", help="Enable AGC flag", default=False)
