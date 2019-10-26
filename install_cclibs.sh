@@ -22,11 +22,3 @@ cmake ..
 make -j
 sudo make install
 cd ../..
-
-git clone https://github.com/Themaister/muFFT.git
-cd muFFT
-mkdir -p build
-cd build
-cmake ..
-make -j
-cp libmuFFT* $LIBDIR
