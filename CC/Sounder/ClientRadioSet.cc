@@ -38,7 +38,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
     }
     radios.shrink_to_fit();
 
-    int ueTrigOffset = 505; //_cfg->prefix + 256 + _cfg->postfix + 17 + _cfg->prefix;
+    int ueTrigOffset = 745; //_cfg->prefix + 256 + _cfg->postfix + 17 + _cfg->prefix;
     int sf_start = ueTrigOffset / _cfg->sampsPerSymbol;
     int sp_start = ueTrigOffset % _cfg->sampsPerSymbol;
 
