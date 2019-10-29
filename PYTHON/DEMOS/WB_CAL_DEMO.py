@@ -11,8 +11,6 @@
  Example:
     python3 WB_CAL_DEMO.py
 
-  Author(s): Rahman Doost-Mohamamdy: doost@rice.edu
-
 ---------------------------------------------------------------------
  Copyright (c) 2018-2019, Rice University
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license

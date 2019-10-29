@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
  SISO_TX.py
 
@@ -99,7 +99,7 @@ def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, waveFreq, numSamps, se
         if "CBRS" in info["frontend"]:
             print("set CBRS front-end gains")
             sdr.setGain(SOAPY_SDR_TX, c, 'ATTN', 0)  # {-18,-12,-6,0}
-        sdr.setGain(SOAPY_SDR_TX, c, "IAMP", 12)
+        sdr.setGain(SOAPY_SDR_TX, c, "IAMP", 0)
         sdr.setGain(SOAPY_SDR_TX, c, "PAD", gain)
 
     # Generate TX signal
@@ -186,8 +186,8 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx and Rx sample rate", default=5e6)
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
-    parser.add_option("--gain", type="float", dest="gain", help="Tx gain (dB)", default=52.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=2.5e9)
+    parser.add_option("--gain", type="float", dest="gain", help="Tx gain (dB)", default=48.0)
+    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=3.6e9)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
     parser.add_option("--waveFreq", type="float", dest="waveFreq", help="Baseband waveform freq (Hz)", default=None)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=1024)
