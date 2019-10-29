@@ -1,0 +1,29 @@
+{
+	"BaseStations" : {
+		 "cells" : 1,
+		 "sdr_id" : ["files/renew-iris-serials1.txt"],
+		 "hub_id" : "files/renew-hub-serials1.txt",
+		 "frequency" : 3.6e9,
+		 "channel" : "AB",
+		 "rxgainA" : 20,
+		 "txgainA" : 40,
+		 "rxgainB" : 20,
+		 "txgainB" : 40,
+		 "rate" : 5e6,
+		 "frame_schedule" : [
+		     "BGPPGGGGGGGGGGGGGGGG"
+		 ],
+		 "max_frame" : 0,
+		 "subframe_size" : 640,
+		 "fft_size" : 64,
+		 "cp_size" : 16,
+		 "prefix" : 82,
+		 "postfix" : 68,
+		 "beacon_seq" : "gold_ifft",
+		 "beamsweep" : true,
+                 "sample_calibrate" : false,
+		 "beacon_antenna" : 0,
+		 "pilot_seq" : "lts-half"
+	}
+
+}

@@ -1,17 +1,17 @@
 {
 	"BaseStations" : {
 		 "cells" : 1,
-		 "sdr_id" : ["files/iris_serials_new.txt"],
-		 "hub_id" : "files/hub_serials.txt",
-		 "frequency" : 3.6e9,
-		 "channel" : "A",
+		 "sdr_id" : ["files/powder-iris-serials.txt"],
+		 "hub_id" : "files/powder-hub-serials.txt",
+		 "frequency" : 2.5e9,
+		 "channel" : "AB",
 		 "rxgainA" : 20,
 		 "txgainA" : 40,
 		 "rxgainB" : 20,
 		 "txgainB" : 40,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "BGPGUGGGGGGGGGGGGGGG"
+		     "BGPPPGGGGGGGGGGGGGGG"
 		 ],
 		 "max_frame" : 4000,
 		 "subframe_size" : 640,
@@ -28,19 +28,20 @@
 
 	"Clients" : {
 		 "sdr_id" : [
-		     "RF3E000375"
+		     "RF3E000060",
+		     "RF3E000157"
 		 ],
-		 "frequency" : 3.6e9,
+		 "frequency" : 2.5e9,
 		 "channel" : "A",
 		 "agc_en" : false,
-                 "agc_gain_init": 70,
-		 "rxgainA" : [20],
-		 "txgainA" : [40],
-		 "rxgainB" : [20],
-		 "txgainB" : [40],
+		 "rxgainA" : [20, 20],
+		 "txgainA" : [40, 40],
+		 "rxgainB" : [20, 20],
+		 "txgainB" : [40, 40],
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "GDPGUGGGGGGGGGGGGGGG"
+		     "GGPGGGGGGGGGGGGGGGGG",
+                     "GGGPGGGGGGGGGGGGGGGG"
 		 ],
 		 "frame_mode" : "continuous_resync",
 		 "subframe_size" : 640,
