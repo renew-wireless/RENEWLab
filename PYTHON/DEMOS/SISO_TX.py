@@ -98,9 +98,11 @@ def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, waveFreq, numSamps, se
             sdr.writeSetting(SOAPY_SDR_TX, c, 'TX_ENB_OVERRIDE', 'true')
         if "CBRS" in info["frontend"]:
             print("set CBRS front-end gains")
-            sdr.setGain(SOAPY_SDR_TX, c, 'ATTN', 0)  # {-18,-12,-6,0}
-        sdr.setGain(SOAPY_SDR_TX, c, "IAMP", 0)
-        sdr.setGain(SOAPY_SDR_TX, c, "PAD", gain)
+            sdr.setGain(SOAPY_SDR_TX, c, gain)
+        else:
+            # Automatic distribution of gains currently only available with CBRS board
+            sdr.setGain(SOAPY_SDR_TX, c, "IAMP", 12)
+            sdr.setGain(SOAPY_SDR_TX, c, "PAD", gain)
 
     # Generate TX signal
     txSignal = np.empty(numSamps).astype(np.complex64)
@@ -148,6 +150,15 @@ def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, waveFreq, numSamps, se
             sdr.writeRegisters("TX_RAM_B", replay_addr, pilot1_ui32.tolist())
         sdr.writeSetting("TX_REPLAY", str(numSamps)) # this starts transmission
 
+    # Selected gains
+    IAMP = sdr.getGain(SOAPY_SDR_TX, 0, "IAMP")
+    PAD = sdr.getGain(SOAPY_SDR_TX, 0, "PAD")
+    PA1 = sdr.getGain(SOAPY_SDR_TX, 0, "PA1")
+    PA2 = sdr.getGain(SOAPY_SDR_TX, 0, "PA2")
+    PA3 = sdr.getGain(SOAPY_SDR_TX, 0, "PA3")
+    ATTN = sdr.getGain(SOAPY_SDR_TX, 0, "ATTN")
+    print("GAINS: {}, {}, {}, {}, {}, {}".format(PA1, PA3, PA2, ATTN, PAD, IAMP))
+
     # Plot signal
     debug = 0
     if debug:
@@ -186,8 +197,8 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx and Rx sample rate", default=5e6)
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
-    parser.add_option("--gain", type="float", dest="gain", help="Tx gain (dB)", default=48.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=3.6e9)
+    parser.add_option("--gain", type="float", dest="gain", help="Tx gain [0:105] (dB)", default=52.0)
+    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=2.5e9)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
     parser.add_option("--waveFreq", type="float", dest="waveFreq", help="Baseband waveform freq (Hz)", default=None)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=1024)
