@@ -112,8 +112,10 @@ void Utils::loadDevices(const std::string& filename, std::vector<std::string>& d
         myfile.close();
     }
 
-    else
-        printf("Unable to open device file %s\n", filename.c_str());
+    else {
+        std::cerr << "Unable to open device file " << filename << std::endl;
+        exit(1);
+    }
 }
 
 void Utils::loadData(const char* filename, std::vector<std::complex<int16_t>>& data, int samples)
@@ -153,8 +155,10 @@ void Utils::loadTDDConfig(const std::string& filename, std::string& jconfig)
         configFile.close();
     }
 
-    else
-        printf("Unable to open config file %s\n", filename.c_str());
+    else {
+        std::cerr << "Unable to open config file " << filename << std::endl;
+        exit(1);
+    }
 }
 
 std::vector<std::string> Utils::split(const std::string& s, char delimiter)
