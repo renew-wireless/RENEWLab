@@ -109,7 +109,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
     }
 
     //beaconSize + 82 (BS FE delay) + 68 (path delay) + 17 (correlator delay) + 82 (Client FE Delay)
-    int ueTrigOffset = _cfg->beaconSize + 249; 
+    int ueTrigOffset = _cfg->beaconSize + 249;
     int sf_start = ueTrigOffset / _cfg->sampsPerSymbol;
     int sp_start = ueTrigOffset % _cfg->sampsPerSymbol;
 
@@ -136,27 +136,27 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         dev->writeRegisters("CORR_COE", 0, _cfg->coeffs);
 
 #ifdef JSON
-        json conf;
-        conf["tdd_enabled"] = true;
-        conf["frame_mode"] = _cfg->frame_mode;
+        json tddConf;
+        tddConf["tdd_enabled"] = true;
+        tddConf["frame_mode"] = _cfg->frame_mode;
         int max_frame_ = (int)(2.0 / ((_cfg->sampsPerSymbol * _cfg->symbolsPerFrame) / _cfg->rate));
-        conf["max_frame"] = max_frame_;
+        tddConf["max_frame"] = max_frame_;
         //std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;
         if (_cfg->clSdrCh == 2)
-            conf["dual_pilot"] = true;
-        conf["frames"] = json::array();
-        conf["frames"].push_back(tddSched[i]);
-        conf["symbol_size"] = _cfg->sampsPerSymbol;
-        std::string confString = conf.dump();
+            tddConf["dual_pilot"] = true;
+        tddConf["frames"] = json::array();
+        tddConf["frames"].push_back(tddSched[i]);
+        tddConf["symbol_size"] = _cfg->sampsPerSymbol;
+        std::string tddConfStr = tddConf.dump();
 #else
-        std::string confString = "{\"tdd_enabled\":true,\"frame_mode\":" + _cfg->frame_mode + ",";
-        confString += "\"symbol_size\":" + std::to_string(_cfg->sampsPerSymbol);
+        std::string tddConfStr = "{\"tdd_enabled\":true,\"frame_mode\":" + _cfg->frame_mode + ",";
+        tddConfStr += "\"symbol_size\":" + std::to_string(_cfg->sampsPerSymbol);
         if (_cfg->clSdrCh == 2)
-            confString += "\"dual_pilot\":true,";
-        confString += ",\"frames\":[\"" + tddSched[i] + "\"]}";
-        std::cout << confString << std::endl;
+            tddConfStr += "\"dual_pilot\":true,";
+        tddConfStr += ",\"frames\":[\"" + tddSched[i] + "\"]}";
+        std::cout << tddConfStr << std::endl;
 #endif
-        dev->writeSetting("TDD_CONFIG", confString);
+        dev->writeSetting("TDD_CONFIG", tddConfStr);
 
         dev->setHardwareTime(SoapySDR::ticksToTimeNs((sf_start << 16) | sp_start, _cfg->rate), "TRIGGER");
         dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
@@ -210,16 +210,16 @@ void ClientRadioSet::initAGC(SoapySDR::Device* dev)
      * Initialize AGC parameters
      */
 #ifdef JSON
-    json conf;
-    conf["agc_enabled"] = _cfg->clAgcEn;
-    conf["agc_gain_init"] = _cfg->clAgcGainInit;
-    std::string confString = conf.dump();
+    json agcConf;
+    agcConf["agc_enabled"] = _cfg->clAgcEn;
+    agcConf["agc_gain_init"] = _cfg->clAgcGainInit;
+    std::string agcConfStr = agcConf.dump();
 #else
-    std::string confString = "{\"agc_enabled\":"+_cfg->clAgcEn ? "true" : "false";
-    confString += ",\"agc_gain_init\":" + std::to_string(_cfg->clAgcGainInit);
-    confString += "}";
+    std::string agcConfStr = "{\"agc_enabled\":" + _cfg->clAgcEn ? "true" : "false";
+    agcConfStr += ",\"agc_gain_init\":" + std::to_string(_cfg->clAgcGainInit);
+    agcConfStr += "}";
 #endif
-    dev->writeSetting("AGC_CONFIG", confString);
+    dev->writeSetting("AGC_CONFIG", agcConfStr);
 }
 
 BaseRadioSet::BaseRadioSet(Config* cfg)
@@ -328,27 +328,31 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
     }
 
 #ifdef JSON
-    json conf;
-    conf["tdd_enabled"] = true;
-    conf["frame_mode"] = "free_running";
-    conf["max_frame"] = _cfg->max_frame;
-    conf["frames"] = _tddSched;
-    conf["symbol_size"] = _cfg->sampsPerSymbol;
-    std::string confString = conf.dump();
+    json tddConf;
+    tddConf["tdd_enabled"] = true;
+    tddConf["frame_mode"] = "free_running";
+    tddConf["max_frame"] = _cfg->max_frame;
+    tddConf["frames"] = _tddSched;
+    tddConf["symbol_size"] = _cfg->sampsPerSymbol;
+    tddConf["beacon_start"] = _cfg->prefix;
+    tddConf["beacon_stop"] = _cfg->prefix + _cfg->beaconSize;
+    std::string tddConfStr = tddConf.dump();
 #else
-    std::string confString = "{\"tdd_enabled\":true,\"frame_mode\":\"free_running\",";
-    confString += "\"symbol_size\":" + std::to_string(_cfg->sampsPerSymbol);
-    confString += ",\"frames\":[";
-    for (int f = 0; f < _cfg->frames.size(); f++)
-        confString += (f == _cfg->frames.size() - 1) ? "\"" + _tddSched[f] + "\"" : "\"" + _tddSched[f] + "\",";
-    confString += "]}";
-    std::cout << confString << std::endl;
+    std::string tddConfStr = "{\"tdd_enabled\":true,\"frame_mode\":\"free_running\"";
+    tddConfStr += ",\"symbol_size\":" + std::to_string(_cfg->sampsPerSymbol);
+    tddConfStr += ",\"beacon_start\":" + std::to_string(_cfg->prefix);
+    tddConfStr += ",\"beacon_stop\":" + std::to_string(_cfg->prefix + _cfg->beaconSize);
+    tddConfStr += ",\"frames\":[";
+    for (size_t f = 0; f < _cfg->frames.size(); f++)
+        tddConfStr += (f == _cfg->frames.size() - 1) ? "\"" + _tddSched[f] + "\"" : "\"" + _tddSched[f] + "\",";
+    tddConfStr += "]}";
+    std::cout << tddConfStr << std::endl;
 #endif
     for (size_t i = 0; i < bsRadios[0].size(); i++) {
         SoapySDR::Device* dev = bsRadios[0][i]->dev;
         dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
         dev->writeSetting("TDD_MODE", "true");
-        dev->writeSetting("TDD_CONFIG", confString);
+        dev->writeSetting("TDD_CONFIG", tddConfStr);
     }
 
     // write beacons to FPGA buffers
@@ -358,13 +362,13 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         SoapySDR::Device* dev = bsRadios[0][i]->dev;
         dev->writeRegisters("BEACON_RAM", 0, _cfg->beacon);
         for (char const& c : _cfg->bsChannel) {
-            bool isBeaconAntenna = !_cfg->beamsweep && ndx == _cfg->beacon_ant; 
+            bool isBeaconAntenna = !_cfg->beamsweep && ndx == _cfg->beacon_ant;
             std::vector<unsigned> beacon_weights(nBsAntennas[0], isBeaconAntenna ? 1 : 0);
             std::string tx_ram_wgt = "BEACON_RAM_WGT_";
-	    if (_cfg->beamsweep) {
+            if (_cfg->beamsweep) {
                 for (int j = 0; j < nBsAntennas[0]; j++)
                     beacon_weights[j] = CommsLib::hadamard2(ndx, j);
-	    }
+            }
             dev->writeRegisters(tx_ram_wgt + c, 0, beacon_weights);
             ++ndx;
         }
