@@ -14,7 +14,7 @@ Initialization for different functionalities
 from macros import *
 
 
-def agc_init(sdr, rssi_target_idx):
+def agc_init(sdr, rssi_target_idx, agc_en):
     """
     AGC setup. Register setup
 
@@ -37,7 +37,7 @@ def agc_init(sdr, rssi_target_idx):
     sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_RSSI_TARGET, rssi_target_idx) # RSSI Target for AGC: ideally around. Try 20 for 3.6GHz and 30 for 2.5GHz
     sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_TEST_GAIN_SETTINGS, 0)    # Enable only for testing gain settings
     sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 0)            # Clear AGC reset flag
-    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, 1)
+    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, agc_en)
     sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_GAIN_INIT, 80)            # Initialize gains to this value
 
     # Pkt Detect Setup

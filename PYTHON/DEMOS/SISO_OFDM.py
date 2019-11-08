@@ -378,12 +378,9 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
         sdrRx = SoapySDR.Device(dict(serial=serialRx))
         infoRx = sdrRx.getHardwareInfo()
 
-        if agc_en:
-            if freq > 3e9:
-                rssi_target_idx = 30
-            else:
-                rssi_target_idx = 30
-            agc_init(sdrRx, rssi_target_idx)
+        # AGC - target might need to change for different frequencies (tested with 30 at 3.6GHz)
+        rssi_target_idx = 30
+        agc_init(sdrRx, rssi_target_idx, agc_en)
 
         # Reset
         sdrRx.writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 0x1)

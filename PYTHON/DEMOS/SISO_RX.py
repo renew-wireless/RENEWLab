@@ -73,7 +73,7 @@ sdr = None
 rxStream = None
 recorder = None
 FIG_LEN = 16384   
-Rate = 500e3
+Rate = 5e6
 fft_size = 2**12  # 1024
 numBufferSamps = 1000
 rssiPwrBuffer = collections.deque(maxlen=numBufferSamps)
@@ -212,10 +212,9 @@ def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
     print(info)
 
     # Set gains to very high value if AGC enabled.
-    if agc_en:
-        gain = 100
-        rssi_target_idx = 20
-        agc_init(sdr, rssi_target_idx)
+    rssi_target_idx = 20
+    agc_init(sdr, rssi_target_idx, agc_en)
+    if agc_en: gain = 100
 
     # Set params on both channels (both RF chains)
     for ch in [0, 1]:
