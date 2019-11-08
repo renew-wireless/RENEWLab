@@ -212,16 +212,12 @@ Config::Config(const std::string& jsonfile)
             }
         }
 
-        std::vector<std::complex<int16_t>> pre0(prefix, 0);
         if (sampsPerSymbol < beaconSize + prefix + postfix) {
             std::cout << "Subframe size too small!"
                       << " Try increasing to at least "
                       << beaconSize << std::endl;
             exit(0);
         }
-        std::vector<std::complex<int16_t>> post0(sampsPerSymbol - beaconSize - prefix, 0);
-        beacon_ci16.insert(beacon_ci16.begin(), pre0.begin(), pre0.end());
-        beacon_ci16.insert(beacon_ci16.end(), post0.begin(), post0.end());
 
         beacon = Utils::cint16_to_uint32(beacon_ci16, false, "QI");
 
