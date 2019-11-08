@@ -214,9 +214,9 @@ Config::Config(const std::string& jsonfile)
 
         if (sampsPerSymbol < beaconSize + prefix + postfix) {
             std::cout << "Subframe size too small!"
-                      << " Try increasing to at least "
+                      << " Increasing to "
                       << beaconSize << std::endl;
-            exit(0);
+            sampsPerSymbol = beaconSize + prefix + postfix;
         }
 
         beacon = Utils::cint16_to_uint32(beacon_ci16, false, "QI");

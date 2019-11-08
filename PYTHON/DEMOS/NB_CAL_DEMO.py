@@ -1,4 +1,24 @@
-#!/usr/bin/python
+#!/usr/bin/python3
+"""
+    NB_CAL_DEMO.py
+
+    NOTE: IRIS BOARDS MUST BE CHAINED FOR THIS SCRIPT TO WORK.
+    ORDER MATTERS; FIRST NON-REF BOARD (SERIALS) IS THE ONE SENDING THE TRIGGER.
+
+    This script is useful watching the recprocity amplitude and phases of 
+    narrow-band (sine) signals between all boards and a reference board .
+    It programs two Irises in TDD mode with the following framing
+    schedule.
+
+    Example:
+        python3 NB_CAL_DEMO.py --serials=bs_serials.txt --ref-serial="RF3C000025"
+
+---------------------------------------------------------------------
+ Copyright © 2018-2019. Rice University.
+ RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+---------------------------------------------------------------------
+"""
+
 import sys
 sys.path.append('../IrisUtils/')
 
@@ -231,7 +251,7 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=1e6)
     parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=20.0)
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Tx gain (dB)", default=20.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=2.5e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-pad", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)
     parser.add_option("--postfix-pad", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)

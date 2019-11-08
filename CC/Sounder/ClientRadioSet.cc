@@ -1,0 +1,161 @@
+#include "include/ClientRadioSet.h"
+#include "include/Radio.h"
+#include "include/comms-lib.h"
+#include "include/macros.h"
+#include "include/utils.h"
+#include <SoapySDR/Errors.hpp>
+#include <SoapySDR/Formats.hpp>
+#include <SoapySDR/Time.hpp>
+
+ClientRadioSet::ClientRadioSet(Config* cfg)
+    : _cfg(cfg)
+{
+    //load channels
+    auto channels = Utils::strToChannels(_cfg->clChannel);
+    radios.reserve(_cfg->nClSdrs);
+    for (size_t i = 0; i < _cfg->nClSdrs; i++) {
+        SoapySDR::Kwargs args;
+        args["timeout"] = "1000000";
+        args["serial"] = _cfg->cl_sdr_ids.at(i);
+        try {
+            radios.push_back(new Radio(args, SOAPY_SDR_CF32, channels, _cfg->rate));
+        } catch (std::runtime_error) {
+            std::cerr << "Ignoring serial " << _cfg->cl_sdr_ids.at(i) << std::endl;
+            continue;
+        }
+        auto dev = radios.back()->dev;
+        SoapySDR::Kwargs info = dev->getHardwareInfo();
+
+        for (auto ch : { 0, 1 }) //channels)
+        {
+            double rxgain = _cfg->clRxgain_vec[ch][i]; //[0,30]
+            double txgain = _cfg->clTxgain_vec[ch][i]; //[0,52]
+            radios.back()->dev_init(_cfg, ch, rxgain, txgain, info["frontend"]);
+        }
+
+        initAGC(dev);
+    }
+    radios.shrink_to_fit();
+
+    //beaconSize + 82 (BS FE delay) + 68 (path delay) + 17 (correlator delay) + 82 (Client FE Delay)
+    int clTrigOffset = _cfg->beaconSize + 249;
+    int sf_start = clTrigOffset / _cfg->sampsPerSymbol;
+    int sp_start = clTrigOffset % _cfg->sampsPerSymbol;
+
+    for (size_t i = 0; i < radios.size(); i++) {
+        auto dev = radios[i]->dev;
+        std::string corrConfString = "{\"corr_enabled\":true,\"corr_threshold\":" + std::to_string(1) + "}";
+        dev->writeSetting("CORR_CONFIG", corrConfString);
+        dev->writeRegisters("CORR_COE", 0, _cfg->coeffs);
+
+        std::string tddSched = _cfg->clFrames[i];
+        for (size_t s = 0; s < _cfg->clFrames[i].size(); s++) {
+            char c = _cfg->clFrames[i].at(s);
+            if (c == 'B')
+                tddSched.replace(s, 1, "G");
+            else if (c == 'U')
+                tddSched.replace(s, 1, "T");
+            else if (c == 'D')
+                tddSched.replace(s, 1, "R");
+        }
+        std::cout << "Client " << i << " schedule: " << tddSched << std::endl;
+#ifdef JSON
+        json tddConf;
+        tddConf["tdd_enabled"] = true;
+        tddConf["frame_mode"] = _cfg->frame_mode;
+        int max_frame_ = (int)(2.0 / ((_cfg->sampsPerSymbol * _cfg->symbolsPerFrame) / _cfg->rate));
+        tddConf["max_frame"] = max_frame_;
+        //std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;
+        if (_cfg->clSdrCh == 2)
+            tddConf["dual_pilot"] = true;
+        tddConf["frames"] = json::array();
+        tddConf["frames"].push_back(tddSched);
+        tddConf["symbol_size"] = _cfg->sampsPerSymbol;
+        std::string tddConfStr = tddConf.dump();
+#else
+        std::string tddConfStr = "{\"tdd_enabled\":true,\"frame_mode\":" + _cfg->frame_mode + ",";
+        tddConfStr += "\"symbol_size\":" + std::to_string(_cfg->sampsPerSymbol);
+        if (_cfg->clSdrCh == 2)
+            tddConfStr += "\"dual_pilot\":true,";
+        tddConfStr += ",\"frames\":[\"" + tddSched[i] + "\"]}";
+        std::cout << tddConfStr << std::endl;
+#endif
+        dev->writeSetting("TDD_CONFIG", tddConfStr);
+
+        dev->setHardwareTime(SoapySDR::ticksToTimeNs((sf_start << 16) | sp_start, _cfg->rate), "TRIGGER");
+        dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
+        dev->writeSetting("TDD_MODE", "true");
+        // write pilot to FPGA buffers
+        for (char const& c : _cfg->bsChannel) {
+            std::string tx_ram = "TX_RAM_";
+            dev->writeRegisters(tx_ram + c, 0, _cfg->pilot);
+        }
+        radios[i]->activateRecv();
+        radios[i]->activateXmit();
+
+        dev->writeSetting("CORR_START", (_cfg->bsChannel == "B") ? "B" : "A");
+    }
+    std::cout << __func__ << " done!" << std::endl;
+}
+
+ClientRadioSet::~ClientRadioSet(void)
+{
+    for (size_t i = 0; i < radios.size(); i++)
+        delete radios[i];
+}
+
+void ClientRadioSet::radioStop(void)
+{
+    std::string corrConfStr = "{\"corr_enabled\":false}";
+    std::string tddConfStr = "{\"tdd_enabled\":false}";
+    for (size_t i = 0; i < _cfg->nClSdrs; i++) {
+        auto dev = radios[i]->dev;
+        dev->writeSetting("CORR_CONFIG", corrConfStr);
+        const auto timeStamp = SoapySDR::timeNsToTicks(dev->getHardwareTime(""), _cfg->rate);
+        std::cout << "device " << i << ": Frame=" << (timeStamp >> 32)
+                  << ", Symbol=" << ((timeStamp && 0xFFFFFFFF) >> 16) << std::endl;
+        dev->writeSetting("TDD_CONFIG", tddConfStr);
+        dev->writeSetting("TDD_MODE", "false");
+        radios[i]->reset_DATA_clk_domain();
+    }
+}
+
+int ClientRadioSet::triggers(int i)
+{
+    return (radios[i]->getTriggers());
+}
+
+int ClientRadioSet::radioRx(size_t radio_id, void* const* buffs, int numSamps, long long& frameTime)
+{
+    if (radio_id < radios.size()) {
+        long long frameTimeNs = 0;
+        int ret = radios[radio_id]->recv(buffs, numSamps, frameTimeNs);
+        frameTime = frameTimeNs; //SoapySDR::timeNsToTicks(frameTimeNs, _rate);
+        return ret;
+    }
+    std::cout << "invalid radio id " << radio_id << std::endl;
+    return 0;
+}
+
+int ClientRadioSet::radioTx(size_t radio_id, const void* const* buffs, int numSamps, int flags, long long& frameTime)
+{
+    return radios[radio_id]->xmit(buffs, numSamps, flags, frameTime);
+}
+
+void ClientRadioSet::initAGC(SoapySDR::Device* dev)
+{
+    /*
+     * Initialize AGC parameters
+     */
+#ifdef JSON
+    json agcConf;
+    agcConf["agc_enabled"] = _cfg->clAgcEn;
+    agcConf["agc_gain_init"] = _cfg->clAgcGainInit;
+    std::string agcConfStr = agcConf.dump();
+#else
+    std::string agcConfStr = "{\"agc_enabled\":" + _cfg->clAgcEn ? "true" : "false";
+    agcConfStr += ",\"agc_gain_init\":" + std::to_string(_cfg->clAgcGainInit);
+    agcConfStr += "}";
+#endif
+    dev->writeSetting("AGC_CONFIG", agcConfStr);
+}

@@ -10,6 +10,7 @@
 */
 
 #include "include/receiver.h"
+#include "include/ClientRadioSet.h"
 #include "include/macros.h"
 #include "include/utils.h"
 #include <atomic>
@@ -137,11 +138,13 @@ void Receiver::loopRecv(ReceiverContext* context)
     }
 
     // Use mutex to sychronize data receiving across threads
-    pthread_mutex_lock(&mutex);
-    printf("Recv Thread %d: waiting for release\n", tid);
+    if (config_->nClSdrs > 0 && config_->nBsSdrs[0] > 0) {
+        pthread_mutex_lock(&mutex);
+        printf("Recv Thread %d: waiting for release\n", tid);
 
-    pthread_cond_wait(&cond, &mutex);
-    pthread_mutex_unlock(&mutex); // unlocking for all other threads
+        pthread_cond_wait(&cond, &mutex);
+        pthread_mutex_unlock(&mutex); // unlocking for all other threads
+    }
 
     // use token to speed up
     moodycamel::ProducerToken local_ptok(*message_queue_);
@@ -269,12 +272,11 @@ void Receiver::clientTxRx(dev_profile* context)
     clock_gettime(CLOCK_MONOTONIC, &tv);
 
     assert(clientRadioSet_ != NULL);
-    Radio* radio = clientRadioSet_->getRadio(tid);
     while (config_->running) {
         clock_gettime(CLOCK_MONOTONIC, &tv2);
         double diff = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e9;
         if (diff > 2) {
-            int total_trigs = radio->getTriggers();
+            int total_trigs = clientRadioSet_->triggers(tid);
             std::cout << "new triggers: " << total_trigs - all_trigs << ", total: " << total_trigs << std::endl;
             all_trigs = total_trigs;
             tv = tv2;
@@ -285,7 +287,7 @@ void Receiver::clientTxRx(dev_profile* context)
         long long firstRxTime(0);
         bool receiveErrors = false;
         for (int i = 0; i < rxSyms; i++) {
-            int r = radio->recv(rxbuff.data(), NUM_SAMPS, rxTime);
+            int r = clientRadioSet_->radioRx(tid, rxbuff.data(), NUM_SAMPS, rxTime);
             if (r == NUM_SAMPS) {
                 if (i == 0)
                     firstRxTime = rxTime;
@@ -304,7 +306,7 @@ void Receiver::clientTxRx(dev_profile* context)
         txTime += ((long long)txStartSym << 16);
         //printf("rxTime %llx, txTime %llx \n", firstRxTime, txTime);
         for (int i = 0; i < txSyms; i++) {
-            int r = radio->xmit(txbuff.data(), NUM_SAMPS, 2, txTime);
+            int r = clientRadioSet_->radioTx(tid, txbuff.data(), NUM_SAMPS, 2, txTime);
             if (r == NUM_SAMPS)
                 txTime += 0x10000;
         }

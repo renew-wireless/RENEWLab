@@ -231,7 +231,7 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=25.0)
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Tx gain (dB)", default=20.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=2.5e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-pad", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)
     parser.add_option("--postfix-pad", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)

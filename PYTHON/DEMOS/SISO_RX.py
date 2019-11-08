@@ -63,7 +63,8 @@ from digital_rssi import *
 from bandpower import *
 from file_rdwr import *
 from fft_power import *
-
+from macros import *
+from init_fncs import *
 
 #########################################
 #            Global Parameters          #
@@ -72,8 +73,8 @@ sdr = None
 rxStream = None
 recorder = None
 FIG_LEN = 16384   
-Rate = 5e6 
-fft_size = 2**12 # 1024
+Rate = 500e3
+fft_size = 2**12  # 1024
 numBufferSamps = 1000
 rssiPwrBuffer = collections.deque(maxlen=numBufferSamps)
 timePwrBuffer = collections.deque(maxlen=numBufferSamps)
@@ -100,38 +101,6 @@ SoapySDR.SoapySDR_setLogLevel(logLevel)
 logging.basicConfig(filename='./data_out/debug_SISO_RX.log',
                     level=logging.DEBUG,
                     format='[%(levelname)s] (%(threadName)-10s) %(asctime)s %(message)s',)
-
-
-#########################################
-#                Registers              #
-#########################################
-# Reset
-RF_RST_REG = 48
-
-# AGC registers Set
-FPGA_IRIS030_WR_AGC_ENABLE_FLAG = 232
-FPGA_IRIS030_WR_AGC_RESET_FLAG = 236
-FPGA_IRIS030_WR_IQ_THRESH = 240
-FPGA_IRIS030_WR_NUM_SAMPS_SAT = 244
-FPGA_IRIS030_WR_MAX_NUM_SAMPS_AGC = 248
-FPGA_IRIS030_WR_RSSI_TARGET = 252
-FPGA_IRIS030_WR_WAIT_COUNT_THRESH = 256
-FPGA_IRIS030_WR_AGC_SMALL_JUMP = 260
-FPGA_IRIS030_WR_AGC_BIG_JUMP = 264
-FPGA_IRIS030_WR_AGC_TEST_GAIN_SETTINGS = 268
-FPGA_IRIS030_WR_AGC_LNA_IN = 272
-FPGA_IRIS030_WR_AGC_TIA_IN = 276
-FPGA_IRIS030_WR_AGC_PGA_IN = 280
-
-# RSSI register Set
-FPGA_IRIS030_RD_MEASURED_RSSI = 284
-
-# Packet Detect Register Set
-FPGA_IRIS030_WR_PKT_DET_THRESH = 288
-FPGA_IRIS030_WR_PKT_DET_NUM_SAMPS = 292
-FPGA_IRIS030_WR_PKT_DET_ENABLE = 296
-FPGA_IRIS030_WR_PKT_DET_NEW_FRAME = 300
-
 
 #########################################
 #             Create Plots              #
@@ -229,27 +198,6 @@ def init():
     return line1, line2, line3, line4, line5, line6, line7, line8, line9, line10, line11, line12, line13, line14
 
 
-def register_setup():
-    # AGC setup
-    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, 0)         # Enable AGC Flag (set to 0 initially)
-    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 1)          # Reset AGC Flag
-    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_IQ_THRESH, 10300)           # Saturation Threshold: 10300 about -6dBm
-    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_NUM_SAMPS_SAT, 3)           # Number of samples needed to claim sat.
-    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_MAX_NUM_SAMPS_AGC, 20)      # Threshold at which AGC stops
-    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_WAIT_COUNT_THRESH, 160)     # Gain settle takes about 20 samps(value=20)
-    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 0)          # Clear AGC reset flag
-    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_BIG_JUMP, 15)           # Drop gain at initial saturation detection
-    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_SMALL_JUMP, 5)          # Drop gain at subsequent sat. detections
-    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_RSSI_TARGET, 20)            # RSSI Target for AGC: ideally around 14
-    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_TEST_GAIN_SETTINGS, 0)  # Enable only for testing gain settings
-
-    # Pkt Detect Setup
-    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_THRESH, 0)          # RSSI value at which Pkt is detected
-    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NUM_SAMPS, 5)       # Number of samples needed to detect frame
-    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_ENABLE, 0)          # Enable packet detection flag
-    sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0)       # Finished last frame? (set to 0 initially)
-
-
 def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
     """
     Initialize IRIS parameters and animation kick-off
@@ -263,21 +211,21 @@ def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
     info = sdr.getHardwareInfo()
     print(info)
 
+    # Set gains to very high value if AGC enabled.
+    if agc_en:
+        gain = 100
+        rssi_target_idx = 20
+        agc_init(sdr, rssi_target_idx)
+
     # Set params on both channels (both RF chains)
     for ch in [0, 1]:
-        #sdr.setBandwidth(SOAPY_SDR_RX, ch, 3*Rate)
-        #sdr.setBandwidth(SOAPY_SDR_TX, ch, 3*Rate)
+        # sdr.setBandwidth(SOAPY_SDR_RX, ch, 3*Rate)
+        # sdr.setBandwidth(SOAPY_SDR_TX, ch, 3*Rate)
         sdr.setFrequency(SOAPY_SDR_RX, ch, freq)
         sdr.setSampleRate(SOAPY_SDR_RX, ch, Rate)
         sdr.setFrequency(SOAPY_SDR_TX, ch, freq)
         sdr.setSampleRate(SOAPY_SDR_TX, ch, Rate)
-        if "CBRS" in info["frontend"]:
-            sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', gain[5])  # [0,17]
-            sdr.setGain(SOAPY_SDR_RX, ch, 'LNA1', gain[4])  # [0,33]
-            sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', gain[3])  # [-18,0]
-        sdr.setGain(SOAPY_SDR_RX, ch, 'LNA', gain[2])       # [0,30]
-        sdr.setGain(SOAPY_SDR_RX, ch, 'TIA', gain[1])       # [0,12]
-        sdr.setGain(SOAPY_SDR_RX, ch, 'PGA', gain[0])       # [-12,19]
+        sdr.setGain(SOAPY_SDR_RX, ch, gain)
         # sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
         sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
 
@@ -288,8 +236,6 @@ def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
     # Setup RX stream
     rxStream = sdr.setupStream(SOAPY_SDR_RX, SOAPY_SDR_CF32, [0, 1])
 
-    # Initialize registers to be used by AGC and packet detect FPGA cores
-    register_setup()
     # RSSI read setup
     setUpDigitalRssiMode(sdr)
 
@@ -369,6 +315,8 @@ def animate(i, num_samps, recorder, agc_en, wait_trigger):
     f1, powerBins, noiseFloor, pks = fft_power(sampsRx[0], Rate, num_bins=fft_size, peak=1.0,
                                                scaling='spectrum', peak_thresh=20)
     fftPower = bandpower(sampsRx[0], Rate, 0, Rate / 2)
+    if fftPower <= 0:
+        fftPower = 1e-15     # Remove warning
     fftPower_dB = 10 * np.log10(fftPower)
     fftPower_dBm = 10 * np.log10(fftPower / 1e-3)
 
@@ -439,16 +387,11 @@ def replay(name, leng):
 def main():
     parser = OptionParser()
     parser.add_option("--label", type="string", dest="label", help="label for recorded file name", default="rx2.600GHz_TEST.hdf5")
-    parser.add_option("--lna", type="float", dest="lna", help="Lime Chip Rx LNA gain [0:30](dB)", default=14.0)
-    parser.add_option("--tia", type="float", dest="tia", help="Lime Chip Rx TIA gain [0,3,9,12] (dB)", default=0.0)
-    parser.add_option("--pga", type="float", dest="pga", help="Lime Chip Rx PGA gain [-12:19] (dB)", default=0.0)
-    parser.add_option("--lna1", type="float", dest="lna1", help="BRS/CBRS Front-end LNA1 gain stage [0:33] (dB)", default=33.0)
-    parser.add_option("--lna2", type="float", dest="lna2", help="BRS/CBRS Front-end LNA2 gain [0:17] (dB)", default=17.0)
-    parser.add_option("--attn", type="float", dest="rxattn", help="BRS/CBRS Front-end ATTN gain stage [-18:6:0] (dB)", default=0.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="RX GAIN: 2.5GHz [0:108](dB), 3.6GHz [0:105] (dB)", default=50.0)
     parser.add_option("--latitude", type="float", dest="latitude", help="Latitude", default=0.0)
     parser.add_option("--longitude", type="float", dest="longitude", help="Longitude", default=0.0)
     parser.add_option("--elevation", type="float", dest="elevation", help="Elevation", default=0.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Rx freq (Hz)", default=2.5e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Optional Rx freq (Hz)", default=3.6e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=16384)
     parser.add_option("--serial", type="string", dest="serial", help="Serial number of the device", default="")
     parser.add_option("--rxMode", type="string", dest="rxMode", help="RX Mode, Options:BASIC/REC/REPLAY", default="BASIC")
@@ -469,20 +412,13 @@ def main():
     print("========== RX PARAMETERS =========")
     print("Receiving signal on board {}".format(options.serial))
     print("Sample Rate (sps): {}".format(Rate))
-    print("Lime Rx Gain (dB) - LNA: {}, TIA: {}, PGA: {}".format(options.lna, options.tia, options.pga))
-    print("BRS/CBRS Rx Gain (dB) - LNA1: {}, LNA2: {}, ATTN: {}".format(options.lna1, options.lna2, options.rxattn))
+    print("Rx Gain (dB): {}".format(options.rxgain))
     print("Frequency (Hz): {}".format(options.freq))
     print("RX Mode: {}".format(options.rxMode))
     print("Number of Samples: {}".format(options.numSamps))
     if options.AGCen: print("** AGC ENABLED **")
     print("==================================")
     print("\n")
-
-    # Set gains to max. if AGC enabled.
-    if options.AGCen:
-        options.lna = 30
-        options.tia = 12
-        options.pga = 19
 
     # If recording file
     recorder = None
@@ -491,12 +427,6 @@ def main():
         recorder = DataRecorder(options.label,
                                 options.serial,
                                 options.freq,
-                                options.lna,
-                                options.tia,
-                                options.pga,
-                                options.lna1,
-                                options.lna2,
-                                options.rxattn,
                                 options.numSamps,
                                 options.latitude,
                                 options.longitude,
@@ -511,7 +441,7 @@ def main():
         rxsamples_app(
             srl=options.serial,
             freq=options.freq,
-            gain=[options.pga, options.tia, options.lna, options.rxattn, options.lna1, options.lna2],
+            gain=options.rxgain,
             num_samps=options.numSamps,
             recorder=recorder,
             agc_en=options.AGCen,

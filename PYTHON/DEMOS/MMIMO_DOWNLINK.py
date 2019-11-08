@@ -1,3 +1,10 @@
+#!/usr/bin/python3
+"""
+---------------------------------------------------------------------
+ Copyright © 2018-2019. Rice University.
+ RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+---------------------------------------------------------------------
+"""
 
 import sys
 sys.path.append('../IrisUtils/')

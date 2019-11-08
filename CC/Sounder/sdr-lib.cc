@@ -11,216 +11,13 @@
 */
 
 #include "include/sdr-lib.h"
+#include "include/Radio.h"
 #include "include/comms-lib.h"
 #include "include/macros.h"
+#include "include/utils.h"
 #include <SoapySDR/Errors.hpp>
 #include <SoapySDR/Formats.hpp>
 #include <SoapySDR/Time.hpp>
-
-static void
-reset_DATA_clk_domain(SoapySDR::Device* dev)
-{
-    dev->writeSetting("RESET_DATA_LOGIC", "");
-}
-
-static void
-dev_init(SoapySDR::Device* dev, Config* _cfg, int ch, double rxgain, double txgain,
-    const std::string& feType)
-{
-    // these params are sufficient to set befor DC offset and IQ imbalance calibration
-    dev->setAntenna(SOAPY_SDR_RX, ch, "TRX");
-    dev->setBandwidth(SOAPY_SDR_RX, ch, _cfg->bwFilter);
-    dev->setBandwidth(SOAPY_SDR_TX, ch, _cfg->bwFilter);
-
-    dev->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->radioRfFreq);
-    dev->setFrequency(SOAPY_SDR_RX, ch, "BB", _cfg->nco);
-    dev->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->radioRfFreq);
-    dev->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->nco);
-
-    // lime
-    dev->setGain(SOAPY_SDR_RX, ch, "LNA", rxgain);
-    dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0); //[0,12]
-    dev->setGain(SOAPY_SDR_RX, ch, "PGA", 0); //[-12,19]
-    dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 0); //[0,12]
-    dev->setGain(SOAPY_SDR_TX, ch, "PAD", txgain);
-
-    // Set Front-end gains based on type
-    // TODO: replace these with one gain setting
-    if (feType.find("CBRS") != std::string::npos) {
-        // receive gains
-        if (_cfg->freq > 3e9) { // CBRS HI Band
-            dev->setGain(SOAPY_SDR_RX, ch, "ATTN", 0); //[-18,0]
-            dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 14); //[0,14]
-        } else { // CBRS LO Band
-            dev->setGain(SOAPY_SDR_RX, ch, "ATTN", -12); //[-18,0]
-            dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); //[0,17]
-        }
-
-        // transmit gains
-        if (_cfg->freq > 3e9) { // CBRS HI Band
-            dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //[-18,0] by 3
-            // Setting PA2 can cause saturation or even damage!! DO NOT USE IF NOT SURE!!!
-            dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|14]   can bypass
-        } else if (_cfg->freq > 2e9) { // CBRS LO Band
-            dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6); //[-18,0] by 3
-            dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0); //[0|17]   can bypass.
-        }
-    }
-    if (feType.find("UHF") != std::string::npos) {
-        // receive gains
-        dev->setGain(SOAPY_SDR_RX, ch, "ATTN1", -6); //[-18,0]
-        dev->setGain(SOAPY_SDR_RX, ch, "ATTN2", -12); //[-18,0]
-
-        // transmit gains
-        dev->setGain(SOAPY_SDR_TX, ch, "ATTN", 0); //[-18,0] by 3
-    }
-
-    dev->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
-}
-
-ClientRadioSet::ClientRadioSet(Config* cfg)
-    : _cfg(cfg)
-{
-    //load channels
-    std::vector<size_t> channels;
-    if (_cfg->bsChannel == "A")
-        channels = { 0 };
-    else if (cfg->bsChannel == "B")
-        channels = { 1 };
-    else
-        channels = { 0, 1 };
-    radios.resize(_cfg->nClSdrs);
-    for (size_t i = 0; i < _cfg->nClSdrs; i++) {
-        SoapySDR::Kwargs args;
-        args["timeout"] = "1000000";
-        args["serial"] = _cfg->cl_sdr_ids.at(i);
-        radios[i] = new Radio(args, SOAPY_SDR_CF32, channels, _cfg->rate);
-        auto dev = radios[i]->dev;
-        SoapySDR::Kwargs info = dev->getHardwareInfo();
-
-        for (auto ch : { 0, 1 }) //channels)
-        {
-            double rxgain = _cfg->clRxgain_vec[ch][i]; //[0,30]
-            double txgain = _cfg->clTxgain_vec[ch][i]; //[0,52]
-            dev_init(dev, _cfg, ch, rxgain, txgain, info["frontend"]);
-        }
-
-        initAGC(dev);
-    }
-
-    //beaconSize + 82 (BS FE delay) + 68 (path delay) + 17 (correlator delay) + 82 (Client FE Delay)
-    int ueTrigOffset = _cfg->beaconSize + 249;
-    int sf_start = ueTrigOffset / _cfg->sampsPerSymbol;
-    int sp_start = ueTrigOffset % _cfg->sampsPerSymbol;
-
-    std::vector<std::string> tddSched;
-    tddSched.resize(_cfg->nClSdrs);
-    for (size_t i = 0; i < _cfg->nClSdrs; i++) {
-        tddSched[i] = _cfg->clFrames[i];
-        for (size_t s = 0; s < _cfg->clFrames[i].size(); s++) {
-            char c = _cfg->clFrames[i].at(s);
-            if (c == 'B')
-                tddSched[i].replace(s, 1, "G");
-            else if (c == 'U')
-                tddSched[i].replace(s, 1, "T");
-            else if (c == 'D')
-                tddSched[i].replace(s, 1, "R");
-        }
-        std::cout << "Client " << i << " schedule: " << tddSched[i] << std::endl;
-    }
-
-    for (size_t i = 0; i < _cfg->nClSdrs; i++) {
-        auto dev = radios[i]->dev;
-        std::string corrConfString = "{\"corr_enabled\":true,\"corr_threshold\":" + std::to_string(1) + "}";
-        dev->writeSetting("CORR_CONFIG", corrConfString);
-        dev->writeRegisters("CORR_COE", 0, _cfg->coeffs);
-
-#ifdef JSON
-        json tddConf;
-        tddConf["tdd_enabled"] = true;
-        tddConf["frame_mode"] = _cfg->frame_mode;
-        int max_frame_ = (int)(2.0 / ((_cfg->sampsPerSymbol * _cfg->symbolsPerFrame) / _cfg->rate));
-        tddConf["max_frame"] = max_frame_;
-        //std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;
-        if (_cfg->clSdrCh == 2)
-            tddConf["dual_pilot"] = true;
-        tddConf["frames"] = json::array();
-        tddConf["frames"].push_back(tddSched[i]);
-        tddConf["symbol_size"] = _cfg->sampsPerSymbol;
-        std::string tddConfStr = tddConf.dump();
-#else
-        std::string tddConfStr = "{\"tdd_enabled\":true,\"frame_mode\":" + _cfg->frame_mode + ",";
-        tddConfStr += "\"symbol_size\":" + std::to_string(_cfg->sampsPerSymbol);
-        if (_cfg->clSdrCh == 2)
-            tddConfStr += "\"dual_pilot\":true,";
-        tddConfStr += ",\"frames\":[\"" + tddSched[i] + "\"]}";
-        std::cout << tddConfStr << std::endl;
-#endif
-        dev->writeSetting("TDD_CONFIG", tddConfStr);
-
-        dev->setHardwareTime(SoapySDR::ticksToTimeNs((sf_start << 16) | sp_start, _cfg->rate), "TRIGGER");
-        dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
-        dev->writeSetting("TDD_MODE", "true");
-        // write beacons to FPGA buffers
-        if (_cfg->bsChannel != "B")
-            dev->writeRegisters("TX_RAM_A", 0, _cfg->pilot);
-        if (_cfg->bsChannel == "B")
-            dev->writeRegisters("TX_RAM_B", 0, _cfg->pilot);
-        if (_cfg->clSdrCh == 2)
-            dev->writeRegisters("TX_RAM_B", 0, _cfg->pilot);
-
-        radios[i]->activateRecv();
-        radios[i]->activateXmit();
-
-        dev->writeSetting("CORR_START", (_cfg->bsChannel == "B") ? "B" : "A");
-    }
-    std::cout << __func__ << " done!" << std::endl;
-}
-
-ClientRadioSet::~ClientRadioSet(void)
-{
-    for (size_t i = 0; i < _cfg->nClSdrs; i++)
-        delete radios[i];
-}
-
-void ClientRadioSet::radioStop(void)
-{
-    std::string corrConfStr = "{\"corr_enabled\":false}";
-    std::string tddConfStr = "{\"tdd_enabled\":false}";
-    for (size_t i = 0; i < _cfg->nClSdrs; i++) {
-        auto dev = radios[i]->dev;
-        dev->writeSetting("CORR_CONFIG", corrConfStr);
-        const auto timeStamp = SoapySDR::timeNsToTicks(dev->getHardwareTime(""), _cfg->rate);
-        std::cout << "device " << i << ": Frame=" << (timeStamp >> 32)
-                  << ", Symbol=" << ((timeStamp && 0xFFFFFFFF) >> 16) << std::endl;
-        dev->writeSetting("TDD_CONFIG", tddConfStr);
-        dev->writeSetting("TDD_MODE", "false");
-        reset_DATA_clk_domain(dev);
-    }
-}
-
-Radio* ClientRadioSet::getRadio(int i)
-{
-    return (radios[i]);
-}
-
-void ClientRadioSet::initAGC(SoapySDR::Device* dev)
-{
-    /*
-     * Initialize AGC parameters
-     */
-#ifdef JSON
-    json agcConf;
-    agcConf["agc_enabled"] = _cfg->clAgcEn;
-    agcConf["agc_gain_init"] = _cfg->clAgcGainInit;
-    std::string agcConfStr = agcConf.dump();
-#else
-    std::string agcConfStr = "{\"agc_enabled\":" + _cfg->clAgcEn ? "true" : "false";
-    agcConfStr += ",\"agc_gain_init\":" + std::to_string(_cfg->clAgcGainInit);
-    agcConfStr += "}";
-#endif
-    dev->writeSetting("AGC_CONFIG", agcConfStr);
-}
 
 BaseRadioSet::BaseRadioSet(Config* cfg)
     : _cfg(cfg)
@@ -263,6 +60,22 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         while (threadCount > 0)
             ;
 
+        // Strip out broken radios.
+        for (int i = 0; i < radioNum; i++) {
+            if (bsRadios[c][i] == NULL) {
+                while (radioNum != 0 && bsRadios[c][radioNum - 1] == NULL) {
+                    --radioNum;
+                    bsRadios[c].pop_back();
+                }
+                if (i < radioNum) {
+                    bsRadios[c][i] = bsRadios[c][--radioNum];
+                    bsRadios[c].pop_back();
+                }
+            }
+        }
+        bsRadios[c].shrink_to_fit();
+        _cfg->nBsSdrs[c] = radioNum;
+
         // Perform DC Offset & IQ Imbalance Calibration
         if (_cfg->imbalanceCalEn) {
             if (_cfg->bsChannel.find('A') != std::string::npos)
@@ -279,9 +92,9 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
             context->tid = i;
             context->cell = c;
 #ifdef THREADED_INIT
-            pthread_t init_thread_;
-            if (pthread_create(&init_thread_, NULL, BaseRadioSet::configure_launch, context) != 0) {
-                perror("init thread create failed");
+            pthread_t configure_thread_;
+            if (pthread_create(&configure_thread_, NULL, BaseRadioSet::configure_launch, context) != 0) {
+                perror("configure thread create failed");
                 exit(0);
             }
 #else
@@ -410,19 +223,18 @@ void BaseRadioSet::init(BaseRadioContext* context)
     std::atomic_int* threadCount = context->threadCount;
     delete context;
 
-    std::vector<size_t> channels;
-    if (_cfg->bsChannel == "A")
-        channels = { 0 };
-    else if (_cfg->bsChannel == "B")
-        channels = { 1 };
-    else
-        channels = { 0, 1 };
-
+    auto channels = Utils::strToChannels(_cfg->bsChannel);
     SoapySDR::Kwargs args;
     args["driver"] = "iris";
     args["timeout"] = "1000000";
     args["serial"] = _cfg->bs_sdr_ids[c][i];
-    bsRadios[c][i] = new Radio(args, SOAPY_SDR_CS16, channels, _cfg->rate);
+    try {
+        bsRadios[c][i] = new Radio(args, SOAPY_SDR_CS16, channels, _cfg->rate);
+    } catch (std::runtime_error) {
+        std::cerr << "Ignoring iris " << _cfg->bs_sdr_ids[c][i] << std::endl;
+        bsRadios[c][i] = NULL;
+    }
+
     (*threadCount)--;
 }
 
@@ -442,35 +254,45 @@ void BaseRadioSet::configure(BaseRadioContext* context)
     delete context;
 
     //load channels
-    std::vector<size_t> channels;
-    if (_cfg->bsChannel == "A")
-        channels = { 0 };
-    else if (_cfg->bsChannel == "B")
-        channels = { 1 };
-    else
-        channels = { 0, 1 };
-
+    auto channels = Utils::strToChannels(_cfg->bsChannel);
     Radio* bsRadio = bsRadios[c][i];
     SoapySDR::Device* dev = bsRadio->dev;
     SoapySDR::Kwargs info = dev->getHardwareInfo();
     for (auto ch : channels) {
         double rxgain = _cfg->rxgain[ch];
         double txgain = _cfg->txgain[ch];
-        dev_init(dev, _cfg, ch, rxgain, txgain, info["frontend"]);
+        bsRadios[c][i]->dev_init(_cfg, ch, rxgain, txgain, info["frontend"]);
     }
 
     (*threadCount)--;
 }
 
-SoapySDR::Device* BaseRadioSet::baseRadio(int cellId)
+SoapySDR::Device* BaseRadioSet::baseRadio(size_t cellId)
 {
-    return (hubs.empty() ? bsRadios[cellId][0]->dev : hubs[cellId]);
+    if (cellId < hubs.size())
+        return (hubs[cellId]);
+    if (cellId < bsRadios.size() && bsRadios[cellId].size() > 0)
+        return bsRadios[cellId][0]->dev;
+    return NULL;
+}
+
+void BaseRadioSet::sync_delays(int cellIdx)
+{
+    /*
+     * Compute Sync Delays
+     */
+    SoapySDR::Device* base = baseRadio(cellIdx);
+    if (base != NULL)
+        base->writeSetting("SYNC_DELAYS", "");
 }
 
 void BaseRadioSet::radioTrigger(void)
 {
-    for (size_t c = 0; c < _cfg->nCells; c++)
-        baseRadio(c)->writeSetting("TRIGGER_GEN", "");
+    for (size_t c = 0; c < _cfg->nCells; c++) {
+        SoapySDR::Device* base = baseRadio(c);
+        if (base != NULL)
+            base->writeSetting("TRIGGER_GEN", "");
+    }
 }
 
 void BaseRadioSet::radioStart()
@@ -501,7 +323,7 @@ void BaseRadioSet::radioStop(void)
         SoapySDR::Device* dev = bsRadios[0][i]->dev;
         dev->writeSetting("TDD_CONFIG", tddConfStr);
         dev->writeSetting("TDD_MODE", "false");
-        reset_DATA_clk_domain(dev);
+        bsRadios[0][i]->reset_DATA_clk_domain();
     }
 }
 
@@ -552,100 +374,4 @@ int BaseRadioSet::radioRx(size_t radio_id, void* const* buffs, long long& frameT
     }
     std::cout << "invalid radio id " << radio_id << std::endl;
     return 0;
-}
-
-void Radio::drain_buffers(std::vector<void*> buffs, int symSamp)
-{
-    /*
-     *  "Drain" rx buffers during initialization
-     *  Input:
-     *      buffs   - Vector to which we will write received IQ samples
-     *      symSamp - Number of samples
-     *
-     *  Output:
-     *      None
-     */
-    long long frameTime = 0;
-    int flags = 0, r = 0, i = 0;
-    while (r != -1) {
-        r = dev->readStream(rxs, buffs.data(), symSamp, flags, frameTime, 0);
-        i++;
-    }
-    //std::cout << "Number of reads needed to drain: " << i << std::endl;
-}
-
-void BaseRadioSet::sync_delays(int cellIdx)
-{
-    /*
-     * Compute Sync Delays
-     */
-    baseRadio(cellIdx)->writeSetting("SYNC_DELAYS", "");
-}
-
-Radio::Radio(const SoapySDR::Kwargs& args, const char soapyFmt[],
-    const std::vector<size_t>& channels, double rate)
-{
-    dev = SoapySDR::Device::make(args);
-    for (auto ch : channels) {
-        dev->setSampleRate(SOAPY_SDR_RX, ch, rate);
-        dev->setSampleRate(SOAPY_SDR_TX, ch, rate);
-    }
-    rxs = dev->setupStream(SOAPY_SDR_RX, soapyFmt, channels);
-    txs = dev->setupStream(SOAPY_SDR_TX, soapyFmt, channels);
-    reset_DATA_clk_domain(dev);
-}
-
-Radio::~Radio(void)
-{
-    deactivateRecv();
-    deactivateXmit();
-    dev->closeStream(rxs);
-    dev->closeStream(txs);
-    SoapySDR::Device::unmake(dev);
-}
-
-int Radio::recv(void* const* buffs, int samples, long long& frameTime)
-{
-    int flags(0);
-    return dev->readStream(rxs, buffs, samples, flags, frameTime, 1000000);
-}
-
-int Radio::activateRecv(const long long rxTime, const size_t numSamps)
-{
-    return dev->activateStream(rxs, 0, rxTime, numSamps);
-}
-
-void Radio::deactivateRecv(void)
-{
-    dev->deactivateStream(rxs);
-}
-
-int Radio::xmit(const void* const* buffs, int samples, int flags, long long& frameTime)
-{
-    int soapyFlags[] = {
-        0,
-        SOAPY_SDR_HAS_TIME,
-        SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST,
-        SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST
-    };
-    int flag_args = soapyFlags[flags];
-    int r = dev->writeStream(txs, buffs, samples, flag_args, frameTime, 1000000);
-    if (r != samples)
-        std::cerr << "unexpected writeStream error " << SoapySDR::errToStr(r) << std::endl;
-    return (r);
-}
-
-void Radio::activateXmit(void)
-{
-    dev->activateStream(txs);
-}
-
-void Radio::deactivateXmit(void)
-{
-    dev->deactivateStream(txs);
-}
-
-int Radio::getTriggers(void) const
-{
-    return std::stoi(dev->readSetting("TRIGGER_COUNT"));
 }

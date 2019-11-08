@@ -6,43 +6,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <string>
 
-class Radio {
-private:
-    SoapySDR::Device* dev;
-    SoapySDR::Stream* rxs;
-    SoapySDR::Stream* txs;
-    friend class ClientRadioSet;
-    friend class BaseRadioSet;
-
-public:
-    Radio(const SoapySDR::Kwargs& args, const char soapyFmt[], const std::vector<size_t>& channels, double rate);
-    ~Radio(void);
-    int recv(void* const* buffs, int samples, long long& frameTime);
-    int activateRecv(const long long rxTime = 0, const size_t numSamps = 0);
-    void deactivateRecv(void);
-    int xmit(const void* const* buffs, int samples, int flags, long long& frameTime);
-    void activateXmit(void);
-    void deactivateXmit(void);
-    int getTriggers(void) const;
-    void drain_buffers(std::vector<void*> buffs, int symSamp);
-};
-
-class ClientRadioSet {
-public:
-    ClientRadioSet(Config* cfg);
-    ~ClientRadioSet(void);
-    Radio* getRadio(int i);
-    void radioStop(void);
-
-private:
-    void initAGC(SoapySDR::Device* iclSdrs);
-    Config* _cfg;
-    std::vector<Radio*> radios;
-};
+class Radio;
 
 class BaseRadioSet {
 public:
@@ -71,7 +39,7 @@ private:
 
     void radioTrigger(void);
     void sync_delays(int cellIdx);
-    SoapySDR::Device* baseRadio(int cellId);
+    SoapySDR::Device* baseRadio(size_t cellId);
     void collectCSI(bool&);
     static void dciqMinimize(SoapySDR::Device*, SoapySDR::Device*, int, size_t, double, double);
     static void setIQBalance(SoapySDR::Device*, int, size_t, int, int);

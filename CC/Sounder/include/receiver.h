@@ -55,6 +55,8 @@ struct SampleBuffer {
 //std::mutex d_mutex;
 //std::condition_variable cond;
 
+class ClientRadioSet;
+
 class Receiver {
 public:
     // use for create pthread
