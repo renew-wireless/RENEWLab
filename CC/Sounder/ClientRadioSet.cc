@@ -98,7 +98,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         int val = 0;
         for (char const& c : _cfg->bsChannel) {
             std::string tx_ram = "TX_RAM_";
-            dev->writeRegisters(tx_ram + c, val, _cfg->beacon);
+            dev->writeRegisters(tx_ram + c, val, _cfg->pilot);
             val += 2048;
         }
         radios[i]->activateRecv();
