@@ -30,7 +30,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         {
             double rxgain = _cfg->clRxgain_vec[ch][i]; // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
             double txgain = _cfg->clTxgain_vec[ch][i]; // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
-            radios.back()->dev_init(_cfg, ch, rxgain, txgain, info["frontend"]);
+            radios.back()->dev_init(_cfg, ch, rxgain, txgain);
         }
 
         initAGC(dev);

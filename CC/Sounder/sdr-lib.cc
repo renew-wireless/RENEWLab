@@ -261,7 +261,7 @@ void BaseRadioSet::configure(BaseRadioContext* context)
     for (auto ch : channels) {
         double rxgain = _cfg->rxgain[ch];
         double txgain = _cfg->txgain[ch];
-        bsRadios[c][i]->dev_init(_cfg, ch, rxgain, txgain, info["frontend"]);
+        bsRadios[c][i]->dev_init(_cfg, ch, rxgain, txgain);
     }
 
     (*threadCount)--;

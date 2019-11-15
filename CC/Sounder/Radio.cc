@@ -3,8 +3,7 @@
 #include <SoapySDR/Errors.hpp>
 #include <iostream>
 
-void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain,
-    const std::string& feType)
+void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
 {
     // these params are sufficient to set before DC offset and IQ imbalance calibration
     dev->setAntenna(SOAPY_SDR_RX, ch, "TRX");

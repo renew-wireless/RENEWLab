@@ -7,8 +7,7 @@ private:
     SoapySDR::Stream* rxs;
     SoapySDR::Stream* txs;
     void reset_DATA_clk_domain(void);
-    void dev_init(Config* _cfg, int ch, double rxgain, double txgain,
-        const std::string& feType);
+    void dev_init(Config* _cfg, int ch, double rxgain, double txgain);
     friend class ClientRadioSet;
     friend class BaseRadioSet;
 
