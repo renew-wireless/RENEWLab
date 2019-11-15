@@ -15,12 +15,6 @@ import matplotlib.pyplot as plt
 from matplotlib import animation
 from type_conv import *
 
-# TDD Register Set
-RF_RST_REG = 48
-TDD_CONF_REG = 120
-SCH_ADDR_REG = 136
-SCH_MODE_REG = 140
-
 running = True
 
 def signal_handler(signum, frame):
@@ -56,13 +50,8 @@ def calibrate_array(hub_serial, serials, ref_serial, rate, freq, txgain, rxgain,
             sdr.setGain(SOAPY_SDR_RX, ch, 'PGA', 0) #[-12,19]
             sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
             sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
-        #for ch in channel:
-        #    sdr.writeSetting(SOAPY_SDR_RX, ch, "CALIBRATE", '')
-        #    sdr.writeSetting(SOAPY_SDR_TX, ch, "CALIBRATE", '')
 
-        sdr.writeRegister("IRIS30", RF_RST_REG, (1<<29) | 0x1)
-        sdr.writeRegister("IRIS30", RF_RST_REG, (1<<29))
-        sdr.writeRegister("IRIS30", RF_RST_REG, 0)
+        sdr.writeSetting("RESET_DATA_LOGIC", "")
 
     if hub_serial != "":
         hub.writeSetting("SYNC_DELAYS", "")
@@ -87,8 +76,8 @@ def calibrate_array(hub_serial, serials, ref_serial, rate, freq, txgain, rxgain,
     #calibAmp = np.empty(num_bs_ant).astype(np.float)  
 
     # CS16 makes sure the 4-bit lsb are samples are being sent
-    rxStreamB = [sdr.setupStream(SOAPY_SDR_RX, SOAPY_SDR_CS16, [0, 1],  dict(WIRE=SOAPY_SDR_CS16)) for sdr in bsdr]
-    rxStreamM = ref_sdr.setupStream(SOAPY_SDR_RX, SOAPY_SDR_CS16, [0, 1],  dict(WIRE=SOAPY_SDR_CS16))  
+    bs_rx_stream = [sdr.setupStream(SOAPY_SDR_RX, SOAPY_SDR_CS16, [0, 1],  dict(WIRE=SOAPY_SDR_CS16)) for sdr in bsdr]
+    ref_rx_stream = ref_sdr.setupStream(SOAPY_SDR_RX, SOAPY_SDR_CS16, [0, 1],  dict(WIRE=SOAPY_SDR_CS16))  
 
     Ts = 1/rate
     s_freq = 1e5
@@ -105,12 +94,20 @@ def calibrate_array(hub_serial, serials, ref_serial, rate, freq, txgain, rxgain,
     for i,sdr in enumerate(bsdr):
         bsched = "RG"+''.join("G"*i)+"P"+''.join("G"*(frameLen-i-3))
         print("node %d schedule: %s" % (i,bsched))
-        bconf = {"tdd_enabled": True, "frame_mode": "triggered", "symbol_size" : symSamp, "frames": [bsched], "max_frame": 0}
+        bconf = {"tdd_enabled": True, 
+                 "frame_mode": "triggered", 
+                 "symbol_size" : symSamp, 
+                 "frames": [bsched], 
+                 "max_frame": 0}
         sdr.writeSetting("TDD_CONFIG", json.dumps(bconf))
 
     msched = "PG"+''.join("R"*len(bsdr))+"G"
     print("ref node schedule: %s" % (msched))
-    mconf = {"tdd_enabled": True, "frame_mode": "triggered", "symbol_size" : symSamp, "frames": [msched], "max_frame": 0}
+    mconf = {"tdd_enabled": True, 
+             "frame_mode": "triggered", 
+             "symbol_size" : symSamp, 
+             "frames": [msched], 
+             "max_frame": 0}
     ref_sdr.writeSetting("TDD_CONFIG", json.dumps(mconf))
 
     for sdr in sdrs:
@@ -125,8 +122,8 @@ def calibrate_array(hub_serial, serials, ref_serial, rate, freq, txgain, rxgain,
         sdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(pilot2, order='QI').tolist())
 
     flags = 0
-    [sdr.activateStream(rxStreamB[i], flags, 0) for i,sdr in enumerate(bsdr)]
-    ref_sdr.activateStream(rxStreamM, flags, 0)
+    [sdr.activateStream(bs_rx_stream[i], flags, 0) for i,sdr in enumerate(bsdr)]
+    ref_sdr.activateStream(ref_rx_stream, flags, 0)
 
     fig, axes= plt.subplots(nrows=len(serials), ncols=2)# figsize=(16,16))
     axes[0,0].set_title('Downlink')
@@ -177,9 +174,9 @@ def calibrate_array(hub_serial, serials, ref_serial, rate, freq, txgain, rxgain,
             bsdr[0].writeSetting("TRIGGER_GEN", "")
 
         for i,sdr in enumerate(bsdr):
-            sdr.readStream(rxStreamB[i], [UpA[i], UpB[i]], symSamp)
+            sdr.readStream(bs_rx_stream[i], [UpA[i], UpB[i]], symSamp)
         for i in range(len(bsdr)):
-            ref_sdr.readStream(rxStreamM, [DnA[i], DnB[i]], symSamp)
+            ref_sdr.readStream(ref_rx_stream, [DnA[i], DnB[i]], symSamp)
         for i in range(num_bs_ant):
             H1[i] = uint32tocfloat(DnA[i][interval] if not second_channel else DnB[i][interval])
             H2[i] = uint32tocfloat(UpA[i][interval] if not second_channel else UpB[i][interval])
@@ -207,18 +204,15 @@ def calibrate_array(hub_serial, serials, ref_serial, rate, freq, txgain, rxgain,
 
     #plt.show()
 
+    tdd_conf = {"tdd_enabled" : False}
     for sdr in sdrs:
-        sdr.writeRegister("IRIS30", RF_RST_REG, (1<<29)| 0x1)
-        sdr.writeRegister("IRIS30", RF_RST_REG, (1<<29))
-        sdr.writeRegister("IRIS30", RF_RST_REG, 0)
-        for i in range(frameLen):
-            sdr.writeRegister("RFCORE", SCH_ADDR_REG, i) # subframe 0
-            sdr.writeRegister("RFCORE", SCH_MODE_REG, 0) # 01 replay
-        sdr.writeRegister("RFCORE", TDD_CONF_REG, 0)
+        sdr.writeSetting("RESET_DATA_LOGIC", "")
+        sdr.writeSetting("TDD_CONFIG", json.dumps(tdd_conf))
+        sdr.writeSetting("TDD_MODE", "false")
 
-    ref_sdr.closeStream(rxStreamM)
+    ref_sdr.closeStream(ref_rx_stream)
     for i,sdr in enumerate(bsdr):
-        sdr.closeStream(rxStreamB[i])
+        sdr.closeStream(bs_rx_stream[i])
     ref_sdr = None
     bsdr = None
 
@@ -231,7 +225,7 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=1e6)
     parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=20.0)
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Tx gain (dB)", default=20.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=2.5e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-pad", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)
     parser.add_option("--postfix-pad", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)

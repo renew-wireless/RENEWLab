@@ -113,9 +113,7 @@ def init(hub, bnodes, ref_ant, ampl, rate,
         #        sdr.writeSetting(SOAPY_SDR_RX, ch, "CALIBRATE", 'SKLK')
         #        sdr.writeSetting(SOAPY_SDR_TX, ch, "CALIBRATE", '')
 
-        sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 0x1)
-        sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29))
-        sdr.writeRegister("IRIS30", RF_RST_REG, 0)
+        sdr.writeSetting("RESET_DATA_LOGIC", "")
         if not both_channels:
             sdr.writeSetting(SOAPY_SDR_RX, 1, 'ENABLE_CHANNEL', 'false')
             sdr.writeSetting(SOAPY_SDR_TX, 1, 'ENABLE_CHANNEL', 'false')
@@ -232,7 +230,7 @@ def init(hub, bnodes, ref_ant, ampl, rate,
                     best_peak, _, _ = find_lts(rx_samps[m][p], thresh=LTS_THRESH, flip=True)
                     offset = 0 if not best_peak else best_peak - len(lts_sym) + cp_len
                     if offset < 150:
-                        print("bad take, skip")
+                        print("bad data, skip")
                         bad_round = True
                         #break
                     rx_m_p = rx_samps[m][p]
@@ -326,11 +324,10 @@ def main():
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
     parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=30.0)
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB)", default=20.0)
-    parser.add_option("--bw", type="float", dest="bw", help="Optional Tx filter bw (Hz)", default=10e6)
     parser.add_option("--cp", action="store_true", dest="cyc_prefix", help="adds cyclic prefix to tx symbols", default=True)
     parser.add_option("--num-samps", type="int", dest="num_samps", help="Number of samples in Symbol", default=400)
-    parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)
-    parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)
+    parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=100)
+    parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=100)
     parser.add_option("--take-duration", type="float", dest="take_duration", help="measurement single take duration", default=5.0)
     parser.add_option("--both-channels", action="store_true", dest="both_channels", help="transmit from both channels",default=False)
     parser.add_option("--plot-samps", action="store_true", dest="plotter", help="plots all rx signals",default=False)
