@@ -383,9 +383,7 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
         agc_init(sdrRx, rssi_target_idx, agc_en)
 
         # Reset
-        sdrRx.writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 0x1)
-        sdrRx.writeRegister("IRIS30", RF_RST_REG, (1 << 29))
-        sdrRx.writeRegister("IRIS30", RF_RST_REG, 0)
+        sdrRx.writeSetting("RESET_DATA_LOGIC", "")
 
         if ant == 'A':
             txChannel = [0]

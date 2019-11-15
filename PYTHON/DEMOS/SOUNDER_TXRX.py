@@ -50,10 +50,6 @@
   Example:
     python3 SOUNDER_TXRX.py --serial1="RF3C000042" --serial2="RF3C000025"
 
-
-  Author(s): Rahman Doost-Mohamamdy: doost@rice.edu
-             Oscar Bejarano: obejarano@rice.edu
-
 ---------------------------------------------------------------------
  Copyright (c) 2018-2019, Rice University
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
@@ -182,7 +178,7 @@ def rx_thread(sdr, rxStream, numSamps, txSymNum, both_channels):
 
 
 def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms, txSymNum, threshold, tx_advance,
-                 prefix_length, postfix_length, both_channels, wait_trigger, calibrate, record, use_trig, auto_tx_gain, agc_en):
+                 prefix_length, postfix_length, both_channels, wait_trigger, calibrate, record, use_trig, tx_power_loop, agc_en):
     global bsdr, msdr, txStreamM, rxStreamB
 
     print("setting %s as eNB and %s as UE" % (serial1, serial2))
@@ -205,12 +201,12 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
             sdr.setFrequency(SOAPY_SDR_TX, ch, 'BB', .75*rate)
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'BB', .75*rate)
             if "CBRS" in info["frontend"]:
-                sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', -6)  # {-18,-12,-6,0}
+                sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', -6)  # {-18,-12,-6}
             sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)   # [0,52]
             sdr.setGain(SOAPY_SDR_TX, ch, "IAMP", 0)
 
             if "CBRS" in info["frontend"]:
-                sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', -6)   # {-18,-12,-6,0}
+                sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', 0)   # {-18,-12,-6,0}
                 sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 17)  # LO: [0|17], HI:[0|14]
 
             # LMS gains
@@ -302,14 +298,15 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
              "frame_mode": "free_running",
              "symbol_size": symSamp,
              "frames": [bsched],
-             "beacon_offset" : prefix_length,
-             "max_frames" : 0}
+             "beacon_start" : prefix_length,
+             "beacon_stop" : prefix_length+len(beacon),
+             "max_frame" : 0}
     mconf = {"tdd_enabled": True,
              "frame_mode": "free_running" if use_trig else "triggered" if wait_trigger else "continuous_resync",
              "dual_pilot": both_channels,
              "symbol_size" : symSamp,
              "frames": [msched],
-             "max_frames" : 0}
+             "max_frame" : 0}
 
     bsdr.writeSetting("TDD_CONFIG", json.dumps(bconf))
     msdr.writeSetting("TDD_CONFIG", json.dumps(mconf))
@@ -331,14 +328,14 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
 
         # DEV: ueTrigTime = 153 (prefix_length=0), CBRS: ueTrigTime = 235 (prefix_length=82), tx_advance=prefix_length,
         # corr delay is 17 cycles
-        ueTrigTime = prefix_length + len(beacon) + postfix_length + 17 + tx_advance + 150
+        ueTrigTime = len(beacon) + 200 # prefix_length + len(beacon) + postfix_length + 17 + tx_advance + 150
         sf_start = ueTrigTime // symSamp
         sp_start = ueTrigTime % symSamp
         print("UE starting symbol and sample count (%d, %d)" % (sf_start, sp_start))
         # make sure to set this after TDD mode is enabled "writeSetting("TDD_CONFIG", ..."
         msdr.setHardwareTime(SoapySDR.ticksToTimeNs((sf_start << 16) | sp_start, rate), "TRIGGER")
 
-    if auto_tx_gain:
+    if tx_power_loop:
         tcp_conf = {"tpc_enabled" : True,
                     "max_gain" : int(tx_gain),
                     "min_gain" : max(0, max_gain-12)}
@@ -405,10 +402,10 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=40.0)
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) - only used if agc disabled", default=21.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=2.5e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
-    parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)     # to compensate for front-end group delay
-    parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)  # to compensate for rf path delay
+    parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=100)     # to compensate for front-end group delay
+    parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=100)  # to compensate for rf path delay
     parser.add_option("--numSyms", type="int", dest="numSyms", help="Number of symbols in one sub-frame", default=20)
     parser.add_option("--txSymNum", type="int", dest="txSymNum", help="Number of tx sub-frames in one frame", default=0)
     parser.add_option("--corr-threshold", type="int", dest="threshold", help="Correlator Threshold Value", default=1)
@@ -417,7 +414,7 @@ def main():
     parser.add_option("--calibrate", action="store_true", dest="calibrate", help="transmit from both channels", default=False)
     parser.add_option("--use-trig", action="store_true", dest="use_trig", help="uses chain triggers for synchronization", default=False)
     parser.add_option("--wait-trigger", action="store_true", dest="wait_trigger", help="wait for a trigger to start a frame", default=False)
-    parser.add_option("--auto-tx-gain", action="store_true", dest="auto_tx_gain", help="automatically go over tx gains", default=False)
+    parser.add_option("--tx-power-loop", action="store_true", dest="tx_power_loop", help="loop over a set of tx gains in consecutive frames", default=False)
     parser.add_option("--record", action="store_true", dest="record", help="record received pilots and data", default=False)
     parser.add_option("--agc-enable", action="store_true", dest="agc_en", help="Enable AGC flag", default=False)
     (options, args) = parser.parse_args()
@@ -440,7 +437,7 @@ def main():
         wait_trigger=options.wait_trigger,
         calibrate=options.calibrate,
         record=options.record,
-        auto_tx_gain=options.auto_tx_gain,
+        tx_power_loop=options.tx_power_loop,
         use_trig=options.use_trig,
         agc_en=options.agc_en,
     )

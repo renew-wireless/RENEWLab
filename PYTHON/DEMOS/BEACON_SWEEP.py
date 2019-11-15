@@ -22,7 +22,7 @@ from generate_sequence import *
 sdrs = None
 hub_dev = None
 
-def beamsweeper(hub, serials, rate, freq, txgain, rxgain, bw, numSamps, numSyms, prefix_length, postfix_length, calibrate, both_channels):
+def beamsweeper(hub, serials, rate, freq, txgain, rxgain, numSamps, numSyms, prefix_length, postfix_length, calibrate, both_channels):
     global sdrs, hub_dev 
     if hub != "": hub_dev = SoapySDR.Device(dict(serial=hub))
     print("setting %s as eNB" % (serials))
@@ -97,17 +97,22 @@ def beamsweeper(hub, serials, rate, freq, txgain, rxgain, bw, numSamps, numSyms,
 
     bsched = "BG"#+''.join("G"*(numSyms-1)) 
     print("Schedule %s " % bsched) 
-    bconf = {"tdd_enabled": True, "frame_mode": "free_running", "symbol_size" : symSamp, "frames": [bsched], "beacon_offset" : 0}
+    bconf = {"tdd_enabled": True,
+             "frame_mode":
+             "free_running",
+             "symbol_size" : symSamp,
+             "frames": [bsched],
+             "beacon_start" : prefix_length,
+             "beacon_stop" : prefix_length+len(beacon)}
     for i, sdr in enumerate(sdrs):
         sdr.writeSetting("TDD_CONFIG", json.dumps(bconf))
         sdr.writeSetting("TX_SW_DELAY", str(30))
         sdr.writeSetting("TDD_MODE", "true")
 
     for i, sdr in enumerate(sdrs):
-        replay_addr = 0
-        sdr.writeRegisters("BEACON_RAM", replay_addr, cfloat2uint32(beacon, order='QI').tolist())
-        sdr.writeRegisters("BEACON_RAM_WGT_A", replay_addr, beacon_weights[i*nChannels].tolist())
-        sdr.writeRegisters("BEACON_RAM_WGT_B", replay_addr, beacon_weights[2*i+1].tolist() if both_channels else bzeros.tolist())
+        sdr.writeRegisters("BEACON_RAM", 0, cfloat2uint32(beacon, order='QI').tolist())
+        sdr.writeRegisters("BEACON_RAM_WGT_A", 0, beacon_weights[i*nChannels].tolist())
+        sdr.writeRegisters("BEACON_RAM_WGT_B", 0, beacon_weights[2*i+1].tolist() if both_channels else bzeros.tolist())
         sdr.writeSetting("BEACON_START", str(numAnt))
 
     signal.signal(signal.SIGINT, partial(signal_handler, rate, numSyms))
@@ -138,8 +143,7 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=40.0)
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB)", default=20.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=2.5e9)
-    parser.add_option("--bw", type="float", dest="bw", help="Optional Analog Filter Bandwidth (Hz)", default=30e6)
+    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)
     parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)
@@ -154,7 +158,6 @@ def main():
         freq=options.freq,
         txgain=options.txgain,
         rxgain=options.rxgain,
-        bw=options.bw,
         numSamps=options.numSamps,
         numSyms=options.numSyms,
         prefix_length=options.prefix_length,

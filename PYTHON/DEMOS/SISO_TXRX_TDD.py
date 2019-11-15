@@ -78,8 +78,8 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
         info = sdr.getHardwareInfo()
         print("%s settings on device %d" % (info["frontend"], i))
         for ch in [0]:
-            sdr.setBandwidth(SOAPY_SDR_TX, ch, 3*rate)
-            sdr.setBandwidth(SOAPY_SDR_RX, ch, 3*rate)
+            sdr.setBandwidth(SOAPY_SDR_TX, ch, 2.5*rate)
+            sdr.setBandwidth(SOAPY_SDR_RX, ch, 2.5*rate)
             sdr.setSampleRate(SOAPY_SDR_TX, ch, rate)
             sdr.setSampleRate(SOAPY_SDR_RX, ch, rate)
             #sdr.setFrequency(SOAPY_SDR_TX, ch, freq)
@@ -139,8 +139,17 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
     print("Node 1 schedule %s " % bsched)
     print("Node 2 schedule %s " % msched)
     # Send one frame (set mamx_frame to 1)
-    bconf = {"tdd_enabled": True, "frame_mode": "free_running", "symbol_size": symSamp, "frames": [bsched], "max_frame": 1}
-    mconf = {"tdd_enabled": True, "frame_mode": "free_running", "dual_pilot": False, "symbol_size": symSamp, "frames": [msched], "max_frame": 1}
+    bconf = {"tdd_enabled": True,
+             "frame_mode": "free_running",
+             "symbol_size": symSamp,
+             "frames": [bsched],
+             "max_frame": 1}
+    mconf = {"tdd_enabled": True,
+             "frame_mode": "free_running",
+             "dual_pilot": False,
+             "symbol_size": symSamp,
+             "frames": [msched],
+             "max_frame": 1}
     bsdr.writeSetting("TDD_CONFIG", json.dumps(bconf))
     msdr.writeSetting("TDD_CONFIG", json.dumps(mconf))
 
@@ -151,10 +160,9 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
     msdr.writeSetting("TDD_MODE", "true")
     bsdr.writeSetting("TDD_MODE", "true")
 
-    replay_addr = 0
     for sdr in [bsdr, msdr]:
-        sdr.writeRegisters("TX_RAM_A", replay_addr, cfloat2uint32(pilot1, order='QI').tolist())
-        sdr.writeRegisters("TX_RAM_B", replay_addr, cfloat2uint32(pilot2, order='QI').tolist())
+        sdr.writeRegisters("TX_RAM_A", 0, cfloat2uint32(pilot1, order='QI').tolist())
+        sdr.writeRegisters("TX_RAM_B", 0, cfloat2uint32(pilot2, order='QI').tolist())
 
     flags = 0
     r1 = bsdr.activateStream(rxStreamB, flags, 0)
@@ -171,24 +179,12 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
     r2 = bsdr.readStream(rxStreamB, [waveRxA2, waveRxB2], symSamp)
     print("reading stream #2 ({})".format(r2))
  
-    print("printing number of frames")
-    print("UE {}".format(SoapySDR.timeNsToTicks(msdr.getHardwareTime(""), rate)))
-    print("NB {}".format(SoapySDR.timeNsToTicks(bsdr.getHardwareTime(""), rate)))
-
     # ADC_rst, stops the tdd time counters, makes sure next time runs in a clean slate
-    bsdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 0x1)
-    bsdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29))
-    bsdr.writeRegister("IRIS30", RF_RST_REG, 0)
-    msdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 0x1)
-    msdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29))
-    msdr.writeRegister("IRIS30", RF_RST_REG, 0)
-    for i in range(4):
-        msdr.writeRegister("RFCORE", SCH_ADDR_REG, i)  # subframe 0
-        msdr.writeRegister("RFCORE", SCH_MODE_REG, 0)  # 01 replay
-        bsdr.writeRegister("RFCORE", SCH_ADDR_REG, i)  # subframe 0
-        bsdr.writeRegister("RFCORE", SCH_MODE_REG, 0)  # 01 replay
-    bsdr.writeRegister("RFCORE", TDD_CONF_REG, 0)
-    msdr.writeRegister("RFCORE", TDD_CONF_REG, 0)
+    tdd_conf = {"tdd_enabled" : False}
+    for sdr in [bsdr, msdr]:
+        sdr.writeSetting("RESET_DATA_LOGIC", "")
+        sdr.writeSetting("TDD_CONFIG", json.dumps(tdd_conf))
+        sdr.writeSetting("TDD_MODE", "false")
 
     msdr.deactivateStream(rxStreamM)
     bsdr.deactivateStream(rxStreamB)

@@ -30,10 +30,6 @@ from type_conv import cfloat2uint32
 
 plt.style.use('ggplot')  # customize your plots style
 
-RF_RST_REG = 48
-CORR_CONF = 60
-CORR_RST = 64
-CORR_THRESHOLD = 92
 TDD_CONF_REG = 120
 SCH_ADDR_REG = 136
 SCH_MODE_REG = 140
@@ -97,14 +93,7 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plo
             readPGA = sdr.getGain(SOAPY_SDR_RX, 0, 'PGA')
             print("INITIAL GAIN - LNA: {}, \t TIA:{}, \t PGA:{}".format(readLNA, readTIA, readPGA))
 
-        #for ch in [0, 1]:
-        #    if calibrate:
-        #        sdr.writeSetting(SOAPY_SDR_RX, ch, "CALIBRATE", 'SKLK')
-        #        sdr.writeSetting(SOAPY_SDR_TX, ch, "CALIBRATE", '')
-
-        sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29) | 0x1)
-        sdr.writeRegister("IRIS30", RF_RST_REG, (1 << 29))
-        sdr.writeRegister("IRIS30", RF_RST_REG, 0)
+        sdr.writeSetting("RESET_DATA_LOGIC", "")
         if info["serial"].find("RF3E") < 0:
             print("SPI TDD MODE")
             #sdr.writeSetting("SPI_TDD_MODE", "SISO")
@@ -128,7 +117,7 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plo
     preambles_bs = generate_training_seq(preamble_type='gold_ifft', seq_length=128, cp=0, upsample=upsample)
     preambles = preambles_bs[:,::upsample] #the correlators can run at lower rates, so we only need the downsampled signal.
     beacon = preambles[0,:]
-    coe = cfloat2uint32(np.conj(beacon), order='IQ') # FPGA correlator takes coefficients in QI order
+    coe = cfloat2uint32(np.conj(beacon), order='QI') # FPGA correlator takes coefficients in QI order
     pad1 = np.array([0]*(prefix_length), np.complex64) # to comprensate for front-end group delay
     pad2 = np.array([0]*(postfix_length), np.complex64) # to comprensate for rf path delay
     wbz = np.array([0]*(sym_samps), np.complex64)
@@ -136,7 +125,7 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plo
     beacon1 = np.concatenate([pad1,beacon*.5,bcnz])
     beacon2 = wbz  
 
-    wb_pilot = 0.5 * pilot
+    wb_pilot = ampl * pilot
     wbz = np.array([0]*(sym_samps), np.complex64)
     wb_pilot1 = np.concatenate([pad1, wb_pilot, pad2])
 
@@ -151,7 +140,7 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plo
     # BS frame config
     ref_sdr = bsdrs.pop(ref_ant)
     for i,sdr in enumerate(bsdrs):
-        beacon_sch = "PG"
+        beacon_sch = "BG"
         ul_pilot_sch = ''.join("R"*(len(csdrs)))
         ref_pilot_sch = "GR"+''.join("G"*guardSize)
         dl_pilot_sch = ''.join("GG"*i)+"PG"+''.join("GG"*(len(bsdrs)-(i+1))) 
@@ -160,8 +149,9 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plo
         bconf = {"tdd_enabled": True, 
                 "frame_mode": "free_running", 
                 "symbol_size" : sym_samps, 
-                "dual_pilot" : True, 
-                "frames": [frame_sch], 
+                "frames": [frame_sch],
+                "beacon_start" : prefix_length,
+                "beacon_stop" : prefix_length+len(beacon),
                 "max_frame" : 1}
         sdr.writeSetting("TDD_CONFIG", json.dumps(bconf))
         sdr.writeSetting("TDD_MODE", "true")
@@ -203,15 +193,10 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plo
     if not use_trig:
         for sdr in csdrs:
             # enable the correlator, with zeros as inputs
-            sdr.writeRegister("IRIS30", CORR_CONF, int("00004001", 16))
-            for i in range(128):
-                sdr.writeRegister("ARGCOE", i*4, 0)
-            time.sleep(0.1)
-            sdr.writeRegister("IRIS30", CORR_RST, 0x1)  # reset corr
-            sdr.writeRegister("IRIS30", CORR_RST, 0x0)  # unrst corr
-            sdr.writeRegister("IRIS30", CORR_THRESHOLD, threshold)
-            for i in range(128):
-                sdr.writeRegister("ARGCOE", i*4, int(coe[i]))
+            corr_conf = {"corr_enabled" : True,
+                        "corr_threshold" : 1}
+            sdr.writeSetting("CORR_CONFIG", json.dumps(corr_conf))
+            sdr.writeRegisters("CORR_COE", 0, coe.tolist())
 
             # DEV: ueTrigTime = 153 (prefix_length=0),
             # CBRS: ueTrigTime = 235 (prefix_length=82), tx_advance=prefix_length,
@@ -238,17 +223,16 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plo
     beacon_weights = beacon_weights.astype(np.uint32)
 
     replay_addr = 0
-    pilot_uint = cfloat2uint32(wb_pilot1, order='IQ').tolist()
-    beacon_uint = cfloat2uint32(beacon1, order='IQ').tolist()
-    zero_uint = cfloat2uint32(wbz, order='IQ').tolist() 
+    pilot_uint = cfloat2uint32(wb_pilot1, order='QI').tolist()
+    beacon_uint = cfloat2uint32(beacon1, order='QI').tolist()
+    zero_uint = cfloat2uint32(wbz, order='QI').tolist() 
     for i, sdr in enumerate(bsdrs):
-        sdr.writeRegisters("TX_RAM_A", replay_addr, beacon_uint)
-        sdr.writeRegisters("TX_RAM_A", replay_addr+2048, pilot_uint)
-        sdr.writeRegisters("TX_RAM_B", replay_addr, zero_uint)
-        sdr.writeRegisters("TX_RAM_B", replay_addr+2048, zero_uint)
+        sdr.writeRegisters("TX_RAM_A", 0, pilot_uint)
+        sdr.writeRegisters("TX_RAM_B", 0, zero_uint)
 
-        #sdr.writeRegister("RFCORE", 156, int(nRadios))
-        #sdr.writeRegister("RFCORE", 160, 1) # enable beamsweeping
+        sdr.writeRegisters("BEACON_RAM", 0, beacon_uint)
+        sdr.writeRegisters("BEACON_RAM_WGT_A", 0, beacon_weights[i].tolist())
+        sdr.writeSetting("BEACON_START", str(M))
 
     for sdr in csdrs:
         sdr.writeRegisters("TX_RAM_A", replay_addr, pilot_uint)
@@ -400,14 +384,14 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plo
         # disarm correlator in the clients
         if not use_trig:    
             for i, sdr in enumerate(csdrs):
-                sdr.writeRegister("IRIS30", CORR_CONF, int("00004001", 16))
+                sdr.writeSetting("CORR_CONFIG", json.dumps({"corr_enabled": False}))
 
         bad_read = False
         bad_frame = False
         # arm correlator in the clients, inputs from adc
         if not use_trig:    
             for i, sdr in enumerate(csdrs):
-                sdr.writeRegister("IRIS30", CORR_CONF, int("00004011", 16))
+                sdr.writeSetting("CORR_START", "A")
 
         trig_dev.writeSetting("TRIGGER_GEN", "")
 
@@ -723,14 +707,15 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plo
     #    plt.show()
 
     # clear up fpga states 
+    tdd_conf = {"tdd_enabled" : False}
+    corr_conf = {"corr_enabled" : False}
+    for sdr in csdrs:
+        if not use_trig:
+            sdr.writeSetting("CORR_CONFIG", json.dumps(corr_conf))
     for sdr in bsdrs+csdrs:
-        sdr.writeRegister("IRIS30", RF_RST_REG, (1<<29)| 0x1)
-        sdr.writeRegister("IRIS30", RF_RST_REG, (1<<29))
-        sdr.writeRegister("IRIS30", RF_RST_REG, 0)
-        for i in range(frameLen):
-            sdr.writeRegister("RFCORE", SCH_ADDR_REG, i) # subframe 0
-            sdr.writeRegister("RFCORE", SCH_MODE_REG, 0) # 01 replay
-        sdr.writeRegister("RFCORE", TDD_CONF_REG, 0)
+        sdr.writeSetting("TDD_CONFIG", json.dumps(tdd_conf))
+        sdr.writeSetting("TDD_MODE", "false")
+        sdr.writeSetting("RESET_DATA_LOGIC", "")
 
     # close streams and exit
     for i, sdr in enumerate(bsdrs):
@@ -745,7 +730,7 @@ def main():
     parser.add_option("--cnodes", type="string", dest="cnodes", help="file name containing serials to be used as clients", default="client_serials.txt")
     parser.add_option("--hub", type="string", dest="hub", help="Hub node", default="")
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Calibration reference antenna", default=0)
-    parser.add_option("--ampl", type="float", dest="ampl", help="Amplitude coefficient for downCal/upCal", default=5.0)
+    parser.add_option("--ampl", type="float", dest="ampl", help="Amplitude coefficient for downCal/upCal", default=0.5)
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
     parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=40.0)
