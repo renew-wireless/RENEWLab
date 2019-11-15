@@ -88,17 +88,10 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'RF', freq-.75*rate)
             sdr.setFrequency(SOAPY_SDR_TX, ch, 'BB', .75*rate)
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'BB', .75*rate)
-            if "CBRS" in info["frontend"]:
-                sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', 0)  # {-18,-12,-6,0}
-            sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)  # [0,52]
 
-            if "CBRS" in info["frontend"]:
-                sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', 0)   # [-18,0]
-                sdr.setGain(SOAPY_SDR_RX, ch, 'LNA1', 30)  # [0,33]
-                sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 17)  # [0,17]
-            sdr.setGain(SOAPY_SDR_RX, ch, 'LNA', rxgain)   # [0,30]
-            sdr.setGain(SOAPY_SDR_RX, ch, 'TIA', 0)        # [0,12]
-            sdr.setGain(SOAPY_SDR_RX, ch, 'PGA', 0)        # [-12,19]
+            sdr.setGain(SOAPY_SDR_TX, ch, txgain)
+            sdr.setGain(SOAPY_SDR_RX, ch, rxgain)
+
             sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
             sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
 
@@ -225,8 +218,8 @@ def main():
     parser.add_option("--serial1", type="string", dest="serial1", help="serial number of the device 1", default="RF3E000134")
     parser.add_option("--serial2", type="string", dest="serial2", help="serial number of the device 2", default="RF3E000191")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=25.0)
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Tx gain (dB)", default=20.0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=25.0)  # w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Tx gain (dB)", default=20.0)  # w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-pad", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)

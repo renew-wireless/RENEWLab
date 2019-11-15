@@ -168,14 +168,11 @@ def agc_thread():
         agc_fsm.enableAGC()                 # IMPORTANT: Re-enable
 
         ch = 0
-        gainLNA = 30.0           # Arbitrary - start off with some "decent" initial fixed gain
-        gainTIA = 12.0           # Arbitrary - start off with some "decent" initial fixed gain
-        gainPGA = 19.0           # Arbitrary - start off with some "decent" initial fixed gain
-        sdr.setGain(SOAPY_SDR_RX, ch, 'LNA', gainLNA)  # [0:1:30]
-        sdr.setGain(SOAPY_SDR_RX, ch, 'TIA', gainTIA)  # [0, 9, 12]
-        sdr.setGain(SOAPY_SDR_RX, ch, 'PGA', gainPGA)  # [-12:1:19]
+        # Arbitrary - start off with some "decent" initial fixed gain
+        rxgain_init = 90
+        sdr.setGain(SOAPY_SDR_RX, ch, rxgain_init)  # w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
         time.sleep(0.1)     # Let gain settle
-        time.sleep(5)      # Wait for "demo" purposes
+        time.sleep(5)       # Wait for "demo" purposes
         print(" ********** AGC KICKS IN ********** ")
         # DO NOT CHANGE RANGE IN THIS FOR LOOP UNLESS YOU CHANGE THE NUMBER OF SAMPLES
         # USED FOR FINE/COARSE ADJUSTMENT (max 16 samples plus 3 more that should be used for fine tuning)
@@ -272,7 +269,7 @@ def animate(i):
     return line1, line2, line3, line4, line5, line6, line7, line8
 
 
-def rxsamples_app(args, srl, freq, bw, gainLNA, gainTIA, gainPGA, clockRate, out):
+def rxsamples_app(args, srl, freq, bw, rxgain, clockRate, out):
     global sdr, rxStream, timeScale, sampsRx, freqScale, rate, num_samps, fft_size, threadT, agc_fsm
     sdr = SoapySDR.Device(dict(serial=srl))
     info = sdr.getHardwareInfo()
@@ -299,13 +296,7 @@ def rxsamples_app(args, srl, freq, bw, gainLNA, gainTIA, gainPGA, clockRate, out
     sdr.setSampleRate(SOAPY_SDR_RX, ch, rate)
     sdr.setFrequency(SOAPY_SDR_RX, ch, "RF", freq)
     sdr.setFrequency(SOAPY_SDR_RX, ch, "BB", 0)  # don't use cordic
-    if "CBRS" in info["frontend"]:
-        sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', 0)  # [-18,0]
-        sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 0)  # [0,17]
-
-    sdr.setGain(SOAPY_SDR_RX, ch, 'LNA', gainLNA)  # [0:1:30]
-    sdr.setGain(SOAPY_SDR_RX, ch, 'TIA', gainTIA)  # [0, 9, 12]
-    sdr.setGain(SOAPY_SDR_RX, ch, 'PGA', gainPGA)  # [-12:1:19]
+    sdr.setGain(SOAPY_SDR_RX, ch, rxgain)        # w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
     sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
     sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
     sdr.setHardwareTime(0)
@@ -345,9 +336,7 @@ def main():
     parser.add_option("--args",      type="string", dest="args",      help="Device factory arguments",   default="")
     parser.add_option("--freq",      type="float",  dest="freq",      help="Optional Rx freq (Hz)",      default=2.60e9)
     parser.add_option("--bw",        type="float",  dest="bw",        help="Optional Tx filter bw (Hz)", default=30e6)
-    parser.add_option("--gainLNA",   type="float",  dest="gainLNA",   help="Optional Rx LNA gain (dB)",  default=30.0)
-    parser.add_option("--gainTIA",   type="float",  dest="gainTIA",   help="Optional Rx TIA gain (dB)",  default=12.0)
-    parser.add_option("--gainPGA",   type="float",  dest="gainPGA",   help="Optional Rx PGA gain (dB)",  default=19.0)
+    parser.add_option("--rxgain",    type="float",  dest="rxgain",    help="Optional Rx gain (dB)",      default=90.0)
     parser.add_option("--clockRate", type="float",  dest="clockRate", help="Optional clock rate (Hz)",   default=80e6)
     parser.add_option("--out",       type="string", dest="out",       help="Path to output image file",  default=None)
     parser.add_option("--serial",    type="string", dest="serial",    help="Serial number of the device",default="")
@@ -358,9 +347,7 @@ def main():
         srl=options.serial,
         freq=options.freq,
         bw=options.bw,
-        gainLNA=options.gainLNA,
-        gainTIA=options.gainTIA,
-        gainPGA=options.gainPGA,
+        rxgain=options.rxgain,
         clockRate=options.clockRate,
         out=options.out,
     )

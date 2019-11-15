@@ -38,9 +38,11 @@ RUNNING = True
 TOT_FRAMES = 1000 
 LTS_THRESH = 0.8
 
+
 def signal_handler(signum, frame):
     global RUNNING
     RUNNING = False
+
 
 def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plotter, numSamps, prefix_length, postfix_length, tx_advance, threshold, use_trig):
     if hub != "": hub_dev = SoapySDR.Device(dict(driver="remote", serial = hub)) # device that triggers bnodes and ref_node
@@ -69,20 +71,9 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plo
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'RF', freq-.75*rate)
             sdr.setFrequency(SOAPY_SDR_TX, ch, 'BB', .75*rate)
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'BB', .75*rate)
-            if "CBRS" in info["frontend"]:
-                sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', -6)  # {-18,-12,-6,0}
-                sdr.setGain(SOAPY_SDR_TX, ch, 'PA2', 0)    # LO: [0|17], HI:[0|14]
-            sdr.setGain(SOAPY_SDR_TX, ch, 'IAMP', 12)       # [-12,12]
-            sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)   # [0,52]
 
-            if "CBRS" in info["frontend"]:
-                sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', 0)   # {-18,-12,-6,0}
-                sdr.setGain(SOAPY_SDR_RX, ch, 'LNA1', 30)  # [0,33]
-                sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 17)  # LO: [0|17], HI:[0|14]
-
-            sdr.setGain(SOAPY_SDR_RX, ch, 'LNA', rxgain)   # [0,30]
-            sdr.setGain(SOAPY_SDR_RX, ch, 'TIA', 0)       # [0,12]
-            sdr.setGain(SOAPY_SDR_RX, ch, 'PGA', 0)       # [-12,19]
+            sdr.setGain(SOAPY_SDR_TX, ch, txgain)
+            sdr.setGain(SOAPY_SDR_RX, ch, rxgain)
 
             sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
             sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
@@ -733,8 +724,8 @@ def main():
     parser.add_option("--ampl", type="float", dest="ampl", help="Amplitude coefficient for downCal/upCal", default=0.5)
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=40.0)
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB)", default=20.0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=50.0)  # w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB)", default=50.0)  # w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
     parser.add_option("--bw", type="float", dest="bw", help="Optional Tx filter bw (Hz)", default=10e6)
     parser.add_option("--cp", action="store_true", dest="cp", help="adds cyclic prefix to tx symbols", default=True)
     parser.add_option("--plotter", action="store_true", dest="plotter", help="continuously plots all signals and stats",default=False)

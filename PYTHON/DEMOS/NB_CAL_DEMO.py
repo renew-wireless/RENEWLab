@@ -37,9 +37,11 @@ from type_conv import *
 
 running = True
 
+
 def signal_handler(signum, frame):
     global running
     running = False
+
 
 def calibrate_array(hub_serial, serials, ref_serial, rate, freq, txgain, rxgain, numSamps, prefix_pad, postfix_pad, second_channel):
     global running
@@ -50,7 +52,7 @@ def calibrate_array(hub_serial, serials, ref_serial, rate, freq, txgain, rxgain,
     sdrs = [ref_sdr] + bsdr
     #some default sample rates
     for i, sdr in enumerate(sdrs):
-        info = sdr.getHardwareInfo();
+        info = sdr.getHardwareInfo()
         print("%s settings on device %d" % (info["frontend"], i))
         channel = [1] if second_channel else [0]
         for ch in channel:
@@ -58,16 +60,10 @@ def calibrate_array(hub_serial, serials, ref_serial, rate, freq, txgain, rxgain,
             sdr.setFrequency(SOAPY_SDR_RX, ch, freq)
             sdr.setSampleRate(SOAPY_SDR_TX, ch, rate)
             sdr.setSampleRate(SOAPY_SDR_RX, ch, rate)
-            if ("CBRS" in info["frontend"]):
-                sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', -6) #[-18,0] by 3
-            sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain) #[-52,0]
 
-            if ("CBRS" in info["frontend"]):
-                sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', 0) #[-18,0]
-                sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 17) #[0,17]
-            sdr.setGain(SOAPY_SDR_RX, ch, 'LNA', rxgain) #[0,30]
-            sdr.setGain(SOAPY_SDR_RX, ch, 'TIA', 0) #[0,12]
-            sdr.setGain(SOAPY_SDR_RX, ch, 'PGA', 0) #[-12,19]
+            sdr.setGain(SOAPY_SDR_TX, ch, txgain)
+            sdr.setGain(SOAPY_SDR_RX, ch, rxgain)
+
             sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
             sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
 
@@ -243,8 +239,8 @@ def main():
     parser.add_option("--serials", type="string", dest="serials", help="serial number of all devices", default="bs_serials.txt")
     parser.add_option("--ref-serial", type="string", dest="ref_serial", help="reference serial number of the device", default="")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=1e6)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=20.0)
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Tx gain (dB)", default=20.0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]", default=30.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]", default=30.0)
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-pad", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)
@@ -273,6 +269,7 @@ def main():
         postfix_pad=options.postfix_length,
         second_channel=options.second_channel
     )
+
 
 if __name__ == '__main__':
     try:

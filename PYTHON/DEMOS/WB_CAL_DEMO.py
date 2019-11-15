@@ -45,9 +45,11 @@ NUM_BUFFER_SAMPS = 3000
 LTS_THRESH = 0.8
 RUNNING = True
 
+
 def signal_handler(signum, frame):
     global RUNNING
     RUNNING = False
+
 
 def init(hub, bnodes, ref_ant, ampl, rate,
         freq, txgain, rxgain, cyc_prefix, num_samps,
@@ -83,19 +85,9 @@ def init(hub, bnodes, ref_ant, ampl, rate,
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'RF', freq-.75*rate)
             sdr.setFrequency(SOAPY_SDR_TX, ch, 'BB', .75*rate)
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'BB', .75*rate)
-            if "CBRS" in info["frontend"]:
-                sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', -6)  # {-18,-12,-6,0}
-            sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)   # [0,52]
 
-            if "CBRS" in info["frontend"]:
-                if freq < 3e9:
-                    sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', -18)   # {-18,-12,-6,0}
-                else: sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', 0)   # {-18,-12,-6,0}
-                sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 17)  # LO: [0|17], HI:[0|14]
-
-            sdr.setGain(SOAPY_SDR_RX, ch, 'LNA', rxgain)   # [0,30]
-            sdr.setGain(SOAPY_SDR_RX, ch, 'TIA', 0)       # [0,12]
-            sdr.setGain(SOAPY_SDR_RX, ch, 'PGA', 0)       # [-12,19]
+            sdr.setGain(SOAPY_SDR_TX, ch, txgain)
+            sdr.setGain(SOAPY_SDR_RX, ch, rxgain)
 
             sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
             sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
@@ -312,6 +304,7 @@ def init(hub, bnodes, ref_ant, ampl, rate,
         sdr.closeStream(tx_streams[r])
         sdr.closeStream(rx_streams[r])
 
+
 def main():
     parser = OptionParser()
     parser.add_option("--bnodes", type="string", dest="bnodes", help="file name containing serials on the base station", default="bs_serials.txt")
@@ -320,8 +313,8 @@ def main():
     parser.add_option("--ampl", type="float", dest="ampl", help="Pilot amplitude scaling coefficient", default=0.5)
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=30.0)
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB)", default=20.0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]", default=30.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]", default=30.0)
     parser.add_option("--cp", action="store_true", dest="cyc_prefix", help="adds cyclic prefix to tx symbols", default=True)
     parser.add_option("--num-samps", type="int", dest="num_samps", help="Number of samples in Symbol", default=400)
     parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=100)
@@ -339,24 +332,24 @@ def main():
             else:
                 continue      
 
-
     init(
-	hub=options.hub,
-	bnodes=bserials,
-	ref_ant=options.ref_ant,
-	ampl=options.ampl,
-	rate=options.rate,
-	freq=options.freq,
-	txgain=options.txgain,
-	rxgain=options.rxgain,
+        hub=options.hub,
+        bnodes=bserials,
+        ref_ant=options.ref_ant,
+        ampl=options.ampl,
+        rate=options.rate,
+        freq=options.freq,
+        txgain=options.txgain,
+        rxgain=options.rxgain,
         cyc_prefix=options.cyc_prefix,
-	num_samps=options.num_samps,
+        num_samps=options.num_samps,
         prefix_length=options.prefix_length,
         postfix_length=options.postfix_length,
         take_duration=options.take_duration,
         both_channels=options.both_channels,
-	plotter=options.plotter
+        plotter=options.plotter
     )
+
 
 if __name__ == '__main__':
     try:

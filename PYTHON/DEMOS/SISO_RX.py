@@ -83,6 +83,9 @@ noisPwrBuffer = collections.deque(maxlen=numBufferSamps)
 rssiPwrBuffer_fpga = collections.deque(maxlen=numBufferSamps)
 frameCounter = 0
 
+num_samps_circ_buff = 10
+rssi_circ_buff = np.zeros(num_samps_circ_buff)
+pwr_circ_buff = np.zeros(num_samps_circ_buff)
 
 ########################################
 #               LOGGER                 #
@@ -96,7 +99,7 @@ frameCounter = 0
 # SOAPY_SDR_DEBUG    = 7, //!< A debugging message.
 # SOAPY_SDR_TRACE    = 8, //!< A tracing message. This is the lowest priority.
 # SOAPY_SDR_SSI      = 9, //!< Streaming status indicators such as "U" (underflow) and "O" (overflow).
-logLevel = 6         # 4:WARNING, 6:WARNING+INFO, 7:WARNING+INFO+DEBUG...
+logLevel = 3         # 4:WARNING, 6:WARNING+INFO, 7:WARNING+INFO+DEBUG...
 SoapySDR.SoapySDR_setLogLevel(logLevel)
 logging.basicConfig(filename='./data_out/debug_SISO_RX.log',
                     level=logging.DEBUG,
@@ -212,9 +215,10 @@ def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
     print(info)
 
     # Set gains to very high value if AGC enabled.
-    rssi_target_idx = 20
-    agc_init(sdr, rssi_target_idx, agc_en)
-    if agc_en: gain = 100
+    if agc_en:
+        gain = 100
+        rssi_target_idx = 20
+        agc_init(sdr, rssi_target_idx)
 
     # Set params on both channels (both RF chains)
     for ch in [0, 1]:
@@ -244,7 +248,7 @@ def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
 
 
 def animate(i, num_samps, recorder, agc_en, wait_trigger):
-    global sdr, rxStream, freqScale, sampsRx, frameCounter, fft_size, Rate
+    global sdr, rxStream, freqScale, sampsRx, frameCounter, fft_size, Rate, num_samps_circ_buff, rssi_circ_buff, pwr_circ_buff
 
     # Trigger AGC
     if agc_en:
@@ -256,9 +260,6 @@ def animate(i, num_samps, recorder, agc_en, wait_trigger):
             print(" *** DONE WITH PREVIOUS FRAME, ASSUME NEW FRAME INCOMING *** ")
             sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 1)
             sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 0)  # DO NOT REMOVE ME!! Disable right away
-
-    # Count number of frames received
-    frameCounter = frameCounter + 1
 
     # Read samples into this buffer
     sampsRx = [np.zeros(num_samps, np.complex64), np.zeros(num_samps, np.complex64)]
@@ -300,9 +301,8 @@ def animate(i, num_samps, recorder, agc_en, wait_trigger):
     IQmag = np.mean(np.sqrt(I**2 + Q**2))
 
     # Retrieve RSSI measured from digital samples at the LMS7, and convert to PWR in dBm
-    agc_avg = 7
-    rssi, PWRdBm = getDigitalRSSI(sdr, agc_avg)
-    PWRdB = PWRdBm - 30
+    agc_avg = 0
+    rssi, PWRdBFS = getDigitalRSSI(sdr, agc_avg)  # dBFS
 
     # Compute Power of Time Domain Signal
     sigRms = np.sqrt(np.mean(sampsRx[0] * np.conj(sampsRx[0])))
@@ -326,7 +326,7 @@ def animate(i, num_samps, recorder, agc_en, wait_trigger):
     PWRdBm_fpga = 10.0 * np.log10(PWRrms_fpga) + 30           # P(dBm)=10*log10(Prms/1mW)  OR  P(dBm)=10*log10(Prms)+30
 
     # Circular buffer - continuously display data
-    rssiPwrBuffer.append(PWRdBm)
+    rssiPwrBuffer.append(PWRdBFS)
     timePwrBuffer.append(sigPwr_dB)
     freqPwrBuffer.append(fftPower_dB)
     noisPwrBuffer.append(noiseFloor)
@@ -335,7 +335,23 @@ def animate(i, num_samps, recorder, agc_en, wait_trigger):
     lna_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA')    # ChanA (0)
     tia_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'TIA')    # ChanA (0)
     pga_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'PGA')    # ChanA (0)
-    print("RSSI: {} \t PWR: {} \t LNA: {} \t TIA: {} \t PGA: {}".format(rssi_fpga, PWRdBm_fpga, lna_rd, tia_rd, pga_rd))
+    lna1_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA1')    # ChanA (0)
+    lna2_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA2')    # ChanA (0)
+    attn_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'ATTN')    # ChanA (0)
+
+    # Moving average (just for visualization purposes)
+    circ_buff_idx = frameCounter % num_samps_circ_buff
+    rssi_circ_buff[circ_buff_idx] = rssi
+    pwr_circ_buff[circ_buff_idx] = PWRdBFS
+    rssi_buff_avg = np.mean(rssi_circ_buff)
+    pwr_buff_avg = np.mean(pwr_circ_buff)
+
+    # Count number of frames received
+    frameCounter = frameCounter + 1
+
+    # print("RSSI: {} \t PWR: {} \t LNA: {} \t TIA: {} \t PGA: {} \t  XXXXX LNA1: {} \t LNA2: {} \t ATTN: {}".format(rssi_fpga, PWRdBm_fpga, lna_rd, tia_rd, pga_rd, lna1_rd, lna2_rd, attn_rd))
+    print("RSSI: {} \t PWR: {} \t XXX ATTN: {} \t LNA1: {} \t LNA2: {} \t LNA: {} \t TIA: {} \t PGA: {} ".format(rssi_buff_avg, pwr_buff_avg, attn_rd, lna1_rd, lna2_rd, lna_rd, tia_rd, pga_rd))
+    #print("RSSI_LMS7 rssi and dBFS: {} {} \t RSSI: {} \t PWR: {}".format(rssi_buff_avg, pwr_buff_avg, rssi, PWRdBFS))
 
     # Fill out data structures with measured data
     line1.set_data(range(buff0.size), np.real(sampsRx[0]))
@@ -386,13 +402,13 @@ def replay(name, leng):
 def main():
     parser = OptionParser()
     parser.add_option("--label", type="string", dest="label", help="label for recorded file name", default="rx2.600GHz_TEST.hdf5")
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="RX GAIN: 2.5GHz [0:108](dB), 3.6GHz [0:105] (dB)", default=50.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="RX GAIN: 2.5GHz [0:108](dB), 3.6GHz [0:105] (dB)", default=65.0)
     parser.add_option("--latitude", type="float", dest="latitude", help="Latitude", default=0.0)
     parser.add_option("--longitude", type="float", dest="longitude", help="Longitude", default=0.0)
     parser.add_option("--elevation", type="float", dest="elevation", help="Elevation", default=0.0)
     parser.add_option("--freq", type="float", dest="freq", help="Optional Rx freq (Hz)", default=3.6e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=16384)
-    parser.add_option("--serial", type="string", dest="serial", help="Serial number of the device", default="")
+    parser.add_option("--serial", type="string", dest="serial", help="Serial number of the device", default="RF3E000392")  # "RF3E000375"  "RF3E000392"
     parser.add_option("--rxMode", type="string", dest="rxMode", help="RX Mode, Options:BASIC/REC/REPLAY", default="BASIC")
     parser.add_option("--AGCen", type="int", dest="AGCen", help="Enable AGC Flag. Options:0/1", default=0)
     parser.add_option("--wait-trigger", action="store_true", dest="wait_trigger", help="wait for a trigger to start a frame",default=False)

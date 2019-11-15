@@ -364,7 +364,7 @@ def animate(i, num_samps_rd, rxStream, sdr, ofdm_params, tx_struct, ota, ofdm_ob
     return line1, line2, line3, line4, line5, line6, line7, line8, line9, line10, line11, line12
 
 
-def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, ofdm_params, rx_gains,
+def txrx_app(args, rate, ampl, ant, txgain, rxgain, freq, bbfreq, serialTx, serialRx, ofdm_params,
              num_samps_rd, ota, ofdm_obj, agc_en):
     """
     Setup transmitter, generate TX signal, and write data into RAM for TX
@@ -395,32 +395,22 @@ def txrx_app(args, rate, ampl, ant, txgain, freq, bbfreq, serialTx, serialRx, of
             txChannel = []
 
         # RF Parameters
-        for c in [0, 1]: #txChannel:
+        for c in [0, 1]:  # txChannel:
             print("Writing settings for channel {}".format(c))
             sdrTx.setBandwidth(SOAPY_SDR_TX, c, rate)
             sdrTx.setFrequency(SOAPY_SDR_TX, c, freq + bbfreq)
             sdrTx.setSampleRate(SOAPY_SDR_TX, c, rate)
             #if bbfreq > 0:
             #    sdrTx.setFrequency(SOAPY_SDR_TX, c, "BB", bbfreq)
-            if "CBRS" in infoTx["frontend"]:
-                print("set CBRS front-end gains")
-                sdrTx.setGain(SOAPY_SDR_TX, c, 'ATTN', -6)   # {-18,-12,-6,0}
-            sdrTx.setGain(SOAPY_SDR_TX, c, "PAD", txgain)
-            sdrTx.setGain(SOAPY_SDR_TX, c, "IAMP", -12)
+
+            sdrTx.setGain(SOAPY_SDR_TX, c, txgain)
+            sdrRx.setGain(SOAPY_SDR_RX, c, rxgain)
 
             sdrRx.setBandwidth(SOAPY_SDR_RX, c, rate)
             sdrRx.setFrequency(SOAPY_SDR_RX, c, freq)
             sdrRx.setSampleRate(SOAPY_SDR_RX, c, rate)
-            if "CBRS" in infoRx["frontend"]:
-                sdrRx.setGain(SOAPY_SDR_RX, c, 'LNA2', rx_gains[5])  # LO: [0|17], HI:[0|14]
-                sdrRx.setGain(SOAPY_SDR_RX, c, 'LNA1', rx_gains[4])  # [0,33]
-                sdrRx.setGain(SOAPY_SDR_RX, c, 'ATTN', rx_gains[3])  # {-18,-12,-6,0}
-            sdrRx.setGain(SOAPY_SDR_RX, c, 'LNA', rx_gains[2])       # [0,30]
-            sdrRx.setGain(SOAPY_SDR_RX, c, 'TIA', rx_gains[1])       # [0,12]
-            sdrRx.setGain(SOAPY_SDR_RX, c, 'PGA', rx_gains[0])       # [-12,19]
             sdrRx.setAntenna(SOAPY_SDR_RX, c, "TRX")
             sdrRx.setDCOffsetMode(SOAPY_SDR_RX, c, True)
-
             sdrTx.writeSetting(SOAPY_SDR_TX, c, "CALIBRATE", 'SKLK')
             sdrRx.writeSetting(SOAPY_SDR_RX, c, "CALIBRATE", 'SKLK')
     else:
@@ -506,13 +496,8 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx and Rx sample rate", default=5e6)
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
-    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=40.0)
-    parser.add_option("--LNA", type="float", dest="LNA", help="LNA gain (dB) [0:1:30]", default=10.0)
-    parser.add_option("--TIA", type="float", dest="TIA", help="TIA gain (dB) [0, 3, 9, 12]", default=0.0)
-    parser.add_option("--PGA", type="float", dest="PGA", help="PGA gain (dB) [-12:1:19]", default=0.0)
-    parser.add_option("--LNA1", type="float", dest="LNA1", help="BRS/CBRS Front-end LNA1 gain stage [0:33] (dB)", default=33.0)
-    parser.add_option("--LNA2", type="float", dest="LNA2", help="BRS/CBRS Front-end LNA2 gain [0:17] (dB)", default=14.0)
-    parser.add_option("--ATTN", type="float", dest="ATTN", help="BRS/CBRS Front-end ATTN gain stage [-18:6:0] (dB)", default=-18.0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]", default=30.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]", default=30.0)
     parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=3.597e9)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
     parser.add_option("--nOFDMsym", type="int", dest="nOFDMsym", help="Number of OFDM symbols", default=20)
@@ -529,7 +514,6 @@ def main():
     (options, args) = parser.parse_args()
 
     ofdm_params = [options.nOFDMsym, options.ltsCpLen, options.dataCpLen, options.nSC, options.modOrder, options.fftOffset]
-    rx_gains = [options.PGA, options.TIA, options.LNA, options.ATTN, options.LNA1, options.LNA2]
 
     # OFDM object
     ofdm_obj = ofdmTxRx()
@@ -553,8 +537,7 @@ def main():
     print("Sample Rate (sps): {}".format(options.rate))
     print("Antenna: {}".format(options.ant))
     print("Tx Gain (dB): {}".format(options.txgain))
-    print("Rx Gains (dB) - LNA: {}, TIA: {}, PGA: {}".format(options.LNA, options.TIA, options.PGA))
-    print("CBRS/BRS Rx Gains (dB) - LNA1: {}, LNA2: {}, ATTN: {}".format(options.LNA1, options.LNA2, options.ATTN))
+    print("Rx Gain (dB): {}".format(options.rxgain))
     print("Frequency (Hz): {}".format(options.freq))
     print("Baseband Freq. (Hz): {}".format(options.bbfreq))
     print("OFDM Parameters - # OFDM syms: {}, LTS CP length: {}, Data CP length: {}, # SC: {}, Modulation Order: {}".format(options.nOFDMsym, options.ltsCpLen, options.dataCpLen, options.nSC, options.modOrder))
@@ -567,12 +550,12 @@ def main():
         ampl=options.ampl,
         ant=options.ant,
         txgain=options.txgain,
+        rx_gain=rx_gain,
         freq=options.freq,
         bbfreq=options.bbfreq,
         serialTx=options.serialTx,
         serialRx=options.serialRx,
         ofdm_params=ofdm_params,
-        rx_gains=rx_gains,
         num_samps_rd=options.nSampsRead,
         ota=ota,
         ofdm_obj=ofdm_obj,

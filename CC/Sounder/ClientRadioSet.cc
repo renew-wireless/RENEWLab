@@ -28,8 +28,8 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
 
         for (auto ch : { 0, 1 }) //channels)
         {
-            double rxgain = _cfg->clRxgain_vec[ch][i]; //[0,30]
-            double txgain = _cfg->clTxgain_vec[ch][i]; //[0,52]
+            double rxgain = _cfg->clRxgain_vec[ch][i]; // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
+            double txgain = _cfg->clTxgain_vec[ch][i]; // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
             radios.back()->dev_init(_cfg, ch, rxgain, txgain, info["frontend"]);
         }
 

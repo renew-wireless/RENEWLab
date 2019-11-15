@@ -81,19 +81,8 @@ def txrx_app(serials, ref_node_idx, hub_serial, rate, freq, txgain, rxgain, numS
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'RF', freq-.75*rate)
             sdr.setFrequency(SOAPY_SDR_TX, ch, 'BB', .75*rate)
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'BB', .75*rate)
-            if "CBRS" in info["frontend"]:
-                sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', 0)  # [-18,0] by 3
-                sdr.setGain(SOAPY_SDR_TX, ch, 'PA1', 15)  # [0|15]
-                sdr.setGain(SOAPY_SDR_TX, ch, 'PA3', 30)  # [0|30]
-            sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)  # [-52,0]
-
-            if "CBRS" in info["frontend"]:
-                sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', 0)   # [-18,0]
-                sdr.setGain(SOAPY_SDR_RX, ch, 'LNA1', 30)  # [0,33]
-                sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 17)  # [0,17]
-            sdr.setGain(SOAPY_SDR_RX, ch, 'LNA', rxgain)   # [0,30]
-            sdr.setGain(SOAPY_SDR_RX, ch, 'TIA', 0)        # [0,12]
-            sdr.setGain(SOAPY_SDR_RX, ch, 'PGA', 0)        # [-12,19]
+            sdr.setGain(SOAPY_SDR_TX, ch, txgain)
+            sdr.setGain(SOAPY_SDR_RX, ch, rxgain)
             sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
             sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
         # ADC_rst, stops the tdd time counters, makes sure next time runs in a clean slate
@@ -378,8 +367,8 @@ def main():
     parser.add_option("--refNode", type="int", dest="ref_node", help="Index of reference node", default=0)
     parser.add_option("--hubSerial", type="string", dest="hub_serial", help="Serial of Faros HUB", default="")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=30.0)
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB)", default=30.0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]", default=30.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]", default=30.0)
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.5e9)
     parser.add_option("--numPilotSamps", type="int", dest="nPilotSamps", help="Num actual pilot samples to tx (len of LTS is 160 samps)", default=160)
     parser.add_option("--prefix-pad", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=100)

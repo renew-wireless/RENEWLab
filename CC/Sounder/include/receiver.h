@@ -92,6 +92,7 @@ public:
     void loopRecv(ReceiverContext* context);
     static void* clientTxRx_launch(void* in_context);
     void clientTxRx(dev_profile* context);
+    void getPathLoss();
 
 private:
     Config* config_;

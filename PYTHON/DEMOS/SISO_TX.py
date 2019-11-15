@@ -96,13 +96,8 @@ def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, waveFreq, numSamps, se
         if lo_tone:
             sdr.writeSetting(SOAPY_SDR_TX, c, 'TSP_TSG_CONST', str(amplFixed))
             sdr.writeSetting(SOAPY_SDR_TX, c, 'TX_ENB_OVERRIDE', 'true')
-        if "CBRS" in info["frontend"]:
-            print("set CBRS front-end gains")
-            sdr.setGain(SOAPY_SDR_TX, c, gain)
-        else:
-            # Automatic distribution of gains currently only available with CBRS board
-            sdr.setGain(SOAPY_SDR_TX, c, "IAMP", 0)
-            sdr.setGain(SOAPY_SDR_TX, c, "PAD", gain)
+
+        sdr.setGain(SOAPY_SDR_TX, c, gain)
 
     # Generate TX signal
     txSignal = np.empty(numSamps).astype(np.complex64)

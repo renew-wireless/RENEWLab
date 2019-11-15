@@ -255,7 +255,7 @@ void Receiver::clientTxRx(dev_profile* context)
     //d_mutex.unlock();
 
     delete context;
-    std::vector<std::complex<float>> buffs(NUM_SAMPS, 0);
+    std::vector<std::complex<float> > buffs(NUM_SAMPS, 0);
     std::vector<void*> rxbuff(2);
     rxbuff[0] = buffs.data();
     rxbuff[1] = buffs.data();
@@ -311,4 +311,20 @@ void Receiver::clientTxRx(dev_profile* context)
                 txTime += 0x10000;
         }
     }
+}
+
+void Receiver::getPathLoss()
+{
+    /*
+     * Downlink Path Loss computation (BS is TX, CL is RX)
+     * Based on RX power at antenna and TX power at transmitter, 
+     * estimate pathloss. To be used for TX power control
+     */
+    // OBCH
+    int bsTxGain = config_->txgain[0]; // "DECODED" FROM DL FRAME - Chain A (0)
+    auto clRxGain = config_->clRxgain_vec[0];
+
+    // Given RX gain and rssi, find power at antenna
+
+    // Subtract power at RX antenna from TX power to get path loss
 }
