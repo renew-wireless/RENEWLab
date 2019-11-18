@@ -62,7 +62,7 @@ classdef iris_py < handle
                 obj.n_zpad_samp = sdr_params.n_zpad_samp;
                 
                 for ipy=1:obj.n_chain
-                    id_str = convertStringsToChars( obj.serial_ids(ipy))
+                    id_str = convertStringsToChars( obj.serial_ids(ipy));
                     py_obj = py.iris_py.Iris_py( pyargs('serial_id',id_str,...
                         'tx_freq', obj.tx_freq, 'rx_freq', obj.rx_freq,...
                         'tx_gain',obj.tx_gain,'rx_gain',obj.rx_gain,...
@@ -97,13 +97,13 @@ classdef iris_py < handle
             obj.py_obj_array{1}.set_corr(); 
          end
          
-         function sdr_txgainctrl(obj)
-            obj.py_obj_array{1}.tx_gain_ctrl(); 
+         function sdr_configgainctrl(obj)
+            obj.py_obj_array{1}.config_gain_ctrl(); 
          end
          
-         function sdr_txbeacon(obj, prefix_len)
+         function sdr_setupbeacon(obj)
              % Assume Beacon only from the first Iris board in the BS array
-             obj.py_obj_array{1}.burn_beacon( pyargs('prefix_len', prefix_len) );
+             obj.py_obj_array{1}.burn_beacon();
          end
         
          
