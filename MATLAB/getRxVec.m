@@ -204,7 +204,7 @@ elseif chan_type == "iris"
         node_ue2 = iris_py(ue_param(2)); 
     end
 
-    node_ue1.sdr_txgainctrl();
+    node_ue1.sdr_configgainctrl();
     if n_ue  >1
         node_ue2.sdr_txgainctrl();      % gain control
     end
@@ -229,7 +229,7 @@ elseif chan_type == "iris"
         node_ue2.set_config(chained_mode,0);
     end
 
-    node_bs.sdr_txbeacon(N_ZPAD_PRE);   % Burn beacon to the BS(1) RAM
+    node_bs.sdr_setupbeacon();   % Burn beacon to the BS(1) RAM
     
     node_ue1.sdrtx(tx_data(:,1));       % Burn data to the UE RAM
     if n_ue  >1

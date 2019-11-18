@@ -30,6 +30,7 @@ import SoapySDR
 from SoapySDR import *
 sys.path.append('../IrisUtils/')
 from find_lts import *
+from sklearn.linear_model import LinearRegression
 
 plt.style.use('ggplot')  # customize your plots style
 
@@ -137,6 +138,8 @@ def init(hub, bnodes, ref_ant, ampl, rate,
     rx_f = [[np.empty(fft_size).astype(np.complex64) for r in range(num_ants)] for t in range(num_ants)]
     calib_mag = [np.empty(fft_size).astype(np.complex64) for r in range(num_ants)]
     calib_ang = [np.empty(fft_size).astype(np.complex64) for r in range(num_ants)]
+    est_calib_mag = [np.empty(fft_size).astype(np.complex64) for r in range(num_ants)]
+    est_calib_ang = [np.empty(fft_size).astype(np.complex64) for r in range(num_ants)]
     mag_buffer = [[collections.deque(maxlen=NUM_BUFFER_SAMPS) for i in range(pilot_sc_num)] for j in range(num_ants)]
     ang_buffer = [[collections.deque(maxlen=NUM_BUFFER_SAMPS) for i in range(len(pilot_subcarriers))] for j in range(num_ants)]
     dummy = np.empty(sym_samps).astype(np.complex64)
@@ -160,6 +163,28 @@ def init(hub, bnodes, ref_ant, ampl, rate,
         for l in range(2):
             axes1[m,l].legend(fontsize=10)
     fig1.show()
+
+    fig3, axes3 = plt.subplots(nrows=num_ants, ncols=2, figsize=(12,8))
+    axes3[0,0].set_title('Reciprocity Calibration Magnitude')
+    axes3[0,1].set_title('Reciprocity Calibration Phase')
+    for m in range(num_ants):
+        axes3[m,0].set_xlim(-8, 72)
+        axes3[m,1].set_xlim(-8, 72)
+        axes3[m,0].set_ylim(0,5)
+        axes3[m,1].set_ylim(-np.pi,np.pi)
+        if m == ref_ant:
+            axes3[m,0].set_ylabel('Ant %d (ref)'%(m))
+        else:
+            axes3[m,0].set_ylabel('Ant %d'%(m))
+
+    lines300 = [axes3[m,0].plot(range(64), np.zeros(64), label='Measured Mag')[0] for m in range(num_ants)]
+    lines301 = [axes3[m,0].plot(range(64), np.zeros(64), label='Estimated Mag')[0] for m in range(num_ants)]
+    lines310 = [axes3[m,1].plot(range(64), np.zeros(64), label='Measured Ang')[0] for m in range(num_ants)]
+    lines311 = [axes3[m,1].plot(range(64), np.zeros(64), label='Estimated Ang')[0] for m in range(num_ants)]
+    for m in range(num_ants):
+        for l in range(2):
+            axes3[m,l].legend(fontsize=10)
+    fig3.show()
 
     if plotter:
         fig2, axes2 = plt.subplots(nrows=num_ants, ncols=num_ants, figsize=(12,12))
@@ -211,9 +236,9 @@ def init(hub, bnodes, ref_ant, ampl, rate,
                     if sr.ret != sym_samps:
                         print("bad read %d"%sr.ret)
 
-        bad_round = False
+        bad_data = False
         for m in range(num_ants):
-            if bad_round: break
+            if bad_data: break
             for p in range(num_ants):
                 if m != p:
                     rx_samps[m][p] -= np.mean(rx_samps[m][p])
@@ -221,7 +246,7 @@ def init(hub, bnodes, ref_ant, ampl, rate,
                     offset = 0 if not best_peak else best_peak - len(lts_sym) + cp_len
                     if offset < 150:
                         print("bad data, skip")
-                        bad_round = True
+                        bad_data = True
                         #break
                     rx_m_p = rx_samps[m][p]
                     rx_f1 = np.fft.fft(rx_m_p[offset:offset+fft_size], fft_size, 0)
@@ -233,9 +258,11 @@ def init(hub, bnodes, ref_ant, ampl, rate,
                         lines21[m][p].set_ydata(np.imag(rx_samps[m][p]))
                         lines22[m][p].set_data(offset, np.linspace(-1.0, 1.0, num=100))
 
-        if bad_round:
+        if bad_data:
             continue
 
+        mag_model = LinearRegression()
+        ang_model = LinearRegression()
         for m in range(num_ants):
             if m == ref_ant:
                 calib_mag[m] = np.ones(fft_size)
@@ -247,14 +274,28 @@ def init(hub, bnodes, ref_ant, ampl, rate,
                 s = pilot_subcarriers[c]
                 mag_buffer[m][c].append(calib_mag[m][s])
                 ang_buffer[m][c].append(calib_ang[m][s])
+            x = np.asarray(pilot_subcarriers).reshape((-1,1))
+            y_mag = calib_mag[m][pilot_subcarriers]
+            y_ang = calib_ang[m][pilot_subcarriers]
+            mag_model.fit(x, y_mag)
+            ang_model.fit(x, y_ang)
+            for c in range(64):
+                est_calib_mag[m][c] = mag_model.intercept_ + mag_model.coef_ * c
+                est_calib_ang[m][c] = ang_model.intercept_ + ang_model.coef_ * c
 
         for m in range(num_ants):
             for p in range(pilot_sc_num):
                 lines10[m][p].set_data(range(len(mag_buffer[m][p])), mag_buffer[m][p])
                 lines11[m][p].set_data(range(len(mag_buffer[m][p])), ang_buffer[m][p])
+            lines300[m].set_ydata(calib_mag[m])
+            lines301[m].set_ydata(est_calib_mag[m])
+            lines310[m].set_ydata(calib_ang[m])
+            lines311[m].set_ydata(est_calib_ang[m])
 
         fig1.canvas.draw()
         fig1.show()
+        fig3.canvas.draw()
+        fig3.show()
         if plotter:
             fig2.canvas.draw()
             fig2.show()
