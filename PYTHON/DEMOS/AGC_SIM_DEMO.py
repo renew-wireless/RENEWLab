@@ -27,6 +27,8 @@
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
  ---------------------------------------------------------------------
 """
+import matplotlib
+matplotlib.use('GTK3Agg')
 
 import sys
 sys.path.append('../IrisUtils/')
@@ -39,7 +41,6 @@ import time
 import threading
 import pickle
 import scipy.signal
-import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from SoapySDR import *              # SOAPY_SDR constants
@@ -334,7 +335,7 @@ def rxsamples_app(args, srl, freq, bw, rxgain, clockRate, out):
 def main():
     parser = OptionParser()
     parser.add_option("--args",      type="string", dest="args",      help="Device factory arguments",   default="")
-    parser.add_option("--freq",      type="float",  dest="freq",      help="Optional Rx freq (Hz)",      default=2.60e9)
+    parser.add_option("--freq",      type="float",  dest="freq",      help="Optional Rx freq (Hz)",      default=3.6e9)
     parser.add_option("--bw",        type="float",  dest="bw",        help="Optional Tx filter bw (Hz)", default=30e6)
     parser.add_option("--rxgain",    type="float",  dest="rxgain",    help="Optional Rx gain (dB)",      default=90.0)
     parser.add_option("--clockRate", type="float",  dest="clockRate", help="Optional clock rate (Hz)",   default=80e6)

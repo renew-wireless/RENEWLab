@@ -1,5 +1,18 @@
 #!/usr/bin/python3
 """
+
+    MMIMO_DOWNLINK.py
+
+    This script generates uplink and downlink pilots FIXME TODO...
+
+    Example Usage:
+    python3 MMIMO_DOWNLINK.py --bnodes="../IrisUtils/data_in/bs_serials.txt"
+                              --cnodes="../IrisUtils/data_in/cl_serials.txt"
+
+    We have added a couple of files listing serial numbers of
+    base station nodes, as well as client nodes. These need to
+    be modified according to the nodes being used for each experiment
+
 ---------------------------------------------------------------------
  Copyright © 2018-2019. Rice University.
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
@@ -8,7 +21,7 @@
 
 import sys
 sys.path.append('../IrisUtils/')
-
+sys.path.append('../IrisUtils/data_in/')
 import numpy as np
 from optparse import OptionParser
 import SoapySDR
@@ -718,7 +731,7 @@ def main():
     parser = OptionParser()
     parser.add_option("--args", type="string", dest="args", help="arguments", default="")
     parser.add_option("--bnodes", type="string", dest="bnodes", help="file name containing serials on the base station", default="bs_serials.txt")
-    parser.add_option("--cnodes", type="string", dest="cnodes", help="file name containing serials to be used as clients", default="client_serials.txt")
+    parser.add_option("--cnodes", type="string", dest="cnodes", help="file name containing serials to be used as clients", default="cl_serials.txt")
     parser.add_option("--hub", type="string", dest="hub", help="Hub node", default="")
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Calibration reference antenna", default=0)
     parser.add_option("--ampl", type="float", dest="ampl", help="Amplitude coefficient for downCal/upCal", default=0.5)

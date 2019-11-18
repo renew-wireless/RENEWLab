@@ -11,7 +11,10 @@
     schedule.
 
     Example:
-        python3 NB_CAL_DEMO.py --serials=bs_serials.txt --ref-serial="RF3C000025"
+        python3 NB_CAL_DEMO.py --serials=../IrisUtils/data_in/bs_serials.txt --ref-serial="xxxx"
+
+    where "xxxx" is the serial number of an Iris node in the base station.
+    This reference node should not be included in the bs_serials.txt file
 
 ---------------------------------------------------------------------
  Copyright © 2018-2019. Rice University.
@@ -21,6 +24,7 @@
 
 import sys
 sys.path.append('../IrisUtils/')
+sys.path.append('../IrisUtils/data_in/')
 
 import SoapySDR
 from SoapySDR import * #SOAPY_SDR_ constants

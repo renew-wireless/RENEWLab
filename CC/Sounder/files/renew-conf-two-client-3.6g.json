@@ -34,9 +34,9 @@
                  "frequency" : 3.6e9,
                  "channel" : "A",
                  "agc_en" : false,
-                 "rxgainA" : [20, 20],
+                 "rxgainA" : [50, 50],
                  "txgainA" : [40, 40],
-                 "rxgainB" : [20, 20],
+                 "rxgainB" : [50, 50],
                  "txgainB" : [40, 40],
                  "rate" : 5e6,
                  "frame_schedule" : [

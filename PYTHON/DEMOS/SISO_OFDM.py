@@ -68,6 +68,9 @@ plt.style.use('ggplot')
 #########################################
 running = True
 pkt_count = 0
+nextValRX = 0
+nextValTX = 0
+prevValTX = 0
 FIG_LEN = 2**13     # SIM: 2400     # OTA: 2**13
 APPLY_CFO_CORR = 1
 APPLY_SFO_CORR = 1
@@ -145,7 +148,7 @@ ax6.grid(True)
 ax6.set_title('Magnitude Channel Estimates')
 ax6.set_xlabel('Baseband Freq.')
 ax6.set_ylabel('')
-line12, = ax6.step([], [])
+line12, = ax6.plot([], [])
 ax6.set_ylim(-0.1, 5)
 ax6.set_xlim(-10, 10)
 ax6.legend(fontsize=10)
@@ -171,7 +174,33 @@ def init():
     return line1, line2, line3, line4, line5, line6, line7, line8, line9, line10, line11, line12
 
 
-def animate(i, num_samps_rd, rxStream, sdr, ofdm_params, tx_struct, ota, ofdm_obj, agc_en):
+def find_optimal_gain(sdrTx, sdrRx):
+    """
+        Brute force over multiple gain combinations to find best TX/RX gains.
+        TODO: Fully automate this by checking symbol error rate rather than visually checking constellation
+    """
+    global pkt_count, nextValTX, nextValRX, prevValTX
+    txgain_vec = list(range(40, 80, 2))
+    rxgain_vec = list(range(50, 80, 2))
+
+    # Increase gain setting every 10 samples
+    prevValTX = nextValTX
+    if (pkt_count % 10 == 0):
+        nextValTX = (nextValTX + 1) % (len(txgain_vec)-1)
+
+    if nextValTX == 0 and nextValTX != prevValTX:
+        nextValRX = (nextValRX + 1) % (len(rxgain_vec)-1)
+
+    txgain = txgain_vec[nextValTX]
+    rxgain = rxgain_vec[nextValRX]
+
+    sdrTx.setGain(SOAPY_SDR_TX, 0, txgain)
+    sdrRx.setGain(SOAPY_SDR_RX, 0, rxgain)
+
+    print("IDXtx: {}, IDXrx: {}, TXG: {} RXG: {}".format(nextValTX, nextValRX, txgain, rxgain))
+
+
+def animate(i, num_samps_rd, rxStream, sdr, sdrTx, ofdm_params, tx_struct, ota, ofdm_obj, agc_en):
     global FIG_LEN, pkt_count, ax6
 
     pkt_count = pkt_count + 1
@@ -205,6 +234,8 @@ def animate(i, num_samps_rd, rxStream, sdr, ofdm_params, tx_struct, ota, ofdm_ob
 
     if ota:
         # Over-the-air Mode
+        #find_optimal_gain(sdrTx, sdr)
+
         flags = SOAPY_SDR_END_BURST
         flags |= SOAPY_SDR_WAIT_TRIGGER
         sdr.activateStream(rxStream,
@@ -480,7 +511,7 @@ def txrx_app(args, rate, ampl, ant, txgain, rxgain, freq, bbfreq, serialTx, seri
     # Start animation
     anim = animation.FuncAnimation(fig, animate,
                                    init_func=init,
-                                   fargs=(num_samps_rd, rxStream, sdrRx, ofdm_params, tx_struct, ota, ofdm_obj, agc_en),
+                                   fargs=(num_samps_rd, rxStream, sdrRx, sdrTx, ofdm_params, tx_struct, ota, ofdm_obj, agc_en),
                                    frames=100,
                                    interval=100,
                                    blit=True)
@@ -496,8 +527,8 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx and Rx sample rate", default=5e6)
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]", default=30.0)
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]", default=30.0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]", default=65.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]", default=65.0)
     parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=3.597e9)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
     parser.add_option("--nOFDMsym", type="int", dest="nOFDMsym", help="Number of OFDM symbols", default=20)
@@ -506,8 +537,8 @@ def main():
     parser.add_option("--nSC", type="int", dest="nSC", help="# of subcarriers. Only supports 64 sc at the moment", default=64)
     parser.add_option("--fftOfset", type="int", dest="fftOffset", help="FFT Offset: # of CP samples for FFT", default=6)
     parser.add_option("--modOrder", type="int", dest="modOrder", help="Modulation Order 2=BPSK/4=QPSK/16=16QAM/64=64QAM", default=16)
-    parser.add_option("--serialTx", type="string", dest="serialTx", help="Serial # of TX device", default="RF3C000064")
-    parser.add_option("--serialRx", type="string", dest="serialRx", help="Serial # of RX device", default="RF3C000029")
+    parser.add_option("--serialTx", type="string", dest="serialTx", help="Serial # of TX device", default="")
+    parser.add_option("--serialRx", type="string", dest="serialRx", help="Serial # of RX device", default="")
     parser.add_option("--nSampsRead", type="int", dest="nSampsRead", help="# Samples to read", default=FIG_LEN)
     parser.add_option("--mode", type="string", dest="mode", help="Simulation vs Over-the-Air (i.e., SIM/OTA)", default="OTA")
     parser.add_option("--agc_en", action="store_true", dest="agc_en", help="Flag to enable AGC", default=False)
@@ -550,7 +581,7 @@ def main():
         ampl=options.ampl,
         ant=options.ant,
         txgain=options.txgain,
-        rx_gain=rx_gain,
+        rxgain=options.rxgain,
         freq=options.freq,
         bbfreq=options.bbfreq,
         serialTx=options.serialTx,

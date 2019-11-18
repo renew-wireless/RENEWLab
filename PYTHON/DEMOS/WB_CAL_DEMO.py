@@ -307,7 +307,7 @@ def init(hub, bnodes, ref_ant, ampl, rate,
 
 def main():
     parser = OptionParser()
-    parser.add_option("--bnodes", type="string", dest="bnodes", help="file name containing serials on the base station", default="bs_serials.txt")
+    parser.add_option("--bnodes", type="string", dest="bnodes", help="file name containing serials on the base station", default="../IrisUtils/data_in/bs_serials.txt")
     parser.add_option("--hub", type="string", dest="hub", help="Hub node", default="")
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Calibration reference antenna", default=0)
     parser.add_option("--ampl", type="float", dest="ampl", help="Pilot amplitude scaling coefficient", default=0.5)

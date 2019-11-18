@@ -48,7 +48,17 @@
 
 
   Example:
-    python3 SOUNDER_TXRX.py --serial1="RF3C000042" --serial2="RF3C000025"
+    python3 SOUNDER_TXRX.py --bsnode="RF3C000042" --clnode="RF3C000025"
+
+  where bsnode corresponds to a base station node and clnode corresponds
+  to a client node
+
+  IMPORTANT NOTE:
+  The client firmware has different features than the base station node
+  firmware. Therefore, ONLY bsnode can transmit a beacon whereas ONLY
+  cnode can correlate against such beacon. This means it is critical to
+  set bsnode to the serial number of a base station node and clnode to the 
+  serial number of a client node!
 
 ---------------------------------------------------------------------
  Copyright (c) 2018-2019, Rice University
@@ -383,8 +393,8 @@ def signal_handler(rate, numSyms, use_trig, signal, frame):
 #########################################
 def main():
     parser = OptionParser()
-    parser.add_option("--serial1", type="string", dest="serial1", help="serial number of the master device", default="")
-    parser.add_option("--serial2", type="string", dest="serial2", help="serial number of the slave device", default="")
+    parser.add_option("--bsnode", type="string", dest="bsnode", help="serial number of the master (base station node) device", default="")
+    parser.add_option("--clnode", type="string", dest="clnode", help="serial number of the slave (client node) device", default="")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]", default=30.0)
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]", default=30.0)
@@ -406,8 +416,8 @@ def main():
     (options, args) = parser.parse_args()
 
     siso_sounder(
-        serial1=options.serial1,
-        serial2=options.serial2,
+        serial1=options.bsnode,
+        serial2=options.clnode,
         rate=options.rate,
         freq=options.freq,
         txgain=options.txgain,
