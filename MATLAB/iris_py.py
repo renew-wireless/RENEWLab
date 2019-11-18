@@ -131,7 +131,7 @@ class Iris_py:
 
 			#print("Set TX frequency to %f" % self.sdr.getFrequency(SOAPY_SDR_TX, chan))
 			#self.sdr.setAntenna(SOAPY_SDR_TX, chan, "TRX")
-			self.sdr.setGain(SOAPY_SDR_TX, chan, 'PAD', tx_gain)  # [-52,0]
+			self.sdr.setGain(SOAPY_SDR_TX, chan, tx_gain)  # [-52,0]
 
 			#Rx:
 			if sample_rate is not None:
@@ -154,17 +154,6 @@ class Iris_py:
 				self.sdr.setGain(SOAPY_SDR_RX, chan, rx_gain)  # [0,30]
 
 			self.sdr.setDCOffsetMode(SOAPY_SDR_RX, chan, True)
-
-			if ("CBRS" in info["frontend"]):
-				#Tx:
-				self.sdr.setGain(SOAPY_SDR_TX, chan, 'ATTN', 0)  # [-18,0] by 3
-				self.sdr.setGain(SOAPY_SDR_TX, chan, 'PA1', 15)  # [0|15]
-				self.sdr.setGain(SOAPY_SDR_TX, chan, 'PA2', 0)  # [0|15]
-				self.sdr.setGain(SOAPY_SDR_TX, chan, 'PA3', 30)  # [0|30]
-            	#Rx:
-				self.sdr.setGain(SOAPY_SDR_RX, chan, 'ATTN', -18)  # [-18,0]
-				self.sdr.setGain(SOAPY_SDR_RX, chan, 'LNA1', 30)  # [0,33]
-				self.sdr.setGain(SOAPY_SDR_RX, chan, 'LNA2', 17)  # [0,17]
 
 		self.tx_stream = None  # Burst mode
 
@@ -259,13 +248,9 @@ class Iris_py:
                 agc_conf = {"agc_enabled": self.agc_en}
                 self.sdr.writeSetting("AGC_CONFIG", json.dumps(agc_conf))
 
-	def sync_delays(self, is_bs=True):
-		'''Synchronise delays. If is_bs = True, the BS sets the trigger off, else the UE resets the correlator.'''
-		if bool(is_bs):
-			# NB: This should be called for the BS
-			self.sdr.writeSetting("SYNC_DELAYS", "")
-		#else:
-			#self.sdr.writeRegister("ARGCOR", CORR_RST, 0x1) #NB: In UL, this should be called for the UE
+	def sync_delays(self):
+		# NB: This should be called for the BS
+		self.sdr.writeSetting("SYNC_DELAYS", "")
 
     # Setup and activate RX streams
 	def setup_stream_rx(self):
@@ -321,9 +306,6 @@ class Iris_py:
 		        print("reading stream: ({})".format(r1))
                     rx_frames_a[m*in_len: (m*in_len + in_len)] = wave_rx_a
 
-		print("SDR {} ".format(SoapySDR.timeNsToTicks(
-		    self.sdr.getHardwareTime(""), self.sample_rate)))
-		#print("recv_stream_tdd: wave_rx_a: \n")
 		return(rx_frames_a)
 
 	def close(self):
@@ -362,11 +344,11 @@ if __name__ == '__main__':
 	parser.add_argument("--rate", type=float, dest="rate",
 	                    help="Sample rate", default=5e6)
 	parser.add_argument("--txGain", type=float, dest="txGain",
-	                    help="Optional Tx gain (dB)", default=52)
+	                    help="Optional Tx gain (dB)", default=43)
 	parser.add_argument("--rxGain", type=float, dest="rxGain",
-	                    help="Optional Rx gain (dB)", default=65)
+	                    help="Optional Rx gain (dB)", default=20)
 	parser.add_argument("--freq", type=float, dest="freq",
-	                    help="Optional Tx freq (Hz)", default=3.6e9)
+	                    help="Optional Tx freq (Hz)", default=2.5e9)
 	parser.add_argument("--bw", type=float, dest="bw",
 	                    help="Optional filter bw (Hz)", default=None)
 	args = parser.parse_args()
@@ -420,7 +402,6 @@ if __name__ == '__main__':
 	wb_pilot1_i = np.imag(wb_pilot1)
 
 	siso_ue.config_gain_ctrl()
-	siso_ue.sync_delays(False)
 
 	siso_ue.setup_stream_rx()
 	siso_bs.setup_stream_rx()

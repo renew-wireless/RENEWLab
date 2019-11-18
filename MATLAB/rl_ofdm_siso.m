@@ -47,9 +47,9 @@ fprintf("Channel type: %s \n",chan_type);
 %Iris params:
 N_BS_NODE = 1;
 N_UE = 1;
-TX_FRQ                  = 3.6e9;
+TX_FRQ                  = 2.5e9;
 RX_FRQ                  = TX_FRQ;
-TX_GN                   = 53;
+TX_GN                   = 43;
 RX_GN                   = 20;
 SMPL_RT                 = 5e6;
 N_FRM                   = 10;
@@ -146,8 +146,8 @@ else
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
  % Create two Iris node objects:
-    b_ids(end+1) = "0339";
-    ue_ids(end+1) = "RF3C000045";
+    b_ids(end+1) = "RF3E000189";
+    ue_ids(end+1) = "RF3E000060";
     
     b_prim_sched = "BGGGGGRG";           % BS primary noede's schedule: Send Beacon only from one Iris board
     ue_sched = "GGGGGGPG";               % UE schedule

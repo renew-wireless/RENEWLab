@@ -191,7 +191,6 @@ elseif chan_type == "mpc"
 
 elseif chan_type == "iris"
 % Real HW:
-    N_ZPAD_PRE = 90;
     n_samp = bs_param.n_samp;
     if ~isempty(hub_id)
         node_bs = iris_py(bs_param,hub_id);
@@ -206,15 +205,11 @@ elseif chan_type == "iris"
 
     node_ue1.sdr_configgainctrl();
     if n_ue  >1
-        node_ue2.sdr_txgainctrl();      % gain control
+        node_ue2.sdr_configgainctrl();      % gain control
     end
     
-    node_bs.sdrsync(1);                 % synchronize delays only for BS
+    node_bs.sdrsync();                 % synchronize delays only for BS
     
-    node_ue1.sdrsync(0);
-    if n_ue  >1
-        node_ue2.sdrsync(0);
-    end
     node_ue1.sdrrxsetup();             % set up reading stream
     if n_ue  >1
         node_ue2.sdrrxsetup();
@@ -222,11 +217,11 @@ elseif chan_type == "iris"
     node_bs.sdrrxsetup();
     
     chained_mode = 0;
-    node_bs.set_config(chained_mode,1); % configure the BS: schedule etc.
+    node_bs.set_tddconfig(chained_mode,1); % configure the BS: schedule etc.
    
-    node_ue1.set_config(chained_mode,0);
+    node_ue1.set_tddconfig(chained_mode,0);
     if n_ue  >1
-        node_ue2.set_config(chained_mode,0);
+        node_ue2.set_tddconfig(chained_mode,0);
     end
 
     node_bs.sdr_setupbeacon();   % Burn beacon to the BS(1) RAM

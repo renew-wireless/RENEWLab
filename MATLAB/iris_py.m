@@ -85,9 +85,9 @@ classdef iris_py < handle
             end
         end
         
-         function sdrsync(obj, is_bs)
+         function sdrsync(obj)
             if ~obj.use_hub
-                obj.py_obj_array{1}.sync_delays(pyargs('is_bs', is_bs));
+                obj.py_obj_array{1}.sync_delays();
             else
                 obj.py_obj_hub.sync_delays();
             end
@@ -107,7 +107,7 @@ classdef iris_py < handle
          end
         
          
-         function set_config(obj, chained_tx_rx, is_bs)
+         function set_tddconfig(obj, chained_tx_rx, is_bs)
              if chained_tx_rx
                 sched  = convertStringsToChars((obj.tdd_sched));
                 obj.py_obj_array{1}.config_sdr_tdd_chained(pyargs('tdd_sched', sched));        
