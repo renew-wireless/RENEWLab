@@ -88,8 +88,6 @@ class Iris_py:
               bw=None,
               sample_rate=None,
               n_samp=None,				# Total number of samples, including zero-pads
-              n_zpad_samp=150,			# Total number of samples used for zero-padding in prefix and postfix
-                # Number of frames TXed: How many times the schedule will be repeated
                 max_frames=1,
               both_channels=False,
               agc_en=False,
@@ -109,7 +107,6 @@ class Iris_py:
 
 		self.agc_en = agc_en
 		self.both_channels = both_channels
-		self.n_zpad_samp = int(n_zpad_samp)
 		self.max_frames = int(max_frames)
 
 		### Setup channel rates, ports, gains, and filters ###
@@ -172,28 +169,9 @@ class Iris_py:
 		'''enable the correlator, with inputs from adc'''
 		self.sdr.writeSetting("CORR_START", "A")
 
-    # Write SDR configuration (chained mode):
-	def config_sdr_tdd_chained(self, tdd_sched=None):
-		'''Configure the TDD schedule and functionality when chained.'''
-		if tdd_sched is not None:
-			self.tdd_sched = tdd_sched
-		else:
-		    self.tdd_sched = "G"
-		print(tdd_sched)
-                max_frames = self.max_frames
-		conf_str = {"tdd_enabled": True,
-                    "frame_mode": "free_running",
-                    "symbol_size": self.n_samp,
-                    "max_frame": max_frames,
-                    "frames": [self.tdd_sched]}
-		self.sdr.writeSetting("TDD_CONFIG", json.dumps(conf_str))
-		self.sdr.writeSetting("TDD_MODE", "true")
-		self.sdr.writeSetting("TX_SW_DELAY", str(30))
-
 	def config_sdr_tdd(self, tdd_sched=None, is_bs=True, prefix_len=0):
 		'''Configure the TDD schedule and functionality when unchained. Set up the correlator.'''
 		global corr_threshold, beacon
-		len_beacon_zpad = len(beacon) + self.n_zpad_samp
 		coe = cfloat2uint32(np.conj(beacon), order='QI')
 		if tdd_sched is not None:
 			self.tdd_sched = tdd_sched

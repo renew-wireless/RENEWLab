@@ -2,6 +2,9 @@ function y = getRxVec(tx_data, n_bs, n_ue, chan_type, snr, bs_param, ue_param, h
 %%% Returns Rx vector passed through the channel type given in the input
 %%% list.
 
+assert(length(bs_param) == n_bs);
+assert(length(ue_param) == n_ue);
+
 if chan_type == "awgn"
 % AWGN
     tx_var = mean(mean(abs(tx_data).^2 )) * (64/48);
@@ -197,45 +200,27 @@ elseif chan_type == "iris"
     else
         node_bs = iris_py(bs_param,[]);        % initialize BS
     end
-    node_ue1 = iris_py(ue_param(1),[]);    % initialize UE
-    
-    if n_ue  >1
-        node_ue2 = iris_py(ue_param(2)); 
-    end
+    node_ue = iris_py(ue_param,[]);    % initialize UE
 
-    node_ue1.sdr_configgainctrl();
-    if n_ue  >1
-        node_ue2.sdr_configgainctrl();      % gain control
-    end
+    node_ue.sdr_configgainctrl();
     
     node_bs.sdrsync();                 % synchronize delays only for BS
     
-    node_ue1.sdrrxsetup();             % set up reading stream
-    if n_ue  >1
-        node_ue2.sdrrxsetup();
-    end
+    node_ue.sdrrxsetup();             % set up reading stream
     node_bs.sdrrxsetup();
     
-    chained_mode = 0;
-    node_bs.set_tddconfig(chained_mode,1); % configure the BS: schedule etc.
-   
-    node_ue1.set_tddconfig(chained_mode,0);
-    if n_ue  >1
-        node_ue2.set_tddconfig(chained_mode,0);
-    end
+    tdd_sched_index = 1; % for uplink only one frame schedule is sufficient
+    node_bs.set_tddconfig(1, tdd_sched_index); % configure the BS: schedule etc.
+    node_ue.set_tddconfig(0, tdd_sched_index);
 
     node_bs.sdr_setupbeacon();   % Burn beacon to the BS(1) RAM
-    
-    node_ue1.sdrtx(tx_data(:,1));       % Burn data to the UE RAM
-    if n_ue  >1
-        node_ue2.sdrtx(tx_data(:,2));
+
+    for i=1:n_ue
+        node_ue.sdrtx_single(tx_data(:,i), i);       % Burn data to the UE RAM
     end
     node_bs.sdr_activate_rx();          % activate reading stream
 
-    node_ue1.sdr_setcorr()              % activate correlator
-    if n_ue  >1
-        node_ue2.sdr_setcorr()
-    end
+    node_ue.sdr_setcorr()              % activate correlator
     %node_bs.sdrtrigger(trig);           % set trigger to start the frame  
     
     % Iris Rx 
@@ -244,10 +229,7 @@ elseif chan_type == "iris"
     [y, data0_len] = node_bs.sdrrx(n_samp); % read data
 
     node_bs.sdr_close();                % close streams and exit gracefully.
-    node_ue1.sdr_close();
-    if n_ue  >1
-        node_ue2.sdr_close();
-    end
+    node_ue.sdr_close();
     fprintf('Length of the received vector from HW: \tUE:%d\n', data0_len);
 
 
