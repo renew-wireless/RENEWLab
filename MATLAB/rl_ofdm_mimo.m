@@ -43,8 +43,7 @@ else
     RX_GN                   = 23;
     SMPL_RT                 = 5e6;
     N_FRM                   = 50;
-    b_ids                   = string.empty();
-    b_scheds                = string.empty();
+    bs_ids                   = string.empty();
     ue_ids                  = string.empty();
     ue_scheds               = string.empty();
 end
@@ -153,7 +152,7 @@ else
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
         
-        b_ids = ["RF3E000134", "RF3E000191", "RF3E000171", "RF3E000105",...
+        bs_ids = ["RF3E000134", "RF3E000191", "RF3E000171", "RF3E000105",...
             "RF3E000053", "RF3E000177", "RF3E000192", "RF3E000117",...
             "RF3E000183", "RF3E000152", "RF3E000123", "RF3E000178", "RF3E000113", "RF3E000176", "RF3E000132", "RF3E000108", ...
             "RF3E000143", "RF3E000160", "RF3E000025", "RF3E000034",...
@@ -163,34 +162,22 @@ else
         hub_id = "FH4A000001";
         
     else
-        b_ids = ["RF3E000189", "RF3E000024", "RF3E000139", "RF3E000032", "RF3E000154", "RF3E000182", "RF3E000038", "RF3E000137"];
+        bs_ids = ["RF3E000189", "RF3E000024", "RF3E000139", "RF3E000032", "RF3E000154", "RF3E000182", "RF3E000038", "RF3E000137"];
     end
     
     ue_ids= ["RF3E000060", "RF3E000145"];
 
-    b_prim_sched = "PGGGGGGGGGGRGGGG";           % BS primary node's schedule: Send Beacon only from one Iris board
-    b_sec_sched = "GGGGGGGGGGGRGGGG"; 
-    ue_sched = "GGGGGGGGGGGPGGGG";               % UE schedule
+    bs_sched = ["BGGGGGGGGGGRGGGG"];           % BS schedule
+    ue_sched = ["GGGGGGGGGGGPGGGG"];           % UE schedule
 
-    % schedule for the other boards
-    b_scheds =  b_prim_sched;
-    if (N_BS_NODE > 1)
-        b_scheds = [b_scheds b_sec_sched];
-    end
-    
-    % UE schedule
-    ue_scheds = string.empty();
-    for iu = 1:N_UE
-        ue_scheds(iu,:) = ue_sched;
-    end
 
     %number of samples in a frame
     n_samp = length(tx_vecs_iris);
    
     % Iris nodes' parameters
-    sdr_params = struct(...
-        'id', b_ids, ...
-        'n_chain',N_BS_NODE, ...        % number of nodes chained together
+    bs_sdr_params = struct(...
+        'id', bs_ids, ...
+        'n_sdrs',N_BS_NODE, ...        % number of nodes chained together
         'txfreq', TX_FRQ, ...   
         'rxfreq', RX_FRQ, ...
         'txgain', TX_GN, ...
@@ -198,27 +185,22 @@ else
         'sample_rate', SMPL_RT, ...
         'n_samp', n_samp, ...          % number of samples per frame time.
         'n_frame', N_FRM, ...
-        'tdd_sched', b_scheds, ...     % number of zero-paddes samples
-        'n_zpad_samp', (N_ZPAD_PRE + N_ZPAD_POST) ...
+        'tdd_sched', bs_sched, ...     % number of zero-paddes samples
+        'n_zpad_samp', N_ZPAD_PRE ...
         );
 
-    sdr_params(2) = sdr_params(1);
-    sdr_params(2).id =  ue_ids(1);
-    sdr_params(2).n_chain = 1;
-    sdr_params(2).rxfreq = RX_FRQ;
-    sdr_params(2).txfreq = TX_FRQ;
-    sdr_params(2).txgain = TX_GN_ue;
+    ue_sdr_params = bs_sdr_params;
+    ue_sdr_params.id =  ue_ids;
+    ue_sdr_params.n_sdrs = 2;
+    ue_sdr_params.txgain = TX_GN_ue;
     
-    sdr_params(2).tdd_sched = ue_scheds(1);
-    
-    sdr_params(3)= sdr_params(2);
-    sdr_params(3).id =  ue_ids(2);
+    ue_sdr_params.tdd_sched = ue_sched;
     
     if USE_HUB
-        rx_vec_iris = getRxVec(tx_vecs_iris,N_BS_NODE, N_UE, chan_type, [], sdr_params(1), sdr_params(2:3), hub_id);
+        rx_vec_iris = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, chan_type, [], bs_sdr_params, ue_sdr_params, hub_id);
                                
     else
-        rx_vec_iris = getRxVec(tx_vecs_iris,N_BS_NODE, N_UE, chan_type, [], sdr_params(1), sdr_params(2:3), []);
+        rx_vec_iris = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, chan_type, [], bs_sdr_params, ue_sdr_params, []);
     end
 
 end

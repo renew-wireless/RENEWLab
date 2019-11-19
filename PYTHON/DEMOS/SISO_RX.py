@@ -56,7 +56,7 @@ import logging
 import pdb
 from SoapySDR import *              # SOAPY_SDR_ constants
 from optparse import OptionParser
-from matplotlib import animation
+#from matplotlib import animation
 from data_recorder import *
 from find_lts import *
 from digital_rssi import *
@@ -65,6 +65,7 @@ from file_rdwr import *
 from fft_power import *
 from macros import *
 from init_fncs import *
+from MyFuncAnimation import *
 
 #########################################
 #            Global Parameters          #
@@ -242,8 +243,11 @@ def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
     # RSSI read setup
     setUpDigitalRssiMode(sdr)
 
-    anim = animation.FuncAnimation(fig, animate, init_func=init, fargs=(num_samps, recorder, agc_en, wait_trigger), frames=100,
-                                   interval=100, blit=True)
+    #anim = animation.FuncAnimation(fig, animate, init_func=init, fargs=(num_samps, recorder, agc_en, wait_trigger), frames=100,
+    #                               interval=100, blit=True)
+    anim = MyFuncAnimation(fig, animate, init_func=init, fargs=(num_samps, recorder, agc_en, wait_trigger), frames=100,
+                                    interval=100, blit=True)
+
     plt.show()
 
 
@@ -408,7 +412,7 @@ def main():
     parser.add_option("--elevation", type="float", dest="elevation", help="Elevation", default=0.0)
     parser.add_option("--freq", type="float", dest="freq", help="Optional Rx freq (Hz)", default=2.5e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=16384)
-    parser.add_option("--serial", type="string", dest="serial", help="Serial number of the device", default="RF3E000392")  # "RF3E000375"  "RF3E000392"
+    parser.add_option("--serial", type="string", dest="serial", help="Serial number of the device", default="")
     parser.add_option("--rxMode", type="string", dest="rxMode", help="RX Mode, Options:BASIC/REC/REPLAY", default="BASIC")
     parser.add_option("--AGCen", type="int", dest="AGCen", help="Enable AGC Flag. Options:0/1", default=0)
     parser.add_option("--wait-trigger", action="store_true", dest="wait_trigger", help="wait for a trigger to start a frame",default=False)

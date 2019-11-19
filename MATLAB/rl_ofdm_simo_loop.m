@@ -29,7 +29,7 @@ sim_H_var               = 4;
 %Iris params:
 N_BS_NODE = 2;
 N_UE = 1;
-b_ids = string.empty();
+bs_ids = string.empty();
 b_scheds = string.empty();
 ue_ids = string.empty();
 ue_scheds = string.empty();
@@ -162,49 +162,40 @@ else
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     % Create a two Iris node objects:
-    b_ids = ["RF3E000189", "RF3E000024"];
-    ue_ids= "RF3E000060";
+    bs_ids = ["RF3E000189", "RF3E000024"];
+    ue_ids= ["RF3E000060"];
 
-    b_prim_sched = "PGGGGGRG";           % BS primary noede's schedule: Send Beacon only from one Iris board
-    b_sec_sched = "GGGGGGRG"; 
-    ue_sched = "GGGGGGPG";               % UE schedule
+    bs_sched = ["BGGGGGRG"];           % BS schedule
+    ue_sched = ["GGGGGGPG"];          % UE schedule
 
-    b_scheds =  b_prim_sched;
-    if (N_BS_NODE > 1)
-        b_scheds = [b_scheds b_sec_sched];
-    end
-
-    ue_scheds = string.empty();
-    for iu = 1:N_UE
-        ue_scheds(iu,:) = ue_sched;
-    end
-
+    rxfreq = 2.5e9;
+    txfreq = 2.5e9;
+    
     n_samp = length(tx_vec_iris);
     % Iris nodes' parameters
-    sdr_params = struct(...
-        'id', b_ids, ...
-        'n_chain',N_BS_NODE, ...
-        'txfreq', 2.5e9, ...
-        'rxfreq', 2.5e9, ...
+    bs_sdr_params = struct(...
+        'id', bs_ids, ...
+        'n_sdrs', N_BS_NODE, ...
+        'txfreq', txfreq, ...
+        'rxfreq', rxfreq, ...
         'txgain', 42, ...
         'rxgain', 23, ...
         'sample_rate', 5e6, ...
         'n_samp', n_samp, ...          % number of samples per frame time.
-        'tdd_sched', b_scheds, ...     % number of zero-paddes samples
+        'tdd_sched', bs_sched, ...     % number of zero-paddes samples
         'n_zpad_samp', (N_ZPAD_PRE + N_ZPAD_POST) ...
         );
 
-    sdr_params(2) = sdr_params(1);
-    sdr_params(2).id =  ue_ids(1);
-    sdr_params(2).n_chain = 1;
-    sdr_params(2).rxfreq = 2.5e9;
-    sdr_params(2).txfreq = 2.5e9;
-    sdr_params(2).tdd_sched = ue_scheds(1);
-    % Iris nodes objects
-    node_bs = iris_py(sdr_params(1));
-    node_ue = iris_py(sdr_params(2));
+    ue_sdr_params = bs_sdr_params;
+    ue_sdr_params.id =  ue_ids;
+    ue_sdr_params.n_sdrs = 1;
+    ue_sdr_params.tdd_sched = ue_sched;
 
-    SAMP_FREQ = sdr_params(1).sample_rate;
+    % Iris nodes objects
+    node_bs = iris_py(bs_sdr_params);
+    node_ue = iris_py(ue_sdr_params);
+
+    SAMP_FREQ = bs_sdr_params.sample_rate;
 
     %% Iris Tx UL
     % Need to be done once for burst! Just burn the data onto the FPGAs RAM

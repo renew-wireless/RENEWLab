@@ -28,7 +28,7 @@
  ---------------------------------------------------------------------
 """
 import matplotlib
-matplotlib.use('GTK3Agg')
+#matplotlib.use('GTK3Agg')
 
 import sys
 sys.path.append('../IrisUtils/')
@@ -43,7 +43,7 @@ import pickle
 import scipy.signal
 import matplotlib.pyplot as plt
 from matplotlib import animation
-from SoapySDR import *              # SOAPY_SDR constants
+#from SoapySDR import *              # SOAPY_SDR constants
 from optparse import OptionParser
 from digital_rssi import *
 from fft_power import *
@@ -53,6 +53,7 @@ from file_rdwr import *
 from bandpower import *
 from generate_sequence import *
 matplotlib.rcParams.update({'font.size': 10})
+from MyFuncAnimation import *
 
 
 #########################################
@@ -321,8 +322,11 @@ def rxsamples_app(args, srl, freq, bw, rxgain, clockRate, out):
     # Start AGC thread
     threadT.start()
 
-    anim = animation.FuncAnimation(fig, animate, init_func=init,
-                               frames=100, interval=100, blit=True)
+    #anim = animation.FuncAnimation(fig, animate, init_func=init,
+    #                           frames=100, interval=100, blit=True)
+    anim = MyFuncAnimation(fig, animate, init_func=init,
+                                frames=100, interval=100, blit=True)
+
     plt.show()
     if out is not None:
         fig.savefig(out)

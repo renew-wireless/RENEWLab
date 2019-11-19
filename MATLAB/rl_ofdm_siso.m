@@ -54,10 +54,10 @@ RX_GN                   = 20;
 SMPL_RT                 = 5e6;
 N_FRM                   = 10;
 
-b_ids = string.empty();
-b_scheds = string.empty();
+bs_ids = string.empty();
+bs_sched = string.empty();
 ue_ids = string.empty();
-ue_scheds = string.empty();
+ue_sched = string.empty();
 
 
 % Waveform params
@@ -146,25 +146,18 @@ else
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
  % Create two Iris node objects:
-    b_ids(end+1) = "RF3E000189";
-    ue_ids(end+1) = "RF3E000060";
+    bs_ids = ["RF3E000189"];
+    ue_ids = ["RF3E000060"];
     
-    b_prim_sched = "BGGGGGRG";           % BS primary noede's schedule: Send Beacon only from one Iris board
-    ue_sched = "GGGGGGPG";               % UE schedule
- 
-    b_scheds =  b_prim_sched;
-    
-    ue_scheds = string.empty();
-    for iu = 1:N_UE
-        ue_scheds(iu,:) = ue_sched;
-    end
+    bs_sched = ["BGGGGGRG"];           % BS schedule
+    ue_sched = ["GGGGGGPG"];               % UE schedule
     
     n_samp = length(tx_vec_iris);    
     
     % Iris nodes' parameters
-    sdr_params = struct(...
-        'id', b_ids, ...
-        'n_chain',N_BS_NODE, ...
+    bs_sdr_params = struct(...
+        'id', bs_ids, ...
+        'n_sdrs',N_BS_NODE, ...
         'txfreq', TX_FRQ, ...
         'rxfreq', RX_FRQ, ...
         'txgain', TX_GN, ...
@@ -172,18 +165,16 @@ else
         'sample_rate', SMPL_RT, ...
         'n_samp', n_samp, ...          % number of samples per frame time.
         'n_frame', N_FRM, ...
-        'tdd_sched', b_scheds, ...     % number of zero-paddes samples
-        'n_zpad_samp', (N_ZPAD_PRE + N_ZPAD_POST) ...
+        'tdd_sched', bs_sched, ...     % number of zero-paddes samples
+        'n_zpad_samp', N_ZPAD_PRE ...
         );
     
-    sdr_params(2) = sdr_params(1);
-    sdr_params(2).id =  ue_ids(1);
-    sdr_params(2).n_chain = 1;
-    sdr_params(2).txfreq = TX_FRQ;
-    sdr_params(2).rxfreq = RX_FRQ;
-    sdr_params(2).tdd_sched = ue_scheds(1);
+    ue_sdr_params = bs_sdr_params;
+    ue_sdr_params.id =  ue_ids;
+    ue_sdr_params.n_sdrs = 1;
+    ue_sdr_params.tdd_sched = ue_sched;
     
-    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, [], sdr_params(1), sdr_params(2), []);
+    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, [], bs_sdr_params, ue_sdr_params, []);
 
 end
     rx_vec_iris = rx_vec_iris.';
