@@ -49,7 +49,7 @@ import pickle
 from macros import *
 from SoapySDR import *              # SOAPY_SDR_ constants
 from optparse import OptionParser
-from matplotlib import animation
+#from matplotlib import animation
 from data_recorder import *
 from find_lts import *
 from digital_rssi import *
@@ -59,6 +59,7 @@ from type_conv import *
 from print_sensor import *
 from ofdmtxrx import *
 from init_fncs import *
+from MyFuncAnimation import *
 
 plt.style.use('ggplot')
 
@@ -507,9 +508,10 @@ def txrx_app(args, rate, ampl, ant, txgain, rxgain, freq, bbfreq, serialTx, seri
     else:
         # Simulation Mode
         rxStream = []
+        sdrTx = []
 
     # Start animation
-    anim = animation.FuncAnimation(fig, animate,
+    anim = MyFuncAnimation(fig, animate,
                                    init_func=init,
                                    fargs=(num_samps_rd, rxStream, sdrRx, sdrTx, ofdm_params, tx_struct, ota, ofdm_obj, agc_en),
                                    frames=100,
