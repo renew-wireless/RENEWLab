@@ -393,12 +393,12 @@ def signal_handler(rate, numSyms, use_trig, signal, frame):
 #########################################
 def main():
     parser = OptionParser()
-    parser.add_option("--bsnode", type="string", dest="bsnode", help="serial number of the master (base station node) device", default="")
-    parser.add_option("--clnode", type="string", dest="clnode", help="serial number of the slave (client node) device", default="")
+    parser.add_option("--bsnode", type="string", dest="bsnode", help="serial number of the master (base station node) device", default="RF3E000103")
+    parser.add_option("--clnode", type="string", dest="clnode", help="serial number of the slave (client node) device", default="RF3E000157")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]", default=30.0)
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]", default=30.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]", default=65.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]", default=65.0)
+    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=2.5e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=100)     # to compensate for front-end group delay
     parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=100)  # to compensate for rf path delay
