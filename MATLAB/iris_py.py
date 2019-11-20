@@ -161,9 +161,8 @@ class Iris_py:
 			self.sdr.writeSetting(SOAPY_SDR_TX, 1, 'ENABLE_CHANNEL', 'false')
 
     # Set trigger:
-	def set_trigger(self, trig=False):
-		if bool(trig) is True:
-			self.sdr.writeSetting("TRIGGER_GEN", "")
+	def set_trigger(self):
+		self.sdr.writeSetting("TRIGGER_GEN", "")
 
 	def set_corr(self):
 		'''enable the correlator, with inputs from adc'''

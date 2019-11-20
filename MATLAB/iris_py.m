@@ -34,7 +34,6 @@ classdef iris_py < handle
         tdd_sched;
         n_zpad_samp;    %number of zero-padding samples
         n_frame = 10;
-        
     end
     
     methods
@@ -62,7 +61,7 @@ classdef iris_py < handle
                 obj.n_zpad_samp = sdr_params.n_zpad_samp;
                 
                 for ipy=1:obj.n_sdrs
-                    id_str = convertStringsToChars( obj.serial_ids(ipy));
+                    id_str = convertStringsToChars(obj.serial_ids(ipy));
                     py_obj = py.iris_py.Iris_py( pyargs('serial_id',id_str,...
                         'tx_freq', obj.tx_freq, 'rx_freq', obj.rx_freq,...
                         'tx_gain',obj.tx_gain,'rx_gain',obj.rx_gain,...
@@ -76,11 +75,11 @@ classdef iris_py < handle
         
         % NB: Need to redefine py_obj as array to be parsed in all the
         % functions that follow
-        function sdrtrigger(obj, trig)
+        function sdrtrigger(obj)
             if ~obj.use_hub
-            obj.py_obj_array{1}.set_trigger(pyargs('trig',trig)); % The trigger is set only on the fist node
+                obj.py_obj_array{1}.set_trigger(); % The trigger is set only on the fist node
             else
-                obj.py_obj_hub.set_trigger(pyargs('trig',trig));
+                obj.py_obj_hub.set_trigger();
             end
         end
         
@@ -117,18 +116,26 @@ classdef iris_py < handle
                      'is_bs', is_bs, 'prefix_len', obj.n_zpad_samp));
              end
          end
-        
-        function sdrrxsetup(obj)
+
+         function set_tddconfig_single(obj, is_bs, index)
+             for ipy = 1:obj.n_sdrs
+                 sched  = convertStringsToChars(obj.tdd_sched(index(ipy)));
+                 obj.py_obj_array{ipy}.config_sdr_tdd( pyargs('tdd_sched',sched, ...
+                     'is_bs', is_bs, 'prefix_len', obj.n_zpad_samp));
+             end
+         end
+         
+         function sdrrxsetup(obj)
             for ipy = 1:obj.n_sdrs
                 obj.py_obj_array{ipy}.setup_stream_rx();
             end
-        end
+         end
         
-        function sdr_activate_rx(obj)
+         function sdr_activate_rx(obj)
            for ipy=1:obj.n_sdrs
                obj.py_obj_array{ipy}.activate_stream_rx();
            end
-        end
+         end
         
         %Assume same data is Tx-ed from all memebers of the array
         function sdrtx(obj, data)
@@ -153,9 +160,9 @@ classdef iris_py < handle
                 %trigger beacon TX
                 trig = 1;
                 if ~obj.use_hub
-                    obj.py_obj_array{1}.set_trigger(pyargs('trig',trig)); % The trigger is set only on the fist node
+                    obj.py_obj_array{1}.set_trigger(); % The trigger is set only on the fist node
                 else
-                    obj.py_obj_hub.set_trigger(pyargs('trig',trig));
+                    obj.py_obj_hub.set_trigger();
                     disp('trig hub!!!!')
                 end
                 
