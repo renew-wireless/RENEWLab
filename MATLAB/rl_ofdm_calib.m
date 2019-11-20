@@ -21,17 +21,6 @@ end
 
 % Params:
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
-CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
-SIM_MOD                 = 0;    
-N_BS_NODE = 6;
-N_UE = 1;
-
-
-nt                      = 1;
-nsnr                    = 1;
-TX_SCALE                = 0.5;         % Scale for Tx waveform ([0:1])
-chan_type               = "iris";
-
 
 %Iris params:
 USE_HUB                 = 0;
@@ -45,14 +34,7 @@ bs_ids = string.empty();
 bs_sched = string.empty();
 
 
-ber_SIM = zeros(nt,nsnr);           % BER
-berr_th = zeros(nsnr,1);            % Theoretical BER
-fprintf("Channel type: %s \n",chan_type);
-
-
 % Waveform params
-N_OFDM_SYM              = 46;         % Number of OFDM symbols for burst, it needs to be less than 47
-MOD_ORDER               = 16;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
 
 % OFDM params
 SC_IND_PILOTS           = [8 22 44 58];                           % Pilot subcarrier indices
@@ -60,11 +42,10 @@ SC_IND_DATA             = [2:7 9:21 23:27 39:43 45:57 59:64];     % Data subcarr
 SC_IND_DATA_PILOT       = [2:27 39:64]';
 N_SC                    = 64;                                     % Number of subcarriers
 CP_LEN                  = 16;                                     % Cyclic prefix length
-N_DATA_SYMS             = N_OFDM_SYM * length(SC_IND_DATA);       % Number of data symbols (one per data-bearing subcarrier per OFDM symbol)
-N_LTS_SYM               = 2;                                      % Number of 
 N_SYM_SAMP              = N_SC + CP_LEN;                          % Number of samples that will go over the air
-N_ZPAD_PRE              = 90;                                     % Zero-padding prefix for Iris
-N_ZPAD_POST             = N_ZPAD_PRE -14;                         % Zero-padding postfix for Iris
+N_ZPAD_PRE              = 100;                                     % Zero-padding prefix for Iris
+N_ZPAD_POST             = 76;                         % Zero-padding postfix for Iris
+N_OFDM_SYM = floor((4096 - N_ZPAD_PRE - N_ZPAD_POST) / N_SYM_SAMP);% Number of OFDM symbols for burst, it needs to be less than 47
 
 % Rx processing params
 FFT_OFFSET                    = 16;          % Number of CP samples to use in FFT (on average)
@@ -72,7 +53,8 @@ FFT_OFFSET                    = 16;          % Number of CP samples to use in FF
 
 %% Define the preamble
 % LTS for fine CFO and channel estimation
-lts_f = [0 0 0 0 0 0 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1 0 1 -1 -1 1 1 -1 1 -1 1 -1 -1 -1 -1 -1 1 1 -1 -1 1 -1 1 -1 1 1 1 1 0 0 0 0 0].';
+lts_f = [0 1 -1 -1 1 1 -1 1 -1 1 -1 -1 -1 -1 -1 1 1 -1 -1 1 -1 1 -1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 ...
+    1 1 -1 -1 1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1];
 lts_t = ifft(lts_f, 64); %time domain
 
 %% Init Iris nodes
@@ -84,37 +66,31 @@ lts_t = ifft(lts_f, 64); %time domain
 % nodes.
 
 if USE_HUB
-    % Using chains of different size requires some internal
-    % calibration on the BS. This functionality will be added later.
-    % For now, we use only the 4-node chains:
-
-    bs_ids = ["RF3E000134", "RF3E000191", "RF3E000171", "RF3E000105",...
-        "RF3E000053", "RF3E000177", "RF3E000192", "RF3E000117",...
-        "RF3E000183", "RF3E000152", "RF3E000123", "RF3E000178", "RF3E000113", "RF3E000176", "RF3E000132", "RF3E000108", ...
-        "RF3E000143", "RF3E000160", "RF3E000025", "RF3E000034",...
-        "RF3E000189", "RF3E000024", "RF3E000139", "RF3E000032", "RF3E000154", "RF3E000182", "RF3E000038", "RF3E000137", ...
-        "RF3E000103", "RF3E000180", "RF3E000181", "RF3E000188"];
-
-    hub_id = "FH4A000001";
-
+    hub_id = "FH4A000002";
 else
-    bs_ids = ["0328", "0339", "0268", "0282", "0344", "0233"];
+    hub_id = [];
 end
 
+bs_ids = ["RF3E000208", "RF3E000636", "RF3E000632", "RF3E000568", "RF3E000558", "RF3E000633", "RF3E000566", "RF3E000635"];
+
 bs_sched = ["PGRG", "RGPG"];  % All BS schedule, Ref Schedule
-REF_ANT = (N_BS_NODE/2);
+N_BS_NODE = length(bs_ids);
+REF_ANT = floor(N_BS_NODE/2);
 sched_id = ones(1, N_BS_NODE);
 sched_id(REF_ANT) = 2;
 
-preamble_common = [lts_t(49:64); lts_t];
-l_pre = length(preamble_common);
+lts = [lts_t(49:64) lts_t];
 N_BS = N_BS_NODE - 1;
-data_len = N_BS * l_pre;
-preamble = zeros(data_len, N_BS_NODE);
+DATA_REP = floor(N_OFDM_SYM / N_BS);
+data_len = N_BS * DATA_REP * N_SYM_SAMP;
+preamble = zeros(N_BS_NODE, data_len);
 for jp = 1:N_BS
-    ibs = jp + (jp >= REF_ANT);
-    preamble((jp-1)*l_pre + 1: (jp-1)*l_pre+l_pre, ibs) = preamble_common;
-    preamble((jp-1)*l_pre + 1: (jp-1)*l_pre+l_pre, REF_ANT) = preamble_common;
+    nid = jp + (jp >= REF_ANT);
+    for rp = 1:DATA_REP
+        start_index = ((rp - 1) + (jp - 1) * DATA_REP) * N_SYM_SAMP;
+        preamble(nid, start_index + 1: start_index + N_SYM_SAMP) = lts;
+        preamble(REF_ANT, start_index + 1: start_index + N_SYM_SAMP) = lts;
+    end
 end
 
 n_samp = N_ZPAD_PRE + data_len + N_ZPAD_POST;
@@ -138,59 +114,64 @@ bs_sdr_params = struct(...
     'n_zpad_samp', N_ZPAD_PRE ...
     );
 
-if USE_HUB
-    node_bs = iris_py(bs_sdr_params, hub_id);
-else
-    node_bs = iris_py(bs_sdr_params,[]);        % initialize BS
-end
+node_bs = iris_py(bs_sdr_params,hub_id);        % initialize BS
 
 node_bs.sdrsync();                 % synchronize delays only for BS
 node_bs.sdrrxsetup();
 
 node_bs.set_tddconfig_single(1, sched_id); % configure the BS: schedule etc.
 for i=1:N_BS_NODE
-    tx_data = [zeros(N_ZPAD_PRE, 1); preamble(:, i); zeros(N_ZPAD_POST, 1)];
+    tx_data = [zeros(1, N_ZPAD_PRE) preamble(i, :) zeros(1, N_ZPAD_POST)];
     node_bs.sdrtx_single(tx_data, i);  % Burn data to the UE RAM
 end
 node_bs.sdr_activate_rx();   % activate reading stream
+tic
 [rx_vec_iris, data0_len] = node_bs.sdrrx(n_samp); % read data
-
+toc
 a = 1;
-unos = ones(size(preamble_common'));
+unos = ones(size(conj(lts)));
 for ibs = 1:N_BS_NODE
     % Correlation through filtering
-    v0 = filter(fliplr(preamble(:, REF_ANT)), a, rx_vec_iris(ibs, :));
-    v1 = filter(unos, a, abs(rx_vec_iris(ibs, :)) .^ 2);
+    v0 = filter(fliplr(conj(preamble(REF_ANT, end - DATA_REP * N_SYM_SAMP: end))), a, rx_vec_iris(ibs, end - DATA_REP * N_SYM_SAMP: end));
+    v1 = filter(unos, a, abs(rx_vec_iris(ibs, end - DATA_REP * N_SYM_SAMP: end)) .^ 2);
     lts_corr = (abs(v0) .^ 2) ./ v1; % normalized correlation
 
     % position of the last peak
-    [~, max_idx] = max(lts_corr);
-    rx_data_start = max_idx + 1 - data_len;
-    payload_rx(ibs, :) = rx_vec_iris(ibs, rx_data_start: max_idx );
+    [~, max_idx] = max(abs(lts_corr));
+    rx_data_start = max_idx + (n_samp - DATA_REP * N_SYM_SAMP) - data_len
+    if rx_data_start < 0
+       display('bad receive!');
+       break;
+    end
+    payload_rx(ibs, :) = rx_vec_iris(ibs, rx_data_start: rx_data_start + data_len - 1);
 
     for sid = 1:N_BS
-        nid = sid + (sid >= REF_ANT);
-        if (ibs == REF_ANT)
-            rx_fft_ref(sid, :) = fft(payload_rx(ibs, 1 + CP_LEN + (sid - 1) * N_SYM_SAMP : sid * N_SYM_SAMP), N_SC);
-        else
-            rx_fft(sid, :) = rx_fft(sid, :) + fft(payload_rx(ibs, 1 + CP_LEN + (sid - 1) * N_SYM_SAMP : sid * N_SYM_SAMP), N_SC);
+        for rid = 1:DATA_REP
+            % nid = sid + (sid >= REF_ANT);
+            start_index = CP_LEN + ((rid - 1) + (sid - 1) * DATA_REP) * N_SYM_SAMP;
+            if (ibs == REF_ANT)
+                rx_fft_ref(sid, :) = rx_fft_ref(sid, :) + fft(payload_rx(ibs, 1 + start_index : start_index + N_SC), N_SC);
+            else
+                rx_fft(sid, :) = rx_fft(sid, :) + fft(payload_rx(ibs, 1 + start_index : start_index + N_SC), N_SC);
+            end
         end
     end
 end
 
 for sid = 1:N_BS
-    cal_mat(sid, :) = rx_fft_ref(sid, :) ./ (rx_fft(sid, :) / N_BS);
+    cal_mat(sid, :) = (rx_fft_ref(sid, :) / DATA_REP) ./ (rx_fft(sid, :) / (N_BS * DATA_REP));
 end
 
-cf = 0;
+node_bs.sdr_close();
 
+cf = 0;
 cf = cf + 1;
 figure(cf);clf;
 
 for i = 1:N_BS
     subplot(N_BS, 1, i);
     plot(-32:1:31, abs(cal_mat(i, :)));
-    axis([-40 40 0 4])
+    axis([-40 40 0 5])
     grid on;
     title('Calibration MAGNITUDE');
 end

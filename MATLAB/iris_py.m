@@ -139,16 +139,16 @@ classdef iris_py < handle
         
         %Assume same data is Tx-ed from all memebers of the array
         function sdrtx(obj, data)
-            re = real(data).';   
-            im = imag(data).';
+            re = real(data);   
+            im = imag(data);
             for ipy = 1:obj.n_sdrs
                 obj.py_obj_array{ipy}.burn_data( pyargs('data_r', re, 'data_i', im) );
             end
         end
 
         function sdrtx_single(obj, data, index)
-            re = real(data).';   
-            im = imag(data).';
+            re = real(data);   
+            im = imag(data);
             obj.py_obj_array{index}.burn_data( pyargs('data_r', re, 'data_i', im) );
         end
         
