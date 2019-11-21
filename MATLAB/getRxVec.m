@@ -210,8 +210,8 @@ elseif chan_type == "iris"
     node_bs.sdrrxsetup();
     
     tdd_sched_index = 1; % for uplink only one frame schedule is sufficient
-    node_bs.set_tddconfig(1, tdd_sched_index); % configure the BS: schedule etc.
-    node_ue.set_tddconfig(0, tdd_sched_index);
+    node_bs.set_tddconfig(1, bs_param.tdd_sched(tdd_sched_index)); % configure the BS: schedule etc.
+    node_ue.set_tddconfig(0, ue_param.tdd_sched(tdd_sched_index));
 
     node_bs.sdr_setupbeacon();   % Burn beacon to the BS(1) RAM
 

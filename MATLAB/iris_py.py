@@ -88,7 +88,6 @@ class Iris_py:
               bw=None,
               sample_rate=None,
               n_samp=None,				# Total number of samples, including zero-pads
-                max_frames=1,
               both_channels=False,
               agc_en=False,
               ):
@@ -107,7 +106,7 @@ class Iris_py:
 
 		self.agc_en = agc_en
 		self.both_channels = both_channels
-		self.max_frames = int(max_frames)
+		self.max_frames = 1
 
 		### Setup channel rates, ports, gains, and filters ###
 		info = self.sdr.getHardwareInfo()
@@ -168,15 +167,12 @@ class Iris_py:
 		'''enable the correlator, with inputs from adc'''
 		self.sdr.writeSetting("CORR_START", "A")
 
-	def config_sdr_tdd(self, tdd_sched=None, is_bs=True, prefix_len=0):
+	def config_sdr_tdd(self, is_bs=True, tdd_sched="G", prefix_len=0, max_frames=1):
 		'''Configure the TDD schedule and functionality when unchained. Set up the correlator.'''
 		global corr_threshold, beacon
 		coe = cfloat2uint32(np.conj(beacon), order='QI')
-		if tdd_sched is not None:
-			self.tdd_sched = tdd_sched
-		else:
-		    self.tdd_sched = "G"
-	        max_frames = self.max_frames
+		self.tdd_sched = tdd_sched
+                self.max_frames = int(max_frames)
 		if bool(is_bs):
 			conf_str = {"tdd_enabled": True,
                             "frame_mode": "free_running",
@@ -392,7 +388,7 @@ if __name__ == '__main__':
 	siso_bs.activate_stream_rx()
 
 	siso_ue.set_corr()
-	siso_bs.set_trigger(True)
+	siso_bs.set_trigger()
 
 	wave_rx_a_bs_mn = siso_bs.recv_stream_tdd()
 

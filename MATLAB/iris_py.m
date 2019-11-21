@@ -22,24 +22,25 @@ classdef iris_py < handle
         use_hub = 0;
         py_obj_hub;
         % Parameters to feed python (pun very intended!)
-        serial_ids;
-        n_sdrs;         % number of Iris boards in a chain
-		sample_rate;
-		tx_freq;q
-		rx_freq;
-		bw;
-		tx_gain;
-		rx_gain;
-		n_samp;
-        tdd_sched;
-        n_zpad_samp;    %number of zero-padding samples
+        serial_ids = [];
+        n_sdrs = 0;         % number of Iris boards in a chain
+		sample_rate = 0;
+		tx_freq = 0;
+		rx_freq = 0;
+		bw = 0;
+		tx_gain = 0;
+		rx_gain = 0;
+		n_samp = 0;
+        tdd_sched = "";
+        n_zpad_samp = 0;    %number of zero-padding samples
         n_frame = 10;
+        is_bs = 1;
     end
     
     methods
         function obj = iris_py(sdr_params, hub_id) % User must put 0 in hub_params in case hub is not used!
             if nargin > 0
-                if ~isempty(hub_id) 
+                if ~isempty(hub_id)
                     disp('Using hub with ID:');
                     id_str = convertStringsToChars(hub_id);
                     obj.py_obj_hub = py.hub_py.Hub_py( pyargs('serial_id',id_str));
@@ -65,12 +66,15 @@ classdef iris_py < handle
                     py_obj = py.iris_py.Iris_py( pyargs('serial_id',id_str,...
                         'tx_freq', obj.tx_freq, 'rx_freq', obj.rx_freq,...
                         'tx_gain',obj.tx_gain,'rx_gain',obj.rx_gain,...
-                        'sample_rate',obj.sample_rate, 'n_samp', obj.n_samp) );%,...
-                        %'max_frames',obj.n_frame) ); 
+                        'sample_rate',obj.sample_rate, 'n_samp', obj.n_samp) );
                     
                     obj.py_obj_array(ipy,:) = {py_obj};
                 end
             end
+        end
+
+        function sdr_set_n_frame(obj, n_frame)
+            obj.n_frame = n_frame;
         end
         
         % NB: Need to redefine py_obj as array to be parsed in all the
@@ -105,24 +109,24 @@ classdef iris_py < handle
          
          function sdr_setupbeacon(obj)
              % Assume Beacon only from the first Iris board in the BS array
-             obj.py_obj_array{1}.burn_beacon();
-         end
-        
-         
-         function set_tddconfig(obj, is_bs, index)
-             sched  = convertStringsToChars(obj.tdd_sched(index));
              for ipy = 1:obj.n_sdrs
-                 obj.py_obj_array{ipy}.config_sdr_tdd( pyargs('tdd_sched',sched, ...
-                     'is_bs', is_bs, 'prefix_len', obj.n_zpad_samp));
+                 obj.py_obj_array{ipy}.burn_beacon();
+             end
+         end
+         
+         function set_tddconfig(obj, is_bs, tdd_sched)
+             obj.is_bs = is_bs;
+             sched  = convertStringsToChars(tdd_sched);
+             for ipy = 1:obj.n_sdrs
+                 obj.py_obj_array{ipy}.config_sdr_tdd( pyargs('tdd_sched', sched, ...
+                     'is_bs', is_bs, 'prefix_len', obj.n_zpad_samp, 'max_frames', obj.n_frame));
              end
          end
 
-         function set_tddconfig_single(obj, is_bs, index)
-             for ipy = 1:obj.n_sdrs
-                 sched  = convertStringsToChars(obj.tdd_sched(index(ipy)));
-                 obj.py_obj_array{ipy}.config_sdr_tdd( pyargs('tdd_sched',sched, ...
-                     'is_bs', is_bs, 'prefix_len', obj.n_zpad_samp));
-             end
+         function set_tddconfig_single(obj, is_bs, tdd_sched, index)
+             sched  = convertStringsToChars(tdd_sched);
+             obj.py_obj_array{index}.config_sdr_tdd( pyargs('tdd_sched', sched, ...
+                 'is_bs', is_bs, 'prefix_len', obj.n_zpad_samp, 'max_frames', obj.n_frame));
          end
          
          function sdrrxsetup(obj)
@@ -139,31 +143,28 @@ classdef iris_py < handle
         
         %Assume same data is Tx-ed from all memebers of the array
         function sdrtx(obj, data)
-            re = real(data);   
-            im = imag(data);
             for ipy = 1:obj.n_sdrs
-                obj.py_obj_array{ipy}.burn_data( pyargs('data_r', re, 'data_i', im) );
+                obj.py_obj_array{ipy}.burn_data( pyargs('data_r', real(data), 'data_i', imag(data)) );
             end
         end
 
         function sdrtx_single(obj, data, index)
-            re = real(data);   
-            im = imag(data);
-            obj.py_obj_array{index}.burn_data( pyargs('data_r', re, 'data_i', im) );
+            obj.py_obj_array{index}.burn_data( pyargs('data_r', real(data), 'data_i', imag(data)) );
         end
         
         % Read n_frame x n_samp data
         function [data, len] = sdrrx(obj, n_samp)
-            data_raw = zeros(obj.n_sdrs, obj.n_frame*n_samp);  % Change this to max frame!
+            data_raw = zeros(obj.n_sdrs, obj.n_frame * n_samp);  % Change this to max frame!
             
             for jf=1:obj.n_frame
-                %trigger beacon TX
-                trig = 1;
-                if ~obj.use_hub
-                    obj.py_obj_array{1}.set_trigger(); % The trigger is set only on the fist node
-                else
-                    obj.py_obj_hub.set_trigger();
-                    disp('trig hub!!!!')
+                %trigger base station
+                if obj.is_bs
+                    if ~obj.use_hub
+                        obj.py_obj_array{1}.set_trigger(); % The trigger is set only on the fist node
+                    else
+                        obj.py_obj_hub.set_trigger();
+                        disp('trig hub!!!!')
+                    end
                 end
                 
                 for ipy = 1:obj.n_sdrs

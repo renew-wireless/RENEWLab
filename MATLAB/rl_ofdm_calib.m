@@ -114,20 +114,20 @@ bs_sdr_params = struct(...
     'n_zpad_samp', N_ZPAD_PRE ...
     );
 
-node_bs = iris_py(bs_sdr_params,hub_id);        % initialize BS
+node_bs = iris_py(bs_sdr_params, hub_id);        % initialize BS
 
 node_bs.sdrsync();                 % synchronize delays only for BS
 node_bs.sdrrxsetup();
 
-node_bs.set_tddconfig_single(1, sched_id); % configure the BS: schedule etc.
 for i=1:N_BS_NODE
+    node_bs.set_tddconfig_single(1, bs_sched(sched_id(i)), i); % configure the BS: schedule etc.
     tx_data = [zeros(1, N_ZPAD_PRE) preamble(i, :) zeros(1, N_ZPAD_POST)];
     node_bs.sdrtx_single(tx_data, i);  % Burn data to the UE RAM
 end
 node_bs.sdr_activate_rx();   % activate reading stream
-tic
 [rx_vec_iris, data0_len] = node_bs.sdrrx(n_samp); % read data
-toc
+
+% process received reciprocity pilots
 a = 1;
 unos = ones(size(conj(lts)));
 for ibs = 1:N_BS_NODE
