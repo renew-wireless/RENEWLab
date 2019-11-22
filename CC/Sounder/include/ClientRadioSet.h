@@ -13,7 +13,6 @@ public:
     void radioStop(void);
 
 private:
-    void initAGC(SoapySDR::Device* iclSdrs);
     Config* _cfg;
     std::vector<Radio*> radios;
 };

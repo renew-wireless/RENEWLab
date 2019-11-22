@@ -7,6 +7,8 @@
 #include <SoapySDR/Formats.hpp>
 #include <SoapySDR/Time.hpp>
 
+static void initAGC(SoapySDR::Device* dev, Config *cfg);
+
 ClientRadioSet::ClientRadioSet(Config* cfg)
     : _cfg(cfg)
 {
@@ -33,7 +35,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
             radios.back()->dev_init(_cfg, ch, rxgain, txgain);
         }
 
-        initAGC(dev);
+        initAGC(dev, _cfg);
     }
     radios.shrink_to_fit();
 
@@ -142,19 +144,19 @@ int ClientRadioSet::radioTx(size_t radio_id, const void* const* buffs, int numSa
     return radios[radio_id]->xmit(buffs, numSamps, flags, frameTime);
 }
 
-void ClientRadioSet::initAGC(SoapySDR::Device* dev)
+static void initAGC(SoapySDR::Device* dev, Config *cfg)
 {
     /*
      * Initialize AGC parameters
      */
 #ifdef JSON
     json agcConf;
-    agcConf["agc_enabled"] = _cfg->clAgcEn;
-    agcConf["agc_gain_init"] = _cfg->clAgcGainInit;
+    agcConf["agc_enabled"] = cfg->clAgcEn;
+    agcConf["agc_gain_init"] = cfg->clAgcGainInit;
     std::string agcConfStr = agcConf.dump();
 #else
-    std::string agcConfStr = "{\"agc_enabled\":" + _cfg->clAgcEn ? "true" : "false";
-    agcConfStr += ",\"agc_gain_init\":" + std::to_string(_cfg->clAgcGainInit);
+    std::string agcConfStr = "{\"agc_enabled\":" + cfg->clAgcEn ? "true" : "false";
+    agcConfStr += ",\"agc_gain_init\":" + std::to_string(cfg->clAgcGainInit);
     agcConfStr += "}";
 #endif
     dev->writeSetting("AGC_CONFIG", agcConfStr);
