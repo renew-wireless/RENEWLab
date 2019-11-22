@@ -150,7 +150,8 @@ void Receiver::loopRecv(ReceiverContext* context)
     moodycamel::ProducerToken local_ptok(*message_queue_);
 
     const int bsSdrCh = config_->bsChannel.length();
-    int buffer_chunk_size = rx_buffer[0].buffer.size() / config_->getPackageLength();
+    size_t packageLength = sizeof(Package) + config_->getPackageDataLength();
+    int buffer_chunk_size = rx_buffer[0].buffer.size() / packageLength;
 
     // handle two channels at each radio
     // this is assuming buffer_chunk_size is at least 2

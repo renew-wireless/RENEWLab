@@ -39,8 +39,9 @@ Recorder::Recorder(Config* cfg)
         rx_buffer_ = new SampleBuffer[rx_thread_num];
         int intsize = sizeof(std::atomic_int);
         int arraysize = (buffer_chunk_size + intsize - 1) / intsize;
+        size_t packageLength = sizeof(Package) + config_->getPackageDataLength();
         for (int i = 0; i < rx_thread_num; i++) {
-            rx_buffer_[i].buffer.resize(buffer_chunk_size * cfg->getPackageLength());
+            rx_buffer_[i].buffer.resize(buffer_chunk_size * packageLength);
             rx_buffer_[i].pkg_buf_inuse = new std::atomic_int[arraysize];
             std::fill_n(rx_buffer_[i].pkg_buf_inuse, arraysize, 0);
         }
