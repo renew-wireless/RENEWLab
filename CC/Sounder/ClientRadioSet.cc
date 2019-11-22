@@ -113,7 +113,7 @@ void ClientRadioSet::radioStop(void)
         dev->writeSetting("CORR_CONFIG", corrConfStr);
         const auto timeStamp = SoapySDR::timeNsToTicks(dev->getHardwareTime(""), _cfg->rate);
         std::cout << "device " << i << ": Frame=" << (timeStamp >> 32)
-                  << ", Symbol=" << ((timeStamp && 0xFFFFFFFF) >> 16) << std::endl;
+                  << ", Symbol=" << ((timeStamp & 0xFFFFFFFF) >> 16) << std::endl;
         dev->writeSetting("TDD_CONFIG", tddConfStr);
         dev->writeSetting("TDD_MODE", "false");
         radios[i]->reset_DATA_clk_domain();
