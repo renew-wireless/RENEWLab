@@ -2,7 +2,7 @@
 #include "include/comms-lib.h"
 #include "include/macros.h"
 #include "include/matplotlibcpp.h"
-#include "include/sdr-lib.h"
+#include "include/BaseRadioSet.h"
 #include "include/utils.h"
 
 namespace plt = matplotlibcpp;

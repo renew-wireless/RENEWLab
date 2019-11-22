@@ -13,7 +13,7 @@
 #define DATARECEIVER_HEADER
 
 #include "concurrentqueue.h"
-#include "sdr-lib.h"
+#include "BaseRadioSet.h"
 #include <algorithm>
 #include <arpa/inet.h>
 #include <cassert>
