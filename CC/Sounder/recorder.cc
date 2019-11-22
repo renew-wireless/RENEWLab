@@ -151,7 +151,7 @@ static void write_attribute(Group& g, const char name[], const std::vector<std::
 enum {
     DS_FRAME_NUMBER,
     DS_NCELLS,
-    DS_CLIENT_ID,
+    DS_SYMS_PER_FRAME,
     DS_NANTENNAS,
     DS_PKG_DATA_LEN,
     DS_DIM
@@ -620,7 +620,7 @@ herr_t Recorder::record(int, int offset)
 #endif
             }
 
-            hdfoffset[DS_CLIENT_ID] = cfg->getClientId(pkg->frame_id, pkg->symbol_id);
+            hdfoffset[DS_SYMS_PER_FRAME] = cfg->getClientId(pkg->frame_id, pkg->symbol_id);
 
             // Select a hyperslab in extended portion of the dataset
             DataSpace pilot_filespace(pilot_dataset->getSpace());
@@ -650,7 +650,7 @@ herr_t Recorder::record(int, int offset)
 #endif
             }
 
-            hdfoffset[DS_CLIENT_ID] = cfg->getUlSFIndex(pkg->frame_id, pkg->symbol_id);
+            hdfoffset[DS_SYMS_PER_FRAME] = cfg->getUlSFIndex(pkg->frame_id, pkg->symbol_id);
 
             // Select a hyperslab in extended portion of the dataset
             DataSpace data_filespace(data_dataset->getSpace());
