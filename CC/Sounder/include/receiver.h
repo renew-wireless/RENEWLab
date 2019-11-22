@@ -12,8 +12,8 @@
 #ifndef DATARECEIVER_HEADER
 #define DATARECEIVER_HEADER
 
-#include "concurrentqueue.h"
 #include "BaseRadioSet.h"
+#include "concurrentqueue.h"
 #include <algorithm>
 #include <arpa/inet.h>
 #include <cassert>

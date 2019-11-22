@@ -21,9 +21,9 @@
 #include <stdio.h> /* for fprintf */
 #include <stdlib.h>
 #include <string.h> /* for memcpy */
+#include <thread>
 #include <unistd.h>
 #include <vector>
-#include <thread>
 
 class CommsLib {
 public:

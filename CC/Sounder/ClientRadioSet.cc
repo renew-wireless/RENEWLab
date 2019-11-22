@@ -7,7 +7,7 @@
 #include <SoapySDR/Formats.hpp>
 #include <SoapySDR/Time.hpp>
 
-static void initAGC(SoapySDR::Device* dev, Config *cfg);
+static void initAGC(SoapySDR::Device* dev, Config* cfg);
 
 ClientRadioSet::ClientRadioSet(Config* cfg)
     : _cfg(cfg)
@@ -144,7 +144,7 @@ int ClientRadioSet::radioTx(size_t radio_id, const void* const* buffs, int numSa
     return radios[radio_id]->xmit(buffs, numSamps, flags, frameTime);
 }
 
-static void initAGC(SoapySDR::Device* dev, Config *cfg)
+static void initAGC(SoapySDR::Device* dev, Config* cfg)
 {
     /*
      * Initialize AGC parameters

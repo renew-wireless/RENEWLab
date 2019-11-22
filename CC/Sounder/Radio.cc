@@ -16,8 +16,8 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
     dev->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->nco);
 
     // Unified gains for both lime and frontend
-    dev->setGain(SOAPY_SDR_RX, ch, rxgain);  // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
-    dev->setGain(SOAPY_SDR_TX, ch, txgain);  // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
+    dev->setGain(SOAPY_SDR_RX, ch, rxgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
+    dev->setGain(SOAPY_SDR_TX, ch, txgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
     // DC Offset
     dev->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
 }

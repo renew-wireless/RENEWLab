@@ -1,8 +1,8 @@
+#include "include/BaseRadioSet.h"
 #include "include/Radio.h"
 #include "include/comms-lib.h"
 #include "include/macros.h"
 #include "include/matplotlibcpp.h"
-#include "include/BaseRadioSet.h"
 #include "include/utils.h"
 
 namespace plt = matplotlibcpp;
@@ -15,7 +15,7 @@ static std::vector<std::complex<float>> snoopSamples(SoapySDR::Device* dev, size
 }
 
 static void adjustCalibrationGains(std::vector<SoapySDR::Device*> rxDevs, SoapySDR::Device* txDev,
-				   size_t channel, double fftBin, bool plot = false)
+    size_t channel, double fftBin, bool plot = false)
 {
     using std::cout;
     using std::endl;

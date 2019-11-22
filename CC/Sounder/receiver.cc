@@ -255,7 +255,7 @@ void Receiver::clientTxRx(dev_profile* context)
     //d_mutex.unlock();
 
     delete context;
-    std::vector<std::complex<float> > buffs(NUM_SAMPS, 0);
+    std::vector<std::complex<float>> buffs(NUM_SAMPS, 0);
     std::vector<void*> rxbuff(2);
     rxbuff[0] = buffs.data();
     rxbuff[1] = buffs.data();
