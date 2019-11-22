@@ -39,7 +39,7 @@ Recorder::Recorder(Config* cfg)
         rx_buffer_ = new SampleBuffer[rx_thread_num];
         int intsize = sizeof(std::atomic_int);
         int arraysize = (buffer_chunk_size + intsize - 1) / intsize;
-        size_t packageLength = sizeof(Package) + config_->getPackageDataLength();
+        size_t packageLength = sizeof(Package) + cfg->getPackageDataLength();
         for (int i = 0; i < rx_thread_num; i++) {
             rx_buffer_[i].buffer.resize(buffer_chunk_size * packageLength);
             rx_buffer_[i].pkg_buf_inuse = new std::atomic_int[arraysize];
@@ -565,7 +565,8 @@ herr_t Recorder::record(int, int offset)
     int buffer_id = offset / buffer_chunk_size;
     offset = offset - buffer_id * buffer_chunk_size;
     // read info
-    char* cur_ptr_buffer = rx_buffer_[buffer_id].buffer.data() + offset * cfg->getPackageLength();
+    size_t packageLength = sizeof(Package) + cfg->getPackageDataLength();
+    char* cur_ptr_buffer = rx_buffer_[buffer_id].buffer.data() + offset * packageLength;
     Package* pkg = (Package*)cur_ptr_buffer;
 #if DEBUG_PRINT
     printf("record            frame %d, symbol %d, cell %d, ant %d samples: %d %d %d %d %d %d %d %d ....\n",

@@ -184,8 +184,9 @@ void Receiver::loopRecv(ReceiverContext* context)
             }
 
             // Receive data into buffers
+            size_t packageLength = sizeof(Package) + config_->getPackageDataLength();
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
-                pkg[ch] = (Package*)(buffer + (cursor + ch) * config_->getPackageLength());
+                pkg[ch] = (Package*)(buffer + (cursor + ch) * packageLength);
                 samp[ch] = pkg[ch]->data;
             }
             long long frameTime;
