@@ -565,7 +565,7 @@ herr_t Recorder::record(int, int offset)
     offset = offset - buffer_id * buffer_chunk_size;
     // read info
     char* cur_ptr_buffer = rx_buffer_[buffer_id].buffer.data() + offset * cfg->getPackageLength();
-    struct Package* pkg = (struct Package*)cur_ptr_buffer;
+    Package* pkg = (Package*)cur_ptr_buffer;
 #if DEBUG_PRINT
     printf("record            frame %d, symbol %d, cell %d, ant %d samples: %d %d %d %d %d %d %d %d ....\n",
         pkg->frame_id, pkg->symbol_id, pkg->cell_id, pkg->ant_id,
