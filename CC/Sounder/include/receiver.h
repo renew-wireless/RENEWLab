@@ -69,14 +69,6 @@ public:
 
     struct dev_profile {
         int tid;
-        int nsamps;
-        int txSyms;
-        int rxSyms;
-        int txStartSym;
-        unsigned txFrameDelta;
-        double rate;
-        std::string data_file;
-        int core;
         Receiver* ptr;
     };
 
@@ -91,7 +83,7 @@ public:
     static void* loopRecv_launch(void* in_context);
     void loopRecv(ReceiverContext* context);
     static void* clientTxRx_launch(void* in_context);
-    void clientTxRx(dev_profile* context);
+    void clientTxRx(int tid);
     void getPathLoss();
 
 private:

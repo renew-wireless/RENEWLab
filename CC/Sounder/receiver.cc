@@ -56,13 +56,6 @@ std::vector<pthread_t> Receiver::startClientThreads()
             // record the thread id
             dev_profile* profile = new dev_profile;
             profile->tid = i;
-            profile->rate = config_->rate;
-            profile->nsamps = config_->sampsPerSymbol;
-            profile->txSyms = config_->clULSymbols[i].size();
-            profile->rxSyms = config_->clDLSymbols[i].size();
-            profile->txStartSym = config_->clULSymbols[i].empty() ? 0 : config_->clULSymbols[i][0];
-            profile->txFrameDelta = frameTimeDelta;
-            profile->core = i + 1 + config_->rx_thread_num + config_->task_thread_num;
             profile->ptr = this;
             // start socket thread
             if (pthread_create(&cl_thread_, NULL, Receiver::clientTxRx_launch, profile) != 0) {
@@ -230,33 +223,36 @@ void* Receiver::clientTxRx_launch(void* in_context)
 {
     dev_profile* context = (dev_profile*)in_context;
     Receiver* receiver = context->ptr;
-    receiver->clientTxRx(context);
+    int tid = context->tid;
+    delete context;
+    receiver->clientTxRx(tid);
     return 0;
 }
 
-void Receiver::clientTxRx(dev_profile* context)
+void Receiver::clientTxRx(int tid)
 {
-    int tid = context->tid;
-    int txSyms = context->txSyms;
-    int rxSyms = context->rxSyms;
-    int txStartSym = context->txStartSym;
-    unsigned txFrameDelta = context->txFrameDelta;
-    int NUM_SAMPS = context->nsamps;
+    int txSyms = config_->clULSymbols[tid].size();
+    int rxSyms = config_->clDLSymbols[tid].size();
+    int txStartSym = config_->clULSymbols[tid].empty() ? 0 : config_->clULSymbols[tid][0];
+
+    double frameTime = config_->sampsPerSymbol * config_->clFrames[0].size() * 1e3 / config_->rate; // miliseconds
+    unsigned txFrameDelta = (unsigned)(std::ceil(TIME_DELTA / frameTime));
+    int NUM_SAMPS = config_->sampsPerSymbol;
 
     if (config_->core_alloc) {
-        printf("pinning client thread %d to core %d\n", tid, context->core);
-        if (pin_to_core(context->core) != 0) {
-            printf("pin client thread %d to core %d failed\n", tid, context->core);
+        int core = tid + 1 + config_->rx_thread_num + config_->task_thread_num;
+        printf("pinning client thread %d to core %d\n", tid, core);
+        if (pin_to_core(core) != 0) {
+            printf("pin client thread %d to core %d failed\n", tid, core);
             exit(0);
         }
     }
 
     //while(!d_mutex.try_lock()){}
     //thread_count++;
-    //std::cout << "Thread " << tid << ", txSyms " << txSyms << ", rxSyms " << rxSyms << ", txStartSym " << txStartSym << ", rate " << context->rate << ", txFrameDelta " << txFrameDelta << ", nsamps " << NUM_SAMPS << std::endl;
+    //std::cout << "Thread " << tid << ", txSyms " << txSyms << ", rxSyms " << rxSyms << ", txStartSym " << txStartSym << ", rate " << config_->rate << ", txFrameDelta " << txFrameDelta << ", nsamps " << NUM_SAMPS << std::endl;
     //d_mutex.unlock();
 
-    delete context;
     std::vector<std::complex<float>> buffs(NUM_SAMPS, 0);
     std::vector<void*> rxbuff(2);
     rxbuff[0] = buffs.data();
