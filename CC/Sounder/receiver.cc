@@ -79,9 +79,9 @@ std::vector<pthread_t> Receiver::startRecvThreads(SampleBuffer* rx_buffer, unsig
         // record the thread id
         ReceiverContext* context = new ReceiverContext;
         context->ptr = this;
-        context->buffer = rx_buffer;
         context->core_id = in_core_id;
         context->tid = i;
+        context->buffer = rx_buffer;
         // start socket thread
         if (pthread_create(&created_threads[i], NULL, Receiver::loopRecv_launch, context) != 0) {
             perror("socket recv thread create failed");
@@ -111,17 +111,17 @@ void Receiver::go()
 void* Receiver::loopRecv_launch(void* in_context)
 {
     ReceiverContext* context = (ReceiverContext*)in_context;
-    context->ptr->loopRecv(context);
+    auto me = context->ptr;
+    auto tid = context->tid;
+    auto core_id = context->core_id;
+    auto buffer = context->buffer;
+    delete context;
+    me->loopRecv(tid, core_id, buffer);
     return 0;
 }
 
-void Receiver::loopRecv(ReceiverContext* context)
+void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 {
-    SampleBuffer* rx_buffer = context->buffer;
-    int tid = context->tid;
-    int core_id = context->core_id;
-    delete context;
-
     if (config_->core_alloc) {
         printf("pinning thread %d to core %d\n", tid, core_id + tid);
         if (pin_to_core(core_id + tid) != 0) {
