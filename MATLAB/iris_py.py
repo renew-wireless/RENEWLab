@@ -88,7 +88,6 @@ class Iris_py:
               bw=None,
               sample_rate=None,
               n_samp=None,				# Total number of samples, including zero-pads
-                max_frames=1,
               both_channels=False,
               agc_en=False,
               ):
@@ -107,7 +106,7 @@ class Iris_py:
 
 		self.agc_en = agc_en
 		self.both_channels = both_channels
-		self.max_frames = int(max_frames)
+		self.max_frames = 1
 
 		### Setup channel rates, ports, gains, and filters ###
 		info = self.sdr.getHardwareInfo()
@@ -161,23 +160,19 @@ class Iris_py:
 			self.sdr.writeSetting(SOAPY_SDR_TX, 1, 'ENABLE_CHANNEL', 'false')
 
     # Set trigger:
-	def set_trigger(self, trig=False):
-		if bool(trig) is True:
-			self.sdr.writeSetting("TRIGGER_GEN", "")
+	def set_trigger(self):
+		self.sdr.writeSetting("TRIGGER_GEN", "")
 
 	def set_corr(self):
 		'''enable the correlator, with inputs from adc'''
 		self.sdr.writeSetting("CORR_START", "A")
 
-	def config_sdr_tdd(self, tdd_sched=None, is_bs=True, prefix_len=0):
+	def config_sdr_tdd(self, is_bs=True, tdd_sched="G", prefix_len=0, max_frames=1):
 		'''Configure the TDD schedule and functionality when unchained. Set up the correlator.'''
 		global corr_threshold, beacon
 		coe = cfloat2uint32(np.conj(beacon), order='QI')
-		if tdd_sched is not None:
-			self.tdd_sched = tdd_sched
-		else:
-		    self.tdd_sched = "G"
-	        max_frames = self.max_frames
+		self.tdd_sched = tdd_sched
+                self.max_frames = int(max_frames)
 		if bool(is_bs):
 			conf_str = {"tdd_enabled": True,
                             "frame_mode": "free_running",
@@ -322,17 +317,17 @@ if __name__ == '__main__':
 	parser.add_argument("--rate", type=float, dest="rate",
 	                    help="Sample rate", default=5e6)
 	parser.add_argument("--txGain", type=float, dest="txGain",
-	                    help="Optional Tx gain (dB)", default=43)
+	                    help="Optional Tx gain (dB)", default=70)
 	parser.add_argument("--rxGain", type=float, dest="rxGain",
-	                    help="Optional Rx gain (dB)", default=20)
+	                    help="Optional Rx gain (dB)", default=50)
 	parser.add_argument("--freq", type=float, dest="freq",
-	                    help="Optional Tx freq (Hz)", default=2.5e9)
+	                    help="Optional Tx freq (Hz)", default=3.6e9)
 	parser.add_argument("--bw", type=float, dest="bw",
 	                    help="Optional filter bw (Hz)", default=None)
 	args = parser.parse_args()
 
 	siso_bs = Iris_py(
-		serial_id="0339",
+		serial_id="0268",
 		sample_rate=args.rate,
 		tx_freq=args.freq,
 		rx_freq=args.freq,
@@ -343,7 +338,7 @@ if __name__ == '__main__':
 	)
 
 	siso_ue = Iris_py(
-		serial_id="RF3C000045",
+		serial_id="RF3C000025",
 		sample_rate=args.rate,
 		tx_freq=args.freq,
 		rx_freq=args.freq,
@@ -393,7 +388,7 @@ if __name__ == '__main__':
 	siso_bs.activate_stream_rx()
 
 	siso_ue.set_corr()
-	siso_bs.set_trigger(True)
+	siso_bs.set_trigger()
 
 	wave_rx_a_bs_mn = siso_bs.recv_stream_tdd()
 

@@ -101,9 +101,9 @@ public:
     std::vector<double> clTxgain_vec[2];
     std::vector<double> clRxgain_vec[2];
 
-    size_t getPackageLength()
+    size_t getPackageDataLength()
     {
-        return sizeof(int) * 4 + sizeof(ushort) * (size_t)sampsPerSymbol * 2;
+        return (2 * sampsPerSymbol * sizeof(short));
     }
     size_t getNumAntennas();
     int getClientId(int, int);

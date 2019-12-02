@@ -23,8 +23,7 @@ end
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_MOD                 = 0;    
-N_BS_NODE = 32;
-N_UE = 1;
+
 
 if SIM_MOD
     chan_type               = "awgn";
@@ -42,11 +41,11 @@ else
 
     
     %Iris params:
-    USE_HUB                 = 1;
-    TX_FRQ                  = 2.5e9;    
+    USE_HUB                 = 0;
+    TX_FRQ                  = 2.5e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = 40;
-    RX_GN                   = 20;
+    TX_GN                   = 70;
+    RX_GN                   = 60;
     SMPL_RT                 = 5e6;  
     N_FRM                   = 10;
     bs_ids = string.empty();
@@ -163,10 +162,13 @@ else
         
     else
         bs_ids = ["RF3E000189", "RF3E000024", "RF3E000139", "RF3E000032", "RF3E000154", "RF3E000182", "RF3E000038", "RF3E000137"];
+
     end
     
-    ue_id= ["RF3E000060"];
-    
+    ue_ids= ["RF3E000060"];
+
+    N_BS_NODE = length(bs_ids);
+    N_UE = length(ue_ids);
     
     bs_sched = ["BGGGGGRG"];           % BS schedule
     ue_sched = ["GGGGGGPG"];           % UE schedule
