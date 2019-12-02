@@ -119,14 +119,14 @@ classdef iris_py < handle
              sched  = convertStringsToChars(tdd_sched);
              for ipy = 1:obj.n_sdrs
                  obj.py_obj_array{ipy}.config_sdr_tdd( pyargs('tdd_sched', sched, ...
-                     'is_bs', is_bs, 'prefix_len', obj.n_zpad_samp, 'max_frames', obj.n_frame));
+                     'is_bs', is_bs, 'prefix_len', obj.n_zpad_samp, 'max_frames', 1));
              end
          end
 
          function set_tddconfig_single(obj, is_bs, tdd_sched, index)
              sched  = convertStringsToChars(tdd_sched);
              obj.py_obj_array{index}.config_sdr_tdd( pyargs('tdd_sched', sched, ...
-                 'is_bs', is_bs, 'prefix_len', obj.n_zpad_samp, 'max_frames', obj.n_frame));
+                 'is_bs', is_bs, 'prefix_len', obj.n_zpad_samp, 'max_frames', 1));
          end
          
          function sdrrxsetup(obj)

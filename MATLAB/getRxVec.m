@@ -2,8 +2,8 @@ function y = getRxVec(tx_data, n_bs, n_ue, chan_type, snr, bs_param, ue_param, h
 %%% Returns Rx vector passed through the channel type given in the input
 %%% list.
 
-assert(length(bs_param) == n_bs);
-assert(length(ue_param) == n_ue);
+assert(length(bs_param.id) == n_bs);
+assert(length(ue_param.id) == n_ue);
 
 if chan_type == "awgn"
 % AWGN

@@ -317,17 +317,17 @@ if __name__ == '__main__':
 	parser.add_argument("--rate", type=float, dest="rate",
 	                    help="Sample rate", default=5e6)
 	parser.add_argument("--txGain", type=float, dest="txGain",
-	                    help="Optional Tx gain (dB)", default=43)
+	                    help="Optional Tx gain (dB)", default=70)
 	parser.add_argument("--rxGain", type=float, dest="rxGain",
-	                    help="Optional Rx gain (dB)", default=20)
+	                    help="Optional Rx gain (dB)", default=50)
 	parser.add_argument("--freq", type=float, dest="freq",
-	                    help="Optional Tx freq (Hz)", default=2.5e9)
+	                    help="Optional Tx freq (Hz)", default=3.6e9)
 	parser.add_argument("--bw", type=float, dest="bw",
 	                    help="Optional filter bw (Hz)", default=None)
 	args = parser.parse_args()
 
 	siso_bs = Iris_py(
-		serial_id="0339",
+		serial_id="0268",
 		sample_rate=args.rate,
 		tx_freq=args.freq,
 		rx_freq=args.freq,
@@ -338,7 +338,7 @@ if __name__ == '__main__':
 	)
 
 	siso_ue = Iris_py(
-		serial_id="RF3C000045",
+		serial_id="RF3C000025",
 		sample_rate=args.rate,
 		tx_freq=args.freq,
 		rx_freq=args.freq,
