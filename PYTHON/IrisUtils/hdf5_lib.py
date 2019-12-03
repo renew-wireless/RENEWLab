@@ -113,12 +113,12 @@ class hdf5_lib:
         self.data = self.h5file['Data']
 
         if bool(self.data['Pilot_Samples']):
-            self.pilot_samples = self.data['Pilot_Samples'][self.n_frm_st:self.n_frm_end,...]
+            self.pilot_samples = self.data['Pilot_Samples']  # [self.n_frm_st:self.n_frm_end,...]
 
         if len(self.data.keys()) > 1:
             print("looking into UplinkData")
             if bool(self.data['UplinkData']):
-                self.uplink_samples = self.data['UplinkData'][self.n_frm_st:self.n_frm_end,...]
+                self.uplink_samples = self.data['UplinkData']  # [self.n_frm_st:self.n_frm_end,...]
 
         return self.data
 

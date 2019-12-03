@@ -117,7 +117,7 @@ class OFDMplotter:
         self.corr = corr[:, 0]                     # [num frames, numCl]
         self.data_syms = data_syms[0, :]           # tx symbols [numClients, data length]
         self.user_params = user_params
-        self.num_sc = metadata['FFT_SIZE']
+        self.num_sc = int(metadata['FFT_SIZE'])
 
         if self.num_cl > 1:
             self.tx_data2 = tx[1]
