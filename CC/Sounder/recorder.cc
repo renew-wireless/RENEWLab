@@ -310,15 +310,15 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         }
         write_attribute(mainGroup, "OFDM_PILOT", split_vec_pilot);
 
-        // Number of Clients
+        // Number of Pilots
         write_attribute(mainGroup, "PILOT_NUM", (int)cfg->pilotSymsPerFrame);
 
-        // Number of Clients
-        write_attribute(mainGroup, "CL_NUM", (int)cfg->nClSdrs);
+        // Number of Client Antennas
+        write_attribute(mainGroup, "CL_NUM", (int)cfg->nClAntennas);
 
         if (cfg->clPresent) {
             // Client antenna polarization
-            write_attribute(mainGroup, "CL_CH_PER_RADIO", cfg->clSdrCh);
+            write_attribute(mainGroup, "CL_CH_PER_RADIO", (int)cfg->clSdrCh);
 
             // Client AGC enable flag
             write_attribute(mainGroup, "CL_AGC_EN", cfg->clAgcEn ? 1 : 0);
