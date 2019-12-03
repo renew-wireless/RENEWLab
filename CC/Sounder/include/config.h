@@ -74,9 +74,10 @@ public:
     std::string trace_file;
 
     // Clients features
-    unsigned int nClSdrs;
     std::vector<std::string> cl_sdr_ids;
-    int clSdrCh;
+    size_t nClSdrs;
+    size_t clSdrCh;
+    size_t nClAntennas;
     std::string clChannel;
     bool clAgcEn;
     int clAgcGainInit;

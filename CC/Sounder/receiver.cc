@@ -260,8 +260,10 @@ void Receiver::clientTxRx(int tid)
 
     std::vector<void*> txbuff(2);
     if (txSyms > 0) {
-        txbuff[0] = config_->txdata[tid].data();
-        txbuff[1] = config_->txdata[tid].data();
+	size_t txIndex = tid * config_->clSdrCh;
+        txbuff[0] = config_->txdata[txIndex].data();
+	if (config_->clSdrCh == 2)
+            txbuff[1] = config_->txdata[txIndex+1].data();
         std::cout << txSyms << " uplink symbols will be sent per frame..." << std::endl;
     }
 
