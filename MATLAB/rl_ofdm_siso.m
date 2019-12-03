@@ -49,8 +49,8 @@ N_BS_NODE = 1;
 N_UE = 1;
 TX_FRQ                  = 2.5e9;
 RX_FRQ                  = TX_FRQ;
-TX_GN                   = 43;
-RX_GN                   = 20;
+TX_GN                   = 70;
+RX_GN                   = 60;
 SMPL_RT                 = 5e6;
 N_FRM                   = 10;
 

@@ -116,7 +116,7 @@ Config::Config(const std::string& jsonfile)
         dlSymsPerFrame = DLSymbols[0].size();
         // read commons from Client json config
         if (!clPresent) {
-            nClSdrs = std::count(frames.at(0).begin(), frames.at(0).end(), 'P');
+            nClSdrs = nClAntennas = std::count(frames.at(0).begin(), frames.at(0).end(), 'P');
             clDataMod = tddConf.value("modulation", "QPSK");
         }
     }
@@ -130,6 +130,7 @@ Config::Config(const std::string& jsonfile)
         if (clChannel != "A" && clChannel != "B" && clChannel != "AB")
             throw std::invalid_argument("error channel config: not any of A/B/AB!\n");
         clSdrCh = (clChannel == "AB") ? 2 : 1;
+        nClAntennas = nClSdrs * clSdrCh;
         clAgcEn = tddConfCl.value("agc_en", false);
         clAgcGainInit = tddConfCl.value("agc_gain_init", 70); // 0 to 108
         clDataMod = tddConfCl.value("modulation", "QPSK");
@@ -267,7 +268,7 @@ Config::Config(const std::string& jsonfile)
             int syms = nSamps / ofdmSize;
             std::vector<std::complex<float>> pre1(prefix, 0);
             std::vector<std::complex<float>> post1(nSamps % ofdmSize + postfix, 0);
-            for (unsigned int i = 0; i < nClSdrs; i++) {
+            for (unsigned int i = 0; i < nClAntennas; i++) {
                 std::vector<std::complex<float>> data_cf;
                 std::vector<std::complex<float>> data_freq_dom;
                 data_cf.insert(data_cf.begin(), pre1.begin(), pre1.end());
@@ -332,8 +333,7 @@ Config::Config(const std::string& jsonfile)
         tm* ltm = localtime(&now);
         int cell_num = nCells;
         int ant_num = getNumAntennas();
-        int ue_num = nClSdrs;
-        std::string filename = "logs/Argos-" + std::to_string(1900 + ltm->tm_year) + "-" + std::to_string(1 + ltm->tm_mon) + "-" + std::to_string(ltm->tm_mday) + "-" + std::to_string(ltm->tm_hour) + "-" + std::to_string(ltm->tm_min) + "-" + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num) + "x" + std::to_string(ant_num) + "x" + std::to_string(ue_num) + ".hdf5";
+        std::string filename = "logs/Argos-" + std::to_string(1900 + ltm->tm_year) + "-" + std::to_string(1 + ltm->tm_mon) + "-" + std::to_string(ltm->tm_mday) + "-" + std::to_string(ltm->tm_hour) + "-" + std::to_string(ltm->tm_min) + "-" + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num) + "x" + std::to_string(ant_num) + "x" + std::to_string(pilotSymsPerFrame) + ".hdf5";
         trace_file = tddConf.value("trace_file", filename);
     }
 
@@ -358,7 +358,7 @@ Config::Config(const std::string& jsonfile)
     }
 
     if (clPresent && core_alloc)
-        printf("allocating %d cores to client threads ... \n", nClSdrs);
+        printf("allocating %zu cores to client threads ... \n", nClSdrs);
 
     running = true;
 

@@ -12,8 +12,8 @@
 #ifndef DATARECEIVER_HEADER
 #define DATARECEIVER_HEADER
 
+#include "BaseRadioSet.h"
 #include "concurrentqueue.h"
-#include "sdr-lib.h"
 #include <algorithm>
 #include <arpa/inet.h>
 #include <cassert>
@@ -69,14 +69,6 @@ public:
 
     struct dev_profile {
         int tid;
-        int nsamps;
-        int txSyms;
-        int rxSyms;
-        int txStartSym;
-        unsigned txFrameDelta;
-        double rate;
-        std::string data_file;
-        int core;
         Receiver* ptr;
     };
 
@@ -89,9 +81,9 @@ public:
     std::vector<pthread_t> startClientThreads();
     void go();
     static void* loopRecv_launch(void* in_context);
-    void loopRecv(ReceiverContext* context);
+    void loopRecv(int tid, int core_id, SampleBuffer* rx_buffer);
     static void* clientTxRx_launch(void* in_context);
-    void clientTxRx(dev_profile* context);
+    void clientTxRx(int tid);
     void getPathLoss();
 
 private:

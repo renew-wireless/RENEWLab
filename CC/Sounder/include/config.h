@@ -74,9 +74,10 @@ public:
     std::string trace_file;
 
     // Clients features
-    unsigned int nClSdrs;
     std::vector<std::string> cl_sdr_ids;
-    int clSdrCh;
+    size_t nClSdrs;
+    size_t clSdrCh;
+    size_t nClAntennas;
     std::string clChannel;
     bool clAgcEn;
     int clAgcGainInit;
@@ -101,9 +102,9 @@ public:
     std::vector<double> clTxgain_vec[2];
     std::vector<double> clRxgain_vec[2];
 
-    size_t getPackageLength()
+    size_t getPackageDataLength()
     {
-        return sizeof(int) * 4 + sizeof(ushort) * (size_t)sampsPerSymbol * 2;
+        return (2 * sampsPerSymbol * sizeof(short));
     }
     size_t getNumAntennas();
     int getClientId(int, int);

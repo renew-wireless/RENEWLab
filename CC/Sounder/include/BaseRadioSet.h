@@ -41,10 +41,6 @@ private:
     void sync_delays(int cellIdx);
     SoapySDR::Device* baseRadio(size_t cellId);
     void collectCSI(bool&);
-    static void dciqMinimize(SoapySDR::Device*, SoapySDR::Device*, int, size_t, double, double);
-    static void setIQBalance(SoapySDR::Device*, int, size_t, int, int);
-    static void adjustCalibrationGains(std::vector<SoapySDR::Device*>, SoapySDR::Device*, size_t, double, bool plot = false);
-    static std::vector<std::complex<float>> snoopSamples(SoapySDR::Device*, size_t, size_t);
     void dciqCalibrationProc(size_t);
     void readSensors(void);
 
