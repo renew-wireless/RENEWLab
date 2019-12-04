@@ -370,7 +370,7 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est, lts_start)
             this_offset = 60
         else:
             this_offset = samp_offset[0, antIdx]
-        #this_offset = # FIXME !!!
+        # this_offset = 100  # FIXME !!!
         tmp_range = range(this_offset, n_ofdm_syms * (num_sc + data_cp_len) + this_offset)
         payload_samples_mat_cp[antIdx, :, :] = np.reshape(payload[antIdx, tmp_range],
                                                           (num_sc + data_cp_len, n_ofdm_syms),
@@ -616,6 +616,7 @@ def rx_app(filename, user_params, this_plotter):
     cp_len = int(metadata['CP_LEN'])
     ofdm_data_sc = metadata['OFDM_DATA_SC']
     ofdm_pilot = np.array(metadata['OFDM_PILOT'])
+
     if not cl_present:
         cl_frame_sched = metadata['BS_FRAME_SCHED']
         # print('ERROR: Script needs client metadata. Sounder must be run in joint mode (BS and client together)')
@@ -626,12 +627,11 @@ def rx_app(filename, user_params, this_plotter):
         ofdm_data_time = []
         cl_frame_sched = metadata['CL_FRAME_SCHED']
 
-        test0 = metadata['OFDM_DATA_CL' + str(0)]
-        test1 = metadata['OFDM_DATA_CL' + str(1)]
-
         for idx in range(num_cl):
             ofdm_data.append(metadata['OFDM_DATA_CL' + str(idx)][idx])             ##FIXME!!!! REMOVE THAT second [idx]  # Freq domain TX data (Does not contain cyclic prefix or prefix/postfix)
             ofdm_data_time.append(metadata['OFDM_DATA_TIME_CL' + str(idx)][idx])   ##FIXME!!!! REMOVE THAT second [idx]
+            #ofdm_data.append(metadata['OFDM_DATA_CL' + str(idx)])             ##FIXME!!!! REMOVE THAT second [idx]  # Freq domain TX data (Does not contain cyclic prefix or prefix/postfix)
+            #ofdm_data_time.append(metadata['OFDM_DATA_TIME_CL' + str(idx)])   ##FIXME!!!! REMOVE THAT second [idx]
 
     pilot_dim = pilot_samples.shape
     num_frames = pilot_dim[0]
@@ -740,7 +740,7 @@ def rx_app(filename, user_params, this_plotter):
                 num_samps_full_frame = len(tx_data_sim[0, :])
                 ofdm_rx_syms_awgn = np.zeros((num_bs_ant, num_samps_full_frame)).astype(complex)
                 for antIdx in range(num_bs_ant):
-                    noise = 0.001 * (np.random.randn(num_samps_full_frame) + np.random.randn(num_samps_full_frame) * 1j)
+                    noise = 0.015 * (np.random.randn(num_samps_full_frame) + np.random.randn(num_samps_full_frame) * 1j)
                     ofdm_rx_syms_awgn[antIdx, :] = tx_data_sim[antIdx, :] + noise
                     # Remove DC
                     ofdm_rx_syms_awgn[antIdx, :] -= np.mean(ofdm_rx_syms_awgn[antIdx, :])
@@ -996,13 +996,13 @@ if __name__ == '__main__':
     parser = OptionParser()
     # Params
     parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-12-3-16-16-24_1x64x2.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
-    #parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-12-3-14-3-1_1x64x1.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
-    parser.add_option("--mode",       type="string",       dest="mode",       default="REPLAY", help="Options: REPLAY/AWGN/OTA [default: %default]")
+    #parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-8-16-15-35-59_1x8x1_FULL_LTS.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
+    parser.add_option("--mode",       type="string",       dest="mode",       default="AWGN", help="Options: REPLAY/AWGN/OTA [default: %default]")
     parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
     parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=False,  help="Apply CFO correction [default: %default]")
     parser.add_option("--sfoCorr",    action="store_true", dest="sfo_corr",   default=True,  help="Apply SFO correction [default: %default]")
     parser.add_option("--phaseCorr",  action="store_true", dest="phase_corr", default=True,  help="Apply phase correction [default: %default]")
-    parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=5,     help="FFT Offset:# CP samples for FFT [default: %default]")
+    parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=6,     help="FFT Offset:# CP samples for FFT [default: %default]")
     parser.add_option("--numClPlot",  type="int",          dest="num_cl_plot",default=2,     help="Number of clients to plot. Max of 2 [default: %default]")
     (options, args) = parser.parse_args()
 
@@ -1022,7 +1022,7 @@ if __name__ == '__main__':
     num_cl_plot = options.num_cl_plot     # number of clients to plot
     this_plotter = OFDMplotter(num_cl_plot)
 
-    #rx_app(filename, user_params, this_plotter)
+    # rx_app(filename, user_params, this_plotter)
     # RX app thread
     rxth = threading.Thread(target=rx_app, args=(filename, user_params, this_plotter))
     rxth.start()
