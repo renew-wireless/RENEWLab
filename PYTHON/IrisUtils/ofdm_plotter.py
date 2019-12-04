@@ -30,7 +30,7 @@ class OFDMplotter:
 
         self.anim = []
         self.num_cl = num_cl
-        self.FIG_LEN = 1520              # captures 2 pilots + data from both users
+        self.FIG_LEN = 2500 # 1520              # captures 2 pilots + data from both users
         self.pilot_len = 550
         self.num_sc = 64
         self.tx_data = np.zeros(100)
@@ -137,15 +137,18 @@ class OFDMplotter:
         self.line_tx_sig2.set_data(range(len(self.tx_data2)), np.real(self.tx_data2))
 
         # RX
+        subframe_size = 640
+        prefix_len = 82
+        postfix_len = 68
         self.line_rx_sig.set_data(range(len(self.rx_data)), np.real(self.rx_data))
-        self.line_pilot1_start.set_data(68 * np.ones(100), np.linspace(-0.5, 0.5, num=100))
-        self.line_pilot2_start.set_data(68+550 * np.ones(100), np.linspace(-0.5, 0.5, num=100))
-        self.line_payload_start.set_data(68+550+550 * np.ones(100), np.linspace(-0.5, 0.5, num=100))
+        self.line_pilot1_start.set_data(prefix_len * np.ones(100), np.linspace(-0.5, 0.5, num=100))
+        self.line_pilot2_start.set_data((prefix_len+subframe_size+postfix_len+prefix_len) * np.ones(100), np.linspace(-0.5, 0.5, num=100))
+        self.line_payload_start.set_data((prefix_len+subframe_size+postfix_len+prefix_len+subframe_size+postfix_len+prefix_len) * np.ones(100), np.linspace(-0.5, 0.5, num=100))
         # RX2
         self.line_rx_sig2.set_data(range(len(self.rx_data2)), np.real(self.rx_data2))
-        self.line_pilot1_start2.set_data(68 * np.ones(100), np.linspace(-0.5, 0.5, num=100))
-        self.line_pilot2_start2.set_data(68+550 * np.ones(100), np.linspace(-0.5, 0.5, num=100))
-        self.line_payload_start2.set_data(68+550+550 * np.ones(100), np.linspace(-0.5, 0.5, num=100))
+        self.line_pilot1_start2.set_data(prefix_len * np.ones(100), np.linspace(-0.5, 0.5, num=100))
+        self.line_pilot2_start2.set_data((prefix_len+subframe_size+postfix_len+prefix_len) * np.ones(100), np.linspace(-0.5, 0.5, num=100))
+        self.line_payload_start2.set_data((prefix_len+subframe_size+postfix_len+prefix_len+subframe_size+postfix_len+prefix_len) * np.ones(100), np.linspace(-0.5, 0.5, num=100))
 
         # Pilot correlation plot 1
         self.line_corr_pk.set_data(range(len(self.lts_corr)), self.lts_corr)

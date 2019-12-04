@@ -370,7 +370,7 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est, lts_start)
             this_offset = 60
         else:
             this_offset = samp_offset[0, antIdx]
-
+        #this_offset = # FIXME !!!
         tmp_range = range(this_offset, n_ofdm_syms * (num_sc + data_cp_len) + this_offset)
         payload_samples_mat_cp[antIdx, :, :] = np.reshape(payload[antIdx, tmp_range],
                                                           (num_sc + data_cp_len, n_ofdm_syms),
@@ -404,7 +404,11 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est, lts_start)
         chan_est_tmp = np.squeeze(chan_est)
         for symIdx in range(n_ofdm_syms):
             antIdx = 2
-            x[0, :, symIdx] = rxSig_freq[antIdx, :, symIdx] / chan_est_tmp[antIdx, :]
+            if num_cl > 1:
+                cl_idx = 0
+                x[0, :, symIdx] = rxSig_freq[antIdx, :, symIdx] / chan_est_tmp[cl_idx, antIdx, :]
+            else:
+                x[0, :, symIdx] = rxSig_freq[antIdx, :, symIdx] / chan_est_tmp[antIdx, :]
 
     streams = x
     return streams
@@ -621,9 +625,13 @@ def rx_app(filename, user_params, this_plotter):
         ofdm_data = []
         ofdm_data_time = []
         cl_frame_sched = metadata['CL_FRAME_SCHED']
+
+        test0 = metadata['OFDM_DATA_CL' + str(0)]
+        test1 = metadata['OFDM_DATA_CL' + str(1)]
+
         for idx in range(num_cl):
-            ofdm_data.append(metadata['OFDM_DATA_CL' + str(idx)])   # Freq domain TX data (Does not contain cyclic prefix or prefix/postfix)
-            ofdm_data_time.append(metadata['OFDM_DATA_TIME_CL' + str(idx)])
+            ofdm_data.append(metadata['OFDM_DATA_CL' + str(idx)][idx])             ##FIXME!!!! REMOVE THAT second [idx]  # Freq domain TX data (Does not contain cyclic prefix or prefix/postfix)
+            ofdm_data_time.append(metadata['OFDM_DATA_TIME_CL' + str(idx)][idx])   ##FIXME!!!! REMOVE THAT second [idx]
 
     pilot_dim = pilot_samples.shape
     num_frames = pilot_dim[0]
@@ -896,15 +904,15 @@ def rx_app(filename, user_params, this_plotter):
                     #             metadata, n_ofdm_syms, ofdm_obj, phase_error)
 
                     debug = False
-                    if frameIdx > 60 and debug:
+                    if debug:
                         print("Frame: {} \t Sample Offset: {}".format(frameIdx, lts_start))
                         fig = plt.figure(100)
 
                         # TX/RX Constellation
                         ax1 = fig.add_subplot(5, 1, 1)
                         ax1.grid(True)
-                        ax1.plot(np.real(rxSyms_vec), np.imag(rxSyms_vec), 'bo', label='TXSym')
-                        ax1.plot(np.real(ofdm_tx_syms), np.imag(ofdm_tx_syms), 'rx', label='RXSym')
+                        ax1.plot(np.real(rxSyms_vec), np.imag(rxSyms_vec), 'bo', label='RXSym')
+                        ax1.plot(np.real(ofdm_tx_syms), np.imag(ofdm_tx_syms), 'rx', label='TXSym')
                         ax1.axis([-1.5, 1.5, -1.5, 1.5])
 
                         # RX Signal
@@ -919,7 +927,7 @@ def rx_app(filename, user_params, this_plotter):
                         ax3 = fig.add_subplot(5, 1, 3)
                         ax3.grid(True)
                         ax3.set_title('Phase Error')
-                        ax3.plot(range(0, 5), phase_error[0])  # client0
+                        ax3.plot(range(0, len(phase_error[0])), phase_error[0])  # client0
                         ax3.set_ylim(-3.2, 3.2)
                         ax3.set_xlim(0, 5)
 
@@ -987,15 +995,15 @@ if __name__ == '__main__':
 
     parser = OptionParser()
     # Params
-    # parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-8-16-15-35-59_1x8x1_FULL_LTS.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
-    parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-12-2-14-27-11_1x64x1_POWDER.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
+    parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-12-3-16-16-24_1x64x2.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
+    #parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-12-3-14-3-1_1x64x1.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
     parser.add_option("--mode",       type="string",       dest="mode",       default="REPLAY", help="Options: REPLAY/AWGN/OTA [default: %default]")
     parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
     parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=False,  help="Apply CFO correction [default: %default]")
     parser.add_option("--sfoCorr",    action="store_true", dest="sfo_corr",   default=True,  help="Apply SFO correction [default: %default]")
     parser.add_option("--phaseCorr",  action="store_true", dest="phase_corr", default=True,  help="Apply phase correction [default: %default]")
     parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=5,     help="FFT Offset:# CP samples for FFT [default: %default]")
-    parser.add_option("--numClPlot",  type="int",          dest="num_cl_plot",default=1,     help="Number of clients to plot. Max of 2 [default: %default]")
+    parser.add_option("--numClPlot",  type="int",          dest="num_cl_plot",default=2,     help="Number of clients to plot. Max of 2 [default: %default]")
     (options, args) = parser.parse_args()
 
     # Params
@@ -1014,7 +1022,7 @@ if __name__ == '__main__':
     num_cl_plot = options.num_cl_plot     # number of clients to plot
     this_plotter = OFDMplotter(num_cl_plot)
 
-    # rx_app(filename, user_params, this_plotter)
+    #rx_app(filename, user_params, this_plotter)
     # RX app thread
     rxth = threading.Thread(target=rx_app, args=(filename, user_params, this_plotter))
     rxth.start()
