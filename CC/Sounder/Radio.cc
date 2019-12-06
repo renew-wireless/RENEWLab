@@ -56,6 +56,8 @@ Radio::Radio(const SoapySDR::Kwargs& args, const char soapyFmt[],
     const std::vector<size_t>& channels, double rate)
 {
     dev = SoapySDR::Device::make(args);
+    if (dev == NULL)
+        throw std::invalid_argument("error making SoapySDR::Device\n");
     for (auto ch : channels) {
         dev->setSampleRate(SOAPY_SDR_RX, ch, rate);
         dev->setSampleRate(SOAPY_SDR_TX, ch, rate);
