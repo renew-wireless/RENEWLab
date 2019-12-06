@@ -11,7 +11,7 @@
 		 "txgainB" : 40,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "BGPGUGGGGGGGGGGGGGGG"
+		     "BGPPUGGGGGGGGGGGGGGG"
 		 ],
 		 "max_frame" : 6000,
 		 "subframe_size" : 640,
@@ -28,10 +28,10 @@
 
 	"Clients" : {
 		 "sdr_id" : [
-		     "RF3E000060"
+		     "RF3E000157"
 		 ],
 		 "frequency" : 2.5e9,
-		 "channel" : "A",
+		 "channel" : "AB",
 		 "agc_en" : false,
                  "agc_gain_init": 70,
 		 "rxgainA" : [20],
@@ -40,7 +40,7 @@
 		 "txgainB" : [40],
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "GDPGUGGGGGGGGGGGGGGG"
+		     "GDPPUGGGGGGGGGGGGGGG"
 		 ],
 		 "frame_mode" : "continuous_resync",
 		 "subframe_size" : 640,
