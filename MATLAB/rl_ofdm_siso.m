@@ -147,7 +147,7 @@ else
 
  % Create two Iris node objects:
     bs_ids = ["RF3E000189"];
-    ue_ids = ["RF3E000060"];
+    ue_ids = ["RF3E000157"];
     
     bs_sched = ["BGGGGGRG"];           % BS schedule
     ue_sched = ["GGGGGGPG"];               % UE schedule

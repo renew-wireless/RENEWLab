@@ -148,6 +148,7 @@ class Iris_py:
 				self.sdr.setGain(SOAPY_SDR_RX, chan, 100)  # high gain value
 			else:
 				self.sdr.setGain(SOAPY_SDR_RX, chan, rx_gain)  # [0,30]
+				self.sdr.setGain(SOAPY_SDR_RX, chan, "ATTN", -12)  # [0,30]
 
 			self.sdr.setDCOffsetMode(SOAPY_SDR_RX, chan, True)
 
@@ -312,22 +313,24 @@ class Iris_py:
 if __name__ == '__main__':
 
 	parser = ArgumentParser()
-	parser.add_argument("--serial_id", type=str, dest="serial_id",
+	parser.add_argument("--serial-id1", type=str, dest="serial_id1",
+	                    help="TX SDR Serial Number, e.g., 00001", default=None)
+	parser.add_argument("--serial-id2", type=str, dest="serial_id2",
 	                    help="TX SDR Serial Number, e.g., 00001", default=None)
 	parser.add_argument("--rate", type=float, dest="rate",
 	                    help="Sample rate", default=5e6)
 	parser.add_argument("--txGain", type=float, dest="txGain",
-	                    help="Optional Tx gain (dB)", default=70)
+	                    help="Optional Tx gain (dB)", default=80)
 	parser.add_argument("--rxGain", type=float, dest="rxGain",
-	                    help="Optional Rx gain (dB)", default=50)
+	                    help="Optional Rx gain (dB)", default=65)
 	parser.add_argument("--freq", type=float, dest="freq",
-	                    help="Optional Tx freq (Hz)", default=3.6e9)
+	                    help="Optional Tx freq (Hz)", default=2.5e9)
 	parser.add_argument("--bw", type=float, dest="bw",
 	                    help="Optional filter bw (Hz)", default=None)
 	args = parser.parse_args()
 
 	siso_bs = Iris_py(
-		serial_id="0268",
+		serial_id=args.serial_id1,
 		sample_rate=args.rate,
 		tx_freq=args.freq,
 		rx_freq=args.freq,
@@ -338,7 +341,7 @@ if __name__ == '__main__':
 	)
 
 	siso_ue = Iris_py(
-		serial_id="RF3C000025",
+		serial_id=args.serial_id2,
 		sample_rate=args.rate,
 		tx_freq=args.freq,
 		rx_freq=args.freq,

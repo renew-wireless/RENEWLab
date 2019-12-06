@@ -23,7 +23,7 @@ end
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_MOD                 = 0;    
-
+PLOT                    = 1;
 
 if SIM_MOD
     chan_type               = "awgn";
@@ -44,7 +44,7 @@ else
     USE_HUB                 = 0;
     TX_FRQ                  = 2.5e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = 70;
+    TX_GN                   = 80;
     RX_GN                   = 60;
     SMPL_RT                 = 5e6;  
     N_FRM                   = 10;
@@ -165,7 +165,7 @@ else
 
     end
     
-    ue_ids= ["RF3E000060"];
+    ue_ids= ["RF3E000157"];
 
     N_BS_NODE = length(bs_ids);
     N_UE = length(ue_ids);
@@ -404,6 +404,24 @@ end
 cf = 0;
 fst_clr = [0, 0.4470, 0.7410];
 sec_clr = [0.8500, 0.3250, 0.0980];
+
+rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
+rx_H_est_plot(SC_IND_DATA) = rx_H_est(SC_IND_DATA);
+rx_H_est_plot(SC_IND_PILOTS) = rx_H_est(SC_IND_PILOTS);
+
+evm_mat_mrc = abs(payload_syms_mat_mrc - tx_syms_mat).^2;
+aevms_mrc = mean(evm_mat_mrc(:));
+snr_mrc = 10*log10(1./aevms_mrc);
+
+evm_mat_1 = abs(payload_syms_mat_1 - tx_syms_mat).^2;
+aevms_1 = mean(evm_mat_1(:));
+snr_1 = 10*log10(1./aevms_1);
+
+evm_mat_2 = abs(payload_syms_mat_2 - tx_syms_mat).^2;
+aevms_2 = mean(evm_mat_2(:));
+snr_2 = 10*log10(1./aevms_2);
+
+if PLOT
 % Tx signal
 cf = cf + 1;
 figure(cf);clf;
@@ -464,9 +482,6 @@ end
 % Channel Estimates (MRC)
 cf = cf + 1;
 figure(cf); clf;
-rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
-rx_H_est_plot(SC_IND_DATA) = rx_H_est(SC_IND_DATA);
-rx_H_est_plot(SC_IND_PILOTS) = rx_H_est(SC_IND_PILOTS);
 
 x = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1));
 
@@ -532,10 +547,6 @@ end
 cf = cf + 1;
 figure(cf); clf;
 
-evm_mat_mrc = abs(payload_syms_mat_mrc - tx_syms_mat).^2;
-aevms_mrc = mean(evm_mat_mrc(:));
-snr_mrc = 10*log10(1./aevms_mrc);
-
 subplot(2,1,1)
 plot(100*evm_mat_mrc(:),'o','MarkerSize',1)
 axis tight
@@ -572,10 +583,6 @@ end
 
 cf = cf + 1;
 figure(cf); clf;
-
-evm_mat_1 = abs(payload_syms_mat_1 - tx_syms_mat).^2;
-aevms_1 = mean(evm_mat_1(:));
-snr_1 = 10*log10(1./aevms_1);
 
 subplot(2,1,1)
 plot(100*evm_mat_1(:),'o','MarkerSize',1)
@@ -614,10 +621,6 @@ end
 
 cf = cf + 1;
 figure(cf); clf;
-
-evm_mat_2 = abs(payload_syms_mat_2 - tx_syms_mat).^2;
-aevms_2 = mean(evm_mat_2(:));
-snr_2 = 10*log10(1./aevms_2);
 
 subplot(2,1,1)
 plot(100*evm_mat_2(:),'o','MarkerSize',1)
@@ -677,7 +680,7 @@ if SIM_MOD
     hold off;
     title('Bit Error rate vs SNR');
 end
-
+end
 % Calculate Rx stats
 
 sym_errs = sum(tx_data ~= rx_data_mrc);
