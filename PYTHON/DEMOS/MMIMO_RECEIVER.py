@@ -48,7 +48,7 @@ import threading
 import signal
 from optparse import OptionParser
 import matplotlib.pyplot as plt
-from hdf_dump import *
+from hdf5_lib import *
 # from radio_lib import *
 from find_lts import *
 from generate_sequence import *
@@ -87,20 +87,22 @@ def read_rx_samples(rx_mode, filename):
     """
 
     if rx_mode == "AWGN" or rx_mode == "REPLAY":
-        hdf5 = hdfDump(filename)
-        hdf5.get_hdf5()
-        hdf5.parse_hdf5()
+        hdf5 = hdf5_lib(filename)
+        hdf5.get_data()
 
         # Check which data we have available
         data_types_avail = []
         pilots_avail = bool(hdf5.data['Pilot_Samples'])
         ul_data_avail = bool(hdf5.data['UplinkData'])
 
+        samples = dict()
         if pilots_avail:
             data_types_avail.append("PILOTS")
+            samples.update({"PILOT_SAMPS": hdf5.pilot_samples})
             print("PILOT Data Available")
         if ul_data_avail:
             data_types_avail.append("UL_DATA")
+            samples.update({"UL_DATA": hdf5.uplink_samples})
             print("Uplink Data Available")
 
         # Empty structure
@@ -108,13 +110,8 @@ def read_rx_samples(rx_mode, filename):
             raise Exception(' **** No pilots or uplink data found **** ')
 
         # Retrieve attributes
-        hdf5.get_attributes()
         metadata = hdf5.metadata
 
-        # Get raw samples
-        hdf5.get_samples(data_types_avail)
-        samples = hdf5.samples
-        
     else:
         # If OTA
         # TODO - retrieve config data (metadata) and actual samples
@@ -165,6 +162,10 @@ def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[]):
         # If beginning of frame was not captured in current buffer
         if (best_pk - lts_syms_len) < 0:
             print("TOO EARLY. Continue... ")
+            pilot = np.array([])
+            return pilot, tx_pilot, lts_corr, pilot_thresh, best_pk, lts_start
+        if best_pk > len(samples):
+            print("TOO LATE. Continue... ")
             pilot = np.array([])
             return pilot, tx_pilot, lts_corr, pilot_thresh, best_pk, lts_start
 
@@ -336,11 +337,11 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est, lts_start)
 
     w_dim = bf_weights.shape
     num_sc = w_dim[2]
-    num_cl = int(metadata['NUM_CLIENTS'])
+    num_cl = int(metadata['CL_NUM'])
     num_ant = int(metadata['BS_NUM_ANT'])
     data_cp_len = int(metadata['CP_LEN'])
     fft_size = int(metadata['FFT_SIZE'])
-    num_samps = int(metadata['SYM_LEN_NO_PAD'])
+    num_samps = int(metadata['SYMBOL_LEN_NO_PAD'])
     prefix_len = int(metadata['PREFIX_LEN'])
     ofdm_size = fft_size + data_cp_len
     n_ofdm_syms = num_samps//ofdm_size
@@ -369,7 +370,7 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est, lts_start)
             this_offset = 60
         else:
             this_offset = samp_offset[0, antIdx]
-
+        # this_offset = 100  # FIXME !!!
         tmp_range = range(this_offset, n_ofdm_syms * (num_sc + data_cp_len) + this_offset)
         payload_samples_mat_cp[antIdx, :, :] = np.reshape(payload[antIdx, tmp_range],
                                                           (num_sc + data_cp_len, n_ofdm_syms),
@@ -403,7 +404,11 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est, lts_start)
         chan_est_tmp = np.squeeze(chan_est)
         for symIdx in range(n_ofdm_syms):
             antIdx = 2
-            x[0, :, symIdx] = rxSig_freq[antIdx, :, symIdx] / chan_est_tmp[antIdx, :]
+            if num_cl > 1:
+                cl_idx = 0
+                x[0, :, symIdx] = rxSig_freq[antIdx, :, symIdx] / chan_est_tmp[cl_idx, antIdx, :]
+            else:
+                x[0, :, symIdx] = rxSig_freq[antIdx, :, symIdx] / chan_est_tmp[antIdx, :]
 
     streams = x
     return streams
@@ -426,9 +431,9 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
     """
     fft_size = int(metadata['FFT_SIZE'])
     data_cp_len = int(metadata['CP_LEN'])
-    num_samps = int(metadata['SYM_LEN_NO_PAD'])
+    num_samps = int(metadata['SYMBOL_LEN_NO_PAD'])
     num_sc = int(metadata['FFT_SIZE'])
-    mod_order_str = metadata['CL_MODULATION']
+    mod_order_str = metadata['CL_MODULATION'].astype(str)
     data_sc = metadata['OFDM_DATA_SC']
     pilot_sc = metadata['OFDM_PILOT_SC']
     pilot_sc_vec = metadata['OFDM_PILOT_SC_VALS'].reshape(4, 1, order="F")
@@ -443,6 +448,8 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
         mod_order = 16
     elif mod_order_str == "64QAM":
         mod_order = 64
+    else:
+        sys.exit("Invalid Modulation")
 
     pilots_matrix = np.matlib.repmat(pilot_sc_vec, 1, n_ofdm_syms)
     n_data_syms = n_ofdm_syms * len(data_sc)
@@ -533,8 +540,8 @@ def rx_stats(tx_syms, rx_data, cfo_est, lts_evm, metadata, n_ofdm_syms, ofdm_obj
 
     # Symbol error
     ofdm_data_sc = metadata['OFDM_DATA_SC']
-    num_cl = metadata['NUM_CLIENTS']
-    num_sc = metadata['FFT_SIZE']
+    num_cl = int(metadata['CL_NUM'])
+    num_sc = int(metadata['FFT_SIZE'])
     mod_order_str = metadata['CL_MODULATION']
     rate = metadata['RATE']
     num_bs_ant = metadata['BS_NUM_ANT']
@@ -592,30 +599,39 @@ def rx_app(filename, user_params, this_plotter):
     ###########################
     #        Attributes       #
     ###########################
-    cl_present = metadata['CLIENT_PRESENT']
-    prefix_len = metadata['PREFIX_LEN']
-    postfix_len = metadata['POSTFIX_LEN']
-    pilot_type = metadata['PILOT_SEQ']
-    num_bs_ant = metadata['BS_NUM_ANT']
+    if "CL_SDR_ID" in metadata.keys():
+        cl_present = True
+
+    prefix_len = int(metadata['PREFIX_LEN'])
+    postfix_len = int(metadata['POSTFIX_LEN'])
+    pilot_type = metadata['PILOT_SEQ_TYPE'].astype(str)[0]
+    num_bs_ant = int(metadata['BS_NUM_ANT'])
     pilot_samples = samples['PILOT_SAMPS']
-    data_samples = samples['UL_SAMPS']
-    num_cells = metadata['BS_NUM_CELLS']
-    num_cl = int(metadata['NUM_CLIENTS'])
-    sym_len = metadata['SYM_LEN']
-    sym_len_no_pad = metadata['SYM_LEN_NO_PAD']
-    fft_size = metadata['FFT_SIZE']
-    cp_len = metadata['CP_LEN']
+    data_samples = samples['UL_DATA']
+    num_cells = int(metadata['BS_NUM_CELLS'])
+    num_cl = int(metadata['CL_NUM'])
+    sym_len = int(metadata['SYMBOL_LEN'])
+    sym_len_no_pad = int(metadata['SYMBOL_LEN_NO_PAD'])
+    fft_size = int(metadata['FFT_SIZE'])
+    cp_len = int(metadata['CP_LEN'])
     ofdm_data_sc = metadata['OFDM_DATA_SC']
-    ofdm_pilot = metadata['OFDM_PILOT_TIME']
+    ofdm_pilot = np.array(metadata['OFDM_PILOT'])
+
     if not cl_present:
         cl_frame_sched = metadata['BS_FRAME_SCHED']
         # print('ERROR: Script needs client metadata. Sounder must be run in joint mode (BS and client together)')
         print('WARNING: Client(s) metadata is not available. Demodulation will not be available.')
         # sys.exit()
     else:
+        ofdm_data = []
+        ofdm_data_time = []
         cl_frame_sched = metadata['CL_FRAME_SCHED']
-        ofdm_data = metadata['OFDM_DATA']   # Freq domain TX data (Does not contain cyclic prefix or prefix/postfix)
-        ofdm_data_time = metadata['OFDM_DATA_TIME']
+
+        for idx in range(num_cl):
+            ofdm_data.append(metadata['OFDM_DATA_CL' + str(idx)][idx])             ##FIXME!!!! REMOVE THAT second [idx]  # Freq domain TX data (Does not contain cyclic prefix or prefix/postfix)
+            ofdm_data_time.append(metadata['OFDM_DATA_TIME_CL' + str(idx)][idx])   ##FIXME!!!! REMOVE THAT second [idx]
+            #ofdm_data.append(metadata['OFDM_DATA_CL' + str(idx)])             ##FIXME!!!! REMOVE THAT second [idx]  # Freq domain TX data (Does not contain cyclic prefix or prefix/postfix)
+            #ofdm_data_time.append(metadata['OFDM_DATA_TIME_CL' + str(idx)])   ##FIXME!!!! REMOVE THAT second [idx]
 
     pilot_dim = pilot_samples.shape
     num_frames = pilot_dim[0]
@@ -643,8 +659,10 @@ def rx_app(filename, user_params, this_plotter):
     # Pilots
     rep = sym_len_no_pad//len(ofdm_pilot)
     frac = sym_len_no_pad % len(ofdm_pilot)
+
     full_pilot = np.concatenate((np.zeros(prefix_len), np.squeeze(np.matlib.repmat(ofdm_pilot, 1, rep)),
                                  ofdm_pilot[0:frac], np.zeros(postfix_len)))
+
     # Note:
     # One pilot per client + overlapping data + add a prefix so that TX and RX plots are the same (for showing purposes)
     tx_sig = np.zeros((num_cl, (num_cl*sym_len + num_samps_freq_dom + prefix_len)), dtype=complex)
@@ -722,7 +740,7 @@ def rx_app(filename, user_params, this_plotter):
                 num_samps_full_frame = len(tx_data_sim[0, :])
                 ofdm_rx_syms_awgn = np.zeros((num_bs_ant, num_samps_full_frame)).astype(complex)
                 for antIdx in range(num_bs_ant):
-                    noise = 0.001 * (np.random.randn(num_samps_full_frame) + np.random.randn(num_samps_full_frame) * 1j)
+                    noise = 0.015 * (np.random.randn(num_samps_full_frame) + np.random.randn(num_samps_full_frame) * 1j)
                     ofdm_rx_syms_awgn[antIdx, :] = tx_data_sim[antIdx, :] + noise
                     # Remove DC
                     ofdm_rx_syms_awgn[antIdx, :] -= np.mean(ofdm_rx_syms_awgn[antIdx, :])
@@ -886,15 +904,15 @@ def rx_app(filename, user_params, this_plotter):
                     #             metadata, n_ofdm_syms, ofdm_obj, phase_error)
 
                     debug = False
-                    if frameIdx > 60 and debug:
+                    if debug:
                         print("Frame: {} \t Sample Offset: {}".format(frameIdx, lts_start))
                         fig = plt.figure(100)
 
                         # TX/RX Constellation
                         ax1 = fig.add_subplot(5, 1, 1)
                         ax1.grid(True)
-                        ax1.plot(np.real(rxSyms_vec), np.imag(rxSyms_vec), 'bo', label='TXSym')
-                        ax1.plot(np.real(ofdm_tx_syms), np.imag(ofdm_tx_syms), 'rx', label='RXSym')
+                        ax1.plot(np.real(rxSyms_vec), np.imag(rxSyms_vec), 'bo', label='RXSym')
+                        ax1.plot(np.real(ofdm_tx_syms), np.imag(ofdm_tx_syms), 'rx', label='TXSym')
                         ax1.axis([-1.5, 1.5, -1.5, 1.5])
 
                         # RX Signal
@@ -909,7 +927,7 @@ def rx_app(filename, user_params, this_plotter):
                         ax3 = fig.add_subplot(5, 1, 3)
                         ax3.grid(True)
                         ax3.set_title('Phase Error')
-                        ax3.plot(range(0, 5), phase_error[0])  # client0
+                        ax3.plot(range(0, len(phase_error[0])), phase_error[0])  # client0
                         ax3.set_ylim(-3.2, 3.2)
                         ax3.set_xlim(0, 5)
 
@@ -977,15 +995,15 @@ if __name__ == '__main__':
 
     parser = OptionParser()
     # Params
+    parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-12-3-16-16-24_1x64x2.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
     #parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-8-16-15-35-59_1x8x1_FULL_LTS.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
-    parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/Argos-2019-8-20-9-24-49_1x64x1.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
-    parser.add_option("--mode",       type="string",       dest="mode",       default="REPLAY", help="Options: REPLAY/AWGN/OTA [default: %default]")
+    parser.add_option("--mode",       type="string",       dest="mode",       default="AWGN", help="Options: REPLAY/AWGN/OTA [default: %default]")
     parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
     parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=False,  help="Apply CFO correction [default: %default]")
     parser.add_option("--sfoCorr",    action="store_true", dest="sfo_corr",   default=True,  help="Apply SFO correction [default: %default]")
     parser.add_option("--phaseCorr",  action="store_true", dest="phase_corr", default=True,  help="Apply phase correction [default: %default]")
-    parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=5,     help="FFT Offset:# CP samples for FFT [default: %default]")
-    parser.add_option("--numClPlot",  type="int",          dest="num_cl_plot",default=1,     help="Number of clients to plot. Max of 2 [default: %default]")
+    parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=6,     help="FFT Offset:# CP samples for FFT [default: %default]")
+    parser.add_option("--numClPlot",  type="int",          dest="num_cl_plot",default=2,     help="Number of clients to plot. Max of 2 [default: %default]")
     (options, args) = parser.parse_args()
 
     # Params

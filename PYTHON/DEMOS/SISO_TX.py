@@ -97,7 +97,11 @@ def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, waveFreq, numSamps, se
             sdr.writeSetting(SOAPY_SDR_TX, c, 'TSP_TSG_CONST', str(amplFixed))
             sdr.writeSetting(SOAPY_SDR_TX, c, 'TX_ENB_OVERRIDE', 'true')
 
-        sdr.setGain(SOAPY_SDR_TX, c, gain)
+        #sdr.setGain(SOAPY_SDR_TX, c, gain)
+        sdr.setGain(SOAPY_SDR_TX, c, "PAD", gain)
+        sdr.setGain(SOAPY_SDR_TX, c, "IAMP", 0)
+        sdr.setGain(SOAPY_SDR_TX, c, "PA2", 0)
+        sdr.setGain(SOAPY_SDR_TX, c, "ATTN", -6)
 
     # Generate TX signal
     txSignal = np.empty(numSamps).astype(np.complex64)
@@ -192,7 +196,7 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx and Rx sample rate", default=5e6)
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
-    parser.add_option("--gain", type="float", dest="gain", help="Tx gain [0:105] (dB)", default=52.0)
+    parser.add_option("--gain", type="float", dest="gain", help="Tx gain [0:105] (dB)", default=42.0)
     parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=2.5e9)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
     parser.add_option("--waveFreq", type="float", dest="waveFreq", help="Baseband waveform freq (Hz)", default=None)

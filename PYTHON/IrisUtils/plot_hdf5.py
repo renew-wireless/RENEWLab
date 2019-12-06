@@ -34,7 +34,7 @@ from channel_analysis import *
 import hdf5_lib
 from hdf5_lib import *
 
-def verify_hdf5(hdf5, default_frame=100, ant_i =0, n_frm_st=0, deep_inspect=False):
+def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=0.001, deep_inspect=False):
     """
     Plot data in file to verify contents.
 
@@ -65,6 +65,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, n_frm_st=0, deep_inspect=Fals
 
     # Retrieve attributes
     symbol_length = int(metadata['SYMBOL_LEN'])
+    num_pilots = int(metadata['PILOT_NUM'])
     num_cl = int(metadata['CL_NUM'])
     cp = int(metadata['CP_LEN'])
     prefix_len = int(metadata['PREFIX_LEN'])
@@ -98,7 +99,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, n_frm_st=0, deep_inspect=Fals
         if ftype == "PILOTS":
             axes[0, idx].set_title('PILOTS - Cell 0')
             samples = pilot_samples 
-            num_cl_tmp = num_cl  # number of UEs to plot data for
+            num_cl_tmp = num_pilots  # number of UEs to plot data for
 
         elif ftype == "UL_DATA":
 
@@ -114,11 +115,13 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, n_frm_st=0, deep_inspect=Fals
         csi, samps = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size=64, offset=offset, bound=0, cp=0)
 
         # Correlation (Debug plot useful for checking sync)
-        amps = np.mean(np.abs(samps[:, 0, 0, 0, 0, :]), axis=1)
-        pilot_frames = [i for i in range(len(amps)) if amps[i] > 0.001]
-        #if len(pilot_frames) > 0: 
-        corr_ref_frame = pilot_frames[len(pilot_frames) // 2]
-        #else: return 
+        amps = np.mean(np.abs(samps[:, 0, user_i, 0, ant_i, :]), axis=1)
+        pilot_frames = [i for i in range(len(amps)) if amps[i] > thresh]
+        if len(pilot_frames) > 0: 
+            corr_ref_frame = pilot_frames[len(pilot_frames) // 2]
+        else:
+            print("no valid frames where found. Decision threshold for amplitude was %f" % thresh)
+            return 
         cellCSI = csi[:, 0, :, :, :, :]     # First cell
         userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
         corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[corr_ref_frame, :, :, :]), (1, 0, 2) ) )
@@ -134,23 +137,24 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, n_frm_st=0, deep_inspect=Fals
         # Verify default_frame does not exceed max number of collected frames
         ref_frame = min(default_frame - n_frm_st, samps.shape[0])
         ant_plt = ant_i
+        user_plt = user_i
         # Plotter
         # Samps Dimensions: (Frame, Cell, User, Pilot Rep, Antenna, Sample)
         axes[0, idx].set_ylabel('Frame %d ant %d (Re)' %( (ref_frame + n_frm_st), ant_plt) )
-        axes[0, idx].plot(np.real(samps[ref_frame, 0, 0, 0, ant_plt, :]))
+        axes[0, idx].plot(np.real(samps[ref_frame, 0, user_plt, 0, ant_plt, :]))
 
         axes[1, idx].set_ylabel('Frame %d ant %d (Im)' %( (ref_frame + n_frm_st), ant_plt) )
-        axes[1, idx].plot(np.imag(samps[ref_frame, 0, 0, 0, ant_plt, :]))
+        axes[1, idx].plot(np.imag(samps[ref_frame, 0, user_plt, 0, ant_plt, :]))
 
         axes[2, idx].set_ylabel('All Frames ant %d (Re)' %ant_plt )
-        axes[2, idx].plot(np.real(samps[:, 0, 0, 0, ant_plt, :]).flatten())
+        axes[2, idx].plot(np.real(samps[:, 0, user_plt, 0, ant_plt, :]).flatten())
 
         axes[3, idx].set_ylabel('All Frames ant %d (Im)' %ant_plt)
-        axes[3, idx].plot(np.imag(samps[:, 0, 0, 0, ant_plt, :]).flatten())
+        axes[3, idx].plot(np.imag(samps[:, 0, user_plt, 0, ant_plt, :]).flatten())
 
         axes[4, idx].set_ylabel('Amplitude')
         for i in range(samps.shape[4]):
-            axes[4, idx].plot(np.mean(np.abs(samps[:, 0, 0, 0, i, :]), axis=1).flatten())
+            axes[4, idx].plot(np.mean(np.abs(samps[:, 0, user_plt, 0, i, :]), axis=1).flatten())
         axes[4, idx].set_xlabel('Sample')
 
         axes[5, idx].set_ylabel('Correlation with Frame %d' % corr_ref_frame)
@@ -262,7 +266,7 @@ def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0):
     rate = float(metadata['RATE'])
     symbol_num = int(metadata['BS_FRAME_LEN'])
     timestep = symbol_length*symbol_num/rate
-    num_cl = int(metadata['CL_NUM'])-1
+    num_cl = int(metadata['CL_NUM'])
     num_pilots = int(metadata['PILOT_NUM'])
     cp = int(metadata['CP_LEN'])
     prefix_len = int(metadata['PREFIX_LEN'])
@@ -351,7 +355,9 @@ def main():
     parser.add_option("--deep-inspect", action="store_true", dest="deep_inspect", help="Run script without analysis", default= False)
     parser.add_option("--ref-frame", type="int", dest="ref_frame", help="Frame number to plot", default=0)
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Reference antenna", default=0)
+    parser.add_option("--ref-user", type="int", dest="ref_user", help="Reference User", default=0)
     parser.add_option("--n-frames", type="int", dest="n_frames_to_inspect", help="Number of frames to inspect", default=2000)
+    parser.add_option("--thresh", type="float", dest="thresh", help="Ampiltude Threshold for valid frames", default=0.001)
     parser.add_option("--frame-start", type="int", dest="fr_strt", help="Starting frame. Must have set n_frames_to_inspect first and make sure fr_strt is within boundaries ", default=0)
     parser.add_option("--verify-trace", action="store_true", dest="verify", help="Run script without analysis", default= True)
     parser.add_option("--analyze-trace", action="store_true", dest="analyze", help="Run script without analysis", default= False)
@@ -361,6 +367,8 @@ def main():
     n_frames_to_inspect = options.n_frames_to_inspect
     ref_ant = options.ref_ant
     ref_frame = options.ref_frame
+    ref_user = options.ref_user
+    thresh = options.thresh
     fr_strt = options.fr_strt
     verify = options.verify
     analyze = options.analyze
@@ -389,7 +397,7 @@ def main():
     hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
 
     if verify:
-        verify_hdf5(hdf5, ref_frame, ref_ant, fr_strt, deep_inspect)
+        verify_hdf5(hdf5, ref_frame, ref_ant, ref_user, fr_strt, thresh, deep_inspect)
     if analyze:
         analyze_hdf5(hdf5)
     scrpt_end = time.time()

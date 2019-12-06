@@ -24,10 +24,10 @@ WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 
 %Iris params:
 USE_HUB                 = 0;
-TX_FRQ                  = 3.6e9;    
+TX_FRQ                  = 2.5e9;    
 RX_FRQ                  = TX_FRQ;
-TX_GN                   = 70;
-RX_GN                   = 50;
+TX_GN                   = 80;
+RX_GN                   = 60;
 SMPL_RT                 = 5e6;  
 N_FRM                   = 1;
 bs_ids = string.empty();
@@ -99,15 +99,13 @@ precoding_in_mat(N_PILOTS_SYMS + 1:end, SC_IND_PILOTS) = pilots_mat;
 % nodes.
 
 if USE_HUB
-    hub_id = "FH4A000002";
+    hub_id = "FH4A000001";
 else
     hub_id = [];
 end
 
-% bs_ids = ["RF3E000208", "RF3E000636", "RF3E000632", "RF3E000568", "RF3E000558", "RF3E000633", "RF3E000566", "RF3E000635"];
-% ue_ids = ["RF3E000375"];
-bs_ids = ["0328", "0339", "0268", "0282", "0344", "0233"];
-ue_ids = ["RF3C000045"];
+bs_ids = ["RF3E000189", "RF3E000024", "RF3E000139", "RF3E000032", "RF3E000154", "RF3E000182", "RF3E000038", "RF3E000137"];
+ue_ids= ["RF3E000157"];
 
 %bs_sched = ["PGRG", "RGPG"];  % All BS schedule, Ref Schedule
 bs_sched = ["PGRG", "RGPG", "BGRG", "BGPG"];  % BS schedule

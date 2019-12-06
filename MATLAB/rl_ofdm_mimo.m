@@ -26,7 +26,7 @@ N_UE                    = 2;
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 SIM_MOD                 = 0;
 DEBUG                   = 0;
-
+PLOT                    = 1;
 if SIM_MOD
     chan_type               = "rayleigh"; % Will use only Rayleigh for simulation
     sim_SNR_db              = 15;   
@@ -38,8 +38,8 @@ else
     USE_HUB                 = 0;
     TX_FRQ                  = 2.5e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = 70;
-    TX_GN_ue                = 70;
+    TX_GN                   = 80;
+    TX_GN_ue                = 80;
     RX_GN                   = 60;
     SMPL_RT                 = 5e6;
     N_FRM                   = 50;
@@ -170,8 +170,8 @@ else
     % nodes.
 
 
-    bs_sched = ["BGGGGGGGGGGRGGGG"];           % BS schedule
-    ue_sched = ["GGGGGGGGGGGPGGGG"];           % UE schedule
+    bs_sched = ["BGGGGGRG"];           % BS schedule
+    ue_sched = ["GGGGGGPG"];           % UE schedule
 
 
     %number of samples in a frame
@@ -180,7 +180,7 @@ else
     % Iris nodes' parameters
     bs_sdr_params = struct(...
         'id', bs_ids, ...
-        'n_sdrs',N_BS_NODE, ...        % number of nodes chained together
+        'n_sdrs', N_BS_NODE, ...        % number of nodes chained together
         'txfreq', TX_FRQ, ...   
         'rxfreq', RX_FRQ, ...
         'txgain', TX_GN, ...
@@ -194,7 +194,7 @@ else
 
     ue_sdr_params = bs_sdr_params;
     ue_sdr_params.id =  ue_ids;
-    ue_sdr_params.n_sdrs = 2;
+    ue_sdr_params.n_sdrs = N_UE;
     ue_sdr_params.txgain = TX_GN_ue;
     
     ue_sdr_params.tdd_sched = ue_sched;
@@ -363,23 +363,6 @@ cf = 0;
 fst_clr = [0, 0.4470, 0.7410];
 sec_clr = [0.8500, 0.3250, 0.0980];
 
-%Tx signal
-cf = cf + 1;
-figure(cf); clf;
-for sp=1:N_UE
-    subplot(N_UE,2,2*(sp -1) + 1);
-    plot(real(tx_vecs_iris(:,sp)));
-    axis([0 length(tx_vecs_iris(:,sp)) -TX_SCALE TX_SCALE])
-    grid on;
-    title(sprintf('UE %d Tx Waveform (I)', sp));
-
-    subplot(N_UE,2,2*sp);
-    plot(imag(tx_vecs_iris(:,sp)), 'color' , sec_clr);
-    axis([0 length(tx_vecs_iris(:,sp)) -TX_SCALE TX_SCALE])
-    grid on;
-    title(sprintf('UE %d Tx Waveform (Q)',sp));
-end
-
 % Rx signal
 cf = cf + 1;
 figure(cf); clf;
@@ -396,6 +379,24 @@ for sp = 1:N_BS_NODE
     grid on;
     title(sprintf('BS antenna %d Rx Waveform (Q)', sp));
 end 
+
+if PLOT
+%Tx signal
+cf = cf + 1;
+figure(cf); clf;
+for sp=1:N_UE
+    subplot(N_UE,2,2*(sp -1) + 1);
+    plot(real(tx_vecs_iris(:,sp)));
+    axis([0 length(tx_vecs_iris(:,sp)) -TX_SCALE TX_SCALE])
+    grid on;
+    title(sprintf('UE %d Tx Waveform (I)', sp));
+
+    subplot(N_UE,2,2*sp);
+    plot(imag(tx_vecs_iris(:,sp)), 'color' , sec_clr);
+    axis([0 length(tx_vecs_iris(:,sp)) -TX_SCALE TX_SCALE])
+    grid on;
+    title(sprintf('UE %d Tx Waveform (Q)',sp));
+end
 
 %% Rx LTS correlation
 cf = cf+ 1;
@@ -473,6 +474,8 @@ axis([min(bw_span) max(bw_span) 0 max(channel_condition_db)+1])
 grid on;
 title('Channel Condition (dB)')
 xlabel('Baseband Frequency (MHz)')
+
+end
 
 %% EVM & SNR
 sym_errs = sum(tx_data(:) ~= rx_data(:));
