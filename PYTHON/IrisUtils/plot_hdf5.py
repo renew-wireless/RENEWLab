@@ -391,7 +391,7 @@ def main():
         print("Setting the frame to inspect/plot to {}".format(fr_strt))
         ref_frame = fr_strt
 
-    print(">> frame to plot = {}, ref. ant = {}, no. of frames to inspect = {}, starting frame = {} <<".format(ref_frame,ref_ant,n_frames_to_inspect, fr_strt))
+    print(">> frame to plot = {}, ref. ant = {}, ref. user = {}, no. of frames to inspect = {}, starting frame = {} <<".format(ref_frame, ref_ant, ref_user, n_frames_to_inspect, fr_strt))
 
     # Instantiate
     hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
