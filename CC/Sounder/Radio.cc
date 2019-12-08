@@ -82,9 +82,16 @@ int Radio::recv(void* const* buffs, int samples, long long& frameTime)
     return dev->readStream(rxs, buffs, samples, flags, frameTime, 1000000);
 }
 
-int Radio::activateRecv(const long long rxTime, const size_t numSamps)
+int Radio::activateRecv(const long long rxTime, const size_t numSamps, int flags)
 {
-    return dev->activateStream(rxs, 0, rxTime, numSamps);
+    int soapyFlags[] = {
+        0,
+        SOAPY_SDR_HAS_TIME,
+        SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST,
+        SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST
+    };
+    int flag_args = soapyFlags[flags];
+    return dev->activateStream(rxs, flag_args, rxTime, numSamps);
 }
 
 void Radio::deactivateRecv(void)

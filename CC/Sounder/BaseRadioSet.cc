@@ -121,6 +121,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         }
         collectCSI(adjust); // run 2: verify adjustments
         usleep(100000);
+        std::cout << "sample offset calibration done!" << std::endl;
     }
 
     std::vector<std::string> _tddSched;
