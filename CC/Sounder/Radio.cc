@@ -22,7 +22,7 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
     dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0);
     dev->setGain(SOAPY_SDR_RX, ch, "PGA", 0);
     dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
-    dev->setGain(SOAPY_SDR_RX, ch, "ATTN", 0);
+    dev->setGain(SOAPY_SDR_RX, ch, "ATTN", _cfg->radioRfFreq < 3e9 ? -12 : 0);
     dev->setGain(SOAPY_SDR_TX, ch, "PAD", std::min(42.0, txgain)); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
     dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 0);
     dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0);

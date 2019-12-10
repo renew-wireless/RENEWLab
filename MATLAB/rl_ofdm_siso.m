@@ -45,12 +45,12 @@ berr_th = zeros(nsnr,1);            % Theoretical BER
 fprintf("Channel type: %s \n",chan_type);
 
 %Iris params:
-N_BS_NODE = 1;
-N_UE = 1;
+N_BS_NODE 		= 1;
+N_UE 			= 1;
 TX_FRQ                  = 2.5e9;
 RX_FRQ                  = TX_FRQ;
-TX_GN                   = 70;
-RX_GN                   = 60;
+TX_GN                   = 42;
+RX_GN                   = 20;
 SMPL_RT                 = 5e6;
 N_FRM                   = 10;
 
@@ -73,7 +73,7 @@ N_DATA_SYMS             = N_OFDM_SYM * length(SC_IND_DATA);       % Number of da
 N_LTS_SYM               = 2;                                      % Number of 
 N_SYM_SAMP              = N_SC + CP_LEN;                          % Number of samples that will go over the air
 N_ZPAD_PRE              = 90;                                     % Zero-padding prefix for Iris
-N_ZPAD_POST             = N_ZPAD_PRE -14;                         % Zero-padding postfix for Iris
+N_ZPAD_POST             = N_ZPAD_PRE - 14;                         % Zero-padding postfix for Iris
 
 % Rx processing params
 FFT_OFFSET                    = 16;          % Number of CP samples to use in FFT (on average)
@@ -157,7 +157,7 @@ else
     % Iris nodes' parameters
     bs_sdr_params = struct(...
         'id', bs_ids, ...
-        'n_sdrs',N_BS_NODE, ...
+        'n_sdrs', N_BS_NODE, ...
         'txfreq', TX_FRQ, ...
         'rxfreq', RX_FRQ, ...
         'txgain', TX_GN, ...
@@ -171,7 +171,7 @@ else
     
     ue_sdr_params = bs_sdr_params;
     ue_sdr_params.id =  ue_ids;
-    ue_sdr_params.n_sdrs = 1;
+    ue_sdr_params.n_sdrs = N_UE;
     ue_sdr_params.tdd_sched = ue_sched;
     
     rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, [], bs_sdr_params, ue_sdr_params, []);
