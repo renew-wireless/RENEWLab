@@ -81,7 +81,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
 
     if deep_inspect:
         csi_from_pilots_start = time.time()
-        csi_mat, match_filt, sub_fr_strt, cmpx_pilots, k_lts, n_lts = hdf5_lib.csi_from_pilots(
+        csi_mat, match_filt, sub_fr_strt, cmpx_pilots, k_lts, n_lts = csi_from_pilots(
             pilot_samples, z_padding, frm_st_idx=n_frm_st, frame_to_plot=frm_plt, ref_ant=ant_i)
         csi_from_pilots_end = time.time()
 
