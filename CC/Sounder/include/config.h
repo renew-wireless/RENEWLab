@@ -81,6 +81,7 @@ public:
     std::string clChannel;
     bool clAgcEn;
     int clAgcGainInit;
+    int txAdvance;
     std::string clDataMod;
     std::vector<int> data_ind;
     std::vector<uint32_t> coeffs;
