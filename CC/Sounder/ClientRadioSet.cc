@@ -40,7 +40,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
     radios.shrink_to_fit();
 
     //beaconSize + 82 (BS FE delay) + 68 (path delay) + 17 (correlator delay) + 82 (Client FE Delay)
-    int clTrigOffset = _cfg->beaconSize + 249;
+    int clTrigOffset = _cfg->beaconSize + _cfg->txAdvance;
     int sf_start = clTrigOffset / _cfg->sampsPerSymbol;
     int sp_start = clTrigOffset % _cfg->sampsPerSymbol;
 

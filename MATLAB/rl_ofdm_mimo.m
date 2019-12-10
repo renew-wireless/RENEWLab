@@ -38,11 +38,11 @@ else
     USE_HUB                 = 0;
     TX_FRQ                  = 2.5e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = 80;
-    TX_GN_ue                = 80;
-    RX_GN                   = 60;
+    TX_GN                   = 42;
+    TX_GN_ue                = 42;
+    RX_GN                   = 20;
     SMPL_RT                 = 5e6;
-    N_FRM                   = 50;
+    N_FRM                   = 10;
     bs_ids                   = string.empty();
     ue_ids                  = string.empty();
     ue_scheds               = string.empty();

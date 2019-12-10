@@ -135,6 +135,7 @@ Config::Config(const std::string& jsonfile)
         clAgcGainInit = tddConfCl.value("agc_gain_init", 70); // 0 to 108
         clDataMod = tddConfCl.value("modulation", "QPSK");
         frame_mode = tddConfCl.value("frame_mode", "continuous_resync");
+	txAdvance = tddConfCl.value("tx_advance", 250);
 
         auto jClTxgainA_vec = tddConfCl.value("txgainA", json::array());
         clTxgain_vec[0].assign(jClTxgainA_vec.begin(), jClTxgainA_vec.end());
@@ -243,8 +244,11 @@ Config::Config(const std::string& jsonfile)
         pilot_ci16.insert(pilot_ci16.end(), post.begin(), post.end());
 
         pilot = Utils::cint16_to_uint32(pilot_ci16, false, "QI");
+        size_t remain_size = 4096 - pilot.size(); // 4096 is the size of TX_RAM in the FPGA
+        for (size_t j = 0; j < remain_size; j++)
+            pilot.push_back(0);
 #if DEBUG_PRINT
-        for (size_t j = 0; j < pilot.size(); j++) {
+        for (size_t j = 0; j < pilot_ci16.size(); j++) {
             std::cout << "Pilot[" << j << "]: \t " << pilot_ci16[j] << std::endl;
         }
 #endif

@@ -120,14 +120,14 @@ class Iris_py:
 			else:
 				self.sdr.setBandwidth(SOAPY_SDR_TX, chan, 2.5*sample_rate)
 			if tx_gain is not None:
-				self.sdr.setGain(SOAPY_SDR_TX, chan, tx_gain)
+				self.sdr.setGain(SOAPY_SDR_TX, chan, 'PAD', min(tx_gain, 42.0))
 			if tx_freq is not None:
 				self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'RF', tx_freq - .75*sample_rate)
 				self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'BB', .75*sample_rate)
 
 			#print("Set TX frequency to %f" % self.sdr.getFrequency(SOAPY_SDR_TX, chan))
 			#self.sdr.setAntenna(SOAPY_SDR_TX, chan, "TRX")
-			self.sdr.setGain(SOAPY_SDR_TX, chan, tx_gain)  # [-52,0]
+			self.sdr.setGain(SOAPY_SDR_TX, chan, 'ATTN', -6)
 
 			#Rx:
 			if sample_rate is not None:
@@ -147,8 +147,13 @@ class Iris_py:
 			if self.agc_en:
 				self.sdr.setGain(SOAPY_SDR_RX, chan, 100)  # high gain value
 			else:
-				self.sdr.setGain(SOAPY_SDR_RX, chan, rx_gain)  # [0,30]
-				self.sdr.setGain(SOAPY_SDR_RX, chan, "ATTN", -12)  # [0,30]
+				self.sdr.setGain(SOAPY_SDR_RX, chan, 'LNA', min(rx_gain, 30))  # [0,30]
+                        if rx_freq < 3e9:
+				self.sdr.setGain(SOAPY_SDR_RX, chan, "ATTN", -12)
+        			self.sdr.setGain(SOAPY_SDR_RX, chan, 'LNA2', 17)  # [0|17]
+                        else:
+				self.sdr.setGain(SOAPY_SDR_RX, chan, "ATTN", 0)  # [-18,-12,-6,0]
+        			self.sdr.setGain(SOAPY_SDR_RX, chan, 'LNA2', 14)  # [0|14]
 
 			self.sdr.setDCOffsetMode(SOAPY_SDR_RX, chan, True)
 
@@ -314,17 +319,17 @@ if __name__ == '__main__':
 
 	parser = ArgumentParser()
 	parser.add_argument("--serial-id1", type=str, dest="serial_id1",
-	                    help="TX SDR Serial Number, e.g., 00001", default=None)
+	                    help="BS SDR Serial Number, e.g., RF3E000XXX", default=None)
 	parser.add_argument("--serial-id2", type=str, dest="serial_id2",
-	                    help="TX SDR Serial Number, e.g., 00001", default=None)
+	                    help="UE SDR Serial Number, e.g., RF3E000XXX", default=None)
 	parser.add_argument("--rate", type=float, dest="rate",
 	                    help="Sample rate", default=5e6)
 	parser.add_argument("--txGain", type=float, dest="txGain",
-	                    help="Optional Tx gain (dB)", default=80)
+	                    help="Optional Tx gain (dB)", default=40)
 	parser.add_argument("--rxGain", type=float, dest="rxGain",
-	                    help="Optional Rx gain (dB)", default=65)
+	                    help="Optional Rx gain (dB)", default=20)
 	parser.add_argument("--freq", type=float, dest="freq",
-	                    help="Optional Tx freq (Hz)", default=2.5e9)
+	                    help="Optional Tx freq (Hz)", default=3.6e9)
 	parser.add_argument("--bw", type=float, dest="bw",
 	                    help="Optional filter bw (Hz)", default=None)
 	args = parser.parse_args()

@@ -22,7 +22,7 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
     dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0);
     dev->setGain(SOAPY_SDR_RX, ch, "PGA", 0);
     dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
-    dev->setGain(SOAPY_SDR_RX, ch, "ATTN", 0);
+    dev->setGain(SOAPY_SDR_RX, ch, "ATTN", _cfg->radioRfFreq < 3e9 ? -12 : 0);
     dev->setGain(SOAPY_SDR_TX, ch, "PAD", std::min(42.0, txgain)); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
     dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 0);
     dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0);
@@ -56,6 +56,8 @@ Radio::Radio(const SoapySDR::Kwargs& args, const char soapyFmt[],
     const std::vector<size_t>& channels, double rate)
 {
     dev = SoapySDR::Device::make(args);
+    if (dev == NULL)
+        throw std::invalid_argument("error making SoapySDR::Device\n");
     for (auto ch : channels) {
         dev->setSampleRate(SOAPY_SDR_RX, ch, rate);
         dev->setSampleRate(SOAPY_SDR_TX, ch, rate);
@@ -80,9 +82,16 @@ int Radio::recv(void* const* buffs, int samples, long long& frameTime)
     return dev->readStream(rxs, buffs, samples, flags, frameTime, 1000000);
 }
 
-int Radio::activateRecv(const long long rxTime, const size_t numSamps)
+int Radio::activateRecv(const long long rxTime, const size_t numSamps, int flags)
 {
-    return dev->activateStream(rxs, 0, rxTime, numSamps);
+    int soapyFlags[] = {
+        0,
+        SOAPY_SDR_HAS_TIME,
+        SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST,
+        SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST
+    };
+    int flag_args = soapyFlags[flags];
+    return dev->activateStream(rxs, flag_args, rxTime, numSamps);
 }
 
 void Radio::deactivateRecv(void)

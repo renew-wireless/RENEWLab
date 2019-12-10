@@ -525,7 +525,7 @@ void BaseRadioSet::collectCSI(bool& adjust)
                 if (ret < 0)
                     std::cout << "bad write" << std::endl;
             } else {
-                int ret = bsRadios[0][j]->activateRecv(rxTime, _cfg->sampsPerSymbol);
+                int ret = bsRadios[0][j]->activateRecv(rxTime, _cfg->sampsPerSymbol, 3);
                 if (ret < 0)
                     std::cout << "bad activate at node " << j << std::endl;
             }
