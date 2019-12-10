@@ -94,7 +94,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
 
     # PLOTTER
     # Plot pilots or data or both
-    fig, axes = plt.subplots(nrows=6, ncols=len(data_types_avail), squeeze=False)
+    fig, axes = plt.subplots(nrows=6, ncols=len(data_types_avail), squeeze=False, figsize=(10, 8))
     for idx, ftype in enumerate(data_types_avail):
         if ftype == "PILOTS":
             axes[0, idx].set_title('PILOTS - Cell 0')
@@ -309,35 +309,34 @@ def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0):
     _, demmel = calDemmel(userCSI)
 
     # plot stuff
-    # Multiuser Conjugate
-    plt.figure(1000*pl, figsize=(50, 10))
-    plt.plot(
-        np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], conj[1])
-    # plt.ylim([0,2])
-    plt.xlabel('Time (s)')
-    plt.ylabel('Per User Capacity Conj (bps/Hz)')
-    plt.show()
+    subf_conj = conj[-2]
+    subf_zf = zf[-2]
+    mubf_conj = conj[1]
+    mubf_zf = zf[1]
+    fig1, axes1 = plt.subplots(nrows=2, ncols=2, squeeze=False, figsize=(10, 8))
+    for j in range(2):
+        axes1[0, 0].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], mubf_conj[:,j], label = 'Conj User: {}'.format(j) )
+    for j in range(2):
+        axes1[0, 1].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], mubf_zf[:,j], label = 'ZF User: {}'.format(j) )
+    axes1[0,0].legend(loc='upper right', ncol=1, frameon=False)
+    axes1[0,0].set_xlabel('Time (s)', fontsize=18)
+    axes1[0,0].set_ylabel('MUBF User Achievable Rate (bps/Hz)', fontsize=18)
+    axes1[0,1].legend(loc='upper right', ncol=1, frameon=False)
+    axes1[0,1].set_xlabel('Time (s)')
+    for j in range(2):
+        axes1[1, 0].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], subf_conj[:,j], label = 'Conj User: {}'.format(j) )
+    for j in range(2):
+        axes1[1, 1].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], subf_zf[:,j], label = 'ZF User: {}'.format(j) )
+    axes1[1,0].legend(loc='upper right', ncol=1, frameon=False)
+    axes1[1,0].set_xlabel('Time (s)', fontsize=18)
+    axes1[1,0].set_ylabel('SUBF User Achievable Rate (bps/Hz)', fontsize=18)
+    axes1[1,1].legend(loc='upper right', ncol=1, frameon=False)
+    axes1[1,1].set_xlabel('Time (s)')
+    #axes1[1].set_ylabel('Per User Achievable Rate (bps/Hz)')
 
-    # Multiuser Zeroforcing
-    plt.figure(1000*pl+1, figsize=(50, 10))
-    plt.plot(
-        np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], zf[1])
-    # plt.ylim([0,2])
-    plt.xlabel('Time (s)')
-    plt.ylabel('Per User Capacity ZF (bps/Hz)')
-    plt.show()
-
-    # Single user (but show all users)
-    plt.figure(1000*pl+2, figsize=(50, 10))
-    plt.plot(
-        np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], conj[-2])
-    # plt.ylim([0,2])
-    plt.xlabel('Time (s)')
-    plt.ylabel('SUBF Capacity Conj (bps/Hz)')
-    plt.show()
 
     # demmel number
-    plt.figure(1000*pl+3, figsize=(50, 10))
+    plt.figure(1000*pl+3, figsize=(10, 8))
     plt.plot(
             np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], demmel[:, 7])
     # plt.ylim([0,2])
