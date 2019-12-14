@@ -439,7 +439,7 @@ class hdf5_lib:
         return self.metadata
 
     @staticmethod
-    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0):
+    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1):
         """Convert an Argos HDF5 log file with raw IQ in to CSI.
         Asumes 802.11 style LTS used for trace collection.
     
@@ -459,6 +459,7 @@ class hdf5_lib:
         """
         debug = False
         chunkstart = time.time()
+        samps = samps[::sub]
         usersamps = np.reshape(
             samps, (samps.shape[0], samps.shape[1], num_users, samps.shape[3], samps_per_user, 2))
         # What is this? It is eiter 1 or 2: 2 LTSs??
