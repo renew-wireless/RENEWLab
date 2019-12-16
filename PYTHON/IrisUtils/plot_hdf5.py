@@ -34,7 +34,7 @@ from channel_analysis import *
 import hdf5_lib
 from hdf5_lib import *
 
-def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=0.001, deep_inspect=False):
+def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=0.001, deep_inspect=False, sub_sample=1):
     """
     Plot data in file to verify contents.
 
@@ -112,7 +112,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
         # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
         # For correlation use a fft size of 64
         print("*verify_hdf5(): Calling samps2csi with fft_size = 64, offset = {}, bound = cp = 0 *".format(offset))
-        csi, samps = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size=64, offset=offset, bound=0, cp=0)
+        csi, samps = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size=64, offset=offset, bound=0, cp=0, sub=sub_sample)
 
         # Correlation (Debug plot useful for checking sync)
         amps = np.mean(np.abs(samps[:, 0, user_i, 0, ant_i, :]), axis=1)
@@ -132,7 +132,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
         # For looking at the whole picture, use a fft size of whole symbol_length as fft window (for visualization),
         # and no offset
         print("*verify_hdf5():Calling samps2csi *AGAIN*(?) with fft_size = symbol_length, no offset*")
-        csi, samps = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size=symbol_length, offset=0, bound=0, cp=0)
+        csi, samps = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size=symbol_length, offset=0, bound=0, cp=0, sub=sub_sample)
 
         # Verify default_frame does not exceed max number of collected frames
         ref_frame = min(default_frame - n_frm_st, samps.shape[0])
@@ -161,7 +161,8 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
         axes[5, idx].set_ylim([0, 1.1])
         axes[5, idx].set_title('Cell %d offset %d' % (0, offset))
         for u in range(num_cl_tmp):
-            axes[5, idx].plot(corr_total[pilot_frames, u])
+            axes[5, idx].plot(corr_total[pilot_frames, u], label="user %d"%u)
+        axes[5, idx].legend(loc='lower right', frameon=False)
         axes[5, idx].set_xlabel('Frame')
 
     if deep_inspect:
@@ -356,6 +357,7 @@ def main():
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Reference antenna", default=0)
     parser.add_option("--ref-user", type="int", dest="ref_user", help="Reference User", default=0)
     parser.add_option("--n-frames", type="int", dest="n_frames_to_inspect", help="Number of frames to inspect", default=2000)
+    parser.add_option("--sub-sample", type="int", dest="sub_sample", help="Sub sample rate", default=1)
     parser.add_option("--thresh", type="float", dest="thresh", help="Ampiltude Threshold for valid frames", default=0.001)
     parser.add_option("--frame-start", type="int", dest="fr_strt", help="Starting frame. Must have set n_frames_to_inspect first and make sure fr_strt is within boundaries ", default=0)
     parser.add_option("--verify-trace", action="store_true", dest="verify", help="Run script without analysis", default= True)
@@ -371,6 +373,7 @@ def main():
     fr_strt = options.fr_strt
     verify = options.verify
     analyze = options.analyze
+    sub_sample = options.sub_sample
 
     filename = sys.argv[1]
     scrpt_strt = time.time()
@@ -396,7 +399,7 @@ def main():
     hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
 
     if verify:
-        verify_hdf5(hdf5, ref_frame, ref_ant, ref_user, fr_strt, thresh, deep_inspect)
+        verify_hdf5(hdf5, ref_frame, ref_ant, ref_user, fr_strt, thresh, deep_inspect,sub_sample)
     if analyze:
         analyze_hdf5(hdf5)
     scrpt_end = time.time()
