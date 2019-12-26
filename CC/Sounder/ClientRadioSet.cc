@@ -88,14 +88,14 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
         dev->writeSetting("TDD_MODE", "true");
         // write pilot to FPGA buffers
-        for (char const& c : _cfg->bsChannel) {
+        for (char const& c : _cfg->clChannel) {
             std::string tx_ram = "TX_RAM_";
             dev->writeRegisters(tx_ram + c, 0, _cfg->pilot);
         }
         radios[i]->activateRecv();
         radios[i]->activateXmit();
 
-        dev->writeSetting("CORR_START", (_cfg->bsChannel == "B") ? "B" : "A");
+        dev->writeSetting("CORR_START", (_cfg->clChannel == "B") ? "B" : "A");
     }
     std::cout << __func__ << " done!" << std::endl;
 }

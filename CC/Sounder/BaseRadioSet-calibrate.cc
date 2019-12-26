@@ -1,3 +1,18 @@
+/*
+ Original code copyright Skylark Wireless LLC.
+ Copyright (c) 2018-2019, Rice University 
+ RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+ Author(s): Rahman Doost-Mohamamdy: doost@rice.edu
+---------------------------------------------------------------------
+ Performs IQ imbalance and DC offset calibration of Radios in massive-MIMO base station.
+
+ This procedure is adapted from original code that calibrate radio by itself in FDD mode
+ To work in TDD mode, this code uses a reference radio to calibrate the whole array.
+ Note: Because of OTA calibration, the code is (cannot be) parallelized so this a slow procedure.
+---------------------------------------------------------------------
+*/
+
+
 #include "include/BaseRadioSet.h"
 #include "include/Radio.h"
 #include "include/comms-lib.h"

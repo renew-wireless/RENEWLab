@@ -41,7 +41,8 @@ classdef iris_py < handle
         function obj = iris_py(sdr_params, hub_id) % User must put 0 in hub_params in case hub is not used!
             if nargin > 0
                 if ~isempty(hub_id)
-                    disp('Using hub with ID:');
+                    disp('Using hub with ID: ');
+                    disp(hub_id)
                     id_str = convertStringsToChars(hub_id);
                     obj.py_obj_hub = py.hub_py.Hub_py( pyargs('serial_id',id_str));
                     obj.use_hub = 1;
@@ -84,6 +85,7 @@ classdef iris_py < handle
                 obj.py_obj_array{1}.set_trigger(); % The trigger is set only on the fist node
             else
                 obj.py_obj_hub.set_trigger();
+                disp('triggering FAROS hub...')
             end
         end
         
@@ -98,6 +100,12 @@ classdef iris_py < handle
          function sdr_setcorr(obj)
              for ipy = 1:obj.n_sdrs
                  obj.py_obj_array{ipy}.set_corr(); 
+             end
+         end
+         
+         function sdr_unsetcorr(obj)
+             for ipy = 1:obj.n_sdrs
+                 obj.py_obj_array{ipy}.unset_corr(); 
              end
          end
          
@@ -163,7 +171,7 @@ classdef iris_py < handle
                         obj.py_obj_array{1}.set_trigger(); % The trigger is set only on the fist node
                     else
                         obj.py_obj_hub.set_trigger();
-                        disp('trig hub!!!!')
+                        disp('triggering FAROS hub...')
                     end
                 end
                 

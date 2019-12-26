@@ -39,7 +39,7 @@ public:
     ~Utils();
 
     static std::vector<size_t> strToChannels(const std::string& channel);
-    static std::vector<std::complex<int16_t>> double_to_int16(std::vector<std::vector<double>> in);
+    static std::vector<std::complex<int16_t>> double_to_cint16(std::vector<std::vector<double>> in);
     static std::vector<std::complex<float>> doubletocfloat(std::vector<std::vector<double>> in);
     static std::vector<std::complex<float>> uint32tocfloat(std::vector<uint32_t> in,
         const std::string& order);
