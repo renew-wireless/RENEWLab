@@ -32,6 +32,7 @@ public:
     double rate;
     double radioRfFreq; // RF frequency set on the radio after NCO adjustments
     double bwFilter;
+    int subframeSize;
     int sampsPerSymbol;
     int prefix;
     int postfix;
@@ -44,6 +45,7 @@ public:
     float tx_scale;
     std::string pilot_seq;
     std::string beacon_seq;
+    bool ulDataSymPresent;
 
     // BS features
     size_t nCells;
@@ -89,7 +91,7 @@ public:
     std::vector<std::complex<int16_t>> pilot_ci16;
     std::vector<uint32_t> pilot;
     std::vector<std::vector<int>> pilot_sc;
-    std::vector<std::vector<double>> pilot_double;
+    std::vector<std::vector<double>> pilotSym;
     //std::vector<std::vector<std::vector<std::complex<float>>>> txdata;
     std::vector<std::vector<std::complex<float>>> txdata;
     std::vector<std::vector<std::complex<float>>> txdata_freq_dom;

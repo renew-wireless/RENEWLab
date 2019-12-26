@@ -23,7 +23,7 @@ const int Recorder::dequeue_bulk_size = 5;
 const int Recorder::config_pilot_extent_step = 400;
 // data dataset size increment
 const int Recorder::config_data_extent_step = 400;
-
+const int DS_SIM = 5;
 Recorder::Recorder(Config* cfg)
 {
     this->cfg = cfg;
@@ -202,8 +202,7 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         write_attribute(mainGroup, "RATE", cfg->rate);
 
         // Number of samples on each symbol (excluding prefix/postfix)
-        write_attribute(mainGroup, "SYMBOL_LEN_NO_PAD",
-            cfg->sampsPerSymbol - cfg->prefix - cfg->postfix);
+        write_attribute(mainGroup, "SYMBOL_LEN_NO_PAD", cfg->subframeSize);
 
         // Number of samples for prefix (padding)
         write_attribute(mainGroup, "PREFIX_LEN", cfg->prefix);
@@ -283,30 +282,11 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         write_attribute(mainGroup, "UL_SYMS", (int)cfg->ulSymsPerFrame);
 
         // ******* Clients ******** //
-        // Data subcarriers
-        write_attribute(mainGroup, "OFDM_DATA_SC", cfg->data_ind);
-
-        // Pilot subcarriers (indexes)
-        write_attribute(mainGroup, "OFDM_PILOT_SC", cfg->pilot_sc[0]);
-        write_attribute(mainGroup, "OFDM_PILOT_SC_VALS", cfg->pilot_sc[1]);
-
-        // Freq. Domain Data Symbols - OBCH
-        for (size_t i = 0; i < cfg->txdata_freq_dom.size(); i++) {
-            std::string var = std::string("OFDM_DATA_CL") + std::to_string(i);
-            write_attribute(mainGroup, var.c_str(), cfg->txdata_freq_dom[i]);
-        }
-
-        // Time Domain Data Symbols
-        for (size_t i = 0; i < cfg->txdata_time_dom.size(); i++) {
-            std::string var = std::string("OFDM_DATA_TIME_CL") + std::to_string(i);
-            write_attribute(mainGroup, var.c_str(), cfg->txdata_time_dom[i]);
-        }
-
         // Freq. Domain Pilot symbols
-        std::vector<double> split_vec_pilot(2 * cfg->pilot_double[0].size());
-        for (size_t i = 0; i < cfg->pilot_double[0].size(); i++) {
-            split_vec_pilot[2 * i + 0] = cfg->pilot_double[0][i];
-            split_vec_pilot[2 * i + 1] = cfg->pilot_double[1][i];
+        std::vector<double> split_vec_pilot(2 * cfg->pilotSym[0].size());
+        for (size_t i = 0; i < cfg->pilotSym[0].size(); i++) {
+            split_vec_pilot[2 * i + 0] = cfg->pilotSym[0][i];
+            split_vec_pilot[2 * i + 1] = cfg->pilotSym[1][i];
         }
         write_attribute(mainGroup, "OFDM_PILOT", split_vec_pilot);
 
@@ -343,6 +323,27 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
 
             // Data modulation
             write_attribute(mainGroup, "CL_MODULATION", cfg->clDataMod);
+        }
+
+        if (cfg->ulDataSymPresent) {
+            // Data subcarriers
+            write_attribute(mainGroup, "OFDM_DATA_SC", cfg->data_ind);
+
+            // Pilot subcarriers (indexes)
+            write_attribute(mainGroup, "OFDM_PILOT_SC", cfg->pilot_sc[0]);
+            write_attribute(mainGroup, "OFDM_PILOT_SC_VALS", cfg->pilot_sc[1]);
+
+            // Freq. Domain Data Symbols - OBCH
+            for (size_t i = 0; i < cfg->txdata_freq_dom.size(); i++) {
+                std::string var = std::string("OFDM_DATA_CL") + std::to_string(i);
+                write_attribute(mainGroup, var.c_str(), cfg->txdata_freq_dom[i]);
+            }
+
+            // Time Domain Data Symbols
+            for (size_t i = 0; i < cfg->txdata_time_dom.size(); i++) {
+                std::string var = std::string("OFDM_DATA_TIME_CL") + std::to_string(i);
+                write_attribute(mainGroup, var.c_str(), cfg->txdata_time_dom[i]);
+            }
         }
         // ********************* //
 

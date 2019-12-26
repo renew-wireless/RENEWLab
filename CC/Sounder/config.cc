@@ -15,7 +15,6 @@
 
 Config::Config(const std::string& jsonfile)
 {
-    int pilotSeqLen;
     std::string conf;
     Utils::loadTDDConfig(jsonfile, conf);
     const auto jConf = json::parse(conf);
@@ -43,15 +42,15 @@ Config::Config(const std::string& jsonfile)
         nco = tddConf.value("nco_frequency", 0.75 * rate);
         bwFilter = rate + 2 * nco;
         radioRfFreq = freq - nco;
-        int samps = tddConf.value("subframe_size", 0);
+        subframeSize = tddConf.value("subframe_size", 0);
         prefix = tddConf.value("prefix", 0);
         postfix = tddConf.value("postfix", 0);
-        sampsPerSymbol = samps + prefix + postfix;
+        sampsPerSymbol = subframeSize + prefix + postfix;
         fftSize = tddConf.value("fft_size", 0);
         cpSize = tddConf.value("cp_size", 0);
         tx_scale = tddConf.value("tx_scale", 0.5);
         beacon_seq = tddConf.value("beacon_seq", "gold_ifft");
-        pilot_seq = tddConf.value("pilot_seq", "lts-full");
+        pilot_seq = tddConf.value("pilot_seq", "lts-half");
 
         // BS
         hub_file = tddConf.value("hub_id", "hub_serials.txt");
@@ -135,7 +134,7 @@ Config::Config(const std::string& jsonfile)
         clAgcGainInit = tddConfCl.value("agc_gain_init", 70); // 0 to 108
         clDataMod = tddConfCl.value("modulation", "QPSK");
         frame_mode = tddConfCl.value("frame_mode", "continuous_resync");
-	txAdvance = tddConfCl.value("tx_advance", 250);
+        txAdvance = tddConfCl.value("tx_advance", 250);
 
         auto jClTxgainA_vec = tddConfCl.value("txgainA", json::array());
         clTxgain_vec[0].assign(jClTxgainA_vec.begin(), jClTxgainA_vec.end());
@@ -160,175 +159,170 @@ Config::Config(const std::string& jsonfile)
             nco = tddConfCl.value("nco_frequency", 0.75 * rate);
             bwFilter = rate + 2 * nco;
             radioRfFreq = freq - nco;
-            int samps = tddConfCl.value("subframe_size", 0);
+            subframeSize = tddConfCl.value("subframe_size", 0);
             prefix = tddConfCl.value("prefix", 0);
             postfix = tddConfCl.value("postfix", 0);
-            sampsPerSymbol = samps + prefix + postfix;
+            sampsPerSymbol = subframeSize + prefix + postfix;
             fftSize = tddConfCl.value("fft_size", 0);
             cpSize = tddConfCl.value("cp_size", 0);
             tx_scale = tddConfCl.value("tx_scale", 0.5);
             beacon_seq = tddConfCl.value("beacon_seq", "gold_ifft");
-            pilot_seq = tddConfCl.value("pilot_seq", "lts-full");
+            pilot_seq = tddConfCl.value("pilot_seq", "lts-half");
             symbolsPerFrame = clFrames.at(0).size();
         }
     }
 
-    // Signal Generation
-    if (bsPresent or clPresent) {
-        if (fftSize != 64)
-            fftSize = 64;
+    ulDataSymPresent = (bsPresent && !ULSymbols[0].empty())
+        || (clPresent && !clULSymbols[0].empty());
+
+    // compose Beacon subframe:
+    // STS Sequence (for AGC) + GOLD Sequence (for Sync)
+    // 15reps of STS(16) + 2reps of gold_ifft(128)
+    srand(time(NULL));
+    std::vector<std::vector<double>> gold_ifft = CommsLib::getSequence(128, CommsLib::GOLD_IFFT);
+    std::vector<std::complex<int16_t>> gold_ifft_ci16 = Utils::double_to_cint16(gold_ifft);
+
+    std::vector<std::vector<double>> sts_seq = CommsLib::getSequence(0, CommsLib::STS_SEQ);
+    std::vector<std::complex<int16_t>> sts_seq_ci16 = Utils::double_to_cint16(sts_seq);
+
+    // Populate STS (stsReps repetitions)
+    int stsReps = 15;
+    for (int i = 0; i < stsReps; i++) {
+        beacon_ci16.insert(beacon_ci16.end(), sts_seq_ci16.begin(), sts_seq_ci16.end());
+    }
+
+    // Populate gold sequence (two reps, 128 each)
+    int goldReps = 2;
+    for (int i = 0; i < goldReps; i++) {
+        beacon_ci16.insert(beacon_ci16.end(), gold_ifft_ci16.begin(), gold_ifft_ci16.end());
+    }
+
+    beaconSize = beacon_ci16.size();
+
+    if (sampsPerSymbol < beaconSize + prefix + postfix) {
+        std::string msg = "Minimum supported subframe_size is ";
+        msg += std::to_string(beaconSize);
+        throw std::invalid_argument(msg);
+    }
+
+    beacon = Utils::cint16_to_uint32(beacon_ci16, false, "QI");
+    coeffs = Utils::cint16_to_uint32(gold_ifft_ci16, true, "QI");
+
+    // compose pilot subframe
+    if (fftSize != 64) {
+        fftSize = 64;
+        std::cout << "Unsupported fftSize! Setting fftSize to 64..." << std::endl;
+    }
+
+    if (cpSize != 16 && cpSize != 0) {
+        cpSize = ulDataSymPresent ? 16 : 0;
+        std::cout << "Invalid cpSize! Setting cpSize to " << cpSize << "..." << std::endl;
+    }
+    int pilotSeqLen = fftSize + cpSize;
+    //if (pilot_seq.compare("lts-full") == 0) {
+    //    pilotSeqLen = 160;
+    //} else if (pilot_seq.compare("lts-half") == 0) {
+    //    pilotSeqLen = 80;
+    //} else if (pilot_seq.compare("lts-no-cp") == 0) {
+    //    pilotSeqLen = 64;
+    //} else {
+    //    throw std::invalid_argument("Only LTS is currently supported!");
+    //}
+
+    int pilotReps = subframeSize / pilotSeqLen;
+    int frac = subframeSize % pilotSeqLen;
+    std::vector<std::complex<int16_t>> pre(prefix, 0);
+    std::vector<std::complex<int16_t>> post(postfix + frac, 0);
+
+    pilotSym = CommsLib::getSequence(pilotSeqLen, CommsLib::LTS_SEQ);
+    std::vector<std::complex<int16_t>> lts_ci16 = Utils::double_to_cint16(pilotSym);
+    pilot_ci16.insert(pilot_ci16.begin(), pre.begin(), pre.end());
+
+    for (int i = 0; i < pilotReps; i++)
+        pilot_ci16.insert(pilot_ci16.end(), lts_ci16.begin(), lts_ci16.end());
+
+    pilot_ci16.insert(pilot_ci16.end(), post.begin(), post.end());
+
+    pilot = Utils::cint16_to_uint32(pilot_ci16, false, "QI");
+    size_t remain_size = 4096 - pilot.size(); // 4096 is the size of TX_RAM in the FPGA
+    for (size_t j = 0; j < remain_size; j++)
+        pilot.push_back(0);
+#if DEBUG_PRINT
+    for (size_t j = 0; j < pilot_ci16.size(); j++) {
+        std::cout << "Pilot[" << j << "]: \t " << pilot_ci16[j] << std::endl;
+    }
+#endif
+
+    // compose data subframe
+    if (ulDataSymPresent) {
+        int mod_type = clDataMod == "64QAM" ? CommsLib::QAM64 : (clDataMod == "16QAM" ? CommsLib::QAM16 : CommsLib::QPSK);
+        std::cout << mod_type << std::endl;
+        int mod_order = 1 << mod_type;
+        std::cout << mod_order << std::endl;
+
         data_ind = CommsLib::getDataSc(fftSize);
         pilot_sc = CommsLib::getPilotSc(fftSize);
-
-        if (pilot_seq.compare("lts-full") == 0) {
-            pilotSeqLen = 160;
-        } else if (pilot_seq.compare("lts-half") == 0) {
-            pilotSeqLen = 80;
-        } else {
-            throw std::invalid_argument("Only LTS pilots currently supported");
-        }
-        pilot_double = CommsLib::getSequence(pilotSeqLen, CommsLib::LTS_SEQ);
-
-        std::vector<std::vector<std::complex<float>>> txdata_freq_dom_conf = txdata_freq_dom;
-
-        // Generate Beacon STS Sequence + GOLD Sequence
-        srand(time(NULL));
-        std::vector<std::vector<double>> gold_ifft = CommsLib::getSequence(128, CommsLib::GOLD_IFFT);
-        std::vector<std::vector<double>> sts_seq = CommsLib::getSequence(0, CommsLib::STS_SEQ);
-        int stsSymLen = sts_seq[0].size();
-        int stsReps = 15;
-        int stsLen = stsReps * stsSymLen; // length of entire STS sequence
-        beaconSize = 256 + stsLen;
-        beacon_ci16.resize(beaconSize); // OBCH: Original gold_ifft(256)+10repsSTS(160)
-        // Populate gold sequence (two reps, 128 each)
-        for (int i = 0; i < 128; i++) {
-            beacon_ci16[stsLen + i] = std::complex<int16_t>((int16_t)(gold_ifft[0][i] * 32768), (int16_t)(gold_ifft[1][i] * 32768));
-            beacon_ci16[stsLen + i + 128] = beacon_ci16[stsLen + i];
-        }
-        // Populate STS (stsReps repetitions)
-        for (int i = 0; i < stsReps; i++) {
-            for (int j = 0; j < stsSymLen; j++) {
-                int16_t re = sts_seq[0][j] * 32768;
-                int16_t im = sts_seq[1][j] * 32768;
-                beacon_ci16[stsSymLen * i + j] = std::complex<int16_t>(re, im);
-            }
-        }
-
-        if (sampsPerSymbol < beaconSize + prefix + postfix) {
-            std::cout << "Subframe size too small!"
-                      << " Increasing to "
-                      << beaconSize << std::endl;
-            sampsPerSymbol = beaconSize + prefix + postfix;
-        }
-
-        beacon = Utils::cint16_to_uint32(beacon_ci16, false, "QI");
-
-        std::vector<std::complex<int16_t>> pre(prefix, 0);
-        std::vector<std::complex<int16_t>> post(postfix, 0);
-
-        coeffs_ci16 = Utils::double_to_int16(gold_ifft);
-        coeffs = Utils::cint16_to_uint32(coeffs_ci16, true, "QI");
-
-        // compose pilot subframe
-        std::vector<std::vector<double>> lts = pilot_double; // CommsLib::getSequence(80, CommsLib::LTS_SEQ);
-        std::vector<std::complex<int16_t>> lts_ci16 = Utils::double_to_int16(lts);
-        int nSamps = sampsPerSymbol - prefix - postfix;
-        int rep = nSamps / pilotSeqLen; // 80;
-        int frac = nSamps % pilotSeqLen; // 80;
-        pilot_ci16.insert(pilot_ci16.begin(), pre.begin(), pre.end());
-
-        for (int i = 0; i < rep; i++)
-            pilot_ci16.insert(pilot_ci16.end(), lts_ci16.begin(), lts_ci16.end());
-
-        pilot_ci16.insert(pilot_ci16.end(), lts_ci16.begin(), lts_ci16.begin() + frac);
-        pilot_ci16.insert(pilot_ci16.end(), post.begin(), post.end());
-
-        pilot = Utils::cint16_to_uint32(pilot_ci16, false, "QI");
-        size_t remain_size = 4096 - pilot.size(); // 4096 is the size of TX_RAM in the FPGA
-        for (size_t j = 0; j < remain_size; j++)
-            pilot.push_back(0);
+        int ofdmSize = fftSize + cpSize;
+        int nDataScs = data_ind.size();
+        int syms = subframeSize / ofdmSize;
+        std::vector<std::complex<float>> pre1(prefix, 0);
+        std::vector<std::complex<float>> post1(subframeSize % ofdmSize + postfix, 0);
+        for (unsigned int i = 0; i < nClAntennas; i++) {
+            std::vector<std::complex<float>> data_cf;
+            std::vector<std::complex<float>> data_freq_dom;
+            data_cf.insert(data_cf.begin(), pre1.begin(), pre1.end());
+            std::vector<std::vector<int>> dataBits;
+            dataBits.resize(syms);
+            for (int s = 0; s < syms; s++) {
+                for (int c = 0; c < nDataScs; c++)
+                    dataBits[s].push_back(rand() % mod_order);
+                std::vector<std::complex<float>> mod_data = CommsLib::modulate(dataBits[s], mod_type);
 #if DEBUG_PRINT
-        for (size_t j = 0; j < pilot_ci16.size(); j++) {
-            std::cout << "Pilot[" << j << "]: \t " << pilot_ci16[j] << std::endl;
-        }
+                std::cout << "Modulation output: " << mod_data[0] << " " << mod_data[1] << std::endl;
 #endif
-
-        // compose data subframe
-        if ((bsPresent and !ULSymbols[0].empty()) or (clPresent and !clULSymbols[0].empty())) {
-            int fftSize = this->fftSize;
-            int cpSize = this->cpSize;
-            int mod_type = clDataMod == "64QAM" ? CommsLib::QAM64 : (clDataMod == "16QAM" ? CommsLib::QAM16 : CommsLib::QPSK);
-            std::cout << mod_type << std::endl;
-            int mod_order = 1 << mod_type;
-            std::cout << mod_order << std::endl;
-            if (fftSize != 64)
-                fftSize = 64;
-            if (cpSize != 16)
-                cpSize = 16;
-            std::vector<int> data_ind = CommsLib::getDataSc(fftSize);
-            pilot_sc = CommsLib::getPilotSc(fftSize);
-            int ofdmSize = fftSize + cpSize;
-            int nDataScs = data_ind.size();
-            int syms = nSamps / ofdmSize;
-            std::vector<std::complex<float>> pre1(prefix, 0);
-            std::vector<std::complex<float>> post1(nSamps % ofdmSize + postfix, 0);
-            for (unsigned int i = 0; i < nClAntennas; i++) {
-                std::vector<std::complex<float>> data_cf;
-                std::vector<std::complex<float>> data_freq_dom;
-                data_cf.insert(data_cf.begin(), pre1.begin(), pre1.end());
-                std::vector<std::vector<int>> dataBits;
-                dataBits.resize(syms);
-                for (int s = 0; s < syms; s++) {
-                    for (int c = 0; c < nDataScs; c++)
-                        dataBits[s].push_back(rand() % mod_order);
-                    std::vector<std::complex<float>> mod_data = CommsLib::modulate(dataBits[s], mod_type);
-#if DEBUG_PRINT
-                    std::cout << "Modulation output: " << mod_data[0] << " " << mod_data[1] << std::endl;
-#endif
-                    std::vector<std::complex<float>> ofdmSym(fftSize);
-                    int sc = 0;
-                    for (int c = 0; c < nDataScs; c++) {
-                        sc = data_ind[c];
-                        ofdmSym[sc] = mod_data[c];
-                    }
-#if DEBUG_PRINT
-                    std::cout << "Data symbol: " << ofdmSym[sc - 2] << " " << ofdmSym[sc - 1] << std::endl;
-#endif
-                    for (size_t c = 0; c < pilot_sc[0].size(); c++) {
-                        sc = pilot_sc[0][c];
-                        ofdmSym[sc] = pilot_sc[1][c];
-                    }
-#if DEBUG_PRINT
-                    std::cout << "Pilot symbol: " << ofdmSym[pilot_sc[0][0]] << " " << ofdmSym[pilot_sc[0][1]] << std::endl;
-#endif
-                    std::vector<std::complex<float>> txSym = CommsLib::IFFT(ofdmSym, fftSize);
-                    for (auto p = txSym.begin(); p != txSym.end(); ++p)
-                        *p *= tx_scale;
-                    txSym.insert(txSym.begin(), txSym.end() - cpSize, txSym.end()); // add CP
-#if DEBUG_PRINT
-                    std::cout << "IFFT output: " << txSym[0] << " " << txSym[64] << std::endl;
-#endif
-                    data_cf.insert(data_cf.end(), txSym.begin(), txSym.end());
-                    data_freq_dom.insert(data_freq_dom.end(), ofdmSym.begin(), ofdmSym.end());
+                std::vector<std::complex<float>> ofdmSym(fftSize);
+                int sc = 0;
+                for (int c = 0; c < nDataScs; c++) {
+                    sc = data_ind[c];
+                    ofdmSym[sc] = mod_data[c];
                 }
-                data_cf.insert(data_cf.end(), post1.begin(), post1.end());
-                txdata.push_back(data_cf);
-                txdata_time_dom.push_back(data_cf);
-                txdata_freq_dom.push_back(data_freq_dom);
-            }
 #if DEBUG_PRINT
-            for (size_t i = 0; i < txdata.size(); i++) {
-                for (size_t j = 0; j < txdata[i].size(); j++) {
-                    std::cout << "Values[" << i << "][" << j << "]: \t " << txdata[i][j] << std::endl;
-                }
-            }
-            for (size_t i = 0; i < txdata_freq_dom.size(); i++) {
-                for (size_t j = 0; j < txdata_freq_dom[i].size(); j++) {
-                    std::cout << "FREQ DOMAIN Values[" << i << "][" << j << "]: \t " << txdata_freq_dom[i][j] << std::endl;
-                }
-            }
+                std::cout << "Data symbol: " << ofdmSym[sc - 2] << " " << ofdmSym[sc - 1] << std::endl;
 #endif
+                for (size_t c = 0; c < pilot_sc[0].size(); c++) {
+                    sc = pilot_sc[0][c];
+                    ofdmSym[sc] = pilot_sc[1][c];
+                }
+#if DEBUG_PRINT
+                std::cout << "Pilot symbol: " << ofdmSym[pilot_sc[0][0]] << " " << ofdmSym[pilot_sc[0][1]] << std::endl;
+#endif
+                std::vector<std::complex<float>> txSym = CommsLib::IFFT(ofdmSym, fftSize);
+                for (auto p = txSym.begin(); p != txSym.end(); ++p)
+                    *p *= tx_scale;
+                txSym.insert(txSym.begin(), txSym.end() - cpSize, txSym.end()); // add CP
+#if DEBUG_PRINT
+                std::cout << "IFFT output: " << txSym[0] << " " << txSym[64] << std::endl;
+#endif
+                data_cf.insert(data_cf.end(), txSym.begin(), txSym.end());
+                data_freq_dom.insert(data_freq_dom.end(), ofdmSym.begin(), ofdmSym.end());
+            }
+            data_cf.insert(data_cf.end(), post1.begin(), post1.end());
+            txdata.push_back(data_cf);
+            txdata_time_dom.push_back(data_cf);
+            txdata_freq_dom.push_back(data_freq_dom);
         }
+#if DEBUG_PRINT
+        for (size_t i = 0; i < txdata.size(); i++) {
+            for (size_t j = 0; j < txdata[i].size(); j++) {
+                std::cout << "Values[" << i << "][" << j << "]: \t " << txdata[i][j] << std::endl;
+            }
+        }
+        for (size_t i = 0; i < txdata_freq_dom.size(); i++) {
+            for (size_t j = 0; j < txdata_freq_dom[i].size(); j++) {
+                std::cout << "FREQ DOMAIN Values[" << i << "][" << j << "]: \t " << txdata_freq_dom[i][j] << std::endl;
+            }
+        }
+#endif
     }
 
     if (bsPresent) {
@@ -337,7 +331,8 @@ Config::Config(const std::string& jsonfile)
         tm* ltm = localtime(&now);
         int cell_num = nCells;
         int ant_num = getNumAntennas();
-        std::string filename = "logs/Argos-" + std::to_string(1900 + ltm->tm_year) + "-" + std::to_string(1 + ltm->tm_mon) + "-" + std::to_string(ltm->tm_mday) + "-" + std::to_string(ltm->tm_hour) + "-" + std::to_string(ltm->tm_min) + "-" + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num) + "x" + std::to_string(ant_num) + "x" + std::to_string(pilotSymsPerFrame) + ".hdf5";
+        std::string ulPresentStr = (ulDataSymPresent ? "uplink-" : "");
+        std::string filename = "logs/trace-" + ulPresentStr + std::to_string(1900 + ltm->tm_year) + "-" + std::to_string(1 + ltm->tm_mon) + "-" + std::to_string(ltm->tm_mday) + "-" + std::to_string(ltm->tm_hour) + "-" + std::to_string(ltm->tm_min) + "-" + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num) + "x" + std::to_string(ant_num) + "x" + std::to_string(pilotSymsPerFrame) + ".hdf5";
         trace_file = tddConf.value("trace_file", filename);
     }
 
