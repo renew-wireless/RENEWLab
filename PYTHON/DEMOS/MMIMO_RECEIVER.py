@@ -652,9 +652,8 @@ def rx_app(filename, user_params, this_plotter):
     ###########################
     # Process TX freq domain samples (from HDF5). These are the samples generated for transmission and stored in file,
     # not what has been received
-    num_samps_freq_dom = fft_size*sym_len_no_pad//(fft_size+cp_len) #len(ofdm_data[0])
-    ofdm_size = fft_size                        # OFDM_data does not contain cyclic prefix
-    n_ofdm_syms = num_samps_freq_dom//ofdm_size
+    num_samps_freq_dom = fft_size*(sym_len_no_pad//(fft_size+cp_len)) #len(ofdm_data[0])
+    n_ofdm_syms = num_samps_freq_dom//fft_size
 
     # Pilots
     rep = sym_len_no_pad//len(ofdm_pilot)
@@ -670,7 +669,7 @@ def rx_app(filename, user_params, this_plotter):
     if cl_present:
         for clIdx in range(num_cl):
             data_freq = ofdm_data[clIdx]
-            ofdm_data_mat = np.reshape(np.squeeze(data_freq), (ofdm_size, n_ofdm_syms), order='F')
+            ofdm_data_mat = np.reshape(np.squeeze(data_freq), (fft_size, n_ofdm_syms), order='F')
             ofdm_data_mat_time = np.fft.ifft(ofdm_data_mat, axis=0)
             ofdm_data_vec_time = np.reshape(ofdm_data_mat_time, (1, ofdm_data_mat_time.shape[0]*ofdm_data_mat_time.shape[1]), order='F')
             tx_sig[clIdx, (clIdx*len(full_pilot)):(clIdx+1)*len(full_pilot)] = full_pilot
@@ -680,7 +679,7 @@ def rx_app(filename, user_params, this_plotter):
     ofdm_tx_syms = np.empty((num_cl, len(ofdm_data_sc)*n_ofdm_syms)).astype(complex)
     if cl_present:
         for clIdx in range(num_cl):
-            tmp = np.reshape(ofdm_data[clIdx], (ofdm_size, n_ofdm_syms), order='F')
+            tmp = np.reshape(ofdm_data[clIdx], (fft_size, n_ofdm_syms), order='F')
             tmp = tmp[ofdm_data_sc, :]
             ofdm_tx_syms[clIdx, :] = np.reshape(tmp, (1, len(ofdm_data_sc)*n_ofdm_syms), order='F')
 
