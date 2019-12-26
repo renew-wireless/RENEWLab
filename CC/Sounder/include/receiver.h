@@ -84,7 +84,6 @@ public:
     void loopRecv(int tid, int core_id, SampleBuffer* rx_buffer);
     static void* clientTxRx_launch(void* in_context);
     void clientTxRx(int tid);
-    void getPathLoss();
 
 private:
     Config* config_;
