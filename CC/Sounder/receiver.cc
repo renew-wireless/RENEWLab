@@ -26,17 +26,19 @@ Receiver::Receiver(int n_rx_threads, Config* config, moodycamel::ConcurrentQueue
 {
     /* initialize random seed: */
     srand(time(NULL));
-    //    try {
     clientRadioSet_ = config_->clPresent ? new ClientRadioSet(config_) : NULL;
     baseRadioSet_ = config_->bsPresent ? new BaseRadioSet(config_) : NULL;
-    //    } catch (std::exception& e) {
-    // std::cout << e.what() << '\n';
-    if (baseRadioSet_ != NULL && baseRadioSet_->getRadioNotFound())
+    bool except = false;
+    if (baseRadioSet_ != NULL && baseRadioSet_->getRadioNotFound()) {
         delete baseRadioSet_;
-    if (clientRadioSet_ != NULL && clientRadioSet_->getRadioNotFound())
+        except = true;
+    }
+    if (clientRadioSet_ != NULL && clientRadioSet_->getRadioNotFound()) {
         delete clientRadioSet_;
-    throw ReceiverException();
-    // }
+        except = true;
+    }
+    if (except)
+        throw ReceiverException();
 }
 
 Receiver::~Receiver()
