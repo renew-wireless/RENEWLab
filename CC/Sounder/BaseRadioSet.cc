@@ -24,6 +24,8 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
 {
     std::vector<int> nBsAntennas(_cfg->nCells);
     bsRadios.resize(_cfg->nCells);
+    radioNotFound = false;
+    std::vector<std::string> radioSerialNotFound;
 
     for (size_t c = 0; c < _cfg->nCells; c++) {
         int radioNum = _cfg->nBsSdrs[c];
@@ -63,6 +65,8 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         // Strip out broken radios.
         for (int i = 0; i < radioNum; i++) {
             if (bsRadios[c][i] == NULL) {
+                radioNotFound = true;
+                radioSerialNotFound.push_back(_cfg->bs_sdr_ids[c][i]);
                 while (radioNum != 0 && bsRadios[c][radioNum - 1] == NULL) {
                     --radioNum;
                     bsRadios[c].pop_back();
@@ -75,6 +79,8 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         }
         bsRadios[c].shrink_to_fit();
         _cfg->nBsSdrs[c] = radioNum;
+        if (radioNotFound)
+            break;
 
         // Perform DC Offset & IQ Imbalance Calibration
         if (_cfg->imbalanceCalEn) {
@@ -108,94 +114,99 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         sync_delays(c);
     }
 
-    if (_cfg->sampleCalEn) {
-        bool adjust = false;
-        int cal_cnt = 0;
-        while (!adjust) {
-            if (++cal_cnt > 10) {
-                std::cout << "10 attemps of sample offset calibration, stopping..." << std::endl;
-                break;
+    if (radioNotFound) {
+        for (auto st = radioSerialNotFound.begin(); st != radioSerialNotFound.end(); st++)
+            std::cout << "\033[1;31m" << *st << "\033[0m" << std::endl;
+        std::cout << "\033[1;31mERROR: the above base station serials were not discovered in the network!\033[0m" << std::endl;
+    } else {
+        if (_cfg->sampleCalEn) {
+            bool adjust = false;
+            int cal_cnt = 0;
+            while (!adjust) {
+                if (++cal_cnt > 10) {
+                    std::cout << "10 attemps of sample offset calibration, stopping..." << std::endl;
+                    break;
+                }
+                adjust = true;
+                collectCSI(adjust); // run 1: find offsets and adjust
             }
-            adjust = true;
-            collectCSI(adjust); // run 1: find offsets and adjust
+            collectCSI(adjust); // run 2: verify adjustments
+            usleep(100000);
+            std::cout << "sample offset calibration done!" << std::endl;
         }
-        collectCSI(adjust); // run 2: verify adjustments
-        usleep(100000);
-        std::cout << "sample offset calibration done!" << std::endl;
-    }
 
-    std::vector<std::string> _tddSched;
-    _tddSched.resize(_cfg->frames.size());
-    // change symbol letter to Soapy equivalent
-    for (unsigned int f = 0; f < _cfg->frames.size(); f++) {
-        _tddSched[f] = _cfg->frames[f];
-        for (size_t s = 0; s < _cfg->frames[f].size(); s++) {
-            char c = _cfg->frames[f].at(s);
-            if (c == 'P')
-                _tddSched[f].replace(s, 1, "R"); // uplink pilots
-            else if (c == 'U')
-                _tddSched[f].replace(s, 1, "R"); // uplink data
-            else if (c == 'D')
-                _tddSched[f].replace(s, 1, "T"); // downlink data
+        std::vector<std::string> _tddSched;
+        _tddSched.resize(_cfg->frames.size());
+        // change symbol letter to Soapy equivalent
+        for (unsigned int f = 0; f < _cfg->frames.size(); f++) {
+            _tddSched[f] = _cfg->frames[f];
+            for (size_t s = 0; s < _cfg->frames[f].size(); s++) {
+                char c = _cfg->frames[f].at(s);
+                if (c == 'P')
+                    _tddSched[f].replace(s, 1, "R"); // uplink pilots
+                else if (c == 'U')
+                    _tddSched[f].replace(s, 1, "R"); // uplink data
+                else if (c == 'D')
+                    _tddSched[f].replace(s, 1, "T"); // downlink data
+            }
+            std::cout << _tddSched[f] << std::endl;
         }
-        std::cout << _tddSched[f] << std::endl;
-    }
 
 #ifdef JSON
-    json tddConf;
-    tddConf["tdd_enabled"] = true;
-    tddConf["frame_mode"] = "free_running";
-    tddConf["max_frame"] = _cfg->max_frame;
-    tddConf["frames"] = _tddSched;
-    tddConf["symbol_size"] = _cfg->sampsPerSymbol;
-    tddConf["beacon_start"] = _cfg->prefix;
-    tddConf["beacon_stop"] = _cfg->prefix + _cfg->beaconSize;
-    std::string tddConfStr = tddConf.dump();
+        json tddConf;
+        tddConf["tdd_enabled"] = true;
+        tddConf["frame_mode"] = "free_running";
+        tddConf["max_frame"] = _cfg->max_frame;
+        tddConf["frames"] = _tddSched;
+        tddConf["symbol_size"] = _cfg->sampsPerSymbol;
+        tddConf["beacon_start"] = _cfg->prefix;
+        tddConf["beacon_stop"] = _cfg->prefix + _cfg->beaconSize;
+        std::string tddConfStr = tddConf.dump();
 #else
-    std::string tddConfStr = "{\"tdd_enabled\":true,\"frame_mode\":\"free_running\"";
-    tddConfStr += ",\"symbol_size\":" + std::to_string(_cfg->sampsPerSymbol);
-    tddConfStr += ",\"beacon_start\":" + std::to_string(_cfg->prefix);
-    tddConfStr += ",\"beacon_stop\":" + std::to_string(_cfg->prefix + _cfg->beaconSize);
-    tddConfStr += ",\"frames\":[";
-    for (size_t f = 0; f < _cfg->frames.size(); f++)
-        tddConfStr += (f == _cfg->frames.size() - 1) ? "\"" + _tddSched[f] + "\"" : "\"" + _tddSched[f] + "\",";
-    tddConfStr += "]}";
-    std::cout << tddConfStr << std::endl;
+        std::string tddConfStr = "{\"tdd_enabled\":true,\"frame_mode\":\"free_running\"";
+        tddConfStr += ",\"symbol_size\":" + std::to_string(_cfg->sampsPerSymbol);
+        tddConfStr += ",\"beacon_start\":" + std::to_string(_cfg->prefix);
+        tddConfStr += ",\"beacon_stop\":" + std::to_string(_cfg->prefix + _cfg->beaconSize);
+        tddConfStr += ",\"frames\":[";
+        for (size_t f = 0; f < _cfg->frames.size(); f++)
+            tddConfStr += (f == _cfg->frames.size() - 1) ? "\"" + _tddSched[f] + "\"" : "\"" + _tddSched[f] + "\",";
+        tddConfStr += "]}";
+        std::cout << tddConfStr << std::endl;
 #endif
-    for (size_t i = 0; i < bsRadios[0].size(); i++) {
-        SoapySDR::Device* dev = bsRadios[0][i]->dev;
-        dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
-        dev->writeSetting("TDD_MODE", "true");
-        dev->writeSetting("TDD_CONFIG", tddConfStr);
-    }
-
-    // write beacons to FPGA buffers
-    std::vector<unsigned> zeros(_cfg->sampsPerSymbol, 0);
-    size_t ndx = 0;
-    for (size_t i = 0; i < bsRadios[0].size(); i++) {
-        SoapySDR::Device* dev = bsRadios[0][i]->dev;
-        dev->writeRegisters("BEACON_RAM", 0, _cfg->beacon);
-        for (char const& c : _cfg->bsChannel) {
-            bool isBeaconAntenna = !_cfg->beamsweep && ndx == _cfg->beacon_ant;
-            std::vector<unsigned> beacon_weights(nBsAntennas[0], isBeaconAntenna ? 1 : 0);
-            std::string tx_ram_wgt = "BEACON_RAM_WGT_";
-            if (_cfg->beamsweep) {
-                for (int j = 0; j < nBsAntennas[0]; j++)
-                    beacon_weights[j] = CommsLib::hadamard2(ndx, j);
-            }
-            dev->writeRegisters(tx_ram_wgt + c, 0, beacon_weights);
-            ++ndx;
+        for (size_t i = 0; i < bsRadios[0].size(); i++) {
+            SoapySDR::Device* dev = bsRadios[0][i]->dev;
+            dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
+            dev->writeSetting("TDD_MODE", "true");
+            dev->writeSetting("TDD_CONFIG", tddConfStr);
         }
-        dev->writeSetting("BEACON_START", std::to_string(bsRadios[0].size()));
-    }
 
-    for (size_t i = 0; i < bsRadios[0].size(); i++) {
-        SoapySDR::Device* dev = bsRadios[0][i]->dev;
-        bsRadios[0][i]->activateRecv();
-        bsRadios[0][i]->activateXmit();
-        dev->setHardwareTime(0, "TRIGGER");
+        // write beacons to FPGA buffers
+        size_t ndx = 0;
+        for (size_t i = 0; i < bsRadios[0].size(); i++) {
+            SoapySDR::Device* dev = bsRadios[0][i]->dev;
+            dev->writeRegisters("BEACON_RAM", 0, _cfg->beacon);
+            for (char const& c : _cfg->bsChannel) {
+                bool isBeaconAntenna = !_cfg->beamsweep && ndx == _cfg->beacon_ant;
+                std::vector<unsigned> beacon_weights(nBsAntennas[0], isBeaconAntenna ? 1 : 0);
+                std::string tx_ram_wgt = "BEACON_RAM_WGT_";
+                if (_cfg->beamsweep) {
+                    for (int j = 0; j < nBsAntennas[0]; j++)
+                        beacon_weights[j] = CommsLib::hadamard2(ndx, j);
+                }
+                dev->writeRegisters(tx_ram_wgt + c, 0, beacon_weights);
+                ++ndx;
+            }
+            dev->writeSetting("BEACON_START", std::to_string(bsRadios[0].size()));
+        }
+
+        for (size_t i = 0; i < bsRadios[0].size(); i++) {
+            SoapySDR::Device* dev = bsRadios[0][i]->dev;
+            bsRadios[0][i]->activateRecv();
+            bsRadios[0][i]->activateXmit();
+            dev->setHardwareTime(0, "TRIGGER");
+        }
+        std::cout << __func__ << " done!" << std::endl;
     }
-    std::cout << __func__ << " done!" << std::endl;
 }
 
 BaseRadioSet::~BaseRadioSet(void)

@@ -1,8 +1,6 @@
 /*
  Copyright (c) 2018-2019, Rice University 
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
- Author(s): Peiyao Zhao: pdszpy19930218@163.com 
-            Rahman Doost-Mohamamdy: doost@rice.edu
  
 ----------------------------------------------------------
  Handles received samples from massive-mimo base station 
@@ -21,13 +19,24 @@ pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 Receiver::Receiver(int n_rx_threads, Config* config, moodycamel::ConcurrentQueue<Event_data>* in_queue)
     : config_(config)
-    , clientRadioSet_(config->clPresent ? new ClientRadioSet(config) : NULL)
-    , baseRadioSet_(config->bsPresent ? new BaseRadioSet(config) : NULL)
+    //, clientRadioSet_(config->clPresent ? new ClientRadioSet(config) : NULL)
+    //, baseRadioSet_(config->bsPresent ? new BaseRadioSet(config) : NULL)
     , thread_num_(n_rx_threads)
     , message_queue_(in_queue)
 {
     /* initialize random seed: */
     srand(time(NULL));
+    //    try {
+    clientRadioSet_ = config_->clPresent ? new ClientRadioSet(config_) : NULL;
+    baseRadioSet_ = config_->bsPresent ? new BaseRadioSet(config_) : NULL;
+    //    } catch (std::exception& e) {
+    // std::cout << e.what() << '\n';
+    if (baseRadioSet_ != NULL && baseRadioSet_->getRadioNotFound())
+        delete baseRadioSet_;
+    if (clientRadioSet_ != NULL && clientRadioSet_->getRadioNotFound())
+        delete clientRadioSet_;
+    throw ReceiverException();
+    // }
 }
 
 Receiver::~Receiver()
@@ -65,7 +74,6 @@ std::vector<pthread_t> Receiver::startClientThreads()
             client_threads[i] = cl_thread_;
         }
     }
-
     return client_threads;
 }
 
@@ -260,10 +268,10 @@ void Receiver::clientTxRx(int tid)
 
     std::vector<void*> txbuff(2);
     if (txSyms > 0) {
-	size_t txIndex = tid * config_->clSdrCh;
+        size_t txIndex = tid * config_->clSdrCh;
         txbuff[0] = config_->txdata[txIndex].data();
-	if (config_->clSdrCh == 2)
-            txbuff[1] = config_->txdata[txIndex+1].data();
+        if (config_->clSdrCh == 2)
+            txbuff[1] = config_->txdata[txIndex + 1].data();
         std::cout << txSyms << " uplink symbols will be sent per frame..." << std::endl;
     }
 

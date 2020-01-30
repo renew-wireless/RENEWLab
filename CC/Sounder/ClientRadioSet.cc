@@ -1,3 +1,12 @@
+/*
+ Copyright (c) 2018-2019, Rice University 
+ RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+ 
+----------------------------------------------------------
+ Initializes and Configures Client Radios 
+----------------------------------------------------------
+*/
+
 #include "include/ClientRadioSet.h"
 #include "include/Radio.h"
 #include "include/comms-lib.h"
@@ -9,12 +18,21 @@
 
 static void initAGC(SoapySDR::Device* dev, Config* cfg);
 
+static void
+freeRadios(std::vector<Radio*>& radios)
+{
+    for (size_t i = 0; i < radios.size(); i++)
+        delete radios[i];
+}
+
 ClientRadioSet::ClientRadioSet(Config* cfg)
     : _cfg(cfg)
 {
     //load channels
     auto channels = Utils::strToChannels(_cfg->clChannel);
     radios.reserve(_cfg->nClSdrs);
+    radioNotFound = false;
+    std::vector<std::string> radioSerialNotFound;
     for (size_t i = 0; i < _cfg->nClSdrs; i++) {
         SoapySDR::Kwargs args;
         args["timeout"] = "1000000";
@@ -22,7 +40,9 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         try {
             radios.push_back(new Radio(args, SOAPY_SDR_CF32, channels, _cfg->rate));
         } catch (std::runtime_error) {
-            std::cerr << "Ignoring serial " << _cfg->cl_sdr_ids.at(i) << std::endl;
+            //std::cerr << "Ignoring serial " << _cfg->cl_sdr_ids.at(i) << std::endl;
+            radioSerialNotFound.push_back(_cfg->cl_sdr_ids.at(i));
+            radioNotFound = true;
             continue;
         }
         auto dev = radios.back()->dev;
@@ -39,71 +59,76 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
     }
     radios.shrink_to_fit();
 
-    //beaconSize + 82 (BS FE delay) + 68 (path delay) + 17 (correlator delay) + 82 (Client FE Delay)
-    int clTrigOffset = _cfg->beaconSize + _cfg->txAdvance;
-    int sf_start = clTrigOffset / _cfg->sampsPerSymbol;
-    int sp_start = clTrigOffset % _cfg->sampsPerSymbol;
+    if (radioNotFound) {
+        for (auto st = radioSerialNotFound.begin(); st != radioSerialNotFound.end(); st++)
+            std::cout << "\033[1;31m" << *st << "\033[0m" << std::endl;
+        std::cout << "\033[1;31mERROR: the above client serials were not discovered in the network!\033[0m" << std::endl;
+    } else {
+        //beaconSize + 82 (BS FE delay) + 68 (path delay) + 17 (correlator delay) + 82 (Client FE Delay)
+        int clTrigOffset = _cfg->beaconSize + _cfg->txAdvance;
+        int sf_start = clTrigOffset / _cfg->sampsPerSymbol;
+        int sp_start = clTrigOffset % _cfg->sampsPerSymbol;
 
-    for (size_t i = 0; i < radios.size(); i++) {
-        auto dev = radios[i]->dev;
-        std::string corrConfString = "{\"corr_enabled\":true,\"corr_threshold\":" + std::to_string(1) + "}";
-        dev->writeSetting("CORR_CONFIG", corrConfString);
-        dev->writeRegisters("CORR_COE", 0, _cfg->coeffs);
+        for (size_t i = 0; i < radios.size(); i++) {
+            auto dev = radios[i]->dev;
+            std::string corrConfString = "{\"corr_enabled\":true,\"corr_threshold\":" + std::to_string(1) + "}";
+            dev->writeSetting("CORR_CONFIG", corrConfString);
+            dev->writeRegisters("CORR_COE", 0, _cfg->coeffs);
 
-        std::string tddSched = _cfg->clFrames[i];
-        for (size_t s = 0; s < _cfg->clFrames[i].size(); s++) {
-            char c = _cfg->clFrames[i].at(s);
-            if (c == 'B')
-                tddSched.replace(s, 1, "G");
-            else if (c == 'U')
-                tddSched.replace(s, 1, "T");
-            else if (c == 'D')
-                tddSched.replace(s, 1, "R");
-        }
-        std::cout << "Client " << i << " schedule: " << tddSched << std::endl;
+            std::string tddSched = _cfg->clFrames[i];
+            for (size_t s = 0; s < _cfg->clFrames[i].size(); s++) {
+                char c = _cfg->clFrames[i].at(s);
+                if (c == 'B')
+                    tddSched.replace(s, 1, "G");
+                else if (c == 'U')
+                    tddSched.replace(s, 1, "T");
+                else if (c == 'D')
+                    tddSched.replace(s, 1, "R");
+            }
+            std::cout << "Client " << i << " schedule: " << tddSched << std::endl;
 #ifdef JSON
-        json tddConf;
-        tddConf["tdd_enabled"] = true;
-        tddConf["frame_mode"] = _cfg->frame_mode;
-        int max_frame_ = (int)(2.0 / ((_cfg->sampsPerSymbol * _cfg->symbolsPerFrame) / _cfg->rate));
-        tddConf["max_frame"] = max_frame_;
-        //std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;
-        if (_cfg->clSdrCh == 2)
-            tddConf["dual_pilot"] = true;
-        tddConf["frames"] = json::array();
-        tddConf["frames"].push_back(tddSched);
-        tddConf["symbol_size"] = _cfg->sampsPerSymbol;
-        std::string tddConfStr = tddConf.dump();
+            json tddConf;
+            tddConf["tdd_enabled"] = true;
+            tddConf["frame_mode"] = _cfg->frame_mode;
+            int max_frame_ = (int)(2.0 / ((_cfg->sampsPerSymbol * _cfg->symbolsPerFrame) / _cfg->rate));
+            tddConf["max_frame"] = max_frame_;
+            //std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;
+            if (_cfg->clSdrCh == 2)
+                tddConf["dual_pilot"] = true;
+            tddConf["frames"] = json::array();
+            tddConf["frames"].push_back(tddSched);
+            tddConf["symbol_size"] = _cfg->sampsPerSymbol;
+            std::string tddConfStr = tddConf.dump();
 #else
-        std::string tddConfStr = "{\"tdd_enabled\":true,\"frame_mode\":" + _cfg->frame_mode + ",";
-        tddConfStr += "\"symbol_size\":" + std::to_string(_cfg->sampsPerSymbol);
-        if (_cfg->clSdrCh == 2)
-            tddConfStr += "\"dual_pilot\":true,";
-        tddConfStr += ",\"frames\":[\"" + tddSched[i] + "\"]}";
-        std::cout << tddConfStr << std::endl;
+            std::string tddConfStr = "{\"tdd_enabled\":true,\"frame_mode\":" + _cfg->frame_mode + ",";
+            tddConfStr += "\"symbol_size\":" + std::to_string(_cfg->sampsPerSymbol);
+            if (_cfg->clSdrCh == 2)
+                tddConfStr += "\"dual_pilot\":true,";
+            tddConfStr += ",\"frames\":[\"" + tddSched[i] + "\"]}";
+            std::cout << tddConfStr << std::endl;
 #endif
-        dev->writeSetting("TDD_CONFIG", tddConfStr);
+            dev->writeSetting("TDD_CONFIG", tddConfStr);
 
-        dev->setHardwareTime(SoapySDR::ticksToTimeNs((sf_start << 16) | sp_start, _cfg->rate), "TRIGGER");
-        dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
-        dev->writeSetting("TDD_MODE", "true");
-        // write pilot to FPGA buffers
-        for (char const& c : _cfg->clChannel) {
-            std::string tx_ram = "TX_RAM_";
-            dev->writeRegisters(tx_ram + c, 0, _cfg->pilot);
+            dev->setHardwareTime(SoapySDR::ticksToTimeNs((sf_start << 16) | sp_start, _cfg->rate), "TRIGGER");
+            dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
+            dev->writeSetting("TDD_MODE", "true");
+            // write pilot to FPGA buffers
+            for (char const& c : _cfg->clChannel) {
+                std::string tx_ram = "TX_RAM_";
+                dev->writeRegisters(tx_ram + c, 0, _cfg->pilot);
+            }
+            radios[i]->activateRecv();
+            radios[i]->activateXmit();
+
+            dev->writeSetting("CORR_START", (_cfg->clChannel == "B") ? "B" : "A");
         }
-        radios[i]->activateRecv();
-        radios[i]->activateXmit();
-
-        dev->writeSetting("CORR_START", (_cfg->clChannel == "B") ? "B" : "A");
+        std::cout << __func__ << " done!" << std::endl;
     }
-    std::cout << __func__ << " done!" << std::endl;
 }
 
 ClientRadioSet::~ClientRadioSet(void)
 {
-    for (size_t i = 0; i < radios.size(); i++)
-        delete radios[i];
+    freeRadios(radios);
 }
 
 void ClientRadioSet::radioStop(void)

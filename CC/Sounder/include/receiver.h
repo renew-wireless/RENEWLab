@@ -1,8 +1,6 @@
 /*
  Copyright (c) 2018-2019, Rice University 
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
- Author(s): Peiyao Zhao: pdszpy19930218@163.com 
-            Rahman Doost-Mohamamdy: doost@rice.edu
  
 ----------------------------------------------------------
  Handles received samples from massive-mimo base station 
@@ -25,6 +23,14 @@
 #include <pthread.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <exception>
+
+class ReceiverException : public std::exception {
+    virtual const char* what() const throw()
+    {
+        return "Receiver could not be setup correctly!";
+    }
+};
 
 struct Event_data {
     int event_type;
