@@ -1,3 +1,9 @@
+/*
+ Copyright (c) 2018-2019, Rice University 
+ RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+ 
+*/
+
 #include "config.h"
 #include <SoapySDR/Device.hpp>
 

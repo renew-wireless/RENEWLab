@@ -22,6 +22,7 @@ public:
     int radioRx(size_t radio_id, void* const* buffs, long long& frameTime);
     void radioStart(void);
     void radioStop(void);
+    bool getRadioNotFound() { return radioNotFound; }
 
 private:
     // use for create pthread
@@ -47,4 +48,5 @@ private:
     Config* _cfg;
     std::vector<SoapySDR::Device*> hubs;
     std::vector<std::vector<Radio*>> bsRadios; // [cell, iris]
+    bool radioNotFound;
 };

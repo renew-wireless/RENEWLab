@@ -1,7 +1,6 @@
 /*
  Copyright (c) 2018-2019, Rice University 
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
- Author(s): Rahman Doost-Mohamamdy: doost@rice.edu
 
 ----------------------------------------------------------------------
  Record received frames from massive-mimo base station in HDF5 format
@@ -46,8 +45,13 @@ Recorder::Recorder(Config* cfg)
             std::fill_n(rx_buffer_[i].pkg_buf_inuse, arraysize, 0);
         }
     }
-
-    receiver_.reset(new Receiver(rx_thread_num, cfg, &message_queue_));
+    try {
+        receiver_.reset(new Receiver(rx_thread_num, cfg, &message_queue_));
+    } catch (std::exception& e) {
+        std::cout << e.what() << '\n';
+        receiver_.reset();
+        exit(1);
+    }
 
     if (task_thread_num > 0) {
         // task threads
