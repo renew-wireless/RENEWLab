@@ -4,6 +4,21 @@
 %	Author(s): C. Nicolas Barati nicobarati@rice.edu 
 %		Rahman Doost-Mohamamdy: doost@rice.edu
 %
+%
+% Single-shot transmission from N_UE clients to N_BS_NODE base station
+% radios (UE stands for User Equipment). We define two modes:
+% OTA (Over-the-air) and SIM_MOD (simulation).
+% In simulation mode we simply use a Rayleigh channel whereas the OTA mode
+% relies on the Iris hardware for transmission and reception.
+% In both cases the clients transmit an OFDM signal that resembles a
+% typical 802.11 WLAN waveform. If the transmission is OTA, then the user
+% specifies a schedule that tells all clients when to transmit their frame
+% The base station initiates the schedule by sending a beacon signal that
+% synchronizes clients. After that, all clients will transmit
+% simultaneously. We implement a frame structure that allows the base
+% station to capture clean (non-overlaping) training sequences for
+% equalization and demultiplexing of the concurrent data streams.
+%
 %---------------------------------------------------------------------
 % Original code copyright Mango Communications, Inc.
 % Distributed under the WARP License http://warpproject.org/license
@@ -21,10 +36,10 @@ if ~isloaded
 end
 
 % Params:
-N_BS_NODE               = 4;
-N_UE                    = 2;
+N_BS_NODE               = 8;
+N_UE                    = 4;
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
-SIM_MOD                 = 1;
+SIM_MOD                 = 0;
 DEBUG                   = 0;
 PLOT                    = 1;
 if SIM_MOD
@@ -460,7 +475,7 @@ for sp=1:N_UE
     grid on;
     hold on;
     plot(tx_syms(:, sp),'*', 'MarkerSize',10, 'LineWidth',2, 'color', fst_clr);
-    title(sprintf('Equalized Uplink Tx (blue) and Rx (red) symbols for stream %d', sp));
+    title(sprintf('Equalized Uplink Tx (blue) and \n Rx (red) symbols for stream %d', sp));
     % legend({'Rx','Tx'},'Location','EastOutside', 'fontsize', 12);
 end
 
@@ -468,7 +483,7 @@ for sp=1:N_BS_NODE
     subplot(sp_rows,sp_cols, sp_cols+sp);
     plot(squeeze(Y_data(sp,:,:)),'co','MarkerSize',1);
     axis square; axis(max(max(max( abs( Y_data)) ))*[-1 1 -1 1]);
-    title(sprintf('Unequalized received symbols at BS ant. %d', sp));
+    title(sprintf('Unequalized received symbols \n at BS ant. %d', sp));
     grid on;
     hold on;
 end
@@ -488,7 +503,7 @@ for ibs = 1:N_BS_NODE
         bar(bw_span, fftshift(abs( squeeze(H_hat(ibs, iue, : ) ) ) ),1,'LineWidth', 1);
         axis([min(bw_span) max(bw_span) 0 1.1*max(abs( squeeze(H_hat(ibs, iue, :) ) ) )])
         grid on;
-        title(sprintf('UE %d -> BS ant. %d Channel Estimates (Magnitude)', iue, ibs))
+        title(sprintf('UE %d -> BS ant. %d Channel Est. (Mag.)', iue, ibs))
         xlabel('Baseband Frequency (MHz)')
     end
 end
