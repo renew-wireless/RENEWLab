@@ -21,16 +21,19 @@ if ~isloaded
 end
 
 % Params:
-N_BS_NODE               = 8;
+N_BS_NODE               = 4;
 N_UE                    = 2;
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
-SIM_MOD                 = 0;
+SIM_MOD                 = 1;
 DEBUG                   = 0;
 PLOT                    = 1;
 if SIM_MOD
     chan_type               = "rayleigh"; % Will use only Rayleigh for simulation
-    sim_SNR_db              = 15;   
+    sim_SNR_db              = 15;
     TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
+    bs_ids                  = ones(1, N_BS_NODE);
+    ue_ids                  = ones(1, N_UE);
+
 else 
     %Iris params:
     TX_SCALE                = 0.5;         % Scale for Tx waveform ([0:1])
@@ -157,8 +160,31 @@ tx_vecs_iris = TX_SCALE .* tx_vecs_iris ./ max(abs(tx_vecs_iris));
 
 %% SIMULATION:
 if (SIM_MOD) 
+
+    %number of samples in a frame
+    n_samp = length(tx_vecs_iris);
+
+    % Iris nodes' parameters
+    bs_sdr_params = struct(...
+        'id', bs_ids, ...
+        'n_sdrs', N_BS_NODE, ...        % number of nodes chained together
+        'txfreq', [], ...
+        'rxfreq', [], ...
+        'txgain', [], ...
+        'rxgain', [], ...
+        'sample_rate', [], ...
+        'n_samp', n_samp, ...          % number of samples per frame time.
+        'n_frame', [], ...
+        'tdd_sched', [], ...     % number of zero-paddes samples
+        'n_zpad_samp', N_ZPAD_PRE ...
+        );
     
-    rx_vec_iris = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db);
+    ue_sdr_params = bs_sdr_params;
+    ue_sdr_params.id =  ue_ids;
+    ue_sdr_params.n_sdrs = N_UE;
+    ue_sdr_params.txgain = [];
+
+    rx_vec_iris = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db, bs_sdr_params, ue_sdr_params, []);
     rx_vec_iris = rx_vec_iris.'; % just to agree with what the hardware spits out.
     
 %% Init Iris nodes
@@ -434,8 +460,8 @@ for sp=1:N_UE
     grid on;
     hold on;
     plot(tx_syms(:, sp),'*', 'MarkerSize',10, 'LineWidth',2, 'color', fst_clr);
-    title(sprintf('Equalized Uplink Tx and Rx symbols for stream %d', sp));
-    legend('Rx','Tx','Location','EastOutside', 'fontsize', 12);
+    title(sprintf('Equalized Uplink Tx (blue) and Rx (red) symbols for stream %d', sp));
+    % legend({'Rx','Tx'},'Location','EastOutside', 'fontsize', 12);
 end
 
 for sp=1:N_BS_NODE
