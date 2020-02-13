@@ -9,6 +9,14 @@
 
  Usage example: python3 SISO_TX.py --serial="RF3C000047"
 
+  NOTE ON GAINS:
+  Gain settings will vary depending on RF frontend board being used
+  If using CBRS:
+  gain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
+
+  If using only Dev Board:
+  gain: at both frequency bands [0:1:42]
+
 ---------------------------------------------------------------------
  Copyright © 2018-2019. Rice University.
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
@@ -97,11 +105,12 @@ def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, waveFreq, numSamps, se
             sdr.writeSetting(SOAPY_SDR_TX, c, 'TSP_TSG_CONST', str(amplFixed))
             sdr.writeSetting(SOAPY_SDR_TX, c, 'TX_ENB_OVERRIDE', 'true')
 
-        #sdr.setGain(SOAPY_SDR_TX, c, gain)
-        sdr.setGain(SOAPY_SDR_TX, c, "PAD", gain)
-        sdr.setGain(SOAPY_SDR_TX, c, "IAMP", 0)
-        sdr.setGain(SOAPY_SDR_TX, c, "PA2", 0)
-        sdr.setGain(SOAPY_SDR_TX, c, "ATTN", -6)
+        if "CBRS" in info["frontend"]:
+            sdr.setGain(SOAPY_SDR_TX, c, gain)
+        else:
+            # No CBRS board gains, only changing LMS7 gains
+            sdr.setGain(SOAPY_SDR_TX, c, "PAD", gain)  # [0:1:42]
+            sdr.setGain(SOAPY_SDR_TX, c, "IAMP", 0)    # [-12:1:3]
 
     # Generate TX signal
     txSignal = np.empty(numSamps).astype(np.complex64)
@@ -149,14 +158,19 @@ def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, waveFreq, numSamps, se
             sdr.writeRegisters("TX_RAM_B", replay_addr, pilot1_ui32.tolist())
         sdr.writeSetting("TX_REPLAY", str(numSamps)) # this starts transmission
 
-    # Selected gains
-    IAMP = sdr.getGain(SOAPY_SDR_TX, 0, "IAMP")
-    PAD = sdr.getGain(SOAPY_SDR_TX, 0, "PAD")
-    PA1 = sdr.getGain(SOAPY_SDR_TX, 0, "PA1")
-    PA2 = sdr.getGain(SOAPY_SDR_TX, 0, "PA2")
-    PA3 = sdr.getGain(SOAPY_SDR_TX, 0, "PA3")
-    ATTN = sdr.getGain(SOAPY_SDR_TX, 0, "ATTN")
-    print("GAINS: {}, {}, {}, {}, {}, {}".format(PA1, PA3, PA2, ATTN, PAD, IAMP))
+    # Show current gains
+    if "CBRS" in info["frontend"]:
+        IAMP = sdr.getGain(SOAPY_SDR_TX, 0, "IAMP")
+        PAD = sdr.getGain(SOAPY_SDR_TX, 0, "PAD")
+        PA1 = sdr.getGain(SOAPY_SDR_TX, 0, "PA1")
+        PA2 = sdr.getGain(SOAPY_SDR_TX, 0, "PA2")
+        PA3 = sdr.getGain(SOAPY_SDR_TX, 0, "PA3")
+        ATTN = sdr.getGain(SOAPY_SDR_TX, 0, "ATTN")
+        print("GAINS CHAN0: PA1 {}, PA3 {}, PA2 {}, ATTN {}, PAD {}, IAMP {}".format(PA1, PA3, PA2, ATTN, PAD, IAMP))
+    else:
+        IAMP = sdr.getGain(SOAPY_SDR_TX, 0, "IAMP")
+        PAD = sdr.getGain(SOAPY_SDR_TX, 0, "PAD")
+        print("GAINS CHAN0: PAD {}, IAMP {}".format(PAD, IAMP))
 
     # Plot signal
     debug = 0
