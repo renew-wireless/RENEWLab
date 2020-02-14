@@ -31,6 +31,18 @@
     what each of the Iris boards received from each other (as shown
     in the schedule above).
 
+    NOTE ON GAINS:
+    Gain settings will vary depending on RF frontend board being used
+    If using CBRS:
+    rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
+    txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
+
+    If using only Dev Board:
+    rxgain: at both frequency bands [0:1:30]
+    txgain: at both frequency bands [0:1:42]
+
+    The code assumes both TX and RX have the same type of RF frontend board.
+
     Example:
         python3 SISO_TXRX_TDD.py --serial1="RF3C000042" --serial2="RF3C000025"
 
@@ -53,17 +65,7 @@ import math
 import json
 import matplotlib.pyplot as plt
 from type_conv import *
-
-
-#########################################
-#                Registers              #
-#########################################
-# TDD Register Set
-RF_RST_REG = 48
-TDD_CONF_REG = 120
-SCH_ADDR_REG = 136
-SCH_MODE_REG = 140
-TX_GAIN_CTRL = 88
+from macros import *
 
 
 #########################################
@@ -88,15 +90,22 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'RF', freq-.75*rate)
             sdr.setFrequency(SOAPY_SDR_TX, ch, 'BB', .75*rate)
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'BB', .75*rate)
-
-            sdr.setGain(SOAPY_SDR_TX, ch, txgain)
-            sdr.setGain(SOAPY_SDR_RX, ch, rxgain)
-
             sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
             sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
 
-    # TX_GAIN_CTRL and SYNC_DELAYS
-    msdr.writeRegister("IRIS30", TX_GAIN_CTRL, 0)
+            if "CBRS" in info["frontend"]:
+                # Set gains to high val (initially)
+                sdr.setGain(SOAPY_SDR_TX, ch, txgain)  # txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
+                sdr.setGain(SOAPY_SDR_RX, ch, rxgain)  # rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
+            else:
+                # No CBRS board gains, only changing LMS7 gains
+                sdr.setGain(SOAPY_SDR_TX, ch, "PAD", txgain)    # [0:1:42]
+                sdr.setGain(SOAPY_SDR_TX, ch, "IAMP", 0)        # [-12:1:3]
+                sdr.setGain(SOAPY_SDR_RX, ch, "LNA", rxgain)    # [0:1:30]
+                sdr.setGain(SOAPY_SDR_RX, ch, "TIA", 0)         # [0, 3, 9, 12]
+                sdr.setGain(SOAPY_SDR_RX, ch, "PGA", -10)       # [-12:1:19]
+
+    # SYNC_DELAYS
     bsdr.writeSetting("SYNC_DELAYS", "")
 
     # Packet size
@@ -215,11 +224,11 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
 #########################################
 def main():
     parser = OptionParser()
-    parser.add_option("--serial1", type="string", dest="serial1", help="serial number of the device 1", default="RF3E000143")
-    parser.add_option("--serial2", type="string", dest="serial2", help="serial number of the device 2", default="RF3E000160")
+    parser.add_option("--serial1", type="string", dest="serial1", help="serial number of the device 1", default="")
+    parser.add_option("--serial2", type="string", dest="serial2", help="serial number of the device 2", default="")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=35.0)  # w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Tx gain (dB)", default=35.0)  # w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
+    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=25.0)  # See documentation at top of file for info on gain range
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Rx gain (dB)", default=20.0)  # See documentation at top of file for info on gain range
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=2.5e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-pad", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)
