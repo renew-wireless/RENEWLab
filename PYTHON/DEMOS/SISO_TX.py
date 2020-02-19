@@ -215,7 +215,7 @@ def main():
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
     parser.add_option("--waveFreq", type="float", dest="waveFreq", help="Baseband waveform freq (Hz)", default=None)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=1024)
-    parser.add_option("--serial", type="string", dest="serial", help="serial number of the device", default="")
+    parser.add_option("--serial", type="string", dest="serial", help="serial number of the device", default="RF3E000157")
     parser.add_option("--sigType", type="string", dest="sigType", help="Signal Type: LTE/LTS/STS/SINE", default="SINE")
     parser.add_option("--lo-tone", action="store_true", dest="lo_tone", help="generate tone using the LO ", default=False)
     (options, args) = parser.parse_args()
