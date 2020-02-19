@@ -173,7 +173,7 @@ def signal_handler(rate, numSyms, signal, frame):
 def main():
     parser = OptionParser()
     parser.add_option("--hub", type="string", dest="hub", help="serial number of the hub device", default="")
-    parser.add_option("--serials", type="string", dest="serials", help="serial numbers of the devices", default="")
+    parser.add_option("--serials", type="string", dest="serials", help="serial numbers of the devices", default="RF3E000143,RF3E000160,RF3E000025,RF3E000034")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=2.5e9)
     parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=30.0)
