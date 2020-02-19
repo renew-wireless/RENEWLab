@@ -285,7 +285,7 @@ void Receiver::clientTxRx(int tid)
     while (config_->running) {
         clock_gettime(CLOCK_MONOTONIC, &tv2);
         double diff = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e9;
-        if (diff > 2) {
+        if (config_->frame_mode != "free_running" and diff > 2) {
             int total_trigs = clientRadioSet_->triggers(tid);
             std::cout << "new triggers: " << total_trigs - all_trigs << ", total: " << total_trigs << std::endl;
             all_trigs = total_trigs;
@@ -316,7 +316,7 @@ void Receiver::clientTxRx(int tid)
         txTime += ((long long)txStartSym << 16);
         //printf("rxTime %llx, txTime %llx \n", firstRxTime, txTime);
         for (int i = 0; i < txSyms; i++) {
-            int r = clientRadioSet_->radioTx(tid, txbuff.data(), NUM_SAMPS, 2, txTime);
+            int r = clientRadioSet_->radioTx(tid, txbuff.data(), NUM_SAMPS, 1, txTime);
             if (r == NUM_SAMPS)
                 txTime += 0x10000;
         }

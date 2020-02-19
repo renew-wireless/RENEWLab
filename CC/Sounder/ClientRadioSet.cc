@@ -91,7 +91,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
             tddConf["tdd_enabled"] = true;
             tddConf["frame_mode"] = _cfg->frame_mode;
             int max_frame_ = (int)(2.0 / ((_cfg->sampsPerSymbol * _cfg->symbolsPerFrame) / _cfg->rate));
-            tddConf["max_frame"] = max_frame_;
+            tddConf["max_frame"] = _cfg->frame_mode == "free_running" ? 0 : max_frame_;
             //std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;
             if (_cfg->clSdrCh == 2)
                 tddConf["dual_pilot"] = true;
@@ -119,8 +119,10 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
             }
             radios[i]->activateRecv();
             radios[i]->activateXmit();
-
-            dev->writeSetting("CORR_START", (_cfg->clChannel == "B") ? "B" : "A");
+            if (_cfg->frame_mode == "free_running")
+                dev->writeSetting("TRIGGER_GEN", "");
+	    else
+                dev->writeSetting("CORR_START", (_cfg->clChannel == "B") ? "B" : "A");
         }
         std::cout << __func__ << " done!" << std::endl;
     }
