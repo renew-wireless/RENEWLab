@@ -224,8 +224,8 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
 #########################################
 def main():
     parser = OptionParser()
-    parser.add_option("--serial1", type="string", dest="serial1", help="serial number of the device 1", default="")
-    parser.add_option("--serial2", type="string", dest="serial2", help="serial number of the device 2", default="")
+    parser.add_option("--serial1", type="string", dest="serial1", help="serial number of the device 1", default="RF3E000143")
+    parser.add_option("--serial2", type="string", dest="serial2", help="serial number of the device 2", default="RF3E000160")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=25.0)  # See documentation at top of file for info on gain range
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Rx gain (dB)", default=20.0)  # See documentation at top of file for info on gain range

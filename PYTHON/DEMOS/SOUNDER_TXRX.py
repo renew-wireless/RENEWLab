@@ -50,7 +50,11 @@
     python3 SOUNDER_TXRX.py --bsnode="RF3C000042" --clnode="RF3C000025"
 
   where bsnode corresponds to a base station node and clnode corresponds
-  to a client node
+  to a client node.
+
+  OUTPUT:
+  The script will generate binary files that can be analyzed using the
+  plt_simp.py script in folder PYTHON/IrisUtils/
 
   IMPORTANT NOTE:
   The client firmware has different features than the base station node

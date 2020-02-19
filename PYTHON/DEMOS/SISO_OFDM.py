@@ -484,6 +484,7 @@ def txrx_app(args, rate, ampl, ant, txgain, rxgain, freq, bbfreq, serialTx, seri
     else:
         # Simulation Mode
         sdrRx = []
+        infoTx = []
 
     if agc_en and "CBRS" in info["frontend"]:
         sdrRx.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_ENABLE, 1)
@@ -575,8 +576,8 @@ def main():
     parser.add_option("--nSC", type="int", dest="nSC", help="# of subcarriers. Only supports 64 sc at the moment", default=64)
     parser.add_option("--fftOfset", type="int", dest="fftOffset", help="FFT Offset: # of CP samples for FFT", default=6)
     parser.add_option("--modOrder", type="int", dest="modOrder", help="Modulation Order 2=BPSK/4=QPSK/16=16QAM/64=64QAM", default=16)
-    parser.add_option("--serialTx", type="string", dest="serialTx", help="Serial # of TX device", default="")
-    parser.add_option("--serialRx", type="string", dest="serialRx", help="Serial # of RX device", default="")
+    parser.add_option("--serialTx", type="string", dest="serialTx", help="Serial # of TX device", default="RF3E000060")
+    parser.add_option("--serialRx", type="string", dest="serialRx", help="Serial # of RX device", default="RF3E000157")
     parser.add_option("--nSampsRead", type="int", dest="nSampsRead", help="# Samples to read", default=FIG_LEN)
     parser.add_option("--mode", type="string", dest="mode", help="Simulation vs Over-the-Air (i.e., SIM/OTA)", default="OTA")
     parser.add_option("--agc_en", action="store_true", dest="agc_en", help="Flag to enable AGC", default=False)  # Only supported if using CBRS board
