@@ -433,7 +433,7 @@ def main():
     parser.add_option("--use-trig", action="store_true", dest="use_trig", help="uses chain triggers for synchronization", default=False)
     parser.add_option("--wait-trigger", action="store_true", dest="wait_trigger", help="wait for a trigger to start a frame", default=False)
     parser.add_option("--tx-power-loop", action="store_true", dest="tx_power_loop", help="loop over a set of tx gains in consecutive frames", default=False)
-    parser.add_option("--record", action="store_true", dest="record", help="record received pilots and data", default=False)
+    parser.add_option("--record", action="store_true", dest="record", help="record received pilots and data", default=True)
     parser.add_option("--agc-enable", action="store_true", dest="agc_en", help="Enable AGC flag", default=False)
     (options, args) = parser.parse_args()
 
