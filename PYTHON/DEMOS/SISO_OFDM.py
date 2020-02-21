@@ -256,7 +256,7 @@ def animate(i, num_samps_rd, rxStream, sdr, sdrTx, ofdm_params, tx_struct, ota, 
             0,                      # timeNs (dont care unless using SOAPY_SDR_HAS_TIME)
             buff0.size)             # numElems - this is the burst size
 
-        if agc_en and "CBRS" in infoTx["frontend"]:
+        if agc_en and "CBRS" in infoRx["frontend"]:
             sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 1)
             sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_RESET_FLAG, 0)
             sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 1)
@@ -277,8 +277,7 @@ def animate(i, num_samps_rd, rxStream, sdr, sdrTx, ofdm_params, tx_struct, ota, 
             lna1_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA1')     # ChanA (0)
             lna2_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA2')     # ChanA (0)
             attn_rd1 = sdr.getGain(SOAPY_SDR_RX, 0, 'ATTN')    # ChanA (0)
-            print("RSSI: {} \t LNA: {} \t TIA: {} \t PGA: {} \t LNA1: {} \t LNA2: {} \t ATTN1: {}".format(rssi_fpga,
-                                                                                                          lna_rd,
+            print("LNA: {} \t TIA: {} \t PGA: {} \t LNA1: {} \t LNA2: {} \t ATTN1: {}".format(lna_rd,
                                                                                                           tia_rd,
                                                                                                           pga_rd,
                                                                                                           lna1_rd,
@@ -288,7 +287,7 @@ def animate(i, num_samps_rd, rxStream, sdr, sdrTx, ofdm_params, tx_struct, ota, 
             lna_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA')  # ChanA (0)
             tia_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'TIA')  # ChanA (0)
             pga_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'PGA')  # ChanA (0)
-            print("RSSI: {} \t LNA: {} \t TIA: {} \t PGA: {}".format(rssi_fpga, lna_rd, tia_rd, pga_rd))
+            print("LNA: {} \t TIA: {} \t PGA: {}".format(lna_rd, tia_rd, pga_rd))
 
     else:
         # Simulation Mode
@@ -434,12 +433,12 @@ def txrx_app(args, rate, ampl, ant, txgain, rxgain, freq, bbfreq, serialTx, seri
         sdrRx = SoapySDR.Device(dict(serial=serialRx))
         infoRx = sdrRx.getHardwareInfo()
 
-        # AGC - target might need to change for different frequencies (tested with 30 at 3.6GHz)
-        rssi_target_idx = 30
-        agc_init(sdrRx, rssi_target_idx, agc_en)
-
         # Reset
         sdrRx.writeSetting("RESET_DATA_LOGIC", "")
+
+        # AGC - target might need to change for different frequencies (tested with 30 at 3.6GHz)
+        rssi_target_idx = 25
+        agc_init(sdrRx, rssi_target_idx, agc_en)
 
         if ant == 'A':
             txChannel = [0]
@@ -471,8 +470,20 @@ def txrx_app(args, rate, ampl, ant, txgain, rxgain, freq, bbfreq, serialTx, seri
 
                 if "CBRS" in infoTx["frontend"]:
                     # Set gains to high val (initially)
-                    sdr.setGain(SOAPY_SDR_TX, c, txgain)  # txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
-                    sdr.setGain(SOAPY_SDR_RX, c, rxgain)  # rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
+                    #sdr.setGain(SOAPY_SDR_TX, c, txgain)  # txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
+                    #sdr.setGain(SOAPY_SDR_RX, c, rxgain)  # rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
+                    sdr.setGain(SOAPY_SDR_RX, c, 'LNA', 20)
+                    sdr.setGain(SOAPY_SDR_RX, c, 'PGA', 10)
+                    sdr.setGain(SOAPY_SDR_RX, c, 'TIA', 3)
+                    sdr.setGain(SOAPY_SDR_RX, c, 'ATTN', -18)
+
+                    sdr.setGain(SOAPY_SDR_TX, c, 'PAD', 30)
+                    sdr.setGain(SOAPY_SDR_TX, c, 'IAMP', 0)
+                    sdr.setGain(SOAPY_SDR_TX, c, 'PA1', 17)
+                    sdr.setGain(SOAPY_SDR_TX, c, 'PA2', 14)
+                    sdr.setGain(SOAPY_SDR_TX, c, 'PA3', 31.5)
+                    sdr.setGain(SOAPY_SDR_TX, c, 'ATTN', -6)
+
                 else:
                     # No CBRS board gains, only changing LMS7 gains
                     sdr.setGain(SOAPY_SDR_TX, c, "PAD", txgain)    # [0:1:42]
@@ -486,7 +497,7 @@ def txrx_app(args, rate, ampl, ant, txgain, rxgain, freq, bbfreq, serialTx, seri
         sdrRx = []
         infoTx = []
 
-    if agc_en and "CBRS" in info["frontend"]:
+    if agc_en and "CBRS" in infoRx["frontend"]:
         sdrRx.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_ENABLE, 1)
         sdrRx.writeRegister("IRIS30", FPGA_IRIS030_WR_AGC_ENABLE_FLAG, 1)
         sdrRx.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 1)
@@ -566,7 +577,7 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx and Rx sample rate", default=5e6)
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
-    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=60.0)  # See documentation at top of file for info on gain range
+    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=55.0)  # See documentation at top of file for info on gain range
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Rx gain (dB)", default=55.0)  # See documentation at top of file for info on gain range
     parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=2.5e9)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
@@ -576,11 +587,11 @@ def main():
     parser.add_option("--nSC", type="int", dest="nSC", help="# of subcarriers. Only supports 64 sc at the moment", default=64)
     parser.add_option("--fftOfset", type="int", dest="fftOffset", help="FFT Offset: # of CP samples for FFT", default=6)
     parser.add_option("--modOrder", type="int", dest="modOrder", help="Modulation Order 2=BPSK/4=QPSK/16=16QAM/64=64QAM", default=16)
-    parser.add_option("--serialTx", type="string", dest="serialTx", help="Serial # of TX device", default="RF3E000060")
-    parser.add_option("--serialRx", type="string", dest="serialRx", help="Serial # of RX device", default="RF3E000157")
+    parser.add_option("--serialTx", type="string", dest="serialTx", help="Serial # of TX device", default="RF3E000157")
+    parser.add_option("--serialRx", type="string", dest="serialRx", help="Serial # of RX device", default="RF3E000060")
     parser.add_option("--nSampsRead", type="int", dest="nSampsRead", help="# Samples to read", default=FIG_LEN)
     parser.add_option("--mode", type="string", dest="mode", help="Simulation vs Over-the-Air (i.e., SIM/OTA)", default="OTA")
-    parser.add_option("--agc_en", action="store_true", dest="agc_en", help="Flag to enable AGC", default=False)  # Only supported if using CBRS board
+    parser.add_option("--agc_en", action="store_true", dest="agc_en", help="Flag to enable AGC", default=False)  # Currently under testing
     (options, args) = parser.parse_args()
 
     ofdm_params = [options.nOFDMsym, options.ltsCpLen, options.dataCpLen, options.nSC, options.modOrder, options.fftOffset]
