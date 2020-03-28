@@ -72,6 +72,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
     postfix_len = int(metadata['POSTFIX_LEN'])
     z_padding = prefix_len + postfix_len
     offset = int(prefix_len)
+    fft_size = int(metadata['FFT_SIZE'])
 
     print(" symbol_length = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}".format(symbol_length, cp, prefix_len, postfix_len, z_padding))
 
@@ -81,12 +82,12 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
 
     if deep_inspect:
         csi_from_pilots_start = time.time()
-        csi_mat, match_filt, sub_fr_strt, cmpx_pilots, k_lts, n_lts = csi_from_pilots(
-            pilot_samples, z_padding, frm_st_idx=n_frm_st, frame_to_plot=frm_plt, ref_ant=ant_i)
+        csi_mat, match_filt, sub_fr_strt, cmpx_pilots, k_lts, n_lts, sf_start, pilots_rx_t_btc = csi_from_pilots(
+            pilot_samples, z_padding, fft_size = fft_size, cp = cp, frm_st_idx=n_frm_st, frame_to_plot=frm_plt, ref_ant=ant_i, ref_user = user_i)
         csi_from_pilots_end = time.time()
 
         frame_sanity_start = time.time()
-        match_filt_clr, frame_map, f_st = hdf5_lib.frame_sanity(match_filt, k_lts, n_lts, n_frm_st, frm_plt, plt_ant=ant_i)
+        match_filt_clr, frame_map, f_st, peak_map = hdf5_lib.frame_sanity(match_filt, k_lts, n_lts, n_frm_st, frm_plt, plt_ant=ant_i, cp = cp)
         frame_sanity_end = time.time()
 
         print(">>>> csi_from_pilots time: %f \n" % ( csi_from_pilots_end - csi_from_pilots_start) )
@@ -111,8 +112,8 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
         # Samps: #Frames, #Cell, #Users, #Antennas, #Samples
         # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
         # For correlation use a fft size of 64
-        print("*verify_hdf5(): Calling samps2csi with fft_size = 64, offset = {}, bound = cp = 0 *".format(offset))
-        csi, samps = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size=64, offset=offset, bound=0, cp=0, sub=sub_sample)
+        print("*verify_hdf5(): Calling samps2csi with fft_size = {}, offset = {}, bound = cp = 0 *".format(fft_size, offset))
+        csi, samps = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = 0, cp = cp, sub = sub_sample)
 
         # Correlation (Debug plot useful for checking sync)
         amps = np.mean(np.abs(samps[:, 0, user_i, 0, ant_i, :]), axis=1)
