@@ -79,7 +79,7 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
     for i, sdr in enumerate([bsdr, msdr]):
         info = sdr.getHardwareInfo()
         print("%s settings on device %d" % (info["frontend"], i))
-        for ch in [0]:
+        for ch in [0, 1]:
             sdr.setBandwidth(SOAPY_SDR_TX, ch, 2.5*rate)
             sdr.setBandwidth(SOAPY_SDR_RX, ch, 2.5*rate)
             sdr.setSampleRate(SOAPY_SDR_TX, ch, rate)
@@ -95,15 +95,16 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
 
             if "CBRS" in info["frontend"]:
                 # Set gains to high val (initially)
-                sdr.setGain(SOAPY_SDR_TX, ch, txgain)  # txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
-                sdr.setGain(SOAPY_SDR_RX, ch, rxgain)  # rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
-            else:
+                # sdr.setGain(SOAPY_SDR_TX, ch, txgain)  # txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
+                # sdr.setGain(SOAPY_SDR_RX, ch, rxgain)  # rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
+            # else:
                 # No CBRS board gains, only changing LMS7 gains
-                sdr.setGain(SOAPY_SDR_TX, ch, "PAD", txgain)    # [0:1:42]
+                sdr.setGain(SOAPY_SDR_TX, ch, "PAD", 25)    # [0:1:42] txgain
                 sdr.setGain(SOAPY_SDR_TX, ch, "IAMP", 0)        # [-12:1:3]
-                sdr.setGain(SOAPY_SDR_RX, ch, "LNA", rxgain)    # [0:1:30]
+                sdr.setGain(SOAPY_SDR_RX, ch, "LNA", 20)    # [0:1:30] rxgain
+                sdr.setGain(SOAPY_SDR_RX, ch, "LNA2", 14)    # [0:1:30] rxgain
                 sdr.setGain(SOAPY_SDR_RX, ch, "TIA", 0)         # [0, 3, 9, 12]
-                sdr.setGain(SOAPY_SDR_RX, ch, "PGA", -10)       # [-12:1:19]
+                sdr.setGain(SOAPY_SDR_RX, ch, "PGA", 0)       # [-12:1:19] -10
 
     # SYNC_DELAYS
     bsdr.writeSetting("SYNC_DELAYS", "")
@@ -163,8 +164,8 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
     bsdr.writeSetting("TDD_MODE", "true")
 
     for sdr in [bsdr, msdr]:
-        sdr.writeRegisters("TX_RAM_A", 0, cfloat2uint32(pilot1, order='QI').tolist())
-        sdr.writeRegisters("TX_RAM_B", 0, cfloat2uint32(pilot2, order='QI').tolist())
+        sdr.writeRegisters("TX_RAM_A", 0, cfloat2uint32(pilot2, order='QI').tolist())
+        sdr.writeRegisters("TX_RAM_B", 0, cfloat2uint32(pilot1, order='QI').tolist())
 
     flags = 0
     r1 = bsdr.activateStream(rxStreamB, flags, 0)
