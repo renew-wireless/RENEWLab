@@ -71,58 +71,65 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
 
         for (size_t i = 0; i < radios.size(); i++) {
             auto dev = radios[i]->dev;
-            std::string corrConfString = "{\"corr_enabled\":true,\"corr_threshold\":" + std::to_string(1) + "}";
-            dev->writeSetting("CORR_CONFIG", corrConfString);
-            dev->writeRegisters("CORR_COE", 0, _cfg->coeffs);
+            if (_cfg->framer_mode == "hardware") {
+                std::string corrConfString = "{\"corr_enabled\":true,\"corr_threshold\":" + std::to_string(1) + "}";
+                dev->writeSetting("CORR_CONFIG", corrConfString);
+                dev->writeRegisters("CORR_COE", 0, _cfg->coeffs);
 
-            std::string tddSched = _cfg->clFrames[i];
-            for (size_t s = 0; s < _cfg->clFrames[i].size(); s++) {
-                char c = _cfg->clFrames[i].at(s);
-                if (c == 'B')
-                    tddSched.replace(s, 1, "G");
-                else if (c == 'U')
-                    tddSched.replace(s, 1, "T");
-                else if (c == 'D')
-                    tddSched.replace(s, 1, "R");
-            }
-            std::cout << "Client " << i << " schedule: " << tddSched << std::endl;
+                std::string tddSched = _cfg->clFrames[i];
+                for (size_t s = 0; s < _cfg->clFrames[i].size(); s++) {
+                    char c = _cfg->clFrames[i].at(s);
+                    if (c == 'B')
+                        tddSched.replace(s, 1, "G");
+                    else if (c == 'U')
+                        tddSched.replace(s, 1, "T");
+                    else if (c == 'D')
+                        tddSched.replace(s, 1, "R");
+                }
+                std::cout << "Client " << i << " schedule: " << tddSched << std::endl;
 #ifdef JSON
-            json tddConf;
-            tddConf["tdd_enabled"] = true;
-            tddConf["frame_mode"] = _cfg->frame_mode;
-            int max_frame_ = (int)(2.0 / ((_cfg->sampsPerSymbol * _cfg->symbolsPerFrame) / _cfg->rate));
-            tddConf["max_frame"] = _cfg->frame_mode == "free_running" ? 0 : max_frame_;
-            //std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;
-            if (_cfg->clSdrCh == 2)
-                tddConf["dual_pilot"] = true;
-            tddConf["frames"] = json::array();
-            tddConf["frames"].push_back(tddSched);
-            tddConf["symbol_size"] = _cfg->sampsPerSymbol;
-            std::string tddConfStr = tddConf.dump();
+                json tddConf;
+                tddConf["tdd_enabled"] = true;
+                tddConf["frame_mode"] = _cfg->frame_mode;
+                int max_frame_ = (int)(2.0 / ((_cfg->sampsPerSymbol * _cfg->symbolsPerFrame) / _cfg->rate));
+                tddConf["max_frame"] = _cfg->frame_mode == "free_running" ? 0 : max_frame_;
+                //std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;
+                if (_cfg->clSdrCh == 2)
+                    tddConf["dual_pilot"] = true;
+                tddConf["frames"] = json::array();
+                tddConf["frames"].push_back(tddSched);
+                tddConf["symbol_size"] = _cfg->sampsPerSymbol;
+                std::string tddConfStr = tddConf.dump();
 #else
-            std::string tddConfStr = "{\"tdd_enabled\":true,\"frame_mode\":" + _cfg->frame_mode + ",";
-            tddConfStr += "\"symbol_size\":" + std::to_string(_cfg->sampsPerSymbol);
-            if (_cfg->clSdrCh == 2)
-                tddConfStr += "\"dual_pilot\":true,";
-            tddConfStr += ",\"frames\":[\"" + tddSched[i] + "\"]}";
-            std::cout << tddConfStr << std::endl;
+                std::string tddConfStr = "{\"tdd_enabled\":true,\"frame_mode\":" + _cfg->frame_mode + ",";
+                tddConfStr += "\"symbol_size\":" + std::to_string(_cfg->sampsPerSymbol);
+                if (_cfg->clSdrCh == 2)
+                    tddConfStr += "\"dual_pilot\":true,";
+                tddConfStr += ",\"frames\":[\"" + tddSched[i] + "\"]}";
+                std::cout << tddConfStr << std::endl;
 #endif
-            dev->writeSetting("TDD_CONFIG", tddConfStr);
+                dev->writeSetting("TDD_CONFIG", tddConfStr);
 
-            dev->setHardwareTime(SoapySDR::ticksToTimeNs((sf_start << 16) | sp_start, _cfg->rate), "TRIGGER");
-            dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
-            dev->writeSetting("TDD_MODE", "true");
-            // write pilot to FPGA buffers
-            for (char const& c : _cfg->clChannel) {
-                std::string tx_ram = "TX_RAM_";
-                dev->writeRegisters(tx_ram + c, 0, _cfg->pilot);
-            }
-            radios[i]->activateRecv();
-            radios[i]->activateXmit();
-            if (_cfg->frame_mode == "free_running")
+                dev->setHardwareTime(SoapySDR::ticksToTimeNs((sf_start << 16) | sp_start, _cfg->rate), "TRIGGER");
+                dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
+                dev->writeSetting("TDD_MODE", "true");
+                // write pilot to FPGA buffers
+                for (char const& c : _cfg->clChannel) {
+                    std::string tx_ram = "TX_RAM_";
+                    dev->writeRegisters(tx_ram + c, 0, _cfg->pilot);
+                }
+                radios[i]->activateRecv();
+                radios[i]->activateXmit();
+                if (_cfg->frame_mode == "free_running")
+                    dev->writeSetting("TRIGGER_GEN", "");
+                else
+                    dev->writeSetting("CORR_START", (_cfg->clChannel == "B") ? "B" : "A");
+            } else {
+                dev->setHardwareTime(0, "TRIGGER");
+                radios[i]->activateRecv();
+                radios[i]->activateXmit();
                 dev->writeSetting("TRIGGER_GEN", "");
-	    else
-                dev->writeSetting("CORR_START", (_cfg->clChannel == "B") ? "B" : "A");
+            }
         }
         std::cout << __func__ << " done!" << std::endl;
     }
@@ -157,10 +164,7 @@ int ClientRadioSet::triggers(int i)
 int ClientRadioSet::radioRx(size_t radio_id, void* const* buffs, int numSamps, long long& frameTime)
 {
     if (radio_id < radios.size()) {
-        long long frameTimeNs = 0;
-        int ret = radios[radio_id]->recv(buffs, numSamps, frameTimeNs);
-        frameTime = frameTimeNs; //SoapySDR::timeNsToTicks(frameTimeNs, _rate);
-        return ret;
+        return radios[radio_id]->recv(buffs, numSamps, frameTime);
     }
     std::cout << "invalid radio id " << radio_id << std::endl;
     return 0;

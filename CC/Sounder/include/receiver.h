@@ -17,13 +17,13 @@
 #include <cassert>
 #include <chrono>
 #include <ctime>
+#include <exception>
 #include <iostream>
 #include <netinet/in.h>
 #include <numeric>
 #include <pthread.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <exception>
 
 class ReceiverException : public std::exception {
     virtual const char* what() const throw()
@@ -90,6 +90,7 @@ public:
     void loopRecv(int tid, int core_id, SampleBuffer* rx_buffer);
     static void* clientTxRx_launch(void* in_context);
     void clientTxRx(int tid);
+    void clientSyncTxRx(int tid);
 
 private:
     Config* config_;

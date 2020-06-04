@@ -6,12 +6,14 @@
 
 #include "config.h"
 #include <SoapySDR/Device.hpp>
+#include <SoapySDR/Time.hpp>
 
 class Radio {
 private:
     SoapySDR::Device* dev;
     SoapySDR::Stream* rxs;
     SoapySDR::Stream* txs;
+    double rate;
     void reset_DATA_clk_domain(void);
     void dev_init(Config* _cfg, int ch, double rxgain, double txgain);
     friend class ClientRadioSet;

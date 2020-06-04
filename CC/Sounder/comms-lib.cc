@@ -56,13 +56,15 @@ int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
     std::vector<std::complex<double>> iq_sign = CommsLib::csign(iq);
 
     // Convolution
-    std::vector<double> lts_corr = CommsLib::convolve(iq_sign, lts_sym_conj);
-    double lts_limit = lts_thresh * *std::max_element(lts_corr.begin(), lts_corr.end());
+    std::vector<std::complex<double>> lts_corr = CommsLib::convolve(iq_sign, lts_sym_conj);
+    std::vector<double> lts_corr_abs(lts_corr.size());
+    std::transform(lts_corr.begin(), lts_corr.end(), lts_corr_abs.begin(), computeAbs);
+    double lts_limit = lts_thresh * *std::max_element(lts_corr_abs.begin(), lts_corr_abs.end());
 
     // Find all peaks, and pairs that are lts_sym.size() samples apart
     std::queue<int> valid_peaks;
     for (size_t i = lts_sym.size(); i < lts_corr.size(); i++) {
-        if (lts_corr[i] > lts_limit && lts_corr[i - lts_sym.size()] > lts_limit)
+        if (lts_corr_abs[i] > lts_limit && lts_corr_abs[i - lts_sym.size()] > lts_limit)
             valid_peaks.push(i - lts_sym.size());
     }
 
@@ -100,7 +102,8 @@ std::vector<std::complex<double>> CommsLib::csign(std::vector<std::complex<doubl
     return iq_sign;
 }
 
-std::vector<double> CommsLib::convolve(std::vector<std::complex<double>> const& f, std::vector<std::complex<double>> const& g)
+template <typename T>
+std::vector<T> CommsLib::convolve(std::vector<T> const& f, std::vector<T> const& g)
 {
     /* Convolution of two vectors
      * Source:
@@ -109,15 +112,13 @@ std::vector<double> CommsLib::convolve(std::vector<std::complex<double>> const& 
     int const nf = f.size();
     int const ng = g.size();
     int const n = nf + ng - 1;
-    std::vector<double> out(n, 0);
-    std::vector<std::complex<double>> outc(n, 0);
+    std::vector<T> out(n, 0);
     for (auto i(0); i < n; ++i) {
         int const jmn = (i >= ng - 1) ? i - (ng - 1) : 0;
         int const jmx = (i < nf - 1) ? i : nf - 1;
         for (auto j(jmn); j <= jmx; ++j) {
-            outc[i] += f[j] * g[i - j];
+            out[i] += f[j] * g[i - j];
         }
-        out[i] += abs(outc[i]);
     }
     return out;
 }
@@ -145,7 +146,7 @@ std::vector<float> CommsLib::magnitudeFFT(std::vector<std::complex<float>> const
     return fftMag;
 }
 
-// Take ffsSize samples of (1 - cos(x)) / 2 from 0 up to 2pi
+// Take fftSize samples of (1 - cos(x)) / 2 from 0 up to 2pi
 std::vector<float> CommsLib::hannWindowFunction(size_t fftSize)
 {
     std::vector<float> winFcn(1, 0);
@@ -206,6 +207,9 @@ std::vector<int> CommsLib::getDataSc(int fftSize)
             22, 23, 24, 25, 26, 38, 39, 40, 41, 42, 44, 45, 46, 47, 48, 49, 50,
             51, 52, 53, 54, 55, 56, 58, 59, 60, 61, 62, 63 };
         data_sc.assign(sc_ind, sc_ind + 48);
+    } else {
+        for (int i = 0; i < fftSize; i++)
+            data_sc.push_back(i);
     }
     return data_sc;
 }

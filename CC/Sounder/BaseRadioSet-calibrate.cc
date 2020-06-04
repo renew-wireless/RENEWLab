@@ -12,15 +12,14 @@
 ---------------------------------------------------------------------
 */
 
-
 #include "include/BaseRadioSet.h"
 #include "include/Radio.h"
 #include "include/comms-lib.h"
 #include "include/macros.h"
-#include "include/matplotlibcpp.h"
+//#include "include/matplotlibcpp.h"
 #include "include/utils.h"
 
-namespace plt = matplotlibcpp;
+//namespace plt = matplotlibcpp;
 
 static std::vector<std::complex<float>> snoopSamples(SoapySDR::Device* dev, size_t channel, size_t readSize)
 {
@@ -169,6 +168,7 @@ static void adjustCalibrationGains(std::vector<SoapySDR::Device*> rxDevs, SoapyS
         }
         toneLevels[r] = toneLevel;
         cout << "Node " << r << ": toneLevel3=" << toneLevel << endl;
+#if DEBUG_PLOT
         if (plot) {
             auto fftMag = CommsLib::magnitudeFFT(samps, win, N);
             std::vector<double> magDouble(N);
@@ -191,6 +191,7 @@ static void adjustCalibrationGains(std::vector<SoapySDR::Device*> rxDevs, SoapyS
             plt::legend();
             plt::save("rx" + std::to_string(rxDevsSize) + "_" + std::to_string(r) + "_ch" + std::to_string(channel) + ".png");
         }
+#endif
     }
 
     std::cout << rxDevsSize - remainingRadios << " radios reached target level" << std::endl;

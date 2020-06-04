@@ -25,6 +25,16 @@
 #include <unistd.h>
 #include <vector>
 
+static inline double computeAbs(std::complex<double> x)
+{
+    return std::abs(x);
+}
+
+//template <typename T>
+//static inline T computeAbs(std::complex<T> x) { return std::abs(x); }
+static inline double computePower(std::complex<double> x) { return std::pow(std::abs(x), 2); }
+static inline double computeSquare(double x) { return x * x; }
+
 class CommsLib {
 public:
     enum SequenceType {
@@ -53,7 +63,8 @@ public:
     static std::vector<std::complex<float>> IFFT(std::vector<std::complex<float>>, int);
 
     static int findLTS(const std::vector<std::complex<double>>& iq, int seqLen);
-    static std::vector<double> convolve(std::vector<std::complex<double>> const& f, std::vector<std::complex<double>> const& g);
+    template <typename T>
+    static std::vector<T> convolve(std::vector<T> const& f, std::vector<T> const& g);
     static std::vector<std::complex<double>> csign(std::vector<std::complex<double>> iq);
     static inline int hadamard2(int i, int j) { return (__builtin_parity(i & j) != 0 ? -1 : 1); }
     static std::vector<float> magnitudeFFT(std::vector<std::complex<float>> const&, std::vector<float> const&, size_t);
@@ -62,6 +73,19 @@ public:
     template <typename T>
     static T findTone(std::vector<T> const&, double, double, size_t, const size_t delta = 10);
     static float measureTone(std::vector<std::complex<float>> const&, std::vector<float> const&, double, double, size_t, const size_t delta = 10);
+
+    // Functions using AVX
+    static int findBeaconGold(const std::vector<std::complex<float>>& iq);
+    static std::vector<float> correlate_avx_s(std::vector<float> const& f, std::vector<float> const& g);
+    static std::vector<int16_t> correlate_avx_si(std::vector<int16_t> const& f, std::vector<int16_t> const& g);
+    static std::vector<float> abs2_avx(std::vector<std::complex<float>> const& f);
+    static std::vector<int32_t> abs2_avx(std::vector<std::complex<int16_t>> const& f);
+    static std::vector<std::complex<float>> auto_corr_mult_avx(std::vector<std::complex<float>> const& f, const int dly, const bool conj = true);
+    static std::vector<std::complex<int16_t>> auto_corr_mult_avx(std::vector<std::complex<int16_t>> const& f, const int dly, const bool conj = true);
+    static std::vector<std::complex<float>> correlate_avx(std::vector<std::complex<float>> const& f, std::vector<std::complex<float>> const& g);
+    static std::vector<std::complex<float>> complex_mult_avx(std::vector<std::complex<float>> const& f, std::vector<std::complex<float>> const& g, const bool conj);
+    static std::vector<std::complex<int16_t>> complex_mult_avx(std::vector<std::complex<int16_t>> const& f, std::vector<std::complex<int16_t>> const& g, const bool conj);
+    static std::vector<std::complex<int16_t>> correlate_avx(std::vector<std::complex<int16_t>> const& f, std::vector<std::complex<int16_t>> const& g);
     //private:
     //    static inline float** init_qpsk();
     //    static inline float** init_qam16();

@@ -2,7 +2,7 @@ cmake_minimum_required (VERSION 2.8)
 project (Sounder)
 
 set(CMAKE_C_FLAGS "-std=c99 -Wall")
-set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -O3 -mavx2 -mavx")
+set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -g -mavx2 -mavx")
 
 find_package(nlohmann_json 3.2.0 REQUIRED)
 find_package(PythonLibs REQUIRED)
@@ -35,6 +35,8 @@ message(STATUS "HDF5_INCLUDE_DIRS: ${HDF5_INCLUDE_DIRS}")
 message(STATUS "HDF5_LIBRARIES: ${HDF5_LIBRARIES}")
 include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS} ${PYTHON_INCLUDE_DIRS})
 
-add_executable(sounder main.cc ClientRadioSet.cc config.cc Radio.cc receiver.cc recorder.cc BaseRadioSet.cc BaseRadioSet-calibrate.cc comms-lib.cc utils.cc signalHandler.cpp)
+add_executable(sounder main.cc ClientRadioSet.cc config.cc Radio.cc receiver.cc recorder.cc BaseRadioSet.cc BaseRadioSet-calibrate.cc comms-lib.cc comms-lib-avx.cc utils.cc signalHandler.cpp)
 target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe ${SoapySDR_LIBRARIES} ${HDF5_LIBRARIES} ${CMAKE_SOURCE_DIR}/mufft/libmuFFT.a ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse.a ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse3.a ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-avx.a ${PYTHON_LIBRARIES})
 
+add_executable(test-sounder test-main.cc comms-lib.cc comms-lib-avx.cc utils.cc)
+target_link_libraries(test-sounder -lpthread ${CMAKE_SOURCE_DIR}/mufft/libmuFFT.a ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse.a ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse3.a ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-avx.a ${PYTHON_LIBRARIES}) 

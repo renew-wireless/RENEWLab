@@ -64,6 +64,7 @@ public:
     std::string bsChannel;
     std::vector<std::string> frames;
     std::string frame_mode;
+    std::string framer_mode;
     size_t max_frame;
     std::vector<std::vector<size_t>> pilotSymbols;
     std::vector<std::vector<size_t>> ULSymbols;
@@ -89,6 +90,7 @@ public:
     std::vector<uint32_t> coeffs;
     std::vector<std::complex<int16_t>> coeffs_ci16;
     std::vector<std::complex<int16_t>> pilot_ci16;
+    std::vector<std::complex<float>> pilot_cf32;
     std::vector<uint32_t> pilot;
     std::vector<std::vector<int>> pilot_sc;
     std::vector<std::vector<double>> pilotSym;

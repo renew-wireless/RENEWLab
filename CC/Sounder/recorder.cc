@@ -331,11 +331,14 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
 
         if (cfg->ulDataSymPresent) {
             // Data subcarriers
-            write_attribute(mainGroup, "OFDM_DATA_SC", cfg->data_ind);
+            if (cfg->data_ind.size() > 0)
+                write_attribute(mainGroup, "OFDM_DATA_SC", cfg->data_ind);
 
             // Pilot subcarriers (indexes)
-            write_attribute(mainGroup, "OFDM_PILOT_SC", cfg->pilot_sc[0]);
-            write_attribute(mainGroup, "OFDM_PILOT_SC_VALS", cfg->pilot_sc[1]);
+            if (cfg->pilot_sc[0].size() > 0)
+                write_attribute(mainGroup, "OFDM_PILOT_SC", cfg->pilot_sc[0]);
+            if (cfg->pilot_sc[1].size() > 0)
+                write_attribute(mainGroup, "OFDM_PILOT_SC_VALS", cfg->pilot_sc[1]);
 
             // Freq. Domain Data Symbols - OBCH
             for (size_t i = 0; i < cfg->txdata_freq_dom.size(); i++) {
