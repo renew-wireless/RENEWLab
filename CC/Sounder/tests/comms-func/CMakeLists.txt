@@ -10,11 +10,11 @@ set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 INCLUDE_DIRECTORIES( "../../include" )
 message(STATUS "PYTHON_LIBRARIES: ${PYTHON_LIBRARIES}")
 include_directories(${PYTHON_INCLUDE_DIRS})
-add_executable(test-sounder test-main.cc
+add_executable(comm-testbench test-main.cc
 	${SOURCE_DIR}/comms-lib.cc
 	${SOURCE_DIR}/comms-lib-avx.cc
 	${SOURCE_DIR}/utils.cc)
-target_link_libraries(test-sounder -lpthread 
+target_link_libraries(comm-testbench -lpthread 
 	${SOURCE_DIR}/mufft/libmuFFT.a
        	${SOURCE_DIR}/mufft/libmuFFT-sse.a
 	${SOURCE_DIR}/mufft/libmuFFT-sse3.a

@@ -47,9 +47,26 @@ int main(int argc, char const* argv[])
 
     auto testAbs0 = CommsLib::abs2_avx(testDataCF32);
     auto testAbs1 = CommsLib::abs2_avx(testDataCS16);
-    std::cout << "\nTesting abs_avx:\n";
-    for (size_t i = 0; i < testAbs0.size(); i++)
-        std::cout << "ABS Float RESULT: " << testAbs0[i] << ", ABS INT RESULT: " << testAbs1[i] / (std::pow(2.0, 30)) << ", GT: " << (testDataCF32[i] * std::conj(testDataCF32[i])).real() << std::endl;
+    bool pass = true;
+    std::cout << "\nTesting abs_avx (floating-point):\n";
+    for (size_t i = 0; i < testAbs0.size(); i++) {
+	std::complex<float> gt = (testDataCF32[i] * std::conj(testDataCF32[i]));
+        //std::cout << "ABS Float RESULT: " << testAbs0[i] << ", GT: " << gt << std::endl;
+	if (std::abs(testAbs0[i] - gt) > 0.01)
+            pass = false;
+    }
+    std::cout << (pass ? "PASSED" : "FAILED") << std::endl;
+
+    pass = true;
+    std::cout << "\nTesting abs_avx (fixed-point):\n";
+    for (size_t i = 0; i < testAbs0.size(); i++) {
+	std::complex<float> gt = (testDataCF32[i] * std::conj(testDataCF32[i]));
+	std::complex<double> gt_double(gt.real(), gt.imag());
+        //std::cout << "ABS INT RESULT: " << testAbs1[i] / (std::pow(2.0, 30)) << ", GT: " << gt << std::endl;
+	if (std::abs((testAbs1[i] / (std::pow(2.0, 30))) - gt_double) > 0.01)
+            pass = false;
+    }
+    std::cout << (pass ? "PASSED" : "FAILED") << std::endl;
 
     /*
      * test complex_mult_cs16
@@ -190,7 +207,7 @@ int main(int argc, char const* argv[])
     for (size_t i = 0; i < testCorrResFloat.size(); i++) {
         std::cout << "Float Op Result: " << testCorrResFloat[i] << ", INT Op Result: (" << testCorrResInt[i] / 32768.0 << "), GT:" << testCorrRefReal[i] << std::endl;
     }
-
+    exit(0);
     /*
      * test findBeacon
      */
