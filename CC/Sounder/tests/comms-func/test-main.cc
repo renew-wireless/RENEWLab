@@ -6,7 +6,7 @@
 #include <unistd.h>
 int main(int argc, char const* argv[])
 {
-
+#ifdef UNIT_TEST
     /*
      * test abs2_avx
      */
@@ -42,7 +42,7 @@ int main(int argc, char const* argv[])
     testDataCF32.push_back(std::complex<float>(.8, .9));
     testDataCF32.push_back(std::complex<float>(.9, .0));
     std::vector<std::complex<int16_t>> testDataCS16;
-    for (int i = 0; i < testDataCF32.size(); i++)
+    for (size_t i = 0; i < testDataCF32.size(); i++)
         testDataCS16.push_back(std::complex<int16_t>((int16_t)(testDataCF32[i].real() * 32768), (int16_t)(testDataCF32[i].imag() * 32768)));
 
     auto testAbs0 = CommsLib::abs2_avx(testDataCF32);
@@ -74,12 +74,12 @@ int main(int argc, char const* argv[])
     std::cout << "\nTesting Complex Mult" << std::endl;
     auto testCS2 = CommsLib::complex_mult_avx(testDataCS16, testDataCS16, true);
     auto testCF2 = CommsLib::complex_mult_avx(testDataCF32, testDataCF32, true);
-    for (int i = 0; i < testCS2.size(); i++)
+    for (size_t i = 0; i < testCS2.size(); i++)
         std::cout << "Conj True - CS Result: (" << testCS2[i].real() / 32768.0 << "," << testCS2[i].imag() / 32768.0 << "), CF Result: " << testCF2[i] << std::endl;
 
     testCS2 = CommsLib::complex_mult_avx(testDataCS16, testDataCS16, false);
     testCF2 = CommsLib::complex_mult_avx(testDataCF32, testDataCF32, false);
-    for (int i = 0; i < testCS2.size(); i++)
+    for (size_t i = 0; i < testCS2.size(); i++)
         std::cout << "Conj False - CS Result: (" << testCS2[i].real() / 32768.0 << "," << testCS2[i].imag() / 32768.0 << "), CF Result: " << testCF2[i] << std::endl;
 
     /*
@@ -92,7 +92,7 @@ int main(int argc, char const* argv[])
     std::cout << "\nTesting auto_corr_mult_avx (dly = " << dly << ", conj = " << (conj ? "true" : "false")
               << "):\n";
     for (size_t i = 0; i < testMultRes.size(); i++) {
-        if (i < dly)
+        if ((int)i < dly)
             std::cout << "Float Op Result: " << testMultRes[i] << ", INT Op Result: (" << testMultResCS[i].real() / 32768.0 << "," << testMultResCS[i].imag() / 32668.0 << "), GT: (0, 0)" << std::endl;
         else
             std::cout << "Float Op Result: " << testMultRes[i] << ", INT Op Result: (" << testMultResCS[i].real() / 32768.0 << "," << testMultResCS[i].imag() / 32668.0 << "), GT:" << testDataCF32[i] * (conj ? std::conj(testDataCF32[i - dly]) : testDataCF32[i - dly]) << std::endl;
@@ -104,7 +104,7 @@ int main(int argc, char const* argv[])
     std::cout << "\nTesting auto_corr_mult_avx (dly = " << dly << ", conj = " << (conj ? "true" : "false")
               << "):\n";
     for (size_t i = 0; i < testMultRes.size(); i++) {
-        if (i < dly)
+        if ((int)i < dly)
             std::cout << "Float Op Result: " << testMultRes[i] << ", INT Op Result: (" << testMultResCS[i].real() / 32768.0 << "," << testMultResCS[i].imag() / 32668.0 << "), GT: (0, 0)" << std::endl;
         else
             std::cout << "Float Op Result: " << testMultRes[i] << ", INT Op Result: (" << testMultResCS[i].real() / 32768.0 << "," << testMultResCS[i].imag() / 32668.0 << "), GT:" << testDataCF32[i] * (conj ? std::conj(testDataCF32[i - dly]) : testDataCF32[i - dly]) << std::endl;
@@ -117,7 +117,7 @@ int main(int argc, char const* argv[])
     std::cout << "\nTesting auto_corr_mult_avx (dly = " << dly << ", conj = " << (conj ? "true" : "false")
               << "):\n";
     for (size_t i = 0; i < testMultRes.size(); i++) {
-        if (i < dly)
+        if ((int)i < dly)
             std::cout << "Float Op Result: " << testMultRes[i] << ", INT Op Result: (" << testMultResCS[i].real() / 32768.0 << "," << testMultResCS[i].imag() / 32668.0 << "), GT: (0, 0)" << std::endl;
         else
             std::cout << "Float Op Result: " << testMultRes[i] << ", INT Op Result: (" << testMultResCS[i].real() / 32768.0 << "," << testMultResCS[i].imag() / 32668.0 << "), GT:" << testDataCF32[i] * (conj ? std::conj(testDataCF32[i - dly]) : testDataCF32[i - dly]) << std::endl;
@@ -130,7 +130,7 @@ int main(int argc, char const* argv[])
     std::cout << "\nTesting auto_corr_mult_avx (dly = " << dly << ", conj = " << (conj ? "true" : "false")
               << "):\n";
     for (size_t i = 0; i < testMultRes.size(); i++) {
-        if (i < dly)
+        if ((int)i < dly)
             std::cout << "Float Op Result: " << testMultRes[i] << ", INT Op Result: (" << testMultResCS[i].real() / 32768.0 << "," << testMultResCS[i].imag() / 32668.0 << "), GT: (0, 0)" << std::endl;
         else
             std::cout << "Float Op Result: " << testMultRes[i] << ", INT Op Result: (" << testMultResCS[i].real() / 32768.0 << "," << testMultResCS[i].imag() / 32668.0 << "), GT:" << testDataCF32[i] * (conj ? std::conj(testDataCF32[i - dly]) : testDataCF32[i - dly]) << std::endl;
@@ -151,7 +151,7 @@ int main(int argc, char const* argv[])
     testCorrSeqCF32.push_back(std::complex<float>(.1, .1));
 
     std::vector<std::complex<int16_t>> testCorrSeqCS16;
-    for (int i = 0; i < testCorrSeqCF32.size(); i++)
+    for (size_t i = 0; i < testCorrSeqCF32.size(); i++)
         testCorrSeqCS16.push_back(std::complex<int16_t>((int16_t)(testCorrSeqCF32[i].real() * 32768), (int16_t)(testCorrSeqCF32[i].imag() * 32768)));
 
     auto testCorrResCF32 = CommsLib::correlate_avx(testDataCF32, testCorrSeqCF32);
@@ -207,11 +207,11 @@ int main(int argc, char const* argv[])
     for (size_t i = 0; i < testCorrResFloat.size(); i++) {
         std::cout << "Float Op Result: " << testCorrResFloat[i] << ", INT Op Result: (" << testCorrResInt[i] / 32768.0 << "), GT:" << testCorrRefReal[i] << std::endl;
     }
-    exit(0);
+#else
     /*
      * test findBeacon
      */
-    std::cout << "Testing findBeaconGold:\n";
+    std::cout << "Testing find_beacon_avx:\n";
 
     // generate beacon
     std::vector<std::vector<double>> gold_ifft = CommsLib::getSequence(128, CommsLib::GOLD_IFFT);
@@ -224,46 +224,46 @@ int main(int argc, char const* argv[])
     }
 
     size_t beaconSize = beacon_ci16.size();
+    const int seqLen = 128;
+    auto gold_seq = CommsLib::getSequence(seqLen, CommsLib::GOLD_IFFT);
+    std::vector<std::complex<float>> gold_sym_orig(seqLen);
+    for (size_t i = 0; i < seqLen; i++) {
+        gold_sym_orig[i] = std::complex<float>(gold_seq[0][i], gold_seq[1][i]);
+    }
 
-    std::default_random_engine generator;
-    std::normal_distribution<double> distribution(.0, 0.002);
 
-    size_t symbolsPerFrame = 20;
-    size_t sampsPerSymbol = 1024 + 150;
+    size_t symbolsPerFrame = 2;
+    size_t sampsPerSymbol = 512 + 32 + 320;
     size_t SYNC_NUM_SAMPS = sampsPerSymbol * symbolsPerFrame;
-    std::vector<std::complex<float>> buffs(SYNC_NUM_SAMPS, 0);
-
-    //FILE* fpi = fopen("input_vector_i.m", "w+");
-    //FILE* fpq = fopen("input_vector_q.m", "w+");
-    //fprintf(fpi, "rx_sig_i=[");
-    //fprintf(fpq, "rx_sig_q=[");
+    std::vector<std::complex<float>> buffs;
 
     size_t prefix = 501;
-    for (size_t i = 0; i < prefix; i++)
-        buffs[i] = std::complex<float>((float)(distribution(generator)),
-            (float)(distribution(generator)));
-    for (size_t i = 0; i < beaconSize; i++)
-        buffs[i + prefix] = std::complex<float>((float)(beacon_ci16[i].real() / 32768.0 / 2 + distribution(generator)),
-            (float)(beacon_ci16[i].imag() / 32768.0 / 2 + distribution(generator)));
-    for (size_t i = prefix + beaconSize; i < SYNC_NUM_SAMPS; i++)
-        buffs[i] = std::complex<float>((float)(distribution(generator)),
-            (float)(distribution(generator)));
-
-    //for (size_t i = 0; i < SYNC_NUM_SAMPS; i++) {
-    //    fprintf(fpi, "%1.4f ", buffs[i].real());
-    //    fprintf(fpq, "%1.4f ", buffs[i].imag());
-    //}
-    //fprintf(fpi, "];");
-    //fprintf(fpq, "];");
-    //fclose(fpi);
-    //fclose(fpq);
+    std::default_random_engine randgen;
+    std::normal_distribution<float> nextrand(.0, 0.002);
+    for (size_t i = 0; i < prefix; i++) {
+	float re = nextrand(randgen);
+	float im = nextrand(randgen);
+        buffs.push_back(std::complex<float>(re, im));
+    }
+    for (size_t i = 0; i < beaconSize; i++) {
+        float re = (beacon_ci16[i].real() / 65536.0) + nextrand(randgen);
+        float im = (beacon_ci16[i].real() / 65536.0) + nextrand(randgen);
+        buffs.push_back(std::complex<float>(re, im));
+    }
+    for (size_t i = prefix + beaconSize; i < SYNC_NUM_SAMPS; i++) {
+	float re = nextrand(randgen);
+	float im = nextrand(randgen);
+        buffs.push_back(std::complex<float>(re, im));
+    }
 
     struct timespec tv, tv2;
     clock_gettime(CLOCK_MONOTONIC, &tv);
-    int sync_index = CommsLib::findBeaconGold(buffs);
+    int sync_index = CommsLib::find_beacon_avx(buffs, gold_sym_orig);
     clock_gettime(CLOCK_MONOTONIC, &tv2);
     double diff = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
-    std::cout << "SYNC Found at index " << sync_index << std::endl;
+    std::cout << "SYNC Found at index " << sync_index - seqLen + 1 << std::endl;
+    std::cout << "TEST " << (((int)prefix == sync_index - seqLen + 1) ? "PASSED" : "FAILED") << std::endl;
     std::cout << "Correlation took " << diff << " usec" << std::endl;
+#endif
     return 0;
 }

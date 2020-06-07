@@ -1,11 +1,8 @@
 #include "include/comms-lib.h"
 #include <queue>
 //#include <itpp/itbase.h>
-#include "include/matplotlibcpp.h"
 #include <immintrin.h>
 #include <iomanip>
-
-namespace plt = matplotlibcpp;
 
 #define USE_AVX
 #define ALIGNMENT 32
@@ -13,115 +10,28 @@ namespace plt = matplotlibcpp;
 #define AVX_PACKED_SI 16 // short int
 #define AVX_PACKED_CS 8 // complex short int
 
-/*
-int CommsLib::findBeaconGold(const std::vector<std::complex<int16_t>>& iq)
+int CommsLib::find_beacon_avx(const std::vector<std::complex<float>>& iq, const std::vector<std::complex<float>>& seq)
 {
-    std::vector<std::vector<double>> gold_seq;
     int best_peak;
     std::queue<int> valid_peaks;
 
     // Original LTS sequence
-    const int seqLen = 128;
-    gold_seq = CommsLib::getSequence(seqLen, GOLD_IFFT);
+    int seqLen = seq.size();
     struct timespec tv, tv2;
-
-    std::vector<std::complex<int16_t>> gold_sym(seqLen);
-    std::vector<std::complex<int16_t>> gold_sym_conj(gold_sym.size());
-    for (size_t i = 0; i < seqLen; i++) {
-        // grab one symbol and flip around
-        gold_sym[i] = std::complex<int16_t>(gold_seq[0][seqLen - 1 - i], gold_seq[1][seqLen - 1 - i]);
-        // conjugate
-        gold_sym_conj[i] = std::conj(gold_sym[i]);
-    }
-
-}*/
-
-int CommsLib::findBeaconGold(const std::vector<std::complex<float>>& iq)
-{
-    std::vector<std::vector<double>> gold_seq;
-    int best_peak;
-    std::queue<int> valid_peaks;
-
-    // Original LTS sequence
-    const int seqLen = 128;
-    gold_seq = CommsLib::getSequence(seqLen, GOLD_IFFT);
-    struct timespec tv, tv2;
-
-#ifndef USE_AVX
-    // Re-arrange into complex vector, flip, and compute conjugate
-    std::vector<std::complex<double>> gold_sym(seqLen);
-    std::vector<std::complex<double>> gold_sym_conj(gold_sym.size());
-    for (size_t i = 0; i < seqLen; i++) {
-        // grab one symbol and flip around
-        gold_sym[i] = std::complex<double>(gold_seq[0][seqLen - 1 - i], gold_seq[1][seqLen - 1 - i]);
-        // conjugate
-        gold_sym_conj[i] = std::conj(gold_sym[i]);
-    }
-
-    // Convolution
-    clock_gettime(CLOCK_MONOTONIC, &tv);
-    std::vector<std::complex<double>> gold_corr = CommsLib::convolve(iq, gold_sym_conj);
-    clock_gettime(CLOCK_MONOTONIC, &tv2);
-    double diff = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
-    std::cout << "Convolution took " << diff << " usec" << std::endl;
-
-    size_t gold_corr_size = gold_corr.size();
-    size_t gold_corr_size_2 = gold_corr_size + seqLen;
-    std::vector<double> gold_corr_2(gold_corr_size_2);
-    clock_gettime(CLOCK_MONOTONIC, &tv);
-    for (size_t i = seqLen; i < gold_corr_size; i++) {
-        gold_corr_2[i] = computePower(gold_corr[i] * std::conj(gold_corr[i - seqLen]));
-    }
-    clock_gettime(CLOCK_MONOTONIC, &tv2);
-    diff = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
-    std::cout << "Corr Abs took " << diff << " usec" << std::endl;
-
-    std::vector<double> const1(seqLen, 1);
-
-    std::vector<double> corr_abs(gold_corr_size);
-    clock_gettime(CLOCK_MONOTONIC, &tv);
-    std::transform(gold_corr.begin(), gold_corr.end(), corr_abs.begin(), computePower);
-    std::vector<double> corr_abs_filt = CommsLib::convolve(corr_abs, const1);
-    corr_abs_filt.push_back(0);
-    clock_gettime(CLOCK_MONOTONIC, &tv2);
-    diff = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
-    std::cout << "Thresh calc took " << diff << " usec" << std::endl;
-
-    std::vector<double> thresh(corr_abs_filt.begin(), corr_abs_filt.end());
-    //std::vector<double> thresh(corr_abs_filt.size());
-    //std::transform(corr_abs_filt.begin(), corr_abs_filt.end(), thresh.begin(),
-    //    std::bind(std::multiplies<double>(), std::placeholders::_1, 0.0078)); // divide by 128
-    // Find all peaks, and pairs that are lts_sym.size() samples apart
-    for (size_t i = seqLen; i < gold_corr_size; i++) {
-        if (gold_corr_2[i] > thresh[i] / 128)
-            valid_peaks.push(i - seqLen);
-    }
-
-#else
-    /*
-     * AVX
-     */
-    std::vector<std::complex<float>> gold_sym_orig(seqLen);
-    for (size_t i = 0; i < seqLen; i++) {
-        // grab one symbol and flip around
-        gold_sym_orig[i] = std::complex<float>(gold_seq[0][i], gold_seq[1][i]);
-    }
-    std::vector<std::complex<float>> iqf(iq.begin(), iq.end());
     clock_gettime(CLOCK_MONOTONIC, &tv);
 
     // correlate signal with beacon
-    std::vector<std::complex<float>> gold_corr_avx = CommsLib::correlate_avx(iqf, gold_sym_orig);
+    std::vector<std::complex<float>> gold_corr_avx = CommsLib::correlate_avx(iq, seq);
     clock_gettime(CLOCK_MONOTONIC, &tv2);
-    double diff = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
-    std::cout << "Convolution AVX took " << diff << " usec" << std::endl;
+    double diff1 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
+
     clock_gettime(CLOCK_MONOTONIC, &tv);
     // multiply the corre result with its (gold seq length-) shifted copy
     std::vector<std::complex<float>> gold_auto_corr = CommsLib::auto_corr_mult_avx(gold_corr_avx, seqLen);
     // calculate the abs (use the result for peak detection)
     std::vector<float> gold_corr_avx_2 = CommsLib::abs2_avx(gold_auto_corr);
     clock_gettime(CLOCK_MONOTONIC, &tv2);
-    diff = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
-    std::cout << "Corr Abs AVX took " << diff << " usec" << std::endl;
+    double diff2 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
 
     // calculate the adaptive theshold 
     std::vector<float> consts1(seqLen, 1);
@@ -130,8 +40,7 @@ int CommsLib::findBeaconGold(const std::vector<std::complex<float>>& iq)
     std::vector<float> corr_abs_avx = CommsLib::abs2_avx(gold_corr_avx);
     std::vector<float> thresh_avx = CommsLib::correlate_avx_s(corr_abs_avx, consts1);
     clock_gettime(CLOCK_MONOTONIC, &tv2);
-    diff = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
-    std::cout << "Thresh calc AVX took " << diff << " usec" << std::endl;
+    double diff3 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
 
     // perform thresholding and find peak
     clock_gettime(CLOCK_MONOTONIC, &tv);
@@ -140,76 +49,37 @@ int CommsLib::findBeaconGold(const std::vector<std::complex<float>>& iq)
             valid_peaks.push(i - seqLen);
     }
     clock_gettime(CLOCK_MONOTONIC, &tv2);
-    diff = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
-    std::cout << "Peak Detect AVX took " << diff << " usec" << std::endl;
+    double diff4 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
 
+#ifdef TEST_BENCH
+    std::cout << "Convolution AVX took " << diff1 << " usec" << std::endl;
+    std::cout << "Corr Abs AVX took "    << diff2 << " usec" << std::endl;
+    std::cout << "Thresh calc AVX took " << diff3 << " usec" << std::endl;
+    std::cout << "Peak Detect AVX took " << diff4 << " usec" << std::endl;
+    printf("Saving Corr data\n");
+    std::string filename = "corr_simd.bin";
+    FILE* fc = fopen(filename.c_str(), "wb");
+    float* cdata_ptr = (float *)gold_corr_avx_2.data();
+    fwrite(cdata_ptr, gold_corr_avx_2.size(), sizeof(float), fc);
+    fclose(fc);
+    filename = "thresh_simd.bin";
+    FILE* fp = fopen(filename.c_str(), "wb");
+    float* tdata_ptr = (float *)thresh_avx.data();
+    fwrite(tdata_ptr, thresh_avx.size(), sizeof(float), fp);
+    fclose(fp);
+    filename = "indata.bin";
+    FILE* fi = fopen(filename.c_str(), "wb");
+    float* idata_ptr = (float *)iq.data();
+    fwrite(idata_ptr, iq.size() * 2, sizeof(float), fi);
+    fclose(fi);
 #endif
+
     valid_peaks.push(0);
     // Use first LTS found
     if (valid_peaks.empty()) {
         best_peak = -1;
     } else {
         best_peak = valid_peaks.front();
-        if (true) {
-            //std::vector<double> isamp(iq.size());
-            //std::transform(iq.begin(), iq.end(), isamp.begin(),
-            //    [](std::complex<double> cd) {
-            //        return cd.real();
-            //    });
-            //plt::figure_size(1200, 780);
-            //plt::plot(isamp);
-            //plt::xlim(0, (int)iq.size());
-            //plt::ylim(-4, 4);
-            //plt::title("Signal plot");
-            //plt::legend();
-            //plt::save("rx.png");
-
-#ifndef USE_AVX
-            std::vector<double> gold_corr_i(gold_corr.size());
-            std::transform(gold_corr.begin(), gold_corr.end(), gold_corr_i.begin(),
-                [](std::complex<double> cd) {
-                    return (double)cd.real();
-                });
-            plt::figure_size(1200, 780);
-            plt::plot(gold_corr_i);
-            plt::xlim(0, 2000); //(int)gold_corr.size());
-            plt::ylim(-100, 100);
-            plt::title("Correlation Conv plot");
-            plt::legend();
-            plt::save("corr_conv.png");
-
-            plt::figure_size(1200, 780);
-            plt::plot(gold_corr_2);
-            plt::plot(thresh);
-            plt::xlim(0, 2000); //(int)gold_corr.size());
-            plt::ylim(-700, 700);
-            plt::title("Correlation ^2 plot");
-            plt::legend();
-            plt::save("corr_2.png");
-#else
-            std::vector<double> gold_corr_avx_i(gold_corr_avx.size());
-            std::transform(gold_corr_avx.begin(), gold_corr_avx.end(), gold_corr_avx_i.begin(),
-                [](std::complex<float> cd) {
-                    return (double)cd.real();
-                });
-            plt::figure_size(1200, 780);
-            plt::plot(gold_corr_avx_i);
-            plt::xlim(0, 2000); //(int)gold_corr_avx.size());
-            plt::ylim(-100, 100);
-            plt::title("Correlation AVX plot");
-            plt::legend();
-            plt::save("corr_avx.png");
-
-            plt::figure_size(1200, 780);
-            plt::plot(gold_corr_avx_2);
-            plt::plot(thresh_avx);
-            plt::xlim(0, 2000); //(int)gold_corr_avx.size());
-            plt::ylim(-700, 700);
-            plt::title("Correlation ^2 AVX plot");
-            plt::legend();
-            plt::save("corr_avx_2.png");
-#endif
-        }
     }
 
     return best_peak;
@@ -436,7 +306,6 @@ std::vector<int32_t> CommsLib::abs2_avx(std::vector<std::complex<int16_t>> const
 std::vector<std::complex<int16_t>> CommsLib::correlate_avx(std::vector<std::complex<int16_t>> const& f, std::vector<std::complex<int16_t>> const& g)
 {
     // assuming length0 is larger or equal to length1
-    size_t length0 = f.size();
     size_t length1 = g.size();
 
     std::vector<std::complex<int16_t>> in(length1 - 1, 0);
@@ -477,8 +346,13 @@ std::vector<std::complex<float>> CommsLib::correlate_avx(std::vector<std::comple
     size_t length0 = f.size();
     size_t length1 = g.size();
 
-    std::vector<std::complex<float>> in(length1 - 1, 0);
-    in.insert(in.end(), f.begin(), f.end());
+    std::vector<std::complex<float>> in(length0 + length1 - 1, 0);
+    //std::copy(f.begin(), f.end(), std::back_inserter(in));
+    //in.insert(in.end(), f.begin(), f.end());
+    for (size_t i = length1 - 1; i < in.size(); i++) {
+	size_t j = i - length1 + 1;
+	in[i] = f[j];
+    }
     size_t length = in.size();
 
     float* in0 = (float*)(in.data());
@@ -510,23 +384,22 @@ std::vector<std::complex<float>> CommsLib::correlate_avx(std::vector<std::comple
 std::vector<int16_t> CommsLib::correlate_avx_si(std::vector<int16_t> const& f, std::vector<int16_t> const& g)
 {
     // assuming length0 is larger or equal to length1
-    size_t length0 = f.size();
     size_t length1 = g.size();
 
     std::vector<int16_t> in(length1 - 1, 0);
     in.insert(in.end(), f.begin(), f.end());
     size_t length = in.size();
 
-    int16_t* in1 = (int16_t*)(g.data());
+    //int16_t* in1 = (int16_t*)(g.data());
     std::vector<int16_t> out(length, 0);
 
     size_t sz = sizeof(int16_t);
 
     __m256i seq_samp[length1] __attribute__((aligned(ALIGNMENT)));
 
-    for (size_t i = 0; i < length1; i++) {
-        __m256i samp_i = _mm256_set1_epi16(in1[i]);
-    }
+    //for (size_t i = 0; i < length1; i++) {
+    //    __m256i samp_i = _mm256_set1_epi16(in1[i]);
+    //}
 
     for (size_t i = 0; i < length - length1; i += AVX_PACKED_SI) {
         __m256i accm0 = _mm256_set1_epi16(0x0);
@@ -551,8 +424,12 @@ std::vector<float> CommsLib::correlate_avx_s(std::vector<float> const& f, std::v
     size_t length0 = f.size();
     size_t length1 = g.size();
 
-    std::vector<float> in(length1 - 1, 0);
-    in.insert(in.end(), f.begin(), f.end());
+    std::vector<float> in(length0 + length1 - 1, 0);
+    //in.insert(in.end(), f.begin(), f.end());
+    for (size_t i = length1 - 1; i < in.size(); i++) {
+	size_t j = i - length1 + 1;
+	in[i] = f[j];
+    }
     size_t length = in.size();
 
     float* in0 = (float*)(in.data());
@@ -573,7 +450,7 @@ std::vector<float> CommsLib::correlate_avx_s(std::vector<float> const& f, std::v
 
     for (size_t i = 0; i < (length - length1); i += AVX_PACKED_SP) {
         accm = _mm256_setzero_ps();
-        for (int j = 0; j < length1; j++) {
+        for (size_t j = 0; j < length1; j++) {
             data = _mm256_loadu_ps(in0 + i + j);
             prod = _mm256_mul_ps(data, seq_samp[j]);
             accm = _mm256_add_ps(prod, accm);

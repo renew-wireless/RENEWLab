@@ -54,6 +54,7 @@ public:
     std::string ref_sdr;
     std::vector<std::vector<std::string>> bs_sdr_ids;
     std::vector<std::string> hub_ids;
+    std::vector<std::complex<float>> gold_cf32;
     std::vector<uint32_t> beacon;
     std::vector<std::complex<int16_t>> beacon_ci16;
     int beaconSize;

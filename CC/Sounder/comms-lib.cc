@@ -78,6 +78,91 @@ int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
     return best_peak;
 }
 
+int CommsLib::find_beacon(const std::vector<std::complex<double>>& iq)
+{
+    //std::vector<std::vector<double>> gold_seq;
+    int best_peak;
+    std::queue<int> valid_peaks;
+
+    // Original LTS sequence
+    int seqLen = 128;
+    auto gold_seq = CommsLib::getSequence(seqLen, GOLD_IFFT);
+    struct timespec tv, tv2;
+
+    // Re-arrange into complex vector, flip, and compute conjugate
+    std::vector<std::complex<double>> gold_sym(seqLen);
+    std::vector<std::complex<double>> gold_sym_conj(gold_sym.size());
+    for (int i = 0; i < seqLen; i++) {
+        // grab one symbol and flip around
+        gold_sym[i] = std::complex<double>(gold_seq[0][seqLen - 1 - i], gold_seq[1][seqLen - 1 - i]);
+        // conjugate
+        gold_sym_conj[i] = std::conj(gold_sym[i]);
+    }
+
+    // Convolution
+    clock_gettime(CLOCK_MONOTONIC, &tv);
+    auto gold_corr = CommsLib::convolve(iq, gold_sym_conj);
+    clock_gettime(CLOCK_MONOTONIC, &tv2);
+    double diff1 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
+
+    size_t gold_corr_size = gold_corr.size();
+    size_t gold_corr_size_2 = gold_corr_size + seqLen;
+    std::vector<double> gold_corr_2(gold_corr_size_2);
+    clock_gettime(CLOCK_MONOTONIC, &tv);
+    for (size_t i = seqLen; i < gold_corr_size; i++) {
+        gold_corr_2[i] = computePower(gold_corr[i] * std::conj(gold_corr[i - seqLen]));
+    }
+    clock_gettime(CLOCK_MONOTONIC, &tv2);
+    double diff2 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
+
+    std::vector<double> const1(seqLen, 1);
+
+    std::vector<double> corr_abs(gold_corr_size);
+    clock_gettime(CLOCK_MONOTONIC, &tv);
+    std::transform(gold_corr.begin(), gold_corr.end(), corr_abs.begin(), computePower);
+    auto corr_abs_filt = CommsLib::convolve<double>(corr_abs, const1);
+    corr_abs_filt.push_back(0);
+    clock_gettime(CLOCK_MONOTONIC, &tv2);
+    double diff3 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
+
+    std::vector<double> thresh(corr_abs_filt.begin(), corr_abs_filt.end());
+    //std::vector<double> thresh(corr_abs_filt.size());
+    //std::transform(corr_abs_filt.begin(), corr_abs_filt.end(), thresh.begin(),
+    //    std::bind(std::multiplies<double>(), std::placeholders::_1, 0.0078)); // divide by 128
+    // Find all peaks, and pairs that are lts_sym.size() samples apart
+    for (size_t i = seqLen; i < gold_corr_size; i++) {
+        if (gold_corr_2[i] > thresh[i] / 128)
+            valid_peaks.push(i - seqLen);
+    }
+
+#ifdef TEST_BENCH
+    std::cout << "Convolution took " << diff1 << " usec" << std::endl;
+    std::cout << "Corr Abs took "    << diff2 << " usec" << std::endl;
+    std::cout << "Thresh calc took " << diff3 << " usec" << std::endl;
+    printf("Saving Corr data\n");
+    std::string filename = "corr_data.bin";
+    FILE* fc = fopen(filename.c_str(), "wb");
+    float* cdata_ptr = (float *)gold_corr_2.data();
+    fwrite(cdata_ptr, gold_corr_2.size(), sizeof(float), fc);
+    fclose(fc);
+    filename = "thresh_data.bin";
+    FILE* fp = fopen(filename.c_str(), "wb");
+    float* tdata_ptr = (float *)thresh.data();
+    fwrite(tdata_ptr, thresh.size(), sizeof(float), fp);
+    fclose(fp);
+#endif
+
+    valid_peaks.push(0);
+    // Use first LTS found
+    if (valid_peaks.empty()) {
+        best_peak = -1;
+    } else {
+        best_peak = valid_peaks.front();
+    }
+
+    return best_peak;
+}
+
 std::vector<std::complex<double>> CommsLib::csign(std::vector<std::complex<double>> iq)
 {
     /*
@@ -100,27 +185,6 @@ std::vector<std::complex<double>> CommsLib::csign(std::vector<std::complex<doubl
         }
     }
     return iq_sign;
-}
-
-template <typename T>
-std::vector<T> CommsLib::convolve(std::vector<T> const& f, std::vector<T> const& g)
-{
-    /* Convolution of two vectors
-     * Source:
-     * https://stackoverflow.com/questions/24518989/how-to-perform-1-dimensional-valid-convolution
-     */
-    int const nf = f.size();
-    int const ng = g.size();
-    int const n = nf + ng - 1;
-    std::vector<T> out(n, 0);
-    for (auto i(0); i < n; ++i) {
-        int const jmn = (i >= ng - 1) ? i - (ng - 1) : 0;
-        int const jmx = (i < nf - 1) ? i : nf - 1;
-        for (auto j(jmn); j <= jmx; ++j) {
-            out[i] += f[j] * g[i - j];
-        }
-    }
-    return out;
 }
 
 std::vector<float> CommsLib::magnitudeFFT(std::vector<std::complex<float>> const& samps, std::vector<float> const& win, size_t fftSize)

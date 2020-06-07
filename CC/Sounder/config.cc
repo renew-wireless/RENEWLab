@@ -180,8 +180,12 @@ Config::Config(const std::string& jsonfile)
     // STS Sequence (for AGC) + GOLD Sequence (for Sync)
     // 15reps of STS(16) + 2reps of gold_ifft(128)
     srand(time(NULL));
-    std::vector<std::vector<double>> gold_ifft = CommsLib::getSequence(128, CommsLib::GOLD_IFFT);
+    const int seqLen = 128;
+    std::vector<std::vector<double>> gold_ifft = CommsLib::getSequence(seqLen, CommsLib::GOLD_IFFT);
     std::vector<std::complex<int16_t>> gold_ifft_ci16 = Utils::double_to_cint16(gold_ifft);
+    for (size_t i = 0; i < seqLen; i++) {
+        gold_cf32.push_back(std::complex<float>(gold_ifft[0][i], gold_ifft[1][i]));
+    }
 
     std::vector<std::vector<double>> sts_seq = CommsLib::getSequence(0, CommsLib::STS_SEQ);
     std::vector<std::complex<int16_t>> sts_seq_ci16 = Utils::double_to_cint16(sts_seq);

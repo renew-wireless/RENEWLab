@@ -370,7 +370,7 @@ void Receiver::clientSyncTxRx(int tid)
             std::cerr << "waiting for receive frames... " << std::endl;
             break;
         }
-        int sync_index = CommsLib::findBeaconGold(buffs);
+        int sync_index = CommsLib::find_beacon_avx(buffs, config_->gold_cf32);
         frameStartTime = rxTime - sync_index - config_->beaconSize - config_->prefix;
         //long long resid = (rxTime - frameStartTime) % SYNC_NUM_SAMPS;
         //frameStartTime = rxTime + (SYNC_NUM_SAMPS - resid) + SYNC_NUM_SAMPS;

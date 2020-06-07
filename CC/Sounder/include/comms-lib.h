@@ -64,7 +64,26 @@ public:
 
     static int findLTS(const std::vector<std::complex<double>>& iq, int seqLen);
     template <typename T>
-    static std::vector<T> convolve(std::vector<T> const& f, std::vector<T> const& g);
+    //static std::vector<T> convolve(std::vector<T> const& f, std::vector<T> const& g);
+    static std::vector<T> convolve(std::vector<T> const& f, std::vector<T> const& g)
+    {
+        /* Convolution of two vectors
+         * Source:
+         * https://stackoverflow.com/questions/24518989/how-to-perform-1-dimensional-valid-convolution
+         */
+        int const nf = f.size();
+        int const ng = g.size();
+        int const n = nf + ng - 1;
+        std::vector<T> out(n, 0);
+        for (auto i(0); i < n; ++i) {
+            int const jmn = (i >= ng - 1) ? i - (ng - 1) : 0;
+            int const jmx = (i < nf - 1) ? i : nf - 1;
+            for (auto j(jmn); j <= jmx; ++j) {
+                out[i] += f[j] * g[i - j];
+            }
+        }
+        return out;
+    }
     static std::vector<std::complex<double>> csign(std::vector<std::complex<double>> iq);
     static inline int hadamard2(int i, int j) { return (__builtin_parity(i & j) != 0 ? -1 : 1); }
     static std::vector<float> magnitudeFFT(std::vector<std::complex<float>> const&, std::vector<float> const&, size_t);
@@ -75,7 +94,8 @@ public:
     static float measureTone(std::vector<std::complex<float>> const&, std::vector<float> const&, double, double, size_t, const size_t delta = 10);
 
     // Functions using AVX
-    static int findBeaconGold(const std::vector<std::complex<float>>& iq);
+    static int find_beacon(const std::vector<std::complex<double>>& iq);
+    static int find_beacon_avx(const std::vector<std::complex<float>>& iq, const std::vector<std::complex<float>>& seq);
     static std::vector<float> correlate_avx_s(std::vector<float> const& f, std::vector<float> const& g);
     static std::vector<int16_t> correlate_avx_si(std::vector<int16_t> const& f, std::vector<int16_t> const& g);
     static std::vector<float> abs2_avx(std::vector<std::complex<float>> const& f);
