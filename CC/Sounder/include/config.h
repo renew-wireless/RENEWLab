@@ -65,7 +65,7 @@ public:
     std::string bsChannel;
     std::vector<std::string> frames;
     std::string frame_mode;
-    std::string framer_mode;
+    bool hw_framer;
     size_t max_frame;
     std::vector<std::vector<size_t>> pilotSymbols;
     std::vector<std::vector<size_t>> ULSymbols;

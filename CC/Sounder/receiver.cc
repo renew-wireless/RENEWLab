@@ -59,10 +59,6 @@ std::vector<pthread_t> Receiver::startClientThreads()
 {
     std::vector<pthread_t> client_threads;
     if (config_->clPresent) {
-        double frameTime = config_->sampsPerSymbol * config_->clFrames[0].size() * 1e3 / config_->rate; // miliseconds
-        unsigned frameTimeDelta = (unsigned)(std::ceil(TIME_DELTA / frameTime));
-        std::cout << "Frame time delta " << frameTimeDelta << std::endl;
-
         client_threads.resize(config_->nClSdrs);
         for (unsigned int i = 0; i < config_->nClSdrs; i++) {
             pthread_t cl_thread_;
@@ -237,8 +233,10 @@ void* Receiver::clientTxRx_launch(void* in_context)
     Receiver* receiver = context->ptr;
     int tid = context->tid;
     delete context;
-    receiver->clientTxRx(tid);
-    //receiver->clientSyncTxRx(tid);
+    if (receiver->config_->hw_framer)
+        receiver->clientTxRx(tid);
+    else
+        receiver->clientSyncTxRx(tid);
     return 0;
 }
 
@@ -329,13 +327,11 @@ void Receiver::clientTxRx(int tid)
 void Receiver::clientSyncTxRx(int tid)
 {
     int pilotStartSym = config_->clPilotSymbols[tid][0];
-    long long frameTimeNs = (long long)(config_->sampsPerSymbol * config_->clFrames[0].size() * 1e9 / config_->rate); // nanoseconds
-    long long frameStartTime = 0;
+    size_t frameTimeLen = config_->sampsPerSymbol * config_->clFrames[0].size();
+    size_t txFrameDelta = 4 * frameTimeLen;
 
-    long long txFrameDelta = (long long)(std::ceil(TIME_DELTA / frameTimeNs));
     int NUM_SAMPS = config_->sampsPerSymbol;
     int SYNC_NUM_SAMPS = config_->sampsPerSymbol * config_->symbolsPerFrame;
-    printf("SYNC_NUM_SAMPS %d\n", SYNC_NUM_SAMPS);
 
     if (config_->core_alloc) {
         int core = tid + 1 + config_->rx_thread_num + config_->task_thread_num;
@@ -346,45 +342,68 @@ void Receiver::clientSyncTxRx(int tid)
         }
     }
 
-    std::vector<std::complex<float>> buffs(SYNC_NUM_SAMPS, 0);
+    std::vector<std::complex<float>> syncbuff0(SYNC_NUM_SAMPS, 0);
+    std::vector<std::complex<float>> syncbuff1(SYNC_NUM_SAMPS, 0);
+    std::vector<void*> syncrxbuff(2);
+    syncrxbuff[0] = syncbuff0.data();
+
+    std::vector<std::complex<float>> buff0(NUM_SAMPS, 0);
+    std::vector<std::complex<float>> buff1(NUM_SAMPS, 0);
     std::vector<void*> rxbuff(2);
-    rxbuff[0] = buffs.data();
-    //rxbuff[1] = NULL;
+    rxbuff[0] = buff0.data();
 
     std::vector<void*> pilotbuffA(2);
     std::vector<void*> pilotbuffB(2);
     pilotbuffA[0] = config_->pilot_cf32.data();
     if (config_->clSdrCh == 2) {
-        pilotbuffA[1] = std::vector<std::complex<float>>(config_->sampsPerSymbol, 0).data();
-        pilotbuffB[0] = std::vector<std::complex<float>>(config_->sampsPerSymbol, 0).data();
+        pilotbuffA[1] = std::vector<std::complex<float>>(NUM_SAMPS, 0).data();
         pilotbuffB[1] = config_->pilot_cf32.data();
+        pilotbuffB[0] = std::vector<std::complex<float>>(NUM_SAMPS, 0).data();
+        syncrxbuff[1] = syncbuff1.data();
+        rxbuff[1] = buff1.data();
     }
-
-    int r(0);
     long long rxTime(0);
     long long txTime(0);
-    long long txTime0(0);
+    //clientRadioSet_->radioRxSched(tid, rxTime, SYNC_NUM_SAMPS, 3);
+    //clientRadioSet_->radioRxSched(tid, rxTime, SYNC_NUM_SAMPS, 0);
+    int r = clientRadioSet_->radioRx(tid, rxbuff.data(), SYNC_NUM_SAMPS, rxTime);
+
+    if (r != SYNC_NUM_SAMPS) {
+        std::cerr << "BAD SYNC Receive: " << r << "/" << NUM_SAMPS << std::endl;
+        config_->running = false;
+        return;
+    }
+    int sync_index = CommsLib::find_beacon_avx(syncbuff0, config_->gold_cf32);
+    std::cout << "Beacon detected, sync_index: " << sync_index << std::endl;
+    long long frameStartTime = rxTime + sync_index - config_->gold_cf32.size() - config_->prefix;
+
+    rxTime = frameStartTime + txFrameDelta;
+    clientRadioSet_->radioRxSched(tid, rxTime, NUM_SAMPS, 1);
+
     while (config_->running) {
-        r = clientRadioSet_->radioRx(tid, rxbuff.data(), SYNC_NUM_SAMPS, rxTime);
-        if (r != SYNC_NUM_SAMPS) {
-            std::cerr << "waiting for receive frames... " << std::endl;
-            break;
+        for (int sf = 0; sf < config_->symbolsPerFrame; sf++) {
+            r = clientRadioSet_->radioRx(tid, rxbuff.data(), NUM_SAMPS, rxTime);
+            if (r != SYNC_NUM_SAMPS) {
+                std::cerr << "BAD Receive: " << r << "/" << NUM_SAMPS << std::endl;
+                config_->running = false;
+                return;
+            }
+            if (sf == 0) {
+                //long long resid = (rxTime - frameStartTime) % SYNC_NUM_SAMPS;
+                //frameStartTime = rxTime + (SYNC_NUM_SAMPS - resid) + SYNC_NUM_SAMPS;
+                txTime = rxTime + txFrameDelta + pilotStartSym * NUM_SAMPS;
+                r = clientRadioSet_->radioTx(tid, pilotbuffA.data(), NUM_SAMPS, 2, txTime);
+                if (r < NUM_SAMPS)
+                    std::cout << "BAD Write: " << r << "/" << NUM_SAMPS << std::endl;
+                if (config_->clSdrCh == 2) {
+                    txTime += NUM_SAMPS;
+                    r = clientRadioSet_->radioTx(tid, pilotbuffB.data(), NUM_SAMPS, 2, txTime);
+                    if (r < NUM_SAMPS)
+                        std::cout << "BAD Write: " << r << "/" << NUM_SAMPS << std::endl;
+		}
+            }
+            rxTime += NUM_SAMPS;
+	    // perhaps resync every few thousands frames
         }
-        int sync_index = CommsLib::find_beacon_avx(buffs, config_->gold_cf32);
-        frameStartTime = rxTime - sync_index - config_->beaconSize - config_->prefix;
-        //long long resid = (rxTime - frameStartTime) % SYNC_NUM_SAMPS;
-        //frameStartTime = rxTime + (SYNC_NUM_SAMPS - resid) + SYNC_NUM_SAMPS;
-        txTime = frameStartTime + txFrameDelta * SYNC_NUM_SAMPS + pilotStartSym * config_->sampsPerSymbol;
-        // transmit loop
-        for (char const& c : config_->clChannel) {
-            int i = c - config_->clChannel[0];
-            txTime0 = txTime + i * config_->sampsPerSymbol;
-            if (c == 'A') {
-                r = clientRadioSet_->radioTx(tid, pilotbuffA.data(), NUM_SAMPS, 2, txTime0);
-            } else if (c == 'B')
-                r = clientRadioSet_->radioTx(tid, pilotbuffB.data(), NUM_SAMPS, 2, txTime0);
-        }
-        if (r < NUM_SAMPS)
-            std::cout << "BAD Write!" << std::endl;
     }
 }

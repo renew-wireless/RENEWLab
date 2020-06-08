@@ -71,7 +71,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
 
         for (size_t i = 0; i < radios.size(); i++) {
             auto dev = radios[i]->dev;
-            if (_cfg->framer_mode == "hardware") {
+            if (_cfg->hw_framer) {
                 std::string corrConfString = "{\"corr_enabled\":true,\"corr_threshold\":" + std::to_string(1) + "}";
                 dev->writeSetting("CORR_CONFIG", corrConfString);
                 dev->writeRegisters("CORR_COE", 0, _cfg->coeffs);
@@ -159,6 +159,17 @@ void ClientRadioSet::radioStop(void)
 int ClientRadioSet::triggers(int i)
 {
     return (radios[i]->getTriggers());
+}
+
+int ClientRadioSet::radioRxSched(size_t radio_id, const long long rxTime, const size_t numSamps, int flags)
+{
+    if (flags == 3) {
+        radios[radio_id]->activateRecv(rxTime, numSamps, flags);
+        radios[radio_id]->dev->writeSetting("TRIGGER_GEN", "");
+    } else if (flags == 0)
+        radios[radio_id]->activateRecv();
+    else
+        radios[radio_id]->activateRecv(rxTime, numSamps, flags);
 }
 
 int ClientRadioSet::radioRx(size_t radio_id, void* const* buffs, int numSamps, long long& frameTime)

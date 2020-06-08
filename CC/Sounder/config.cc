@@ -134,7 +134,7 @@ Config::Config(const std::string& jsonfile)
         clAgcGainInit = tddConfCl.value("agc_gain_init", 70); // 0 to 108
         clDataMod = tddConfCl.value("modulation", "QPSK");
         frame_mode = tddConfCl.value("frame_mode", "continuous_resync");
-        framer_mode = tddConfCl.value("frame_mode", "hardware");
+        hw_framer = tddConfCl.value("hw_framer", true);
         txAdvance = tddConfCl.value("tx_advance", 250);
 
         auto jClTxgainA_vec = tddConfCl.value("txgainA", json::array());
