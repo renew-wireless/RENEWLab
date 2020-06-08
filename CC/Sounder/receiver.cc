@@ -328,7 +328,7 @@ void Receiver::clientSyncTxRx(int tid)
 {
     int pilotStartSym = config_->clPilotSymbols[tid][0];
     size_t frameTimeLen = config_->sampsPerSymbol * config_->clFrames[0].size();
-    size_t txFrameDelta = 4 * frameTimeLen;
+    size_t txFrameDelta = 10 * frameTimeLen;
 
     int NUM_SAMPS = config_->sampsPerSymbol;
     int SYNC_NUM_SAMPS = config_->sampsPerSymbol * config_->symbolsPerFrame;
@@ -362,35 +362,43 @@ void Receiver::clientSyncTxRx(int tid)
         syncrxbuff[1] = syncbuff1.data();
         rxbuff[1] = buff1.data();
     }
+
     long long rxTime(0);
     long long txTime(0);
-    //clientRadioSet_->radioRxSched(tid, rxTime, SYNC_NUM_SAMPS, 3);
-    //clientRadioSet_->radioRxSched(tid, rxTime, SYNC_NUM_SAMPS, 0);
-    int r = clientRadioSet_->radioRx(tid, rxbuff.data(), SYNC_NUM_SAMPS, rxTime);
+    int sync_index(-1);
+    int rx_offset = 0;
+    // Keep reading one frame worth of data until a beacon is found
+    while (config_->running && sync_index < 0) {
+        int r = clientRadioSet_->radioRx(tid, syncrxbuff.data(), SYNC_NUM_SAMPS, rxTime);
 
-    if (r != SYNC_NUM_SAMPS) {
-        std::cerr << "BAD SYNC Receive: " << r << "/" << NUM_SAMPS << std::endl;
-        config_->running = false;
-        return;
+        if (r != SYNC_NUM_SAMPS) {
+            std::cerr << "BAD SYNC Receive(" << r << "/" << SYNC_NUM_SAMPS << ") at Time " << rxTime << std::endl;
+            continue;
+        }
+        sync_index = CommsLib::find_beacon_avx(syncbuff0, config_->gold_cf32);
+        if (sync_index < 0)
+            continue;
+        std::cout << "Beacon detected at Time " << rxTime << ", sync_index: " << sync_index << std::endl;
+        rx_offset = sync_index - config_->beaconSize - config_->prefix;
     }
-    int sync_index = CommsLib::find_beacon_avx(syncbuff0, config_->gold_cf32);
-    std::cout << "Beacon detected, sync_index: " << sync_index << std::endl;
-    long long frameStartTime = rxTime + sync_index - config_->gold_cf32.size() - config_->prefix;
 
-    rxTime = frameStartTime + txFrameDelta;
-    clientRadioSet_->radioRxSched(tid, rxTime, NUM_SAMPS, 1);
+    // Read rx_offset to align with the begining of a frame
+    clientRadioSet_->radioRx(tid, syncrxbuff.data(), rx_offset, rxTime);
 
+    // Main client read/write loop.
+    size_t recv_count = 0;
     while (config_->running) {
         for (int sf = 0; sf < config_->symbolsPerFrame; sf++) {
-            r = clientRadioSet_->radioRx(tid, rxbuff.data(), NUM_SAMPS, rxTime);
-            if (r != SYNC_NUM_SAMPS) {
-                std::cerr << "BAD Receive: " << r << "/" << NUM_SAMPS << std::endl;
+            int r = clientRadioSet_->radioRx(tid, rxbuff.data(), NUM_SAMPS, rxTime);
+            if (r != NUM_SAMPS) {
+                std::cerr << "BAD Receive(" << r << "/" << NUM_SAMPS << ") at Time " << rxTime << ", recv count " << recv_count << std::endl;
+            }
+            if (r < 0) {
                 config_->running = false;
                 return;
             }
+	    recv_count++;
             if (sf == 0) {
-                //long long resid = (rxTime - frameStartTime) % SYNC_NUM_SAMPS;
-                //frameStartTime = rxTime + (SYNC_NUM_SAMPS - resid) + SYNC_NUM_SAMPS;
                 txTime = rxTime + txFrameDelta + pilotStartSym * NUM_SAMPS;
                 r = clientRadioSet_->radioTx(tid, pilotbuffA.data(), NUM_SAMPS, 2, txTime);
                 if (r < NUM_SAMPS)
@@ -400,10 +408,9 @@ void Receiver::clientSyncTxRx(int tid)
                     r = clientRadioSet_->radioTx(tid, pilotbuffB.data(), NUM_SAMPS, 2, txTime);
                     if (r < NUM_SAMPS)
                         std::cout << "BAD Write: " << r << "/" << NUM_SAMPS << std::endl;
-		}
+                }
             }
-            rxTime += NUM_SAMPS;
-	    // perhaps resync every few thousands frames
+            // perhaps resync every few thousands frames
         }
     }
 }

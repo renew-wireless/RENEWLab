@@ -142,34 +142,28 @@ ClientRadioSet::~ClientRadioSet(void)
 
 void ClientRadioSet::radioStop(void)
 {
-    std::string corrConfStr = "{\"corr_enabled\":false}";
-    std::string tddConfStr = "{\"tdd_enabled\":false}";
-    for (size_t i = 0; i < _cfg->nClSdrs; i++) {
-        auto dev = radios[i]->dev;
-        dev->writeSetting("CORR_CONFIG", corrConfStr);
-        const auto timeStamp = SoapySDR::timeNsToTicks(dev->getHardwareTime(""), _cfg->rate);
-        std::cout << "device " << i << ": Frame=" << (timeStamp >> 32)
-                  << ", Symbol=" << ((timeStamp & 0xFFFFFFFF) >> 16) << std::endl;
-        dev->writeSetting("TDD_CONFIG", tddConfStr);
-        dev->writeSetting("TDD_MODE", "false");
-        radios[i]->reset_DATA_clk_domain();
+    if (_cfg->hw_framer) {
+        std::string corrConfStr = "{\"corr_enabled\":false}";
+        std::string tddConfStr = "{\"tdd_enabled\":false}";
+        for (size_t i = 0; i < _cfg->nClSdrs; i++) {
+            auto dev = radios[i]->dev;
+            dev->writeSetting("CORR_CONFIG", corrConfStr);
+            const auto timeStamp = SoapySDR::timeNsToTicks(dev->getHardwareTime(""), _cfg->rate);
+            std::cout << "device " << i << ": Frame=" << (timeStamp >> 32)
+                      << ", Symbol=" << ((timeStamp & 0xFFFFFFFF) >> 16) << std::endl;
+            dev->writeSetting("TDD_CONFIG", tddConfStr);
+            dev->writeSetting("TDD_MODE", "false");
+            radios[i]->reset_DATA_clk_domain();
+        }
+    } else {
+        for (size_t i = 0; i < _cfg->nClSdrs; i++)
+            radios[i]->deactivateRecv();
     }
 }
 
 int ClientRadioSet::triggers(int i)
 {
     return (radios[i]->getTriggers());
-}
-
-int ClientRadioSet::radioRxSched(size_t radio_id, const long long rxTime, const size_t numSamps, int flags)
-{
-    if (flags == 3) {
-        radios[radio_id]->activateRecv(rxTime, numSamps, flags);
-        radios[radio_id]->dev->writeSetting("TRIGGER_GEN", "");
-    } else if (flags == 0)
-        radios[radio_id]->activateRecv();
-    else
-        radios[radio_id]->activateRecv(rxTime, numSamps, flags);
 }
 
 int ClientRadioSet::radioRx(size_t radio_id, void* const* buffs, int numSamps, long long& frameTime)

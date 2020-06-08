@@ -12,7 +12,6 @@
 
 int CommsLib::find_beacon_avx(const std::vector<std::complex<float>>& iq, const std::vector<std::complex<float>>& seq)
 {
-    int best_peak;
     std::queue<int> valid_peaks;
 
     // Original LTS sequence
@@ -44,9 +43,9 @@ int CommsLib::find_beacon_avx(const std::vector<std::complex<float>>& iq, const 
 
     // perform thresholding and find peak
     clock_gettime(CLOCK_MONOTONIC, &tv);
-    for (size_t i = seqLen; i < gold_corr_avx_2.size(); i++) {
+    for (size_t i = 0; i < gold_corr_avx_2.size(); i++) {
         if (gold_corr_avx_2[i] > thresh_avx[i])
-            valid_peaks.push(i - seqLen);
+            valid_peaks.push(i);
     }
     clock_gettime(CLOCK_MONOTONIC, &tv2);
     double diff4 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
@@ -74,15 +73,11 @@ int CommsLib::find_beacon_avx(const std::vector<std::complex<float>>& iq, const 
     fclose(fi);
 #endif
 
-    valid_peaks.push(0);
-    // Use first LTS found
     if (valid_peaks.empty()) {
-        best_peak = -1;
-    } else {
-        best_peak = valid_peaks.front();
+        valid_peaks.push(-1);
     }
 
-    return best_peak;
+    return valid_peaks.front();
 }
 
 static inline __m256i __m256_complex_cs16_mult(__m256i data1, __m256i data2, bool conj)
