@@ -50,9 +50,9 @@ int main(int argc, char const* argv[])
     bool pass = true;
     std::cout << "\nTesting abs_avx (floating-point):\n";
     for (size_t i = 0; i < testAbs0.size(); i++) {
-	std::complex<float> gt = (testDataCF32[i] * std::conj(testDataCF32[i]));
+        std::complex<float> gt = (testDataCF32[i] * std::conj(testDataCF32[i]));
         //std::cout << "ABS Float RESULT: " << testAbs0[i] << ", GT: " << gt << std::endl;
-	if (std::abs(testAbs0[i] - gt) > 0.01)
+        if (std::abs(testAbs0[i] - gt) > 0.01)
             pass = false;
     }
     std::cout << (pass ? "PASSED" : "FAILED") << std::endl;
@@ -60,10 +60,10 @@ int main(int argc, char const* argv[])
     pass = true;
     std::cout << "\nTesting abs_avx (fixed-point):\n";
     for (size_t i = 0; i < testAbs0.size(); i++) {
-	std::complex<float> gt = (testDataCF32[i] * std::conj(testDataCF32[i]));
-	std::complex<double> gt_double(gt.real(), gt.imag());
+        std::complex<float> gt = (testDataCF32[i] * std::conj(testDataCF32[i]));
+        std::complex<double> gt_double(gt.real(), gt.imag());
         //std::cout << "ABS INT RESULT: " << testAbs1[i] / (std::pow(2.0, 30)) << ", GT: " << gt << std::endl;
-	if (std::abs((testAbs1[i] / (std::pow(2.0, 30))) - gt_double) > 0.01)
+        if (std::abs((testAbs1[i] / (std::pow(2.0, 30))) - gt_double) > 0.01)
             pass = false;
     }
     std::cout << (pass ? "PASSED" : "FAILED") << std::endl;
@@ -231,7 +231,7 @@ int main(int argc, char const* argv[])
         gold_sym_orig[i] = std::complex<float>(gold_seq[0][i], gold_seq[1][i]);
     }
 
-
+#ifndef READ_DATA
     size_t symbolsPerFrame = 2;
     size_t sampsPerSymbol = 512 + 32 + 320;
     size_t SYNC_NUM_SAMPS = sampsPerSymbol * symbolsPerFrame;
@@ -241,8 +241,8 @@ int main(int argc, char const* argv[])
     std::default_random_engine randgen;
     std::normal_distribution<float> nextrand(.0, 0.002);
     for (size_t i = 0; i < prefix; i++) {
-	float re = nextrand(randgen);
-	float im = nextrand(randgen);
+        float re = nextrand(randgen);
+        float im = nextrand(randgen);
         buffs.push_back(std::complex<float>(re, im));
     }
     for (size_t i = 0; i < beaconSize; i++) {
@@ -251,8 +251,8 @@ int main(int argc, char const* argv[])
         buffs.push_back(std::complex<float>(re, im));
     }
     for (size_t i = prefix + beaconSize; i < SYNC_NUM_SAMPS; i++) {
-	float re = nextrand(randgen);
-	float im = nextrand(randgen);
+        float re = nextrand(randgen);
+        float im = nextrand(randgen);
         buffs.push_back(std::complex<float>(re, im));
     }
 
@@ -264,6 +264,32 @@ int main(int argc, char const* argv[])
     std::cout << "SYNC Found at index " << sync_index - seqLen + 1 << std::endl;
     std::cout << "TEST " << (((int)prefix == sync_index - seqLen + 1) ? "PASSED" : "FAILED") << std::endl;
     std::cout << "Correlation took " << diff << " usec" << std::endl;
+#else
+    size_t symbolsPerFrame = 5;
+    size_t sampsPerSymbol = 790;
+    size_t samps_per_frame = sampsPerSymbol * symbolsPerFrame;
+    size_t num_frames = 1250;
+    std::vector<std::complex<float>> buff0(samps_per_frame, 0);
+    std::string filename = "beacon.bin";
+    FILE* fp = fopen(filename.c_str(), "rb");
+    std::vector<int> index(samps_per_frame);
+    for (size_t i = 0; i < num_frames; i++) {
+        size_t bytes = fread(buff0.data(), sizeof(float) * 2, samps_per_frame, fp);
+        if (bytes < samps_per_frame) {
+            printf("Error reading batch %zu, Exitting...\n", i);
+            break;
+        }
+        int sync_index = CommsLib::find_beacon_avx(buff0, gold_sym_orig);
+	if (sync_index >= 0 && sync_index < samps_per_frame)
+		index[sync_index]++;
+        printf("Frame: %zu, sync_idx: %zu, total_idx: %d\n", i, sync_index, (sync_index + i * samps_per_frame));
+    }
+    for (size_t i = 0; i < samps_per_frame; i++) {
+        if (index[i] > 0)
+            printf("SYNC_INDEX %d: %zu times\n", index[i], i);
+    }
+    fclose(fp);
+#endif
 #endif
     return 0;
 }
