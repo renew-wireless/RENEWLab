@@ -169,7 +169,15 @@ int ClientRadioSet::triggers(int i)
 int ClientRadioSet::radioRx(size_t radio_id, void* const* buffs, int numSamps, long long& frameTime)
 {
     if (radio_id < radios.size()) {
-        return radios[radio_id]->recv(buffs, numSamps, frameTime);
+	int ret(0);
+        if (_cfg->hw_framer) {
+            ret = radios[radio_id]->recv(buffs, numSamps, frameTime);
+	} else {
+            long long frameTimeNs(0);
+            ret = radios[radio_id]->recv(buffs, numSamps, frameTimeNs);
+            frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate);
+	}
+	return ret;
     }
     std::cout << "invalid radio id " << radio_id << std::endl;
     return 0;
@@ -177,7 +185,12 @@ int ClientRadioSet::radioRx(size_t radio_id, void* const* buffs, int numSamps, l
 
 int ClientRadioSet::radioTx(size_t radio_id, const void* const* buffs, int numSamps, int flags, long long& frameTime)
 {
-    return radios[radio_id]->xmit(buffs, numSamps, flags, frameTime);
+    if (_cfg->hw_framer) {
+        return radios[radio_id]->xmit(buffs, numSamps, flags, frameTime);
+    } else { 
+        long long frameTimeNs = SoapySDR::ticksToTimeNs(frameTime, _cfg->rate);
+        return radios[radio_id]->xmit(buffs, numSamps, flags, frameTimeNs);
+    }
 }
 
 static void initAGC(SoapySDR::Device* dev, Config* cfg)

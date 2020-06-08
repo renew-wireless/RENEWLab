@@ -56,7 +56,6 @@ Radio::Radio(const SoapySDR::Kwargs& args, const char soapyFmt[],
     const std::vector<size_t>& channels, double rate)
 {
     dev = SoapySDR::Device::make(args);
-    this->rate = rate;
     if (dev == NULL)
         throw std::invalid_argument("error making SoapySDR::Device\n");
     for (auto ch : channels) {
@@ -80,10 +79,7 @@ Radio::~Radio(void)
 int Radio::recv(void* const* buffs, int samples, long long& frameTime)
 {
     int flags(0);
-    long long frameTimeNs = 0;
-    int ret = dev->readStream(rxs, buffs, samples, flags, frameTimeNs, 1000000);
-    frameTime = SoapySDR::timeNsToTicks(frameTimeNs, rate);
-    return ret;
+    return dev->readStream(rxs, buffs, samples, flags, frameTime, 1000000);
 }
 
 int Radio::activateRecv(const long long rxTime, const size_t numSamps, int flags)
@@ -112,8 +108,7 @@ int Radio::xmit(const void* const* buffs, int samples, int flags, long long& fra
         SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST
     };
     int flag_args = soapyFlags[flags];
-    long long frameTimeNs = SoapySDR::ticksToTimeNs(frameTime, rate);
-    int r = dev->writeStream(txs, buffs, samples, flag_args, frameTimeNs, 1000000);
+    int r = dev->writeStream(txs, buffs, samples, flag_args, frameTime, 1000000);
     if (r != samples)
         std::cerr << "unexpected writeStream error " << SoapySDR::errToStr(r) << std::endl;
     return (r);

@@ -399,7 +399,7 @@ void Receiver::clientSyncTxRx(int tid)
             }
 	    recv_count++;
             if (sf == 0) {
-                txTime = rxTime + txFrameDelta + pilotStartSym * NUM_SAMPS;
+                txTime = rxTime + txFrameDelta + pilotStartSym * NUM_SAMPS - config_->txAdvance;
                 r = clientRadioSet_->radioTx(tid, pilotbuffA.data(), NUM_SAMPS, 2, txTime);
                 if (r < NUM_SAMPS)
                     std::cout << "BAD Write: " << r << "/" << NUM_SAMPS << std::endl;
