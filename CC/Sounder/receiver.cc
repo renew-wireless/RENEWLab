@@ -326,7 +326,6 @@ void Receiver::clientTxRx(int tid)
 
 void Receiver::clientSyncTxRx(int tid)
 {
-    int pilotStartSym = config_->clPilotSymbols[tid][0];
     size_t frameTimeLen = config_->sampsPerSymbol * config_->clFrames[0].size();
     size_t txFrameDelta = 10 * frameTimeLen;
 
@@ -363,6 +362,16 @@ void Receiver::clientSyncTxRx(int tid)
         rxbuff[1] = buff1.data();
     }
 
+    std::vector<void*> txbuff(2);
+    size_t txSyms = config_->clULSymbols[tid].size();
+    if (txSyms > 0) {
+        size_t txIndex = tid * config_->clSdrCh;
+        txbuff[0] = config_->txdata[txIndex].data();
+        if (config_->clSdrCh == 2)
+            txbuff[1] = config_->txdata[txIndex + 1].data();
+        std::cout << txSyms << " uplink symbols will be sent per frame..." << std::endl;
+    }
+
     long long rxTime(0);
     long long txTime(0);
     int sync_index(-1);
@@ -397,17 +406,27 @@ void Receiver::clientSyncTxRx(int tid)
                 config_->running = false;
                 return;
             }
-	    recv_count++;
+            recv_count++;
+            // schedule all TX subframes
             if (sf == 0) {
-                txTime = rxTime + txFrameDelta + pilotStartSym * NUM_SAMPS - config_->txAdvance;
+                txTime = rxTime + txFrameDelta + config_->clPilotSymbols[tid][0] * NUM_SAMPS - config_->txAdvance;
                 r = clientRadioSet_->radioTx(tid, pilotbuffA.data(), NUM_SAMPS, 2, txTime);
                 if (r < NUM_SAMPS)
                     std::cout << "BAD Write: " << r << "/" << NUM_SAMPS << std::endl;
                 if (config_->clSdrCh == 2) {
-                    txTime += NUM_SAMPS;
+                    txTime = rxTime + txFrameDelta + config_->clPilotSymbols[tid][1] * NUM_SAMPS - config_->txAdvance;
+                    //Time += NUM_SAMPS;
                     r = clientRadioSet_->radioTx(tid, pilotbuffB.data(), NUM_SAMPS, 2, txTime);
                     if (r < NUM_SAMPS)
                         std::cout << "BAD Write: " << r << "/" << NUM_SAMPS << std::endl;
+                }
+                if (config_->ulDataSymPresent) {
+                    for (size_t s = 0; s < txSyms; s++) {
+                        txTime = rxTime + txFrameDelta + config_->clULSymbols[tid][s] * NUM_SAMPS - config_->txAdvance;
+                        r = clientRadioSet_->radioTx(tid, txbuff.data(), NUM_SAMPS, 2, txTime);
+                        if (r < NUM_SAMPS)
+                            std::cout << "BAD Write: " << r << "/" << NUM_SAMPS << std::endl;
+                    }
                 }
             }
             // perhaps resync every few thousands frames
