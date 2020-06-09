@@ -1,3 +1,14 @@
+/*
+ Select signal processing and communications blocks implemented using Intel AVX
+
+find_beacon_avx: Correlation and Peak detection of a beacon with Gold code (2 repetitions)
+---------------------------------------------------------------------
+ Copyright (c) 2018-2020, Rice University 
+ RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+ Author(s): Rahman Doost-Mohamamdy: doost@rice.edu
+---------------------------------------------------------------------
+*/
+
 #include "include/comms-lib.h"
 #include <queue>
 //#include <itpp/itbase.h>
