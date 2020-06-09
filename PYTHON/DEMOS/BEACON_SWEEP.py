@@ -15,6 +15,17 @@
    on the base station
    (NOTICE THERE'S NO SPACES BETWEEN SERIAL NUMBERS!)
 
+
+    NOTE ON GAINS:
+    Gain settings will vary depending on RF frontend board being used
+    If using CBRS:
+    rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
+    txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
+
+    If using only Dev Board:
+    rxgain: at both frequency bands [0:1:30]
+    txgain: at both frequency bands [0:1:42]
+
 ---------------------------------------------------------------------
  Copyright © 2018-2019. Rice University.
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
@@ -45,6 +56,7 @@ from generate_sequence import *
 sdrs = None
 hub_dev = None
 
+
 def beamsweeper(hub, serials, rate, freq, txgain, rxgain, numSamps, numSyms, prefix_length, postfix_length, calibrate, both_channels):
     global sdrs, hub_dev 
     if hub != "": hub_dev = SoapySDR.Device(dict(serial=hub))
@@ -55,7 +67,7 @@ def beamsweeper(hub, serials, rate, freq, txgain, rxgain, numSamps, numSyms, pre
     for sdr in sdrs:
         info = sdr.getHardwareInfo()
         print("%s settings on device" % (info["frontend"]))
-        for ch in [0,1]:
+        for ch in [0, 1]:
             sdr.setBandwidth(SOAPY_SDR_RX, ch, 2.5*rate)
             sdr.setBandwidth(SOAPY_SDR_TX, ch, 2.5*rate)
             sdr.setSampleRate(SOAPY_SDR_TX, ch, rate)
@@ -64,16 +76,24 @@ def beamsweeper(hub, serials, rate, freq, txgain, rxgain, numSamps, numSyms, pre
             sdr.setFrequency(SOAPY_SDR_RX, ch, "BB", 0.75*rate)
             sdr.setFrequency(SOAPY_SDR_TX, ch, "RF", freq - 0.75*rate)
             sdr.setFrequency(SOAPY_SDR_RX, ch, "RF", freq - 0.75*rate)
-
-            sdr.setGain(SOAPY_SDR_TX, ch, txgain)
-            sdr.setGain(SOAPY_SDR_RX, ch, rxgain)
-
             sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
-        for ch in [0,1]:
+            sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
+
             if calibrate:
                 sdr.writeSetting(SOAPY_SDR_RX, ch, "CALIBRATE", 'SKLK')
                 sdr.writeSetting(SOAPY_SDR_TX, ch, "CALIBRATE", '')
-            sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
+
+            if "CBRS" in info["frontend"]:
+                # Set gains to high val (initially)
+                sdr.setGain(SOAPY_SDR_TX, ch, txgain)  # txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
+                sdr.setGain(SOAPY_SDR_RX, ch, rxgain)  # rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
+            else:
+                # No CBRS board gains, only changing LMS7 gains
+                sdr.setGain(SOAPY_SDR_TX, ch, "PAD", txgain)    # [0:1:42]
+                sdr.setGain(SOAPY_SDR_TX, ch, "IAMP", 0)        # [-12:1:3]
+                sdr.setGain(SOAPY_SDR_RX, ch, "LNA", rxgain)    # [0:1:30]
+                sdr.setGain(SOAPY_SDR_RX, ch, "TIA", 0)         # [0, 3, 9, 12]
+                sdr.setGain(SOAPY_SDR_RX, ch, "PGA", -10)       # [-12:1:19]
 
         if not both_channels:
             sdr.writeSetting(SOAPY_SDR_RX, 1, 'ENABLE_CHANNEL', 'false')
@@ -134,6 +154,7 @@ def beamsweeper(hub, serials, rate, freq, txgain, rxgain, numSamps, numSyms, pre
         hub_dev.writeSetting("TRIGGER_GEN", "")
     signal.pause()
 
+
 def signal_handler(rate, numSyms, signal, frame):
     global sdrs, hub_dev
     print("printing number of frames")
@@ -148,14 +169,15 @@ def signal_handler(rate, numSyms, signal, frame):
     hub_dev = None
     sys.exit(0)
 
+
 def main():
     parser = OptionParser()
     parser.add_option("--hub", type="string", dest="hub", help="serial number of the hub device", default="")
-    parser.add_option("--serials", type="string", dest="serials", help="serial numbers of the devices", default="")
+    parser.add_option("--serials", type="string", dest="serials", help="serial numbers of the devices", default="RF3E000143,RF3E000160,RF3E000025,RF3E000034")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]", default=30.0)
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]", default=30.0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=30.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB)", default=30.0)
 
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)

@@ -11,6 +11,17 @@
     downlink data is transmitted and received by the client(s). If successful, 
     equalization is done for each received client stream.
 
+    NOTE ON GAINS:
+    Gain settings will vary depending on RF frontend board being used
+    If using CBRS:
+    rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
+    txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
+
+    If using only Dev Board:
+    rxgain: at both frequency bands [0:1:30]
+    txgain: at both frequency bands [0:1:42]
+
+
     Example Usage:
     python3 MMIMO_DOWNLINK.py --bnodes="../IrisUtils/data_in/bs_serials.txt"
                               --cnodes="../IrisUtils/data_in/cl_serials.txt"
@@ -67,7 +78,6 @@ def signal_handler(signum, frame):
 def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plotter, numSamps, prefix_length, postfix_length, tx_advance, mod_order, threshold, use_trig):
     if hub != "": hub_dev = SoapySDR.Device(dict(driver="remote", serial = hub)) # device that triggers bnodes and ref_node
     bsdrs = [SoapySDR.Device(dict(driver="iris", serial = serial)) for serial in bnodes] # base station sdrs
-
     csdrs = [SoapySDR.Device(dict(driver="iris", serial = serial)) for serial in cnodes] # client sdrs
     # assume trig_sdr is part of the master nodes
     trig_dev = None
@@ -91,17 +101,19 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plo
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'RF', freq-.75*rate)
             sdr.setFrequency(SOAPY_SDR_TX, ch, 'BB', .75*rate)
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'BB', .75*rate)
-
-            sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)
-            sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', -6)
-            sdr.setGain(SOAPY_SDR_RX, ch, 'LNA', rxgain)
-            sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 14)
-            if freq < 3e9:
-                sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', -12)
-            else:
-                sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', 0)
             sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
             sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
+
+            sdr.setGain(SOAPY_SDR_TX, ch, 'PAD', txgain)
+            sdr.setGain(SOAPY_SDR_RX, ch, 'LNA', rxgain)
+
+            if "CBRS" in info["frontend"]:
+                sdr.setGain(SOAPY_SDR_TX, ch, 'ATTN', -6)
+                sdr.setGain(SOAPY_SDR_RX, ch, 'LNA2', 14)
+                if freq < 3e9:
+                    sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', -12)
+                else:
+                    sdr.setGain(SOAPY_SDR_RX, ch, 'ATTN', 0)
 
             # Read initial gain settings
             readLNA = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA')
@@ -672,15 +684,15 @@ def init(hub, bnodes, cnodes, ref_ant, ampl, rate, freq, txgain, rxgain, cp, plo
 def main():
     parser = OptionParser()
     parser.add_option("--args", type="string", dest="args", help="arguments", default="")
-    parser.add_option("--bnodes", type="string", dest="bnodes", help="file name containing serials on the base station", default="bs_serials.txt")
-    parser.add_option("--cnodes", type="string", dest="cnodes", help="file name containing serials to be used as clients", default="client_serials.txt")
+    parser.add_option("--bnodes", type="string", dest="bnodes", help="file name containing serials on the base station", default="../IrisUtils/data_in/bs_serials.txt")
+    parser.add_option("--cnodes", type="string", dest="cnodes", help="file name containing serials to be used as clients", default="../IrisUtils/data_in/cl_serials.txt")
     parser.add_option("--hub", type="string", dest="hub", help="Hub node", default="")
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Calibration reference antenna", default=0)
     parser.add_option("--ampl", type="float", dest="ampl", help="Amplitude coefficient for downCal/upCal", default=0.5)
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.59e9)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=40.0)  # w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB)", default=20.0)  # w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=40.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB)", default=20.0)
     parser.add_option("--bw", type="float", dest="bw", help="Optional Tx filter bw (Hz)", default=10e6)
     parser.add_option("--cp", action="store_true", dest="cp", help="adds cyclic prefix to tx symbols", default=True)
     parser.add_option("--plotter", action="store_true", dest="plotter", help="continuously plots all signals and stats",default=False)

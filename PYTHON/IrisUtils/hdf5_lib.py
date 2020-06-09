@@ -27,7 +27,7 @@ import multiprocessing as mp
 import extract_pilots_data as epd
 
 #@staticmethod
-def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0, frame_to_plot=0, ref_ant=0):
+def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0, frame_to_plot=0, ref_ant=0, ref_user = 0):
     """
     Finds the end of the pilots' frames, finds all the lts indices relative to that.
     Divides the data with lts sequences, calculates csi per lts, csi per frame, csi total.
@@ -49,8 +49,8 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
     n_iq = pilots_dump.shape[4]         # no. of IQ samples per frame
 
     if debug:
-        print("input : z_padding = {}, fft_size={}, cp={}, frm_st_idx = {}, frame_to_plot = {}, ref_ant={}".format(
-            z_padding, fft_size, cp, frm_st_idx, frame_to_plot, ref_ant))
+        print("input : z_padding = {}, fft_size={}, cp={}, frm_st_idx = {}, frame_to_plot = {}, ref_ant={}, ref_user = {}".format(
+            z_padding, fft_size, cp, frm_st_idx, frame_to_plot, ref_ant, ref_user))
         print("n_frame = {}, n_cell = {}, n_ue = {}, n_ant = {}, n_iq = {}".format(
             n_frame, n_cell, n_ue, n_ant, n_iq))
 
@@ -78,9 +78,9 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
 
     # take a time-domain lts sequence, concatenate more copies, flip, conjugate
     lts_t, lts_f = generate_training_seq(preamble_type='lts', seq_length=[
-    ], cp=32, upsample=1, reps=[])    # TD LTS sequences (x2.5), FD LTS sequences
+    ], cp = cp, upsample=1, reps=[])    # TD LTS sequences (x2.5), FD LTS sequences
     # last 80 samps (assume 16 cp)
-    lts_tmp = lts_t[-80:]
+    lts_tmp = lts_t[- cp - fft_size:]
     n_lts = len(lts_tmp)
     # no. of LTS sequences in a pilot SF
     k_lts = n_csamp // n_lts
@@ -173,6 +173,9 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
     indexing_end = time.time()
     pool.close()
 
+    # WZC: added pilots_rx_t_btc (pilots_rx_t before truncation) for output
+    pilots_rx_t_btc = np.copy(pilots_rx_t)
+
     # *************** This fancy indexing is slower than the for loop! **************
 #    aaa= np.reshape(cmpx_pilots, (n_frame*n_cell* n_ue * n_ant, n_cmpx))
 #    idxx = np.expand_dims(sf_start.flatten(), axis=1)
@@ -199,8 +202,10 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
     if debug:
         print("Indexing time: %f \n" % (indexing_end - indexing_start))
         print("Shape of: pilots_rx_t = {}\n".format(pilots_rx_t.shape))
-        print("Shape of: rho_max = {}, rho_min = {}, ipos = {}, sf_start = {}".format(
-            rho_max.shape, rho_min.shape, ipos.shape, sf_start.shape))
+
+        # WZC: rho_max might not be defined in current version
+        # print("Shape of: rho_max = {}, rho_min = {}, ipos = {}, sf_start = {}".format(
+        #     rho_max.shape, rho_min.shape, ipos.shape, sf_start.shape))
 
     # take fft and get the raw CSI matrix (no averaging)
     # align SCs based on how they were Tx-ec
@@ -218,8 +223,9 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
     csi = np.fft.fftshift(csi, 5)
 
     if debug:
-        print(">>>> number of NaN indices = {} NaN indices =\n{}".format(
-            nan_indices.shape, nan_indices))
+        # # WZC: rho_max might not be defined in current version
+        # print(">>>> number of NaN indices = {} NaN indices =\n{}".format(
+        #     nan_indices.shape, nan_indices))
         print("Shape of: csi = {}\n".format(csi.shape))
 
     # plot something to see if it worked!
@@ -228,12 +234,12 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
         ax1 = fig.add_subplot(3, 1, 1)
         ax1.grid(True)
         ax1.set_title(
-            'channel_analysis:csi_from_pilots(): Re of Rx pilot - ref frame {} and ref ant. {} (UE 0)'.format(frame_to_plot, ref_ant))
+            'channel_analysis:csi_from_pilots(): Re of Rx pilot - ref frame {} ref ant {} ref user {}'.format(frame_to_plot, ref_ant, ref_user))
         if debug:
             print("cmpx_pilots.shape = {}".format(cmpx_pilots.shape))
 
         ax1.plot(
-            np.real(cmpx_pilots[frame_to_plot - frm_st_idx, 0, 0, ref_ant, :]))
+            np.real(cmpx_pilots[frame_to_plot - frm_st_idx, 0, ref_user, ref_ant, :]))
 
         if debug:
             loc_sec = lts_t_rep_tst
@@ -252,14 +258,15 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
         ax3 = fig.add_subplot(3, 1, 3)
         ax3.grid(True)
         ax3.set_title(
-            'channel_analysis:csi_from_pilots(): MF (uncleared peaks) - ref frame {} and ref ant. {} (UE 0)'.format(frame_to_plot, ref_ant))
-        ax3.stem(m_filt[frame_to_plot - frm_st_idx, 0, 0, ref_ant, :])
+            'channel_analysis:csi_from_pilots(): MF (uncleared peaks) - ref frame {} ref ant {} ref user {}'.format(frame_to_plot, ref_ant, ref_user))
+        ax3.stem(m_filt[frame_to_plot - frm_st_idx, 0, ref_user, ref_ant, :])
         ax3.set_xlabel('Samples')
         # plt.show()
 
     print("********************* ******************** *********************\n")
-    return csi, m_filt, sf_start, cmpx_pilots, k_lts, n_lts
-     # add frame_start for plot indexing!
+    return csi, m_filt, sf_start, cmpx_pilots, k_lts, n_lts, sf_start, pilots_rx_t_btc
+    # add frame_start for plot indexing!
+    # WZC: add pilots_rx_t_btc
 
 class hdf5_lib:
 
@@ -554,6 +561,10 @@ class hdf5_lib:
                 for k in range(n_ue):
                     for l in range(n_ant):
                         mfa = mf_amax[i,j,k,l]
+
+                        # WZC: indexs where side peaks might be
+                        side_idx = np.delete(np.arange(n_corr), (mfa - base_arr))
+
                        # NB: addition: try to detect early packets: TEST it!
                         if dtct_eal_tx:
                             sim_thrsh  = 0.95 # similarity threshold bewtween two consequitive peaks
@@ -574,16 +585,24 @@ class hdf5_lib:
                             cp_idx3 = (mfa + -1  + cp) - base_arr[m]
                             idx_30 = (mfa + 30) - base_arr[m]
                             idx_29 = (mfa + 29) - base_arr[m]
-                            if adj_idx1 >= 0 and adj_idx2 >=0 and adj_idx2 < n_corr:
-                                match_filt[i,j,k,l, adj_idx1 ] = 0
-                                match_filt[i,j,k,l, adj_idx2 ] = 0
-                            if (cp_idx1 >=0) and (cp_idx1 < n_corr) and (cp_idx2 < n_corr) and (cp_idx3 < n_corr):
-                                match_filt[i,j,k,l, cp_idx1 ] = 0
-                                match_filt[i,j,k,l, cp_idx2 ] = 0
-                                match_filt[i,j,k,l, cp_idx3 ] = 0
-                            if (idx_30 >=0) and (idx_30 < n_corr) and (idx_29 >=0) and (idx_29 < n_corr):
-                                match_filt[i,j,k,l,idx_30] = 0
-                                match_filt[i,j,k,l,idx_29] = 0
+
+                            idx_tot = [adj_idx1, adj_idx2, cp_idx1, cp_idx2, cp_idx3, idx_30, idx_29]
+
+                            # WZC: removing possible side peaks
+                            for idx in idx_tot:
+                                if idx in side_idx:
+                                    match_filt[i,j,k,l, idx] = 0
+
+                            # if adj_idx1 >= 0 and adj_idx2 >=0 and adj_idx2 < n_corr:
+                            #     match_filt[i,j,k,l, adj_idx1 ] = 0
+                            #     match_filt[i,j,k,l, adj_idx2 ] = 0
+                            # if (cp_idx1 >=0) and (cp_idx1 < n_corr) and (cp_idx2 < n_corr) and (cp_idx3 < n_corr):
+                            #     match_filt[i,j,k,l, cp_idx1 ] = 0
+                            #     match_filt[i,j,k,l, cp_idx2 ] = 0
+                            #     match_filt[i,j,k,l, cp_idx3 ] = 0
+                            # if (idx_30 >=0) and (idx_30 < n_corr) and (idx_29 >=0) and (idx_29 < n_corr):
+                            #     match_filt[i,j,k,l,idx_30] = 0
+                            #     match_filt[i,j,k,l,idx_29] = 0
 
         # get the k_lts largest peaks and their position
         k_max = np.sort(match_filt, axis = -1)[:,:,:,:, -k_lts:]
@@ -605,11 +624,13 @@ class hdf5_lib:
         if debug:
             print("f_st = {}".format(f_st[frame_to_plot - st_frame,0,0,:]))
             print("frame_sanity(): Shape of k_max.shape = {}, k_amax.shape = {}, lst_pk_idx.shape = {}".format(
-                    k_max.shape, k_amax.shape, lst_pk_idx.shape) )
+                    k_max.shape, k_amax.shape, lst_pk_idx.shape))
             print("frame_sanity(): k_amax = {}".format(k_amax))
             print("frame_sanity(): frame_map.shape = {}\n".format(frame_map.shape))
             print(k_amax[frame_to_plot - st_frame,0,0,plt_ant,:])
             print(idx_diff[frame_to_plot - st_frame,0,0,plt_ant,:])
+
+        peak_map = np.copy(frame_map)
 
         frame_map[frame_map == 1] = -1
         frame_map[frame_map >= (k_lts -1)] = 1
@@ -628,5 +649,5 @@ class hdf5_lib:
                 n_rf, n_gf, n_bf, n_pr,))
         print("===================== ============================= ============")
 
-        return match_filt, frame_map, f_st
-
+        return match_filt, frame_map, f_st, peak_map
+        # WZC: added peak_map for peak_number analysis

@@ -5,16 +5,16 @@
     NOTE: IRIS BOARDS MUST BE CHAINED FOR THIS SCRIPT TO WORK.
     ORDER MATTERS; FIRST NON-REF BOARD (SERIALS) IS THE ONE SENDING THE TRIGGER.
 
-    This script is useful watching the recprocity amplitude and phases of 
-    narrow-band (sine) signals between all boards and a reference board .
-    It programs two Irises in TDD mode with the following framing
-    schedule.
+    This script is used for watching the recprocity amplitude and phases of
+    narrow-band (sine) signals between all boards and a reference board.
+    The reference board will be the first serial that appears in the bs_serials.txt
+    file.
+    It programs two Irises in TDD mode with the a framing schedule.
 
     Example:
-        python3 NB_CAL_DEMO.py --serials=../IrisUtils/data_in/bs_serials.txt --ref-serial="xxxx"
+        python3 NB_CAL_DEMO.py --serials=../IrisUtils/data_in/bs_serials.txt
 
     where "xxxx" is the serial number of an Iris node in the base station.
-    This reference node should not be included in the bs_serials.txt file
 
 ---------------------------------------------------------------------
  Copyright © 2018-2019. Rice University.
@@ -240,8 +240,7 @@ def calibrate_array(hub_serial, serials, ref_serial, rate, freq, txgain, rxgain,
 def main():
     parser = OptionParser()
     parser.add_option("--hub-serial", type="string", dest="hub_serial", help="hub serial number of the base station", default="")
-    parser.add_option("--serials", type="string", dest="serials", help="serial number of all devices", default="bs_serials.txt")
-    parser.add_option("--ref-serial", type="string", dest="ref_serial", help="reference serial number of the device", default="")
+    parser.add_option("--serials", type="string", dest="serials", help="serial number of all devices, reference node will be first serial", default="../IrisUtils/data_in/bs_serials.txt")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=1e6)
     parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]", default=30.0)
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]", default=30.0)
@@ -260,10 +259,20 @@ def main():
             else:
                 continue      
 
+    ref_serial = bserials[0]
+    if len(bserials) > 1:
+        bserials = bserials[1::]
+    else:
+        print("Need more than one board (in bs_serials.txt) to run calibration")
+        sys.exit(0)
+
+    print("SERIALS (EXCEPT REFERENCE NODE): {}".format(bserials))
+    print("REFERENCE NODE SERIAL: {}".format(ref_serial))
+
     calibrate_array(
         hub_serial=options.hub_serial,
         serials=bserials,
-        ref_serial=options.ref_serial,
+        ref_serial=ref_serial,
         rate=options.rate,
         freq=options.freq,
         txgain=options.txgain,

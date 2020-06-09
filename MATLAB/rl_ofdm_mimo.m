@@ -4,6 +4,21 @@
 %	Author(s): C. Nicolas Barati nicobarati@rice.edu 
 %		Rahman Doost-Mohamamdy: doost@rice.edu
 %
+%
+% Single-shot transmission from N_UE clients to N_BS_NODE base station
+% radios (UE stands for User Equipment). We define two modes:
+% OTA (Over-the-air) and SIM_MOD (simulation).
+% In simulation mode we simply use a Rayleigh channel whereas the OTA mode
+% relies on the Iris hardware for transmission and reception.
+% In both cases the clients transmit an OFDM signal that resembles a
+% typical 802.11 WLAN waveform. If the transmission is OTA, then the user
+% specifies a schedule that tells all clients when to transmit their frame
+% The base station initiates the schedule by sending a beacon signal that
+% synchronizes clients. After that, all clients will transmit
+% simultaneously. We implement a frame structure that allows the base
+% station to capture clean (non-overlaping) training sequences for
+% equalization and demultiplexing of the concurrent data streams.
+%
 %---------------------------------------------------------------------
 % Original code copyright Mango Communications, Inc.
 % Distributed under the WARP License http://warpproject.org/license
@@ -22,15 +37,18 @@ end
 
 % Params:
 N_BS_NODE               = 8;
-N_UE                    = 2;
+N_UE                    = 4;
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 SIM_MOD                 = 0;
 DEBUG                   = 0;
 PLOT                    = 1;
 if SIM_MOD
     chan_type               = "rayleigh"; % Will use only Rayleigh for simulation
-    sim_SNR_db              = 15;   
+    sim_SNR_db              = 15;
     TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
+    bs_ids                  = ones(1, N_BS_NODE);
+    ue_ids                  = ones(1, N_UE);
+
 else 
     %Iris params:
     TX_SCALE                = 0.5;         % Scale for Tx waveform ([0:1])
@@ -157,8 +175,31 @@ tx_vecs_iris = TX_SCALE .* tx_vecs_iris ./ max(abs(tx_vecs_iris));
 
 %% SIMULATION:
 if (SIM_MOD) 
+
+    %number of samples in a frame
+    n_samp = length(tx_vecs_iris);
+
+    % Iris nodes' parameters
+    bs_sdr_params = struct(...
+        'id', bs_ids, ...
+        'n_sdrs', N_BS_NODE, ...        % number of nodes chained together
+        'txfreq', [], ...
+        'rxfreq', [], ...
+        'txgain', [], ...
+        'rxgain', [], ...
+        'sample_rate', [], ...
+        'n_samp', n_samp, ...          % number of samples per frame time.
+        'n_frame', [], ...
+        'tdd_sched', [], ...     % number of zero-paddes samples
+        'n_zpad_samp', N_ZPAD_PRE ...
+        );
     
-    rx_vec_iris = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db);
+    ue_sdr_params = bs_sdr_params;
+    ue_sdr_params.id =  ue_ids;
+    ue_sdr_params.n_sdrs = N_UE;
+    ue_sdr_params.txgain = [];
+
+    rx_vec_iris = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db, bs_sdr_params, ue_sdr_params, []);
     rx_vec_iris = rx_vec_iris.'; % just to agree with what the hardware spits out.
     
 %% Init Iris nodes
@@ -434,15 +475,15 @@ for sp=1:N_UE
     grid on;
     hold on;
     plot(tx_syms(:, sp),'*', 'MarkerSize',10, 'LineWidth',2, 'color', fst_clr);
-    title(sprintf('Equalized Uplink Tx and Rx symbols for stream %d', sp));
-    legend('Rx','Tx','Location','EastOutside', 'fontsize', 12);
+    title(sprintf('Equalized Uplink Tx (blue) and \n Rx (red) symbols for stream %d', sp));
+    % legend({'Rx','Tx'},'Location','EastOutside', 'fontsize', 12);
 end
 
 for sp=1:N_BS_NODE
     subplot(sp_rows,sp_cols, sp_cols+sp);
     plot(squeeze(Y_data(sp,:,:)),'co','MarkerSize',1);
     axis square; axis(max(max(max( abs( Y_data)) ))*[-1 1 -1 1]);
-    title(sprintf('Unequalized received symbols at BS ant. %d', sp));
+    title(sprintf('Unequalized received symbols \n at BS ant. %d', sp));
     grid on;
     hold on;
 end
@@ -462,7 +503,7 @@ for ibs = 1:N_BS_NODE
         bar(bw_span, fftshift(abs( squeeze(H_hat(ibs, iue, : ) ) ) ),1,'LineWidth', 1);
         axis([min(bw_span) max(bw_span) 0 1.1*max(abs( squeeze(H_hat(ibs, iue, :) ) ) )])
         grid on;
-        title(sprintf('UE %d -> BS ant. %d Channel Estimates (Magnitude)', iue, ibs))
+        title(sprintf('UE %d -> BS ant. %d Channel Est. (Mag.)', iue, ibs))
         xlabel('Baseband Frequency (MHz)')
     end
 end

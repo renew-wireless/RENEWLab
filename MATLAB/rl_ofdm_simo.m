@@ -3,6 +3,23 @@
 %	Author(s): C. Nicolas Barati nicobarati@rice.edu 
 %		Rahman Doost-Mohamamdy: doost@rice.edu
 %
+% Multiple iterations of a single-shot transmissions from one client or UE
+% to N_BS_NODE base station radios (UE stands for User Equipment).
+% The script explores Bit Error Rate (BER) as a function of Signal-to-Noise
+% Ratio (SNR) and therefore iterates over different SNR values (sim_SNR_db
+% variable). Within each iteration, only a single frame transmission takes
+% place.
+%
+% We define two modes: OTA (Over-the-air) and SIM_MOD (simulation).
+% In simulation mode we simply use a AWGN channel whereas the OTA mode
+% relies on the Iris hardware for transmission and reception.
+% In both cases the client transmits an OFDM signal that resembles a
+% typical 802.11 WLAN waveform. If the transmission is OTA, then the user
+% specifies a schedule that tells the client when to transmit its frame
+% The base station initiates the schedule by sending a beacon signal that
+% synchronizes the client. After that, the client will simply transmit its
+% frame.
+%
 %---------------------------------------------------------------------
 % Original code copyright Mango Communications, Inc.
 % Distributed under the WARP License http://warpproject.org/license
@@ -22,7 +39,7 @@ end
 % Params:
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
-SIM_MOD                 = 0;    
+SIM_MOD                 = 0;
 PLOT                    = 1;
 
 if SIM_MOD
@@ -31,7 +48,11 @@ if SIM_MOD
     sim_SNR_db              = 1:20;
     nsnr                    = length(sim_SNR_db);
     snr_plot                = 20;
-    TX_SCALE                =  1;         % Scale for Tx waveform ([0:1])
+    TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
+    N_BS_NODE               = 8;            % x BS NODES (multiple-output)
+    N_UE                    = 1;            % 1 UE (single-input)
+    bs_ids                  = ones(1, N_BS_NODE);
+    ue_ids                  = ones(1, N_UE);
 
 else
     nt                      = 1;
@@ -132,10 +153,34 @@ tx_vec_iris = TX_SCALE .* tx_vec_iris ./ max(abs(tx_vec_iris));
 
 for isnr = 1:nsnr
     for it = 1:nt
-if (SIM_MOD)        
-    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db(isnr));
+if (SIM_MOD)
+
+    % Iris nodes' parameters
+    n_samp = length(tx_vec_iris);
+    bs_sdr_params = struct(...
+        'id', bs_ids, ...
+        'n_sdrs', N_BS_NODE, ...        % number of nodes chained together
+        'txfreq', [], ...
+        'rxfreq', [], ...
+        'txgain', [], ...
+        'rxgain', [], ...
+        'sample_rate', [], ...
+        'n_samp', n_samp, ...          % number of samples per frame time.
+        'n_frame', [], ...
+        'tdd_sched', [], ...     % number of zero-paddes samples
+        'n_zpad_samp', N_ZPAD_PRE ...
+        );
+
+    ue_sdr_params = bs_sdr_params;
+    ue_sdr_params.id =  ue_ids;
+    ue_sdr_params.n_sdrs = N_UE;
+    ue_sdr_params.txgain = [];
+
+
+    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db(isnr), bs_sdr_params, ue_sdr_params, []);
+    % rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db(isnr));
     rx_vec_iris = rx_vec_iris.'; % just to agree with what the hardware spits out.
-    
+
 else
 
 %% Init Iris nodes
@@ -508,7 +553,7 @@ hold on;
 
 plot(tx_syms_mat(:),'*', 'MarkerSize',16, 'LineWidth',2, 'color', fst_clr);
 title('Tx and Rx Constellations (MRC)')
-legend('Rx','Tx','Location','EastOutside', 'fontsize', 16);
+legend('Rx','Tx','Location','EastOutside');
 
 cf = cf + 1;
 figure(cf); clf;
@@ -522,7 +567,7 @@ hold on;
 
 plot(tx_syms_mat(:),'*', 'MarkerSize',16, 'LineWidth',2, 'color', fst_clr);
 title('Tx and Rx Constellations (branch 1)')
-legend('Rx','Tx','Location','EastOutside', 'fontsize', 16);
+legend('Rx','Tx','Location','EastOutside');
 
 cf = cf + 1;
 figure(cf); clf;
@@ -536,7 +581,7 @@ hold on;
 
 plot(tx_syms_mat(:),'*', 'MarkerSize',16, 'LineWidth',2, 'color', fst_clr);
 title('Tx and Rx Constellations (branch 2)')
-legend('Rx','Tx','Location','EastOutside', 'fontsize', 16);
+legend('Rx','Tx','Location','EastOutside');
 
 if(WRITE_PNG_FILES)
     print(gcf,sprintf('wl_ofdm_plots_%s_constellations', example_mode_string), '-dpng', '-r96', '-painters')

@@ -29,8 +29,18 @@
 
     sdr.writeRegister("IRIS30", FPGA_IRIS030_WR_PKT_DET_NEW_FRAME, 1)
 
- Usage example: python3 SISO_RX.py --serial="RF3C000034" --rxMode="REC" --AGCen=1
+ Currently, AGC only supports the CBRS RF frontend. It cannot be used
+ with the Iris Dev Board or UHF board
 
+  NOTE ON GAINS:
+  Gain settings will vary depending on RF frontend board being used
+  If using CBRS:
+  rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
+
+  If using only Dev Board:
+  rxgain: at both frequency bands [0:1:30]
+
+  Usage example: python3 SISO_RX.py --serial="RF3C000034" --rxMode="REC" --AGCen=1
 ---------------------------------------------------------------------
  Copyright © 2018-2019. Rice University.
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
@@ -215,23 +225,33 @@ def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
     info = sdr.getHardwareInfo()
     print(info)
 
-    # Set gains to very high value if AGC enabled.
-    if agc_en:
+    # Set gains to very high value if AGC enabled (AGC only supports CBRS RF frontend at the moment).
+    if agc_en and "CBRS" in info["frontend"]:
         gain = 100
         rssi_target_idx = 20
         agc_init(sdr, rssi_target_idx)
+    else:
+        # Make sure AGC is disabled if any of the previous checks fails
+        agc_en = 0
 
     # Set params on both channels (both RF chains)
     for ch in [0, 1]:
-        # sdr.setBandwidth(SOAPY_SDR_RX, ch, 3*Rate)
-        # sdr.setBandwidth(SOAPY_SDR_TX, ch, 3*Rate)
+        sdr.setBandwidth(SOAPY_SDR_RX, ch, 2.5*Rate)
+        sdr.setBandwidth(SOAPY_SDR_TX, ch, 2.5*Rate)
         sdr.setFrequency(SOAPY_SDR_RX, ch, freq)
         sdr.setSampleRate(SOAPY_SDR_RX, ch, Rate)
         sdr.setFrequency(SOAPY_SDR_TX, ch, freq)
         sdr.setSampleRate(SOAPY_SDR_TX, ch, Rate)
-        sdr.setGain(SOAPY_SDR_RX, ch, gain)
-        # sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
+        sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
         sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
+
+        if "CBRS" in info["frontend"]:
+            sdr.setGain(SOAPY_SDR_RX, ch, gain)
+        else:
+            # No CBRS board gains, only changing LMS7 gains
+            sdr.setGain(SOAPY_SDR_RX, ch, "LNA", gain)  # [0:1:30]
+            sdr.setGain(SOAPY_SDR_RX, ch, "TIA", 0)     # [0, 3, 9, 12]
+            sdr.setGain(SOAPY_SDR_RX, ch, "PGA", -10)   # [-12:1:19]
 
     print("Number of Samples %d " % num_samps)
     print("Frequency has been set to %f" % sdr.getFrequency(SOAPY_SDR_RX, 0))
@@ -243,15 +263,15 @@ def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
     # RSSI read setup
     setUpDigitalRssiMode(sdr)
 
-    #anim = animation.FuncAnimation(fig, animate, init_func=init, fargs=(num_samps, recorder, agc_en, wait_trigger), frames=100,
-    #                               interval=100, blit=True)
-    anim = MyFuncAnimation(fig, animate, init_func=init, fargs=(num_samps, recorder, agc_en, wait_trigger), frames=100,
-                                    interval=100, blit=True)
-
+    # There's a bug in the FuncAnimation function, we replaced it with a fixed version
+    # anim = animation.FuncAnimation(fig, animate, init_func=init, fargs=(num_samps, recorder, agc_en, wait_trigger),
+    # frames=100, interval=100, blit=True)
+    anim = MyFuncAnimation(fig, animate, init_func=init, fargs=(num_samps, recorder, agc_en, wait_trigger, info),
+                                    frames=100, interval=100, blit=True)
     plt.show()
 
 
-def animate(i, num_samps, recorder, agc_en, wait_trigger):
+def animate(i, num_samps, recorder, agc_en, wait_trigger, info):
     global sdr, rxStream, freqScale, sampsRx, frameCounter, fft_size, Rate, num_samps_circ_buff, rssi_circ_buff, pwr_circ_buff
 
     # Trigger AGC
@@ -336,12 +356,18 @@ def animate(i, num_samps, recorder, agc_en, wait_trigger):
     noisPwrBuffer.append(noiseFloor)
     rssiPwrBuffer_fpga.append(PWRdBm_fpga)
 
+    # Current gain values?
     lna_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA')    # ChanA (0)
     tia_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'TIA')    # ChanA (0)
     pga_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'PGA')    # ChanA (0)
-    lna1_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA1')    # ChanA (0)
-    lna2_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA2')    # ChanA (0)
-    attn_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'ATTN')    # ChanA (0)
+    if "CBRS" in info["frontend"]:
+        lna1_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA1')    # ChanA (0)
+        lna2_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA2')    # ChanA (0)
+        attn_rd = sdr.getGain(SOAPY_SDR_RX, 0, 'ATTN')    # ChanA (0)
+    else:
+        lna1_rd = []
+        lna2_rd = []
+        attn_rd = []
 
     # Moving average (just for visualization purposes)
     circ_buff_idx = frameCounter % num_samps_circ_buff
@@ -353,9 +379,8 @@ def animate(i, num_samps, recorder, agc_en, wait_trigger):
     # Count number of frames received
     frameCounter = frameCounter + 1
 
-    # print("RSSI: {} \t PWR: {} \t LNA: {} \t TIA: {} \t PGA: {} \t  XXXXX LNA1: {} \t LNA2: {} \t ATTN: {}".format(rssi_fpga, PWRdBm_fpga, lna_rd, tia_rd, pga_rd, lna1_rd, lna2_rd, attn_rd))
-    print("RSSI: {} \t PWR: {} \t XXX ATTN: {} \t LNA1: {} \t LNA2: {} \t LNA: {} \t TIA: {} \t PGA: {} ".format(rssi_buff_avg, pwr_buff_avg, attn_rd, lna1_rd, lna2_rd, lna_rd, tia_rd, pga_rd))
-    #print("RSSI_LMS7 rssi and dBFS: {} {} \t RSSI: {} \t PWR: {}".format(rssi_buff_avg, pwr_buff_avg, rssi, PWRdBFS))
+    print("RSSI: {} \t PWR: {} \t ||| GAINS - ATTN: {} \t LNA1: {} \t LNA2: {} \t LNA: {} \t TIA: {} \t PGA: {} ".format(
+        rssi_buff_avg, pwr_buff_avg, attn_rd, lna1_rd, lna2_rd, lna_rd, tia_rd, pga_rd))
 
     # Fill out data structures with measured data
     line1.set_data(range(buff0.size), np.real(sampsRx[0]))
@@ -406,13 +431,13 @@ def replay(name, leng):
 def main():
     parser = OptionParser()
     parser.add_option("--label", type="string", dest="label", help="label for recorded file name", default="rx2.600GHz_TEST.hdf5")
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="RX GAIN: 2.5GHz [0:108](dB), 3.6GHz [0:105] (dB)", default=65.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="RX GAIN (dB)", default=65.0)  # See documentation at top of file for info on gain range
     parser.add_option("--latitude", type="float", dest="latitude", help="Latitude", default=0.0)
     parser.add_option("--longitude", type="float", dest="longitude", help="Longitude", default=0.0)
     parser.add_option("--elevation", type="float", dest="elevation", help="Elevation", default=0.0)
     parser.add_option("--freq", type="float", dest="freq", help="Optional Rx freq (Hz)", default=3.6e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=16384)
-    parser.add_option("--serial", type="string", dest="serial", help="Serial number of the device", default="")
+    parser.add_option("--serial", type="string", dest="serial", help="Serial number of the device", default="RF3E000060")
     parser.add_option("--rxMode", type="string", dest="rxMode", help="RX Mode, Options:BASIC/REC/REPLAY", default="BASIC")
     parser.add_option("--AGCen", type="int", dest="AGCen", help="Enable AGC Flag. Options:0/1", default=0)
     parser.add_option("--wait-trigger", action="store_true", dest="wait_trigger", help="wait for a trigger to start a frame",default=False)

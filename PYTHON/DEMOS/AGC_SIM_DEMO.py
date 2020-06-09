@@ -172,7 +172,7 @@ def agc_thread():
         ch = 0
         # Arbitrary - start off with some "decent" initial fixed gain
         rxgain_init = 90
-        sdr.setGain(SOAPY_SDR_RX, ch, rxgain_init)  # w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
+        sdr.setGain(SOAPY_SDR_RX, ch, rxgain_init)
         time.sleep(0.1)     # Let gain settle
         time.sleep(5)       # Wait for "demo" purposes
         print(" ********** AGC KICKS IN ********** ")

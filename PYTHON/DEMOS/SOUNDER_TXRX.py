@@ -46,12 +46,15 @@
   stored in binary files and they can be inspected using plt_simp.py
   in the IrisUtils folder
 
-
   Example:
     python3 SOUNDER_TXRX.py --bsnode="RF3C000042" --clnode="RF3C000025"
 
   where bsnode corresponds to a base station node and clnode corresponds
-  to a client node
+  to a client node.
+
+  OUTPUT:
+  The script will generate binary files that can be analyzed using the
+  plt_simp.py script in folder PYTHON/IrisUtils/
 
   IMPORTANT NOTE:
   The client firmware has different features than the base station node
@@ -59,6 +62,20 @@
   cnode can correlate against such beacon. This means it is critical to
   set bsnode to the serial number of a base station node and clnode to the 
   serial number of a client node!
+
+  NOTE ON GAINS:
+  Gain settings will vary depending on RF frontend board being used
+  If using CBRS:
+  rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
+  txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
+
+  If using only Dev Board:
+  rxgain: at both frequency bands [0:1:30]
+  txgain: at both frequency bands [0:1:42]
+
+  The code assumes both TX and RX have the same type of RF frontend board.
+  Also, currently AGC only supports the CBRS RF frontend. It cannot be used
+  with the Iris Dev Board or UHF board
 
 ---------------------------------------------------------------------
  Copyright (c) 2018-2019, Rice University
@@ -157,10 +174,6 @@ def rx_thread(sdr, rxStream, numSamps, txSymNum, both_channels):
     if r1<0:
         print("Problem activating stream #1")
     while (running):
-        readLNA = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA')
-        readTIA = sdr.getGain(SOAPY_SDR_RX, 0, 'TIA')
-        readPGA = sdr.getGain(SOAPY_SDR_RX, 0, 'PGA')
-        # print("LNA: {}, \t TIA:{}, \t PGA:{}".format(readLNA, readTIA, readPGA))
         for j in range(pilotSymNum):
             sr = sdr.readStream(rxStream, [waveRxA, waveRxB], numSamps)
             #print("BS: readStream returned %d" % sr.ret)
@@ -210,14 +223,23 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'RF', freq-.75*rate)
             sdr.setFrequency(SOAPY_SDR_TX, ch, 'BB', .75*rate)
             sdr.setFrequency(SOAPY_SDR_RX, ch, 'BB', .75*rate)
-
-            # Set gains to high val (initially)
-            if agc_en: rxgain = 100
-            sdr.setGain(SOAPY_SDR_TX, ch, txgain)
-            sdr.setGain(SOAPY_SDR_RX, ch, rxgain)
-
             sdr.setAntenna(SOAPY_SDR_RX, ch, "TRX")
             sdr.setDCOffsetMode(SOAPY_SDR_RX, ch, True)
+
+            if "CBRS" in info["frontend"]:
+                # Set gains to high val (initially)
+                if agc_en: rxgain = 100
+                sdr.setGain(SOAPY_SDR_TX, ch, txgain)
+                sdr.setGain(SOAPY_SDR_RX, ch, rxgain)
+            else:
+                # No CBRS board gains, only changing LMS7 gains
+                # AGC only supported for CBRS boards
+                agc_en = False
+                sdr.setGain(SOAPY_SDR_TX, ch, "PAD", txgain)    # [0:1:42]
+                sdr.setGain(SOAPY_SDR_TX, ch, "IAMP", 0)        # [-12:1:3]
+                sdr.setGain(SOAPY_SDR_RX, ch, "LNA", rxgain)    # [0:1:30]
+                sdr.setGain(SOAPY_SDR_RX, ch, "TIA", 0)         # [0, 3, 9, 12]
+                sdr.setGain(SOAPY_SDR_RX, ch, "PGA", -10)       # [-12:1:19]
 
             # Read initial gain settings
             readLNA = sdr.getGain(SOAPY_SDR_RX, 0, 'LNA')
@@ -396,8 +418,8 @@ def main():
     parser.add_option("--bsnode", type="string", dest="bsnode", help="serial number of the master (base station node) device", default="")
     parser.add_option("--clnode", type="string", dest="clnode", help="serial number of the slave (client node) device", default="")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]", default=30.0)
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]", default=30.0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=30.0)  # Check top of file for info on gain range
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Rx gain (dB)", default=30.0)  # Check top of file for info on gain range
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=100)     # to compensate for front-end group delay
@@ -411,7 +433,7 @@ def main():
     parser.add_option("--use-trig", action="store_true", dest="use_trig", help="uses chain triggers for synchronization", default=False)
     parser.add_option("--wait-trigger", action="store_true", dest="wait_trigger", help="wait for a trigger to start a frame", default=False)
     parser.add_option("--tx-power-loop", action="store_true", dest="tx_power_loop", help="loop over a set of tx gains in consecutive frames", default=False)
-    parser.add_option("--record", action="store_true", dest="record", help="record received pilots and data", default=False)
+    parser.add_option("--record", action="store_true", dest="record", help="record received pilots and data", default=True)
     parser.add_option("--agc-enable", action="store_true", dest="agc_en", help="Enable AGC flag", default=False)
     (options, args) = parser.parse_args()
 
