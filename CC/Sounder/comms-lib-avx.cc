@@ -22,7 +22,9 @@ int CommsLib::find_beacon_avx(const std::vector<std::complex<float>>& iq, const 
     // correlate signal with beacon
     std::vector<std::complex<float>> gold_corr_avx = CommsLib::correlate_avx(iq, seq);
     clock_gettime(CLOCK_MONOTONIC, &tv2);
+#ifdef TEST_BENCH
     double diff1 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
+#endif
 
     clock_gettime(CLOCK_MONOTONIC, &tv);
     // multiply the corre result with its (gold seq length-) shifted copy
@@ -30,7 +32,9 @@ int CommsLib::find_beacon_avx(const std::vector<std::complex<float>>& iq, const 
     // calculate the abs (use the result for peak detection)
     std::vector<float> gold_corr_avx_2 = CommsLib::abs2_avx(gold_auto_corr);
     clock_gettime(CLOCK_MONOTONIC, &tv2);
+#ifdef TEST_BENCH
     double diff2 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
+#endif
 
     // calculate the adaptive theshold 
     std::vector<float> consts1(seqLen, 1);
@@ -39,7 +43,9 @@ int CommsLib::find_beacon_avx(const std::vector<std::complex<float>>& iq, const 
     std::vector<float> corr_abs_avx = CommsLib::abs2_avx(gold_corr_avx);
     std::vector<float> thresh_avx = CommsLib::correlate_avx_s(corr_abs_avx, consts1);
     clock_gettime(CLOCK_MONOTONIC, &tv2);
+#ifdef TEST_BENCH
     double diff3 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
+#endif
 
     // perform thresholding and find peak
     clock_gettime(CLOCK_MONOTONIC, &tv);
@@ -48,7 +54,9 @@ int CommsLib::find_beacon_avx(const std::vector<std::complex<float>>& iq, const 
             valid_peaks.push(i);
     }
     clock_gettime(CLOCK_MONOTONIC, &tv2);
+#ifdef TEST_BENCH
     double diff4 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
+#endif
 
 #ifdef TEST_BENCH
     std::cout << "Convolution AVX took " << diff1 << " usec" << std::endl;
