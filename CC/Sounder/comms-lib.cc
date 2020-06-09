@@ -103,7 +103,9 @@ int CommsLib::find_beacon(const std::vector<std::complex<double>>& iq)
     clock_gettime(CLOCK_MONOTONIC, &tv);
     auto gold_corr = CommsLib::convolve(iq, gold_sym_conj);
     clock_gettime(CLOCK_MONOTONIC, &tv2);
+#ifdef TEST_BENCH
     double diff1 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
+#endif
 
     size_t gold_corr_size = gold_corr.size();
     size_t gold_corr_size_2 = gold_corr_size + seqLen;
@@ -113,7 +115,9 @@ int CommsLib::find_beacon(const std::vector<std::complex<double>>& iq)
         gold_corr_2[i] = computePower(gold_corr[i] * std::conj(gold_corr[i - seqLen]));
     }
     clock_gettime(CLOCK_MONOTONIC, &tv2);
+#ifdef TEST_BENCH
     double diff2 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
+#endif
 
     std::vector<double> const1(seqLen, 1);
 
@@ -123,7 +127,9 @@ int CommsLib::find_beacon(const std::vector<std::complex<double>>& iq)
     auto corr_abs_filt = CommsLib::convolve<double>(corr_abs, const1);
     corr_abs_filt.push_back(0);
     clock_gettime(CLOCK_MONOTONIC, &tv2);
+#ifdef TEST_BENCH
     double diff3 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
+#endif
 
     std::vector<double> thresh(corr_abs_filt.begin(), corr_abs_filt.end());
     //std::vector<double> thresh(corr_abs_filt.size());
