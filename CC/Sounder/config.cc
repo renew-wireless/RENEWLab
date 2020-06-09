@@ -214,16 +214,16 @@ Config::Config(const std::string& jsonfile)
     coeffs = Utils::cint16_to_uint32(gold_ifft_ci16, true, "QI");
 
     // compose pilot subframe
-    //if (fftSize != 64) {
-    //    fftSize = 64;
-    //    std::cout << "Unsupported fftSize! Setting fftSize to 64..." << std::endl;
-    //}
+    if (fftSize != 64) {
+        fftSize = 64;
+        std::cout << "Unsupported fftSize! Setting fftSize to 64..." << std::endl;
+    }
 
-    //if (cpSize != 16 && cpSize != 0) {
-    //    cpSize = ulDataSymPresent ? 16 : 0;
-    //    std::cout << "Invalid cpSize! Setting cpSize to " << cpSize << "..." << std::endl;
-    //}
-    int pilotSeqLen = 64; //fftSize + cpSize;
+    if (cpSize != 16 && cpSize != 0) {
+        cpSize = ulDataSymPresent ? 16 : 0;
+        std::cout << "Invalid cpSize! Setting cpSize to " << cpSize << "..." << std::endl;
+    }
+    int pilotSeqLen = fftSize + cpSize;
 
     int pilotReps = subframeSize / pilotSeqLen;
     int frac = subframeSize % pilotSeqLen;
