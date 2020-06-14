@@ -339,9 +339,9 @@ void Receiver::clientSyncTxRx(int tid)
     size_t txFrameDelta = std::ceil(TIME_DELTA / (1e3 * frameTimeLen / config_->rate));
     size_t txTimeDelta = txFrameDelta * frameTimeLen;
     std::stringstream ss;
-    ss << "scheduling TX " << txFrameDelta 
-	    << "Frames (" << 1e3 * txTimeDelta / config_->rate << " ms) in the future!"
-	    << std::endl;
+    ss << "scheduling TX " << txFrameDelta
+       << " Frames (" << 1e3 * txTimeDelta / config_->rate << " ms) in the future!"
+       << std::endl;
     std::cout << ss.str();
 
     int NUM_SAMPS = config_->sampsPerSymbol;
@@ -403,29 +403,33 @@ void Receiver::clientSyncTxRx(int tid)
     // Main client read/write loop.
     size_t frame_cnt = 0;
     bool resync = false;
-    int resync_retry_cnt(0);
-    int resync_retry_max(100);
+    bool resync_enable = (config_->frame_mode == "continuous_resync");
+    size_t resync_retry_cnt(0);
+    size_t resync_retry_max(100);
+    size_t resync_success(0);
     rx_offset = 0;
     while (config_->running) {
         for (int sf = 0; sf < config_->symbolsPerFrame; sf++) {
-            int r = clientRadioSet_->radioRx(tid, rxbuff.data(), NUM_SAMPS + rx_offset, rxTime);
-            if (r != NUM_SAMPS + rx_offset) {
-                std::cerr << "BAD Receive(" << r << "/" << NUM_SAMPS + rx_offset
-			<< ") at Time " << rxTime
-			<< ", frame count " << frame_cnt
-			<< std::endl;
-            }
+            int rx_len = (sf == 0) ? NUM_SAMPS + rx_offset : NUM_SAMPS;
+            int r = clientRadioSet_->radioRx(tid, rxbuff.data(), rx_len, rxTime);
             if (r < 0) {
                 config_->running = false;
-                return;
+                break;
+            }
+            if (r != rx_len) {
+                std::cerr << "BAD Receive(" << r << "/" << rx_len
+                          << ") at Time " << rxTime
+                          << ", frame count " << frame_cnt
+                          << std::endl;
             }
             // schedule all TX subframes
             if (sf == 0) {
                 // resync every X=1000 frames:
                 // TODO: X should be a function of sample rate and max CFO
                 if (frame_cnt / 1000 > 0 && frame_cnt % 1000 == 0) {
-                    resync = true;
+                    resync = resync_enable;
                 }
+                rx_offset = 0;
                 if (resync) {
                     sync_index = CommsLib::find_beacon_avx(buff0, config_->gold_cf32);
                     if (sync_index >= 0) {
@@ -433,14 +437,21 @@ void Receiver::clientSyncTxRx(int tid)
                         rxTime += rx_offset;
                         resync = false;
                         resync_retry_cnt = 0;
-                        std::cout << "Re-syncing with offset " << rx_offset << " after "
-                                  << resync_retry_cnt + 1 << " tries\n";
+                        resync_success++;
+                        std::stringstream ss;
+                        ss << "Re-syncing with offset " << rx_offset << " after "
+                           << resync_retry_cnt + 1 << " tries\n";
+                        std::cout << ss.str();
                     } else
                         resync_retry_cnt++;
                 }
                 if (resync && resync_retry_cnt > resync_retry_max) {
-                    std::cerr << "Exceeded resync retry limit (" << resync_retry_max
-                              << "). Stopping..." << std::endl;
+                    std::stringstream ss;
+                    ss << "Exceeded resync retry limit (" << resync_retry_max
+                       << ") for client " << tid
+                       << " reached after " << resync_success
+                       << " resync successes. Stopping..." << std::endl;
+                    std::cerr << ss.str();
                     config_->running = false;
                     break;
                 }
