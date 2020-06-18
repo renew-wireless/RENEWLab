@@ -30,8 +30,8 @@ class OFDMplotter:
 
         self.anim = []
         self.num_cl = num_cl
-        self.FIG_LEN = 2500 # 1520              # captures 2 pilots + data from both users
-        self.pilot_len = 550
+        self.FIG_LEN = 2900  # 1520              # captures 2 pilots + data from both users
+        self.pilot_len = 700  # 550
         self.num_sc = 64
         self.tx_data = np.zeros(100)
         self.rx_data = np.zeros(100)
@@ -138,8 +138,8 @@ class OFDMplotter:
 
         # RX
         subframe_size = 640
-        prefix_len = 82
-        postfix_len = 68
+        prefix_len = 160   # 82 - changed in sounder - TODO: pass values from MMIMO_RECEIVER
+        postfix_len = 160  # 68 - changed in sounder - TODO: pass values from MMIMO_RECEIVER
         self.line_rx_sig.set_data(range(len(self.rx_data)), np.real(self.rx_data))
         self.line_pilot1_start.set_data(prefix_len * np.ones(100), np.linspace(-0.5, 0.5, num=100))
         self.line_pilot2_start.set_data((prefix_len+subframe_size+postfix_len+prefix_len) * np.ones(100), np.linspace(-0.5, 0.5, num=100))
