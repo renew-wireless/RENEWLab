@@ -136,7 +136,8 @@ def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[]):
         tx_pilot  - Transmitted pilot (same pilot sent by all clients)
     """
 
-    if pilot_type == 'lts-half' or pilot_type == 'lts-full':
+    if pilot_type.find('lts') != -1:
+        # LTS-based pilot
         lts_thresh = 0.8
         best_pk, lts_pks, lts_corr = find_lts(samples, thresh=lts_thresh, flip=flip, lts_seq=pilot_seq)
 
@@ -179,7 +180,7 @@ def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[]):
     return pilot, tx_pilot, lts_corr, pilot_thresh, best_pk, lts_start
 
 
-def estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params):
+def estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params, metadata):
     """
     Estimate channel from received pilots
 
@@ -195,11 +196,15 @@ def estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params):
         cfo_est  - Coarse CFO estimate
         lts_evm  - Estimate of Error Vector Magnitude over LTS
     """
+
     fft_offset = user_params[5]
     apply_cfo_corr = user_params[2]
 
     # Retrieve sent pilot (freq domain)
     pilot_freq = tx_pilot[1]
+
+    cp_len = int(metadata['CP_LEN'])
+    pilot_f_len = len(pilot_freq)
 
     # Apply coarse CFO Correction
     lts_start = 0
@@ -222,26 +227,12 @@ def estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params):
 
     # Channel estimation
     # Get LTS again (after CFO correction)
-    if lts_syms_len == 160:
-        # Two LTS symbols
-        lts = pilot_cfo[lts_start: lts_start + lts_syms_len]
-        lts_1 = lts[-64 + -fft_offset + np.array(range(96, 160))]
-        lts_2 = lts[-fft_offset + np.array(range(96, 160))]
-
-        # Average 2 LTS symbols to compute channel estimate
-        chan_est = np.fft.ifftshift(pilot_freq) * (np.fft.fft(lts_1) + np.fft.fft(lts_2)) / 2
-
-        # Compute an estimate of EVM based on TX/RX LTS samples
-        lts1_f = np.fft.fft(lts_1)
-        lts2_f = np.fft.fft(lts_2)
-        lts_tx = np.fft.ifftshift(pilot_freq)
-        evm_tmp1 = abs(lts1_f - lts_tx) ** 2
-        evm_tmp2 = abs(lts2_f - lts_tx) ** 2
-        lts_evm = np.mean((evm_tmp1 + evm_tmp2) / 2)
-    elif lts_syms_len == 80:
+    if lts_syms_len == pilot_f_len + cp_len:
+        # 80-sample long
         # Half sequence (80-sample long LTS)
         lts = pilot_cfo[lts_start: lts_start + lts_syms_len]
-        lts_1 = lts[-64 + -fft_offset + np.array(range(96-16, 160-16))]
+        lts_1 = lts[-pilot_f_len + -fft_offset + np.array(range(lts_syms_len, (2*lts_syms_len - cp_len)))]
+        # lts_1 = lts[-64 + -fft_offset + np.array(range(80, 160-16))]
 
         # Average 2 LTS symbols to compute channel estimate
         chan_est = np.fft.ifftshift(pilot_freq) * np.fft.fft(lts_1)
@@ -371,7 +362,7 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est, lts_start)
             this_offset = 60
         else:
             this_offset = samp_offset[0, antIdx]
-        # this_offset = 100  # FIXME !!!
+
         tmp_range = range(this_offset, n_ofdm_syms * (num_sc + data_cp_len) + this_offset)
         payload_samples_mat_cp[antIdx, :, :] = np.reshape(payload[antIdx, tmp_range],
                                                           (num_sc + data_cp_len, n_ofdm_syms),
@@ -740,7 +731,7 @@ def rx_app(filename, user_params, this_plotter):
                             continue
 
                         # (4) Channel estimation
-                        chan_est_dbg[clIdx, antIdx, :], cfo_est_tmp, lts_evm_tmp = estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params)
+                        chan_est_dbg[clIdx, antIdx, :], cfo_est_tmp, lts_evm_tmp = estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params, metadata)
                         chan_est[num_cells-1, clIdx, antIdx, frameIdx, :] = chan_est_dbg[clIdx, antIdx, :]
                         cfo_est[num_cells - 1, clIdx, antIdx, frameIdx] = cfo_est_tmp
                         lts_evm[num_cells - 1, clIdx, antIdx, frameIdx] = lts_evm_tmp
@@ -822,7 +813,7 @@ def rx_app(filename, user_params, this_plotter):
                         peak_index[clIdx, antIdx, frameIdx] = best_pk
 
                         # Channel estimation from pilots
-                        chan_est_tmp, cfo_est_tmp, lts_evm_tmp = estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params)
+                        chan_est_tmp, cfo_est_tmp, lts_evm_tmp = estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params, metadata)
                         chan_est[num_cells - 1, clIdx, antIdx, frameIdx, :] = chan_est_tmp
                         cfo_est[num_cells - 1, clIdx, antIdx, frameIdx] = cfo_est_tmp
                         lts_evm[num_cells - 1, clIdx, antIdx, frameIdx] = lts_evm_tmp
@@ -847,7 +838,6 @@ def rx_app(filename, user_params, this_plotter):
 
                     rx_data_val, rxSymbols, rxSyms_mat, pilot_sc, data_sc, phase_error = demodulate_data(streams, ofdm_obj, user_params, metadata)
                     rxSyms_vec = np.reshape(rxSyms_mat, (num_cl, len(data_sc) * n_ofdm_syms), order="F")
-                    #rxSyms_vec -= np.mean(rxSyms_vec)
                     
                     # Plotter
                     ant_plot = 3
@@ -932,7 +922,7 @@ if __name__ == '__main__':
     parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/<filename>.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
     parser.add_option("--mode",       type="string",       dest="mode",       default="REPLAY", help="Options: REPLAY/AWGN/OTA [default: %default]")
     parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
-    parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=False,  help="Apply CFO correction [default: %default]")
+    parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=False,  help="Apply CFO correction (not recommended) [default: %default]")
     parser.add_option("--sfoCorr",    action="store_true", dest="sfo_corr",   default=False,  help="Apply SFO correction [default: %default]")
     parser.add_option("--phaseCorr",  action="store_true", dest="phase_corr", default=True,  help="Apply phase correction [default: %default]")
     parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=4,     help="FFT Offset:# CP samples for FFT [default: %default]")
