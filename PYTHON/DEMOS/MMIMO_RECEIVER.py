@@ -159,20 +159,20 @@ def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[]):
             pilot = np.array([])
             return pilot, tx_pilot, lts_corr, pilot_thresh, best_pk, lts_start
         # If beginning of frame was not captured in current buffer
-        if (best_pk - lts_syms_len) < 0:
+        if (best_pk - (2 * lts_syms_len)) < 0:
             print("TOO EARLY. Continue... ")
             pilot = np.array([])
             return pilot, tx_pilot, lts_corr, pilot_thresh, best_pk, lts_start
-        if best_pk > len(samples):
+        if (best_pk - lts_syms_len) > len(samples):
             print("TOO LATE. Continue... ")
             pilot = np.array([])
             return pilot, tx_pilot, lts_corr, pilot_thresh, best_pk, lts_start
 
         # Get pilot
-        lts_start = best_pk - (2*lts_syms_len)  # where LTS-CP start
-        #pilot = samples[lts_start:best_pk+1]
-        pilot = samples[best_pk:(2*best_pk)]
-
+        lts_start = best_pk - (2 * lts_syms_len)  # go back from second peak to start of sequence where pilot
+        pilot = samples[lts_start:lts_start + lts_syms_len]
+        # pilot = samples[lts_start:best_pk+1]
+        # pilot = samples[best_pk:(2 * best_pk)]
     else:
         raise Exception("Only LTS Pilots supported at the moment")
 
@@ -225,8 +225,8 @@ def estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params):
     if lts_syms_len == 160:
         # Two LTS symbols
         lts = pilot_cfo[lts_start: lts_start + lts_syms_len]
-        lts_1 = lts[-64 + -fft_offset + np.array(range(97, 161))]
-        lts_2 = lts[-fft_offset + np.array(range(97, 161))]
+        lts_1 = lts[-64 + -fft_offset + np.array(range(96, 160))]
+        lts_2 = lts[-fft_offset + np.array(range(96, 160))]
 
         # Average 2 LTS symbols to compute channel estimate
         chan_est = np.fft.ifftshift(pilot_freq) * (np.fft.fft(lts_1) + np.fft.fft(lts_2)) / 2
@@ -238,10 +238,10 @@ def estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params):
         evm_tmp1 = abs(lts1_f - lts_tx) ** 2
         evm_tmp2 = abs(lts2_f - lts_tx) ** 2
         lts_evm = np.mean((evm_tmp1 + evm_tmp2) / 2)
-    else:
+    elif lts_syms_len == 80:
         # Half sequence (80-sample long LTS)
         lts = pilot_cfo[lts_start: lts_start + lts_syms_len]
-        lts_1 = lts[-64 + -fft_offset + np.array(range(97-17, 161-17))]
+        lts_1 = lts[-64 + -fft_offset + np.array(range(96-16, 160-16))]
 
         # Average 2 LTS symbols to compute channel estimate
         chan_est = np.fft.ifftshift(pilot_freq) * np.fft.fft(lts_1)
@@ -251,6 +251,12 @@ def estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params):
         lts_tx = np.fft.ifftshift(pilot_freq)
         evm_tmp1 = abs(lts1_f - lts_tx) ** 2
         lts_evm = np.mean(evm_tmp1)
+
+    else:
+        print("Invalid pilot sequence length")
+        chan_est = np.zeros(len(pilot_freq))
+        cfo_est = 0
+        lts_evm = 0
 
     return chan_est, cfo_est, lts_evm
 
@@ -665,8 +671,8 @@ def rx_app(filename, user_params, this_plotter):
 
     # Number of uplink data symbols. Assume all clients are transmitting the same number of data symbols
     #if num_cl > 1:
-    if type(cl_frame_sched) == list:
-        this_cl_sched = cl_frame_sched[0]  # Client index 0
+    if type(cl_frame_sched) == list or type(cl_frame_sched) == numpy.ndarray:
+        this_cl_sched = str(cl_frame_sched[0])  # Client index 0
     else:
         this_cl_sched = str(cl_frame_sched)
     num_ul_syms = this_cl_sched.count('U')
@@ -923,13 +929,13 @@ if __name__ == '__main__':
 
     parser = OptionParser()
     # Params
-    parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/filename.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
+    parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/<filename>.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
     parser.add_option("--mode",       type="string",       dest="mode",       default="REPLAY", help="Options: REPLAY/AWGN/OTA [default: %default]")
     parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
     parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=False,  help="Apply CFO correction [default: %default]")
     parser.add_option("--sfoCorr",    action="store_true", dest="sfo_corr",   default=False,  help="Apply SFO correction [default: %default]")
     parser.add_option("--phaseCorr",  action="store_true", dest="phase_corr", default=True,  help="Apply phase correction [default: %default]")
-    parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=0,     help="FFT Offset:# CP samples for FFT [default: %default]")
+    parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=4,     help="FFT Offset:# CP samples for FFT [default: %default]")
     parser.add_option("--numClPlot",  type="int",          dest="num_cl_plot",default=2,     help="Number of clients to plot. Max of 2 [default: %default]")
     (options, args) = parser.parse_args()
 
