@@ -54,6 +54,7 @@ public:
     std::string ref_sdr;
     std::vector<std::vector<std::string>> bs_sdr_ids;
     std::vector<std::string> hub_ids;
+    std::vector<std::complex<float>> gold_cf32;
     std::vector<uint32_t> beacon;
     std::vector<std::complex<int16_t>> beacon_ci16;
     int beaconSize;
@@ -64,6 +65,7 @@ public:
     std::string bsChannel;
     std::vector<std::string> frames;
     std::string frame_mode;
+    bool hw_framer;
     size_t max_frame;
     std::vector<std::vector<size_t>> pilotSymbols;
     std::vector<std::vector<size_t>> ULSymbols;
@@ -89,6 +91,7 @@ public:
     std::vector<uint32_t> coeffs;
     std::vector<std::complex<int16_t>> coeffs_ci16;
     std::vector<std::complex<int16_t>> pilot_ci16;
+    std::vector<std::complex<float>> pilot_cf32;
     std::vector<uint32_t> pilot;
     std::vector<std::vector<int>> pilot_sc;
     std::vector<std::vector<double>> pilotSym;

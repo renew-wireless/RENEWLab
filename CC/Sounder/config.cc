@@ -134,6 +134,7 @@ Config::Config(const std::string& jsonfile)
         clAgcGainInit = tddConfCl.value("agc_gain_init", 70); // 0 to 108
         clDataMod = tddConfCl.value("modulation", "QPSK");
         frame_mode = tddConfCl.value("frame_mode", "continuous_resync");
+        hw_framer = tddConfCl.value("hw_framer", true);
         txAdvance = tddConfCl.value("tx_advance", 250);
 
         auto jClTxgainA_vec = tddConfCl.value("txgainA", json::array());
@@ -179,14 +180,18 @@ Config::Config(const std::string& jsonfile)
     // STS Sequence (for AGC) + GOLD Sequence (for Sync)
     // 15reps of STS(16) + 2reps of gold_ifft(128)
     srand(time(NULL));
-    std::vector<std::vector<double>> gold_ifft = CommsLib::getSequence(128, CommsLib::GOLD_IFFT);
+    const int seqLen = 128;
+    std::vector<std::vector<double>> gold_ifft = CommsLib::getSequence(seqLen, CommsLib::GOLD_IFFT);
     std::vector<std::complex<int16_t>> gold_ifft_ci16 = Utils::double_to_cint16(gold_ifft);
+    for (size_t i = 0; i < seqLen; i++) {
+        gold_cf32.push_back(std::complex<float>(gold_ifft[0][i], gold_ifft[1][i]));
+    }
 
     std::vector<std::vector<double>> sts_seq = CommsLib::getSequence(0, CommsLib::STS_SEQ);
     std::vector<std::complex<int16_t>> sts_seq_ci16 = Utils::double_to_cint16(sts_seq);
 
     // Populate STS (stsReps repetitions)
-    int stsReps = 15;
+    int stsReps = 0;
     for (int i = 0; i < stsReps; i++) {
         beacon_ci16.insert(beacon_ci16.end(), sts_seq_ci16.begin(), sts_seq_ci16.end());
     }
@@ -219,15 +224,6 @@ Config::Config(const std::string& jsonfile)
         std::cout << "Invalid cpSize! Setting cpSize to " << cpSize << "..." << std::endl;
     }
     int pilotSeqLen = fftSize + cpSize;
-    //if (pilot_seq.compare("lts-full") == 0) {
-    //    pilotSeqLen = 160;
-    //} else if (pilot_seq.compare("lts-half") == 0) {
-    //    pilotSeqLen = 80;
-    //} else if (pilot_seq.compare("lts-no-cp") == 0) {
-    //    pilotSeqLen = 64;
-    //} else {
-    //    throw std::invalid_argument("Only LTS is currently supported!");
-    //}
 
     int pilotReps = subframeSize / pilotSeqLen;
     int frac = subframeSize % pilotSeqLen;
@@ -244,6 +240,7 @@ Config::Config(const std::string& jsonfile)
     pilot_ci16.insert(pilot_ci16.end(), post.begin(), post.end());
 
     pilot = Utils::cint16_to_uint32(pilot_ci16, false, "QI");
+    pilot_cf32 = Utils::uint32tocfloat(pilot, "QI");
     size_t remain_size = 4096 - pilot.size(); // 4096 is the size of TX_RAM in the FPGA
     for (size_t j = 0; j < remain_size; j++)
         pilot.push_back(0);

@@ -12,15 +12,14 @@
 ---------------------------------------------------------------------
 */
 
-
 #include "include/BaseRadioSet.h"
 #include "include/Radio.h"
 #include "include/comms-lib.h"
 #include "include/macros.h"
-#include "include/matplotlibcpp.h"
+//#include "include/matplotlibcpp.h"
 #include "include/utils.h"
 
-namespace plt = matplotlibcpp;
+//namespace plt = matplotlibcpp;
 
 static std::vector<std::complex<float>> snoopSamples(SoapySDR::Device* dev, size_t channel, size_t readSize)
 {
@@ -30,7 +29,7 @@ static std::vector<std::complex<float>> snoopSamples(SoapySDR::Device* dev, size
 }
 
 static void adjustCalibrationGains(std::vector<SoapySDR::Device*> rxDevs, SoapySDR::Device* txDev,
-    size_t channel, double fftBin, bool plot = false)
+    size_t channel, double fftBin)
 {
     using std::cout;
     using std::endl;
@@ -169,28 +168,28 @@ static void adjustCalibrationGains(std::vector<SoapySDR::Device*> rxDevs, SoapyS
         }
         toneLevels[r] = toneLevel;
         cout << "Node " << r << ": toneLevel3=" << toneLevel << endl;
-        if (plot) {
-            auto fftMag = CommsLib::magnitudeFFT(samps, win, N);
-            std::vector<double> magDouble(N);
-            std::transform(fftMag.begin(), fftMag.end(), magDouble.begin(),
-                [](float cf) {
-                    return 10 * std::max(std::log10((double)cf), -20.0);
-                });
-            //std::vector<double> sampsDouble(N);
-            //std::transform(samps.begin(), samps.end(), sampsDouble.begin(),
-            //    [](std::complex<float> cf) {
-            //        return cf.real();
-            //    });
-            plt::figure_size(1200, 780);
-            //plt::plot(sampsDouble);
-            plt::plot(magDouble);
-            plt::xlim(0, (int)N);
-            plt::ylim(-100, 100);
-            //plt::ylim(-1, 1);
-            plt::title("Spectrum figure After Gain Adjustment, FFT Window POWER " + std::to_string(windowGain));
-            plt::legend();
-            plt::save("rx" + std::to_string(rxDevsSize) + "_" + std::to_string(r) + "_ch" + std::to_string(channel) + ".png");
-        }
+#if DEBUG_PLOT
+        auto fftMag = CommsLib::magnitudeFFT(samps, win, N);
+        std::vector<double> magDouble(N);
+        std::transform(fftMag.begin(), fftMag.end(), magDouble.begin(),
+            [](float cf) {
+                return 10 * std::max(std::log10((double)cf), -20.0);
+            });
+        //std::vector<double> sampsDouble(N);
+        //std::transform(samps.begin(), samps.end(), sampsDouble.begin(),
+        //    [](std::complex<float> cf) {
+        //        return cf.real();
+        //    });
+        plt::figure_size(1200, 780);
+        //plt::plot(sampsDouble);
+        plt::plot(magDouble);
+        plt::xlim(0, (int)N);
+        plt::ylim(-100, 100);
+        //plt::ylim(-1, 1);
+        plt::title("Spectrum figure After Gain Adjustment, FFT Window POWER " + std::to_string(windowGain));
+        plt::legend();
+        plt::save("rx" + std::to_string(rxDevsSize) + "_" + std::to_string(r) + "_ch" + std::to_string(channel) + ".png");
+#endif
     }
 
     std::cout << rxDevsSize - remainingRadios << " radios reached target level" << std::endl;
@@ -366,7 +365,7 @@ void BaseRadioSet::dciqCalibrationProc(size_t channel)
 
     // Tune rx gains for calibration on all radios except reference radio
     // Tune tx gain on reference radio
-    adjustCalibrationGains(allButRefDevs, refDev, channel, toneBBFreq / sampleRate, true);
+    adjustCalibrationGains(allButRefDevs, refDev, channel, toneBBFreq / sampleRate);
 
     // Minimize Rx DC offset and IQ Imbalance on all receiving radios
     // TODO: Parallelize this loop

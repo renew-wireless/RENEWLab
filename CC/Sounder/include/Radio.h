@@ -6,6 +6,7 @@
 
 #include "config.h"
 #include <SoapySDR/Device.hpp>
+#include <SoapySDR/Time.hpp>
 
 class Radio {
 private:
