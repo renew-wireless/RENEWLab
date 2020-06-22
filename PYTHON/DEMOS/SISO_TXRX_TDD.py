@@ -95,9 +95,9 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
 
             if "CBRS" in info["frontend"]:
                 # Set gains to high val (initially)
-                # sdr.setGain(SOAPY_SDR_TX, ch, txgain)  # txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
-                # sdr.setGain(SOAPY_SDR_RX, ch, rxgain)  # rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
-            # else:
+                sdr.setGain(SOAPY_SDR_TX, ch, txgain)  # txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
+                sdr.setGain(SOAPY_SDR_RX, ch, rxgain)  # rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
+            else:
                 # No CBRS board gains, only changing LMS7 gains
                 sdr.setGain(SOAPY_SDR_TX, ch, "PAD", txgain) # [0:1:42] txgain
                 sdr.setGain(SOAPY_SDR_TX, ch, "ATTN", -6)
