@@ -177,6 +177,7 @@ class OFDMplotter:
 
     def animate(self):
         self.anim = animation.FuncAnimation(self.fig, self.ani_update, init_func=self.ani_init)
+
         try:
             plt.show()
         except AttributeError:
@@ -204,7 +205,6 @@ class OFDMplotter:
         ax.set_ylim(-1.00, 1.00)
         ax.set_xlim(0, self.FIG_LEN)
         ax.legend(fontsize=10)
-
 
     def init_rx_signal(self):
         ax = self.fig.add_subplot(self.gs[1, 0:4])
@@ -265,7 +265,7 @@ class OFDMplotter:
         self.line_frame_corr, = ax.plot([], [], marker="o", color="r")
         ax.set_ylim([0, 1.1])
         ax.set_xlim(0, self.FIG_LEN)
-        ax.legend(fontsize=10)
+        #ax.legend(fontsize=10)
 
         ax = self.fig.add_subplot(self.gs[2, 6:8])
         ax.grid(True)
@@ -275,7 +275,7 @@ class OFDMplotter:
         self.line_frame_corr2, = ax.plot([], [], marker="o", color="b")
         ax.set_ylim([0, 1.1])
         ax.set_xlim(0, self.FIG_LEN)
-        ax.legend(fontsize=10)
+        #ax.legend(fontsize=10)
 
     def init_constellation(self):
         ax = self.fig.add_subplot(self.gs[3, 0:2])
@@ -309,7 +309,7 @@ class OFDMplotter:
         self.line_chan_est_mag, = ax.step([], [], color='r')
         ax.set_ylim(0, 10)
         ax.set_xlim(-10, 10)
-        ax.legend(fontsize=10)
+        #ax.legend(fontsize=10)
 
         ax = self.fig.add_subplot(self.gs[3, 6:8])
         ax.grid(True)
@@ -319,9 +319,9 @@ class OFDMplotter:
         self.line_chan_est_mag2, = ax.step([], [], color='b')
         ax.set_ylim(0, 10)
         ax.set_xlim(-10, 10)
-        ax.legend(fontsize=10)
+        #ax.legend(fontsize=10)
 
-    def signal_handler(sig, frame):
+    def signal_handler(sig):
         """
         SIGINT signal handler
 
@@ -332,8 +332,5 @@ class OFDMplotter:
             None
         """
         print("SIG HANDLER!")
-        global running
         print('Caught signal %d' % sig)
-        # stop tx/rx threads
-        running = False
-        signal.pause()
+        sys.exit(0)
