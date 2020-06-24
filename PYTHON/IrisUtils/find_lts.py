@@ -37,6 +37,9 @@ def find_lts(iq, thresh=0.8, us=1, cp=32, flip=False, lts_seq=[]):
 	"""
 	debug = False
 
+	# Ignore warnings
+	np.seterr(divide='ignore', invalid='ignore')
+
 	# If original signal not provided, generate LTS
 	lts_seq = np.asarray(lts_seq)
 	if lts_seq.size == 0:
