@@ -470,20 +470,8 @@ def txrx_app(args, rate, ampl, ant, txgain, rxgain, freq, bbfreq, serialTx, seri
 
                 if "CBRS" in infoTx["frontend"]:
                     # Set gains to high val (initially)
-                    #sdr.setGain(SOAPY_SDR_TX, c, txgain)  # txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
-                    #sdr.setGain(SOAPY_SDR_RX, c, rxgain)  # rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
-                    sdr.setGain(SOAPY_SDR_RX, c, 'LNA', 20)
-                    sdr.setGain(SOAPY_SDR_RX, c, 'PGA', 10)
-                    sdr.setGain(SOAPY_SDR_RX, c, 'TIA', 3)
-                    sdr.setGain(SOAPY_SDR_RX, c, 'ATTN', -18)
-
-                    sdr.setGain(SOAPY_SDR_TX, c, 'PAD', 30)
-                    sdr.setGain(SOAPY_SDR_TX, c, 'IAMP', 0)
-                    sdr.setGain(SOAPY_SDR_TX, c, 'PA1', 17)
-                    sdr.setGain(SOAPY_SDR_TX, c, 'PA2', 14)
-                    sdr.setGain(SOAPY_SDR_TX, c, 'PA3', 31.5)
-                    sdr.setGain(SOAPY_SDR_TX, c, 'ATTN', -6)
-
+                    sdr.setGain(SOAPY_SDR_TX, c, txgain)  # txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
+                    sdr.setGain(SOAPY_SDR_RX, c, rxgain)  # rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
                 else:
                     # No CBRS board gains, only changing LMS7 gains
                     sdr.setGain(SOAPY_SDR_TX, c, "PAD", txgain)    # [0:1:42]
@@ -577,8 +565,8 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx and Rx sample rate", default=5e6)
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
-    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=55.0)  # See documentation at top of file for info on gain range
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Rx gain (dB)", default=55.0)  # See documentation at top of file for info on gain range
+    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=70.0)  # See documentation at top of file for info on gain range
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Rx gain (dB)", default=50.0)  # See documentation at top of file for info on gain range
     parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=3.597e9)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
     parser.add_option("--nOFDMsym", type="int", dest="nOFDMsym", help="Number of OFDM symbols", default=20)
