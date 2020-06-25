@@ -30,8 +30,8 @@ class OFDMplotter:
 
         self.anim = []
         self.num_cl = num_cl
-        self.FIG_LEN = 2900  # 1520              # captures 2 pilots + data from both users
-        self.pilot_len = 700  # 550
+        self.FIG_LEN = 1000              # captures 2 pilots + data from both users
+        self.pilot_len = 640
         self.num_sc = 64
         self.tx_data = np.zeros(100)
         self.rx_data = np.zeros(100)
@@ -44,6 +44,9 @@ class OFDMplotter:
         self.data_syms = []
         self.user_params = []
         self.metadata = []
+        self.subframe_size = 640
+        self.prefix_len = 160
+        self.postfix_len = 160
 
         self.tx_data2 = np.zeros(100)
         self.rx_data2 = np.zeros(100)
@@ -62,10 +65,10 @@ class OFDMplotter:
         self.fig.subplots_adjust(hspace=.3, top=.97, bottom=.03, wspace=1)
         self.gs = gridspec.GridSpec(ncols=8, nrows=4)
 
-        self.init_tx_signal()
-        self.init_rx_signal()
-        self.init_corr_peaks()
-        self.init_frame_corr()
+        self.init_tx_signal(self.FIG_LEN)
+        self.init_rx_signal(self.FIG_LEN)
+        self.init_corr_peaks(self.pilot_len)
+        self.init_frame_corr(self.FIG_LEN)
         self.init_constellation()
         self.init_channel_est()
 
@@ -118,6 +121,9 @@ class OFDMplotter:
         self.data_syms = data_syms[0, :]           # tx symbols [numClients, data length]
         self.user_params = user_params
         self.num_sc = int(metadata['FFT_SIZE'])
+        self.subframe_size = int(metadata['SYMBOL_LEN_NO_PAD'])
+        self.prefix_len = int(metadata['PREFIX_LEN'])
+        self.postfix_len = int(metadata['POSTFIX_LEN'])
 
         if self.num_cl > 1:
             self.tx_data2 = tx[1]
@@ -137,9 +143,9 @@ class OFDMplotter:
         self.line_tx_sig2.set_data(range(len(self.tx_data2)), np.real(self.tx_data2))
 
         # RX
-        subframe_size = 640
-        prefix_len = 160   # 82 - changed in sounder - TODO: pass values from MMIMO_RECEIVER
-        postfix_len = 160  # 68 - changed in sounder - TODO: pass values from MMIMO_RECEIVER
+        subframe_size = self.subframe_size  # 640
+        prefix_len = self.prefix_len # 160
+        postfix_len = self.postfix_len # 160
         self.line_rx_sig.set_data(range(len(self.rx_data)), np.real(self.rx_data))
         self.line_pilot1_start.set_data(prefix_len * np.ones(100), np.linspace(-0.5, 0.5, num=100))
         self.line_pilot2_start.set_data((prefix_len+subframe_size+postfix_len+prefix_len) * np.ones(100), np.linspace(-0.5, 0.5, num=100))
@@ -183,7 +189,8 @@ class OFDMplotter:
         except AttributeError:
             sys.exit()
 
-    def init_tx_signal(self):
+    def init_tx_signal(self, fig_len_):
+        self.FIG_LEN = fig_len_
         ax = self.fig.add_subplot(self.gs[0, 0:4])
         ax.grid(True)
         ax.set_title('TX Signal Client 1', fontsize=10)
@@ -206,7 +213,8 @@ class OFDMplotter:
         ax.set_xlim(0, self.FIG_LEN)
         ax.legend(fontsize=10)
 
-    def init_rx_signal(self):
+    def init_rx_signal(self, fig_len_):
+        self.FIG_LEN = fig_len_
         ax = self.fig.add_subplot(self.gs[1, 0:4])
         ax.grid(True)
         ax.set_title('RX Signal Client 1', fontsize=10)
@@ -233,7 +241,8 @@ class OFDMplotter:
         ax.set_xlim(0, self.FIG_LEN)
         ax.legend(fontsize=10, loc='upper center', shadow=True, ncol=4)
 
-    def init_corr_peaks(self):
+    def init_corr_peaks(self, pilot_len_):
+        self.pilot_len = pilot_len_
         ax = self.fig.add_subplot(self.gs[2, 0:2])
         ax.grid(True)
         ax.set_title('Pilot Correlation Peaks Client 1', fontsize=10)
@@ -256,7 +265,8 @@ class OFDMplotter:
         ax.set_xlim(0, self.pilot_len)
         ax.legend(fontsize=10)
 
-    def init_frame_corr(self):
+    def init_frame_corr(self, fig_len_):
+        self.FIG_LEN = fig_len_
         ax = self.fig.add_subplot(self.gs[2, 2:4])
         ax.grid(True)
         ax.set_title('Frame-to-Frame Correlation Client 1', fontsize=10)
