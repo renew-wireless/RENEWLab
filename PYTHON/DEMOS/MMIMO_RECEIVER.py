@@ -30,6 +30,7 @@
     file inside "/CC/Sounder/logs".
     Use file as input to this script: "python3 mmimo_receiver.py --file <path/filename>"
 
+    To terminate - CLOSE FIGURE
 ---------------------------------------------------------------------
  Copyright © 2018-2019. Rice University.
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
@@ -54,11 +55,13 @@ from find_lts import *
 from generate_sequence import *
 from ofdmtxrx import *
 from ofdm_plotter import *
+import matplotlib.cm as cm
 
 
 #########################################
 #              Global Vars              #
 #########################################
+global running
 running = True
 
 #########################################
@@ -170,7 +173,7 @@ def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[]):
             return pilot, tx_pilot, lts_corr, pilot_thresh, best_pk, lts_start
 
         # Get pilot
-        lts_start = best_pk - (2 * lts_syms_len)  # go back from second peak to start of sequence where pilot
+        lts_start = best_pk - (2 * lts_syms_len) + 1  # go back from second peak to start of sequence where pilot begins
         pilot = samples[lts_start:lts_start + lts_syms_len]
         # pilot = samples[lts_start:best_pk+1]
         # pilot = samples[best_pk:(2 * best_pk)]
@@ -364,6 +367,16 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est, lts_start)
             this_offset = samp_offset[0, antIdx]
 
         tmp_range = range(this_offset, n_ofdm_syms * (num_sc + data_cp_len) + this_offset)
+
+
+
+        debug = 0
+        if debug:
+            print("RANGE: {} TO {}. Len(tmp_range): {}".format(tmp_range[0], tmp_range[-1], len(tmp_range)))
+            plt.figure(100+antIdx)
+            plt.plot(np.abs(payload[antIdx, :]))
+            plt.show()
+
         payload_samples_mat_cp[antIdx, :, :] = np.reshape(payload[antIdx, tmp_range],
                                                           (num_sc + data_cp_len, n_ofdm_syms),
                                                            order="F")
@@ -613,16 +626,23 @@ def rx_app(filename, user_params, this_plotter):
     pilot_dim = pilot_samples.shape
     num_frames = pilot_dim[0]
 
+    # Frames to analyze
+    tmp = user_params[6]
+    if tmp.find(':') >= 0:
+        frame0 = int(tmp.split(':')[0])
+        frameEnd = tmp.split(':')[1]
+        if frameEnd.find('end') >= 0:
+            iframes = range(frame0, num_frames)
+        else:
+            iframes = range(frame0, int(frameEnd))
+    else:
+        iframes = range(int(tmp), int(tmp)+1)
+
     # Verify dimensions
     assert pilot_dim[1] == num_cells
     assert pilot_dim[2] == num_cl
     assert pilot_dim[3] == num_bs_ant
     assert pilot_dim[4] == 2 * sym_len  # No complex values in HDF5, x2 to account for IQ
-
-    # Check if there's uplink data present
-    # if len(ofdm_data) == 0:
-    #    print("No uplink data present in the log file. Exiting now...")
-    #    sys.exit(0)
 
     ###########################
     #     Build TX signals    #
@@ -668,6 +688,17 @@ def rx_app(filename, user_params, this_plotter):
         this_cl_sched = str(cl_frame_sched)
     num_ul_syms = this_cl_sched.count('U')
 
+
+    ###########################
+    #       Update Plots      #
+    ###########################
+    fig_len = 3 * (prefix_len + sym_len_no_pad + postfix_len)
+    pilot_len = sym_len_no_pad
+    this_plotter.init_tx_signal(fig_len)
+    this_plotter.init_rx_signal(fig_len)
+    this_plotter.init_corr_peaks(pilot_len)
+    this_plotter.init_frame_corr(fig_len)
+
     ###########################
     #    Process RX Signals   #
     ###########################
@@ -684,6 +715,7 @@ def rx_app(filename, user_params, this_plotter):
         lts_start = np.zeros([num_cl, num_bs_ant])
         corr_total = np.zeros([num_frames, num_cl])
         corr_total[:] = np.nan
+        lts_start_all = np.zeros([num_cells, num_cl, num_bs_ant, num_frames])
 
         if rx_mode == "AWGN":
             for frameIdx in range(num_frames):
@@ -791,7 +823,9 @@ def rx_app(filename, user_params, this_plotter):
                                       metadata)
 
         elif rx_mode == "REPLAY":
-            for frameIdx in range(num_frames):
+            for frameIdx in iframes:
+                if not running:
+                    sys.exit(0)
                 for clIdx in range(num_cl):
                     for antIdx in range(num_bs_ant):
                         print("FRAME: {} \t Client: {} \t Antenna: {}".format(frameIdx, clIdx, antIdx))
@@ -817,6 +851,7 @@ def rx_app(filename, user_params, this_plotter):
                         chan_est[num_cells - 1, clIdx, antIdx, frameIdx, :] = chan_est_tmp
                         cfo_est[num_cells - 1, clIdx, antIdx, frameIdx] = cfo_est_tmp
                         lts_evm[num_cells - 1, clIdx, antIdx, frameIdx] = lts_evm_tmp
+                        lts_start_all[num_cells - 1, clIdx, antIdx, frameIdx] = lts_start[clIdx, antIdx]
 
                         # Measure noise at each BS antenna - for MMSE
                         # TODO
@@ -834,6 +869,7 @@ def rx_app(filename, user_params, this_plotter):
 
                     # Demultiplexing - Separate streams
                     this_chan_est = chan_est[num_cells - 1, :, :, frameIdx, :]
+
                     streams = demultiplex(IQ, bf_weights, user_params, metadata, this_chan_est, lts_start)
 
                     rx_data_val, rxSymbols, rxSyms_mat, pilot_sc, data_sc, phase_error = demodulate_data(streams, ofdm_obj, user_params, metadata)
@@ -888,6 +924,17 @@ def rx_app(filename, user_params, this_plotter):
                                           user_params,
                                           metadata)
 
+            # Analyze pilot offsets
+            #    lts_start_all[0, clIdx, antIdx, frameIdx]
+            debug = 0
+            if debug:
+                y0 = [lts_start_all[0, 0, i, iframes] for i in range(1)]
+                colors = cm.rainbow(np.linspace(0, 1, num_bs_ant))
+                plt.figure(5000)
+                for y, c in zip(y0, colors):
+                    plt.plot(iframes, y, 'o', color=c)
+                plt.show(block=False)
+
         else:
             # else if real-time (OTA)
             raise Exception("Realtime (OTA) not yet supported")
@@ -895,7 +942,7 @@ def rx_app(filename, user_params, this_plotter):
     print("Exiting RX Thread")
 
 
-def signal_handler(sig, frame):
+def signal_handler(sig):
     """
     SIGINT signal handler
     """
@@ -904,18 +951,19 @@ def signal_handler(sig, frame):
     print('Caught signal %d' % sig)
     # stop tx/rx threads
     running = False
-    signal.pause()
-    sys.exit()
+    sys.exit(0)
 
 
 #########################################
 #                 Main                  #
 #########################################
 if __name__ == '__main__':
+
     # Start main program
+    print('CLOSE FIGURE TO TERMINATE')
+
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
-    print('To terminate, press Ctrl+C')
 
     parser = OptionParser()
     # Params
@@ -925,8 +973,9 @@ if __name__ == '__main__':
     parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=False,  help="Apply CFO correction (not recommended) [default: %default]")
     parser.add_option("--sfoCorr",    action="store_true", dest="sfo_corr",   default=False,  help="Apply SFO correction [default: %default]")
     parser.add_option("--phaseCorr",  action="store_true", dest="phase_corr", default=True,  help="Apply phase correction [default: %default]")
-    parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=4,     help="FFT Offset:# CP samples for FFT [default: %default]")
+    parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=1,     help="FFT Offset:# CP samples for FFT [default: %default]")
     parser.add_option("--numClPlot",  type="int",          dest="num_cl_plot",default=2,     help="Number of clients to plot. Max of 2 [default: %default]")
+    parser.add_option("--frame",      type="string",       dest="frame",      default="0:100",  help="Range of frames to analyze (as string). Examples: --frame='5' to analyze a single frame, --frame='5:200' for range from frame 5 to 200, --frame='5:end' all frames starting at frame 5 [default: %default]")
     (options, args) = parser.parse_args()
 
     # Params
@@ -935,11 +984,13 @@ if __name__ == '__main__':
                    options.cfo_corr,
                    options.sfo_corr,
                    options.phase_corr,
-                   options.fft_offset
+                   options.fft_offset,
+                   options.frame
                    ]
 
     # File
     filename = options.file
+    threads_arr = []
 
     # Rx Application. Matplotlib GUI needs to run on main thread.
     num_cl_plot = options.num_cl_plot     # number of clients to plot
@@ -952,7 +1003,11 @@ if __name__ == '__main__':
     else:
         # RX app thread
         rxth = threading.Thread(target=rx_app, args=(filename, user_params, this_plotter))
+        threads_arr.append(rxth)
+        rxth.daemon = True
         rxth.start()
 
     # Start animation
-    this_plotter.animate()
+    ret = this_plotter.animate()
+    sys.exit(0)
+
