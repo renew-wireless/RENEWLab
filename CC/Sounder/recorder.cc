@@ -708,3 +708,21 @@ clean_exit:
     std::atomic_fetch_and(&rx_buffer_[buffer_id].pkg_buf_inuse[offs], ~bit); // now empty
     return 0;
 }
+
+int Recorder::getRecordedFrameNum()
+{
+    return maxFrameNumber;
+}
+
+extern "C"
+{
+    Recorder* Recorder_new(Config *cfg){
+        Recorder *rec = new Recorder(cfg);
+        return rec;
+    }
+
+    void Recorder_start(Recorder *rec){rec->do_it();}
+    int Recorder_getRecordedFrameNum(Recorder *rec){return rec->getRecordedFrameNum();}
+    const char* Recorder_getTraceFileName(Recorder *rec){return rec->getTraceFileName().c_str();}
+}
+

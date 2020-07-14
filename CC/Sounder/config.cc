@@ -430,3 +430,13 @@ unsigned Config::getCoreCount()
 #endif
     return nCores;
 }
+
+extern "C"
+{
+    __attribute__((visibility("default"))) Config* Config_new(char *filename) {
+
+        Config *cfg = new Config(filename);
+
+        return cfg;
+    }
+}

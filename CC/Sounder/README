@@ -7,7 +7,7 @@ experiments with an RENEW base station hardware. To run, follow steps below:
 ```shell
 cd mufft
 git submodule update --init
-cmake ./
+cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON ./
 make -j
 cd ../
 cmake ./

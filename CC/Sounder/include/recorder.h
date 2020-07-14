@@ -21,6 +21,8 @@ public:
     ~Recorder();
 
     void do_it();
+    int getRecordedFrameNum();
+    std::string getTraceFileName() {return cfg->trace_file;}
 
 private:
     struct EventHandlerContext {
