@@ -485,9 +485,11 @@ void Recorder::closeHDF5()
 
 Recorder::~Recorder()
 {
-    for (size_t i = 0; i < cfg->rx_thread_num; i++)
-        delete[] rx_buffer_[i].pkg_buf_inuse;
-    delete[] rx_buffer_;
+    if (cfg->rx_thread_num > 0) {
+        for (size_t i = 0; i < cfg->rx_thread_num; i++)
+            delete[] rx_buffer_[i].pkg_buf_inuse;
+        delete[] rx_buffer_;
+    }
 }
 
 void Recorder::do_it()

@@ -191,7 +191,7 @@ Config::Config(const std::string& jsonfile)
     std::vector<std::complex<int16_t>> sts_seq_ci16 = Utils::double_to_cint16(sts_seq);
 
     // Populate STS (stsReps repetitions)
-    int stsReps = 0;
+    int stsReps = 15;
     for (int i = 0; i < stsReps; i++) {
         beacon_ci16.insert(beacon_ci16.end(), sts_seq_ci16.begin(), sts_seq_ci16.end());
     }
