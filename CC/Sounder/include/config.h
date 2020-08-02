@@ -70,6 +70,7 @@ public:
     std::vector<std::vector<size_t>> pilotSymbols;
     std::vector<std::vector<size_t>> ULSymbols;
     std::vector<std::vector<size_t>> DLSymbols;
+    bool single_gain;
     double txgain[2];
     double rxgain[2];
     double calTxGain[2];

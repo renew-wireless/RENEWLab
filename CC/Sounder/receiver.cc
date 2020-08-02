@@ -359,11 +359,14 @@ void Receiver::clientSyncTxRx(int tid)
 
     std::vector<void*> pilotbuffA(2);
     std::vector<void*> pilotbuffB(2);
+    std::vector<void*> zeros(2);
+    zeros[0] = calloc(NUM_SAMPS, sizeof(float) * 2);
+    zeros[1] = calloc(NUM_SAMPS, sizeof(float) * 2);
     pilotbuffA[0] = config_->pilot_cf32.data();
     if (config_->clSdrCh == 2) {
-        pilotbuffA[1] = std::vector<std::complex<float>>(NUM_SAMPS, 0).data();
+        pilotbuffA[1] = zeros[0];
         pilotbuffB[1] = config_->pilot_cf32.data();
-        pilotbuffB[0] = std::vector<std::complex<float>>(NUM_SAMPS, 0).data();
+        pilotbuffB[0] = zeros[1];
         syncrxbuff[1] = syncbuff1.data();
         rxbuff[1] = buff1.data();
     }
@@ -478,4 +481,6 @@ void Receiver::clientSyncTxRx(int tid)
         }
         frame_cnt++;
     }
+    free(zeros[0]);
+    free(zeros[1]);
 }

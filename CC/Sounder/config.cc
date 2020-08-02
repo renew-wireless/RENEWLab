@@ -62,6 +62,7 @@ Config::Config(const std::string& jsonfile)
             throw std::invalid_argument("error channel config: not any of A/B/AB!\n");
         auto jBsFrames = tddConf.value("frame_schedule", json::array());
         frames.assign(jBsFrames.begin(), jBsFrames.end());
+	single_gain = tddConf.value("single_gain", true);
         txgain[0] = tddConf.value("txgainA", 20);
         rxgain[0] = tddConf.value("rxgainA", 20);
         txgain[1] = tddConf.value("txgainB", 20);
@@ -170,6 +171,7 @@ Config::Config(const std::string& jsonfile)
             beacon_seq = tddConfCl.value("beacon_seq", "gold_ifft");
             pilot_seq = tddConfCl.value("pilot_seq", "lts-half");
             symbolsPerFrame = clFrames.at(0).size();
+	    single_gain = tddConfCl.value("single_gain", true);
         }
     }
 
