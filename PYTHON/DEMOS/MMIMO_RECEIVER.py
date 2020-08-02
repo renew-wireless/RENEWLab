@@ -876,7 +876,7 @@ def rx_app(filename, user_params, this_plotter):
                     rxSyms_vec = np.reshape(rxSyms_mat, (num_cl, len(data_sc) * n_ofdm_syms), order="F")
                     
                     # Plotter
-                    ant_plot = 3
+                    ant_plot = 0
                     cell_plot = 0
                     # Correlation across frames.
                     sc_of_interest = np.sort(np.ndarray.tolist(pilot_sc) + np.ndarray.tolist(data_sc))
