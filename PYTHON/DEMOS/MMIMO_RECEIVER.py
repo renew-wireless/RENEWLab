@@ -694,10 +694,10 @@ def rx_app(filename, user_params, this_plotter):
     ###########################
     fig_len = 3 * (prefix_len + sym_len_no_pad + postfix_len)
     pilot_len = sym_len_no_pad
-    this_plotter.init_tx_signal(fig_len)
-    this_plotter.init_rx_signal(fig_len)
-    this_plotter.init_corr_peaks(pilot_len)
-    this_plotter.init_frame_corr(fig_len)
+    this_plotter.update_tx_signal_fig(fig_len)
+    this_plotter.update_rx_signal_fig(fig_len)
+    this_plotter.update_corr_peaks(pilot_len)
+    this_plotter.update_frame_corr(fig_len)
 
     ###########################
     #    Process RX Signals   #

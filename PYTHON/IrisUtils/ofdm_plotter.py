@@ -122,6 +122,7 @@ class OFDMplotter:
         self.user_params = user_params
         self.num_sc = int(metadata['FFT_SIZE'])
         self.subframe_size = int(metadata['SYMBOL_LEN_NO_PAD'])
+        self.pilot_len = int(metadata['SYMBOL_LEN_NO_PAD'])
         self.prefix_len = int(metadata['PREFIX_LEN'])
         self.postfix_len = int(metadata['POSTFIX_LEN'])
 
@@ -144,8 +145,8 @@ class OFDMplotter:
 
         # RX
         subframe_size = self.subframe_size  # 640
-        prefix_len = self.prefix_len # 160
-        postfix_len = self.postfix_len # 160
+        prefix_len = self.prefix_len        # 160
+        postfix_len = self.postfix_len      # 160
         self.line_rx_sig.set_data(range(len(self.rx_data)), np.real(self.rx_data))
         self.line_pilot1_start.set_data(prefix_len * np.ones(100), np.linspace(-0.5, 0.5, num=100))
         self.line_pilot2_start.set_data((prefix_len+subframe_size+postfix_len+prefix_len) * np.ones(100), np.linspace(-0.5, 0.5, num=100))
@@ -213,6 +214,13 @@ class OFDMplotter:
         ax.set_xlim(0, self.FIG_LEN)
         ax.legend(fontsize=10)
 
+    def update_tx_signal_fig(self, fig_len_):
+        self.FIG_LEN = fig_len_
+        ax = self.fig.add_subplot(self.gs[0, 0:4])
+        ax.set_xlim(0, self.FIG_LEN)
+        ax = self.fig.add_subplot(self.gs[0, 4:8])
+        ax.set_xlim(0, self.FIG_LEN)
+
     def init_rx_signal(self, fig_len_):
         self.FIG_LEN = fig_len_
         ax = self.fig.add_subplot(self.gs[1, 0:4])
@@ -241,6 +249,13 @@ class OFDMplotter:
         ax.set_xlim(0, self.FIG_LEN)
         ax.legend(fontsize=10, loc='upper center', shadow=True, ncol=4)
 
+    def update_rx_signal_fig(self, fig_len_):
+        self.FIG_LEN = fig_len_
+        ax = self.fig.add_subplot(self.gs[1, 0:4])
+        ax.set_xlim(0, self.FIG_LEN)
+        ax = self.fig.add_subplot(self.gs[1, 4:8])
+        ax.set_xlim(0, self.FIG_LEN)
+
     def init_corr_peaks(self, pilot_len_):
         self.pilot_len = pilot_len_
         ax = self.fig.add_subplot(self.gs[2, 0:2])
@@ -265,6 +280,13 @@ class OFDMplotter:
         ax.set_xlim(0, self.pilot_len)
         ax.legend(fontsize=10)
 
+    def update_corr_peaks(self, pilot_len_):
+        self.pilot_len = pilot_len_
+        ax = self.fig.add_subplot(self.gs[2, 0:2])
+        ax.set_xlim(0, self.pilot_len)
+        ax = self.fig.add_subplot(self.gs[2, 4:6])
+        ax.set_xlim(0, self.pilot_len)
+
     def init_frame_corr(self, fig_len_):
         self.FIG_LEN = fig_len_
         ax = self.fig.add_subplot(self.gs[2, 2:4])
@@ -286,6 +308,13 @@ class OFDMplotter:
         ax.set_ylim([0, 1.1])
         ax.set_xlim(0, self.FIG_LEN)
         #ax.legend(fontsize=10)
+
+    def update_frame_corr(self, fig_len_):
+        self.FIG_LEN = fig_len_
+        ax = self.fig.add_subplot(self.gs[2, 2:4])
+        ax.set_xlim(0, self.FIG_LEN)
+        ax = self.fig.add_subplot(self.gs[2, 6:8])
+        ax.set_xlim(0, self.FIG_LEN)
 
     def init_constellation(self):
         ax = self.fig.add_subplot(self.gs[3, 0:2])
@@ -317,7 +346,7 @@ class OFDMplotter:
         ax.set_xlabel('Baseband Freq.')
         ax.set_ylabel('')
         self.line_chan_est_mag, = ax.step([], [], color='r')
-        ax.set_ylim(0, 10)
+        ax.set_ylim(-2, 2)
         ax.set_xlim(-10, 10)
         #ax.legend(fontsize=10)
 
@@ -327,7 +356,7 @@ class OFDMplotter:
         ax.set_xlabel('Baseband Freq.')
         ax.set_ylabel('')
         self.line_chan_est_mag2, = ax.step([], [], color='b')
-        ax.set_ylim(0, 10)
+        ax.set_ylim(-2, 2)
         ax.set_xlim(-10, 10)
         #ax.legend(fontsize=10)
 
