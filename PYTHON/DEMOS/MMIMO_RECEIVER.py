@@ -368,8 +368,6 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est, lts_start)
 
         tmp_range = range(this_offset, n_ofdm_syms * (num_sc + data_cp_len) + this_offset)
 
-
-
         debug = 0
         if debug:
             print("RANGE: {} TO {}. Len(tmp_range): {}".format(tmp_range[0], tmp_range[-1], len(tmp_range)))
@@ -454,6 +452,7 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
     rxSymbols_all = np.zeros((streams.shape[0], n_data_syms), dtype=complex)
     phase_error_all = np.zeros((streams.shape[0], n_ofdm_syms), dtype=float)
     rxSymbols_mat_allCl = []
+    rxSymbols_mat_allCl_noCP = []
     for clIdx in range(streams.shape[0]):
 
         rxSig_freq_eq = streams[clIdx, :, :]
@@ -461,7 +460,7 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
         if apply_sfo_corr:
             rxSig_freq_eq = ofdm_obj.sfo_correction(rxSig_freq_eq, pilot_sc, pilots_matrix, n_ofdm_syms)
         else:
-            sfo_corr = np.zeros((num_sc, n_ofdm_syms))
+            sfo_corr = np.ones((num_sc, n_ofdm_syms)) * -999
 
         # Apply phase correction
         if apply_phase_corr:
@@ -474,6 +473,7 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
         rxSig_freq_eq_phase = rxSig_freq_eq * phase_corr
         rxSymbols_mat = rxSig_freq_eq_phase[data_sc, :]
         rxSymbols_mat_allCl.append(rxSymbols_mat)
+        rxSymbols_mat_allCl_noCP.append(rxSig_freq_eq_phase)
 
         # Demodulation
         rxSymbols_vec = np.reshape(rxSymbols_mat, n_data_syms, order="F")       # Reshape into vector
@@ -483,10 +483,10 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
         rx_data_all[clIdx, :] = rx_data
         phase_error_all[clIdx, :] = phase_error
 
-    return rx_data_all, rxSymbols_all, rxSymbols_mat_allCl, pilot_sc, data_sc, phase_error_all
+    return rx_data_all, rxSymbols_all, rxSymbols_mat_allCl, pilot_sc, data_sc, phase_error_all, rxSymbols_mat_allCl_noCP
 
 
-def compute_correlation(chan_est, frameIdx):
+def compute_correlation(chan_est, frameIdx, ref_frame):
     """
     Debug plot that is useful for checking sync.
 
@@ -502,7 +502,6 @@ def compute_correlation(chan_est, frameIdx):
     """Returns csi with Frame, Cell, User, Pilot Rep, Antenna, Subcarrier"""
 
     this_cell = 0
-    ref_frame = 0
     chan_est_ref = chan_est[this_cell, :, :, ref_frame, :]  # [#clients, #BS ant, #frames, #subcarriers]
     corr_vec = np.transpose(np.conj(chan_est_ref), (1, 0, 2))           # Convert to [#bs ant, #clients, #subcarriers]
 
@@ -533,8 +532,8 @@ def rx_stats(tx_syms, rx_data, cfo_est, lts_evm, metadata, n_ofdm_syms, ofdm_obj
     num_cl = int(metadata['CL_NUM'])
     num_sc = int(metadata['FFT_SIZE'])
     mod_order_str = metadata['CL_MODULATION']
-    rate = metadata['RATE']
-    num_bs_ant = metadata['BS_NUM_ANT']
+    rate = int(metadata['RATE'])
+    num_bs_ant = int(metadata['BS_NUM_ANT'])
 
     if mod_order_str == "BPSK":
         mod_order = 2
@@ -605,6 +604,7 @@ def rx_app(filename, user_params, this_plotter):
     fft_size = int(metadata['FFT_SIZE'])
     cp_len = int(metadata['CP_LEN'])
     ofdm_data_sc = metadata['OFDM_DATA_SC']
+    ofdm_pilot_sc = metadata['OFDM_PILOT_SC']
     ofdm_pilot = np.array(metadata['OFDM_PILOT'])
 
     if not cl_present:
@@ -664,10 +664,11 @@ def rx_app(filename, user_params, this_plotter):
     tx_sig = np.zeros((num_cl, (num_cl*sym_len + num_samps_freq_dom + prefix_len)), dtype=complex)
 
     if cl_present:
+        ofdm_data_mat = []
         for clIdx in range(num_cl):
             data_freq = ofdm_data[clIdx]
-            ofdm_data_mat = np.reshape(np.squeeze(data_freq), (fft_size, n_ofdm_syms), order='F')
-            ofdm_data_mat_time = np.fft.ifft(ofdm_data_mat, axis=0)
+            ofdm_data_mat.append(np.reshape(np.squeeze(data_freq), (fft_size, n_ofdm_syms), order='F'))
+            ofdm_data_mat_time = np.fft.ifft(ofdm_data_mat[clIdx], axis=0)
             ofdm_data_vec_time = np.reshape(ofdm_data_mat_time, (1, ofdm_data_mat_time.shape[0]*ofdm_data_mat_time.shape[1]), order='F')
             tx_sig[clIdx, (clIdx*len(full_pilot)):(clIdx+1)*len(full_pilot)] = full_pilot
             tx_sig[clIdx, num_cl*len(full_pilot)::] = np.concatenate((np.zeros(prefix_len), np.squeeze(ofdm_data_vec_time)))
@@ -698,6 +699,7 @@ def rx_app(filename, user_params, this_plotter):
     this_plotter.update_rx_signal_fig(fig_len)
     this_plotter.update_corr_peaks(pilot_len)
     this_plotter.update_frame_corr(fig_len)
+    this_plotter.update_phaser_err(n_ofdm_syms)
 
     ###########################
     #    Process RX Signals   #
@@ -748,7 +750,7 @@ def rx_app(filename, user_params, this_plotter):
                 num_samps_full_frame = len(tx_data_sim[0, :])
                 ofdm_rx_syms_awgn = np.zeros((num_bs_ant, num_samps_full_frame)).astype(complex)
                 for antIdx in range(num_bs_ant):
-                    noise = 0.015 * (np.random.randn(num_samps_full_frame) + np.random.randn(num_samps_full_frame) * 1j)
+                    noise = 0.0015 * (np.random.randn(num_samps_full_frame) + np.random.randn(num_samps_full_frame) * 1j)
                     ofdm_rx_syms_awgn[antIdx, :] = tx_data_sim[antIdx, :] + noise
                     # Remove DC
                     ofdm_rx_syms_awgn[antIdx, :] -= np.mean(ofdm_rx_syms_awgn[antIdx, :])
@@ -779,7 +781,7 @@ def rx_app(filename, user_params, this_plotter):
                 streams = demultiplex(rx_data, bf_weights, user_params, metadata, chan_est[num_cells - 1, :, :, frameIdx, :], lts_start)
 
                 # (8) Demodulate streams
-                rx_data_val, rxSymbols, rxSyms_mat, pilot_sc, data_sc, phase_error = demodulate_data(streams, ofdm_obj, user_params, metadata)
+                rx_data_val, rxSymbols, rxSyms_mat, pilot_sc, data_sc, phase_error, rxSymsWithCP = demodulate_data(streams, ofdm_obj, user_params, metadata)
 
                 # (9) Plotter
                 rxSyms_vec = np.zeros((num_cl, len(data_sc) * n_ofdm_syms)).astype(complex)
@@ -792,12 +794,18 @@ def rx_app(filename, user_params, this_plotter):
                 H = chan_est_dbg[:, :, sc_of_interest]
                 Htmp = chan_est[:, :, :, :, sc_of_interest]
                 # corr_total: one column per client
-                corr_total[frameIdx, :] = compute_correlation(Htmp, frameIdx)
+                corr_total[frameIdx, :] = compute_correlation(Htmp, frameIdx, frame0)
                 # Manipulation of channel estimates
                 chan_est_vec = []
                 rx_H_est_plot = []
                 rx_H_est_plot_tmp = []
+                evm_mat = []
+                avg_evm = []
+                snr_from_evm = []
                 for clIdx in range(num_cl):
+                    evm_mat.append(abs(rxSymsWithCP[clIdx] - ofdm_data_mat[clIdx]) ** 2)
+                    avg_evm.append(np.mean(evm_mat[clIdx]))
+                    snr_from_evm.append(10 * np.log10(1 / avg_evm[clIdx]))
                     # Dim: chan_est_dbg[numCl, numBsAnt, numSC]
                     chan_est_vec.append(chan_est_dbg[clIdx, ant_plot, :])
                     rx_H_est_plot.append(np.squeeze(np.matlib.repmat(complex('nan'), 1, len(chan_est_vec[clIdx]))))
@@ -807,6 +815,18 @@ def rx_app(filename, user_params, this_plotter):
                     rx_H_est_plot[clIdx] = np.fft.fftshift(abs(rx_H_est_plot[clIdx]))
                 # Re-assign
                 rx_data = full_rx_frame[ant_plot, :]
+
+                # Calculate the Demmel condition number.
+                demmelNumber = np.empty((1, chan_est.shape[4]), dtype='float32')
+                chan_est_tmp = np.squeeze(chan_est[num_cells - 1, :, :, frameIdx, :])
+                for sc in range(chan_est_tmp.shape[2]):
+                    # covariance matrix
+                    cov = np.matmul(chan_est_tmp[:, :, sc],
+                                    np.transpose(np.squeeze(chan_est_tmp[:, :, sc]), [1, 0]).conj())
+                    eigenvalues = np.abs(np.linalg.eigvals(cov))
+                    demmelNumber[0, sc] = np.sum(eigenvalues) / np.min(eigenvalues)
+                tmp = demmelNumber[0, list(ofdm_pilot_sc) + list(ofdm_data_sc)]
+                demmelNumber_ave = np.average(tmp)
 
                 # Update plotter data
                 this_plotter.set_data(frameIdx,
@@ -820,15 +840,20 @@ def rx_app(filename, user_params, this_plotter):
                                       corr_total,  # [num frames, numCl]
                                       ofdm_tx_syms,  # tx symbols [numClients, data length]
                                       user_params,
-                                      metadata)
+                                      metadata,
+                                      phase_error,
+                                      avg_evm,
+                                      snr_from_evm,
+                                      demmelNumber_ave)
 
         elif rx_mode == "REPLAY":
             for frameIdx in iframes:
+                print("FRAME: {}".format(frameIdx))
                 if not running:
                     sys.exit(0)
                 for clIdx in range(num_cl):
                     for antIdx in range(num_bs_ant):
-                        print("FRAME: {} \t Client: {} \t Antenna: {}".format(frameIdx, clIdx, antIdx))
+                        # print("FRAME: {} \t Client: {} \t Antenna: {}".format(frameIdx, clIdx, antIdx))
                         # Put I/Q together
                         # Dims pilots: (frames, numCells, numClients, numAntennasAtBS, numSamplesPerSymbol*2)
                         I = pilot_samples[frameIdx, num_cells - 1, clIdx, antIdx, 0:sym_len * 2:2] / 2 ** 15
@@ -872,9 +897,9 @@ def rx_app(filename, user_params, this_plotter):
 
                     streams = demultiplex(IQ, bf_weights, user_params, metadata, this_chan_est, lts_start)
 
-                    rx_data_val, rxSymbols, rxSyms_mat, pilot_sc, data_sc, phase_error = demodulate_data(streams, ofdm_obj, user_params, metadata)
+                    rx_data_val, rxSymbols, rxSyms_mat, pilot_sc, data_sc, phase_error, rxSymsWithCP = demodulate_data(streams, ofdm_obj, user_params, metadata)
                     rxSyms_vec = np.reshape(rxSyms_mat, (num_cl, len(data_sc) * n_ofdm_syms), order="F")
-                    
+
                     # Plotter
                     ant_plot = 0
                     cell_plot = 0
@@ -882,14 +907,20 @@ def rx_app(filename, user_params, this_plotter):
                     sc_of_interest = np.sort(np.ndarray.tolist(pilot_sc) + np.ndarray.tolist(data_sc))
                     H = chan_est[:, :, :, :, sc_of_interest]
                     # corr_total: one column per client
-                    corr_total[frameIdx, :] = compute_correlation(H, frameIdx)
+                    corr_total[frameIdx, :] = compute_correlation(H, frameIdx, frame0)
 
                     # Manipulation of channel estimates
                     chan_est_vec = []
                     rx_H_est_plot = []
                     rx_H_est_plot_tmp = []
                     rx_data = []
+                    evm_mat = []
+                    avg_evm = []
+                    snr_from_evm = []
                     for clIdx in range(num_cl):
+                        evm_mat.append(abs(rxSymsWithCP[clIdx] - ofdm_data_mat[clIdx]) ** 2)
+                        avg_evm.append(np.mean(evm_mat[clIdx]))
+                        snr_from_evm.append(10 * np.log10(1 / avg_evm[clIdx]))
                         # Dim: chan_est[numCells, numCl, numBsAnt, numFrame, numSC]
                         chan_est_vec.append(chan_est[num_cells - 1, clIdx, ant_plot, frameIdx, :])
                         rx_H_est_plot.append(np.squeeze(np.matlib.repmat(complex('nan'), 1, len(chan_est_vec[clIdx]))))
@@ -902,13 +933,20 @@ def rx_app(filename, user_params, this_plotter):
                         rx_data.extend(IQ_pilots[cell_plot, clIdx, ant_plot, :])
                     rx_data.extend(IQ[ant_plot, :])
 
-                    # Calculate Statistics - TODO
-                    # rx_stats(tx syms, rx syms, CFO, LTS EVM, )
-                    cfo_est_tmp = cfo_est[num_cells - 1, :, :, frameIdx]
+                    # Calculate the Demmel condition number.
+                    demmelNumber = np.empty((1, chan_est.shape[4]), dtype='float32')
+                    chan_est_tmp = np.squeeze(chan_est[num_cells - 1, :, :, frameIdx, :])
+                    for sc in range(chan_est_tmp.shape[2]):
+                        # covariance matrix
+                        cov = np.matmul(chan_est_tmp[:, :, sc], np.transpose(np.squeeze(chan_est_tmp[:, :, sc]), [1, 0]).conj())
+                        eigenvalues = np.abs(np.linalg.eigvals(cov))
+                        demmelNumber[0, sc] = np.sum(eigenvalues) / np.min(eigenvalues)
+                    tmp = demmelNumber[0, list(ofdm_pilot_sc) + list(ofdm_data_sc)]
+                    demmelNumber_ave = np.average(tmp)
+
+                    # TODO: Calculate Statistics
                     lts_evm_tmp = lts_evm[num_cells - 1, :, :, frameIdx]
-                    # if cl_present:
-                    #    rx_stats(ofdm_data, rx_data_val, cfo_est_tmp, lts_evm_tmp,
-                    #             metadata, n_ofdm_syms, ofdm_obj, phase_error)
+                    # rx_stats(rxSymbols, ofdm_data, rx_data_val, lts_evm_tmp, metadata, n_ofdm_syms, ofdm_obj)
 
                     # Update plotter data
                     this_plotter.set_data(frameIdx,
@@ -922,7 +960,11 @@ def rx_app(filename, user_params, this_plotter):
                                           corr_total,                            # [num frames, numCl]
                                           ofdm_tx_syms,                          # tx symbols [numClients, data length]
                                           user_params,
-                                          metadata)
+                                          metadata,
+                                          phase_error,
+                                          avg_evm,
+                                          snr_from_evm,
+                                          demmelNumber_ave)
 
             # Analyze pilot offsets
             #    lts_start_all[0, clIdx, antIdx, frameIdx]
@@ -975,7 +1017,7 @@ if __name__ == '__main__':
     parser.add_option("--phaseCorr",  action="store_true", dest="phase_corr", default=True,  help="Apply phase correction [default: %default]")
     parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=1,     help="FFT Offset:# CP samples for FFT [default: %default]")
     parser.add_option("--numClPlot",  type="int",          dest="num_cl_plot",default=2,     help="Number of clients to plot. Max of 2 [default: %default]")
-    parser.add_option("--frame",      type="string",       dest="frame",      default="0:100",  help="Range of frames to analyze (as string). Examples: --frame='5' to analyze a single frame, --frame='5:200' for range from frame 5 to 200, --frame='5:end' all frames starting at frame 5 [default: %default]")
+    parser.add_option("--frame",      type="string",       dest="frame",      default="300:end",  help="Range of frames to analyze (as string). Examples: --frame='5' to analyze a single frame, --frame='5:200' for range from frame 5 to 200, --frame='5:end' all frames starting at frame 5 [default: %default]")
     (options, args) = parser.parse_args()
 
     # Params
