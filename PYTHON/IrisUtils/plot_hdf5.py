@@ -33,6 +33,8 @@ from optparse import OptionParser
 from channel_analysis import *
 import hdf5_lib
 from hdf5_lib import *
+import matplotlib
+matplotlib.use("TkAgg")
 
 def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=0.001, deep_inspect=False, sub_sample=1):
     """
