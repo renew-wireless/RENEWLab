@@ -432,7 +432,7 @@ def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[]):
         if not best_pk:
             print("SISO_OFDM: No LTS Found! Continue...")
             pilot = np.array([])
-            return pilot, tx_pilot, lts_corr, pilot_thresh, best_pk, lts_start
+            return tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk
     else:
         raise Exception("Only LTS Pilots supported at the moment")
 
