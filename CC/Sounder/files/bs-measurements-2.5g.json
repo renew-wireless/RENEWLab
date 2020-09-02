@@ -14,7 +14,7 @@
 		     "GGGGGGGPGGGGGGG"
 		 ],
 		 "frame_mode" : "free_running",
-		 "max_frame" : 0,
+		 "max_frame" : 4000,
 		 "subframe_size" : 4096,
 		 "fft_size" : 64,
 		 "cp_size" : 0,
