@@ -11,7 +11,8 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
         dev->setBandwidth(SOAPY_SDR_RX, ch, _cfg->bwFilter);
         dev->setBandwidth(SOAPY_SDR_TX, ch, _cfg->bwFilter);
     } else {
-        std::cout << std::endl << "Init USRP channel: " << ch << std::endl;
+        std::cout << std::endl
+                  << "Init USRP channel: " << ch << std::endl;
         dev->setAntenna(SOAPY_SDR_TX, ch, "TX/RX");
         dev->setAntenna(SOAPY_SDR_RX, ch, "RX2"); // or "TX/RX"
         std::cout << "Tx antenna: " << dev->getAntenna(SOAPY_SDR_TX, ch)
@@ -19,9 +20,9 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
     }
 
     dev->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->radioRfFreq);
-    dev->setFrequency(SOAPY_SDR_RX, ch, "BB", 0); // _cfg->nco
+    dev->setFrequency(SOAPY_SDR_RX, ch, "BB", _cfg->nco);
     dev->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->radioRfFreq);
-    dev->setFrequency(SOAPY_SDR_TX, ch, "BB", 0); // _cfg->nco
+    dev->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->nco);
 
     std::cout << "Tx RF freq: " << dev->getFrequency(SOAPY_SDR_TX, ch, "RF")
               << ", Rx RF freq: " << dev->getFrequency(SOAPY_SDR_RX, ch, "RF") << std::endl;
@@ -32,11 +33,11 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
     if (_cfg->single_gain) {
         dev->setGain(SOAPY_SDR_RX, ch, rxgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
         dev->setGain(SOAPY_SDR_TX, ch, txgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
-	std::cout << "Tx gain: " << dev->getGain(SOAPY_SDR_TX, ch)
-	          << ", Rx gain: " << dev->getGain(SOAPY_SDR_RX, ch) << std::endl;
+        std::cout << "Tx gain: " << dev->getGain(SOAPY_SDR_TX, ch)
+                  << ", Rx gain: " << dev->getGain(SOAPY_SDR_RX, ch) << std::endl;
     } else {
         if (!kUseUHD) {
-	    dev->setGain(SOAPY_SDR_RX, ch, "LNA", std::min(30.0, rxgain)); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
+            dev->setGain(SOAPY_SDR_RX, ch, "LNA", std::min(30.0, rxgain)); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
             dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0);
             dev->setGain(SOAPY_SDR_RX, ch, "PGA", 0);
             dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
@@ -45,19 +46,18 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
             dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 0);
             dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0);
             dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6);
-	} else {
-	    dev->setGain(SOAPY_SDR_TX, ch, txgain);
+        } else {
+            dev->setGain(SOAPY_SDR_TX, ch, txgain);
             dev->setGain(SOAPY_SDR_RX, ch, rxgain);
-	    std::cout << "Tx gain: " << dev->getGain(SOAPY_SDR_TX, ch) << std::endl;
+            std::cout << "Tx gain: " << dev->getGain(SOAPY_SDR_TX, ch) << std::endl;
             std::cout << "Rx gain: " << dev->getGain(SOAPY_SDR_RX, ch) << std::endl;
-	}
+        }
     }
 
     // DC Offset
     // TODO: add uhd_cal
     if (!kUseUHD)
         dev->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
-    
 }
 
 void Radio::drain_buffers(std::vector<void*> buffs, int symSamp)
@@ -109,7 +109,7 @@ int Radio::recv(void* const* buffs, int samples, long long& frameTime)
     int flags(0);
     int r = dev->readStream(rxs, buffs, samples, flags, frameTime, 1000000);
     if (r != samples)
-      std::cerr << "time: " << frameTime << ", unexpected readStream error " << SoapySDR::errToStr(r) << ", flag: " << flags << std::endl;
+        std::cerr << "time: " << frameTime << ", unexpected readStream error " << SoapySDR::errToStr(r) << ", flag: " << flags << std::endl;
     return r;
 }
 
@@ -151,11 +151,11 @@ int Radio::xmit(const void* const* buffs, int samples, int flags, long long& fra
 
 void Radio::activateXmit(void)
 {
-  // for USRP device start tx stream 1 sec in the future
-  if (!kUseUHD)
-      dev->activateStream(txs);
-  else
-      dev->activateStream(txs, SOAPY_SDR_HAS_TIME, 1e9, 0);
+    // for USRP device start tx stream 1 sec in the future
+    if (!kUseUHD)
+        dev->activateStream(txs);
+    else
+        dev->activateStream(txs, SOAPY_SDR_HAS_TIME, 1e9, 0);
 }
 
 void Radio::deactivateXmit(void)
