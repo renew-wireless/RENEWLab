@@ -3,8 +3,17 @@ project (Sounder)
 
 set(CMAKE_C_FLAGS "-std=c99 -O3 -Wall")
 set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -g -O3 -mavx2 -mavx")
+# set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -g -O3 -march=native -mavx")
 
 find_package(nlohmann_json 3.2.0 REQUIRED)
+
+set(USE_UHD False CACHE STRING "USE_UHD defaulting to 'False'")
+message(STATUS "USE_UHD: ${USE_UHD}")
+
+if(${USE_UHD})
+  message(STATUS "Enabled USE_UHD: ${USE_UHD}")
+  add_definitions(-DUSE_UHD)
+endif()
 
 ########################################################################
 # SoapySDR dependency
