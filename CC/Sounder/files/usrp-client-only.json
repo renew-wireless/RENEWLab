@@ -1,0 +1,28 @@
+{
+	"Clients" : {
+		 "frequency" : 3.6e9,
+		 "channel" : "A",
+		 "agc_en" : false,
+		 "rxgainA" : [20],
+		 "txgainA" : [15],
+		 "rxgainB" : [20],
+		 "txgainB" : [15],
+		 "rate" : 20e6,
+		 "fft_size" : 64,
+		 "subframe_size" : 640,
+		 "cp_size" : 16,
+		 "prefix" : 82,
+		 "postfix" : 68,
+		 "frame_schedule" : [
+		     "GGPGGGGGGGGGGGGGGGGG"
+		 ],
+	         "frame_mode" : "free_running",
+	         "hw_framer" : false,
+		 "beacon_type" : "gold_ifft",
+		 "modulation" : "QPSK",
+		 "pilot_seq" : "lts-half",
+	         "sdr_id" : [
+		     "10.118.3.2"
+		 ]
+	}
+}
