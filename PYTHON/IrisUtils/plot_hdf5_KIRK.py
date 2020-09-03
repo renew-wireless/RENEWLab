@@ -107,7 +107,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
             IQ = I + (Q * 1j)
             tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk = pilot_finder(IQ, pilot_type, flip=True,
                                                                               pilot_seq=ofdm_pilot)
-            num_peaks_all_frames.append(len(lts_pks))
+            num_peaks_all_frames.append(lts_pks.size)
 
             dbg2 = False
             if dbg2:
