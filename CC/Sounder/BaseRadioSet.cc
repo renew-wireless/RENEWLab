@@ -188,7 +188,6 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
             }
 
             // write beacons to FPGA buffers
-            std::cout << "beacon length: " << _cfg->beacon.size() << std::endl;
             size_t ndx = 0;
             for (size_t i = 0; i < bsRadios[0].size(); i++) {
                 SoapySDR::Device* dev = bsRadios[0][i]->dev;
