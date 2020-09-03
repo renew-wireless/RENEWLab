@@ -10,10 +10,10 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
         dev->setAntenna(SOAPY_SDR_RX, ch, "TRX");
         dev->setBandwidth(SOAPY_SDR_RX, ch, _cfg->bwFilter);
         dev->setBandwidth(SOAPY_SDR_TX, ch, _cfg->bwFilter);
-	dev->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->radioRfFreq);
+        dev->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->radioRfFreq);
         dev->setFrequency(SOAPY_SDR_RX, ch, "BB", _cfg->nco);
-	dev->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->radioRfFreq);
-        dev->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->nco); 
+        dev->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->radioRfFreq);
+        dev->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->nco);
     } else {
         std::cout << std::endl
                   << "Init USRP channel: " << ch << std::endl;
@@ -21,10 +21,10 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
         dev->setAntenna(SOAPY_SDR_RX, ch, "RX2"); // or "TX/RX"
         std::cout << "Tx antenna: " << dev->getAntenna(SOAPY_SDR_TX, ch)
                   << ", Rx antenna: " << dev->getAntenna(SOAPY_SDR_RX, ch) << std::endl;
-	dev->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->radioRfFreq);
-        dev->setFrequency(SOAPY_SDR_RX, ch, "BB", 0);                                                     
+        dev->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->radioRfFreq);
+        dev->setFrequency(SOAPY_SDR_RX, ch, "BB", 0);
         dev->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->radioRfFreq);
-        dev->setFrequency(SOAPY_SDR_TX, ch, "BB", 0); 
+        dev->setFrequency(SOAPY_SDR_TX, ch, "BB", 0);
     }
 
     std::cout << "Tx RF freq: " << dev->getFrequency(SOAPY_SDR_TX, ch, "RF")
