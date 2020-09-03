@@ -197,13 +197,9 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
                     bool isBeaconAntenna = !_cfg->beamsweep && ndx == _cfg->beacon_ant;
                     std::vector<unsigned> beacon_weights(nBsAntennas[0], isBeaconAntenna ? 1 : 0);
                     std::string tx_ram_wgt = "BEACON_RAM_WGT_";
-                    std::cout << "cfg->beamsweep: " << _cfg->beamsweep << std::endl;
                     if (_cfg->beamsweep) {
-                        std::cout << "num of BS antenna: " << nBsAntennas[0] << std::endl;
-                        for (int j = 0; j < nBsAntennas[0]; j++) {
+                        for (int j = 0; j < nBsAntennas[0]; j++)
                             beacon_weights[j] = CommsLib::hadamard2(ndx, j);
-                            std::cout << "beacon_weight[" << j << "]: " << beacon_weights[j] << std::endl;
-                        }
                     }
                     dev->writeRegisters(tx_ram_wgt + c, 0, beacon_weights);
                     ++ndx;
