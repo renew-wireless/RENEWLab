@@ -33,9 +33,14 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
 
         if (!_cfg->hub_ids.empty()) {
             SoapySDR::Kwargs args;
-            args["driver"] = "uhd"; // "remote"
+            // TODO: need to figure out what is hub for USRPs
+            if (!kUseUHD) {
+                args["driver"] = "remote";
+                args["serial"] = _cfg->hub_ids.at(c);
+            } else {
+                args["driver"] = "uhd";
+            }
             args["timeout"] = "1000000";
-            // args["serial"] = _cfg->hub_ids.at(c);
             hubs.push_back(SoapySDR::Device::make(args));
         }
 
@@ -173,52 +178,51 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         tddConfStr += "]}";
         std::cout << tddConfStr << std::endl;
 #endif
-        /*
-	for (size_t i = 0; i < bsRadios[0].size(); i++) {
-            SoapySDR::Device* dev = bsRadios[0][i]->dev;
-            dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
-            dev->writeSetting("TDD_MODE", "true");
-            dev->writeSetting("TDD_CONFIG", tddConfStr);
-	    std::cout << "dev write settings: tx_sw_delay, tdd_mode, tdd_config...!" << std::endl;
-        }
-	*/
-
-        // write beacons to FPGA buffers
-        /*
-	std::cout << "beacon length: " << _cfg->beacon.size() << std::endl;
-	size_t ndx = 0;
-	for (size_t i = 0; i < bsRadios[0].size(); i++) {
-            SoapySDR::Device* dev = bsRadios[0][i]->dev;
-            dev->writeRegisters("BEACON_RAM", 0, _cfg->beacon);
-	    
-            for (char const& c : _cfg->bsChannel) {
-                bool isBeaconAntenna = !_cfg->beamsweep && ndx == _cfg->beacon_ant;
-                std::vector<unsigned> beacon_weights(nBsAntennas[0], isBeaconAntenna ? 1 : 0);
-                std::string tx_ram_wgt = "BEACON_RAM_WGT_";
-		std::cout << "cfg->beamsweep: " << _cfg->beamsweep << std::endl;
-                if (_cfg->beamsweep) {
-		  std::cout << "num of BS antenna: " << nBsAntennas[0] << std::endl;
-		  for (int j = 0; j < nBsAntennas[0]; j++) {
-		    beacon_weights[j] = CommsLib::hadamard2(ndx, j);
-		    std::cout << "beacon_weight[" << j << "]: " << beacon_weights[j] << std::endl;
-		  }
-                }
-                // dev->writeRegisters(tx_ram_wgt + c, 0, beacon_weights);
-                ++ndx;
+        // write TDD schedule and beacons to FPFA buffers only for Iris
+        if (!kUseUHD) {
+            for (size_t i = 0; i < bsRadios[0].size(); i++) {
+                SoapySDR::Device* dev = bsRadios[0][i]->dev;
+                dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
+                dev->writeSetting("TDD_MODE", "true");
+                dev->writeSetting("TDD_CONFIG", tddConfStr);
             }
 
-	    // dev->writeSetting("BEACON_START", std::to_string(bsRadios[0].size()));
-	    std::cout << "write beacon to ram....!" << std::endl;
+            // write beacons to FPGA buffers
+            std::cout << "beacon length: " << _cfg->beacon.size() << std::endl;
+            size_t ndx = 0;
+            for (size_t i = 0; i < bsRadios[0].size(); i++) {
+                SoapySDR::Device* dev = bsRadios[0][i]->dev;
+                dev->writeRegisters("BEACON_RAM", 0, _cfg->beacon);
+                for (char const& c : _cfg->bsChannel) {
+                    bool isBeaconAntenna = !_cfg->beamsweep && ndx == _cfg->beacon_ant;
+                    std::vector<unsigned> beacon_weights(nBsAntennas[0], isBeaconAntenna ? 1 : 0);
+                    std::string tx_ram_wgt = "BEACON_RAM_WGT_";
+                    std::cout << "cfg->beamsweep: " << _cfg->beamsweep << std::endl;
+                    if (_cfg->beamsweep) {
+                        std::cout << "num of BS antenna: " << nBsAntennas[0] << std::endl;
+                        for (int j = 0; j < nBsAntennas[0]; j++) {
+                            beacon_weights[j] = CommsLib::hadamard2(ndx, j);
+                            std::cout << "beacon_weight[" << j << "]: " << beacon_weights[j] << std::endl;
+                        }
+                    }
+                    dev->writeRegisters(tx_ram_wgt + c, 0, beacon_weights);
+                    ++ndx;
+                }
+                dev->writeSetting("BEACON_START", std::to_string(bsRadios[0].size()));
+            }
         }
-	*/
 
         for (size_t i = 0; i < bsRadios[0].size(); i++) {
             SoapySDR::Device* dev = bsRadios[0][i]->dev;
-            dev->setHardwareTime(0); // "CMD"
-            bsRadios[0][i]->activateRecv();
-            bsRadios[0][i]->activateXmit();
-            // dev->setHardwareTime(0, "TRIGGER");
-            // dev->setHardwareTime(0);
+            if (!kUseUHD) {
+                bsRadios[0][i]->activateRecv();
+                bsRadios[0][i]->activateXmit();
+                dev->setHardwareTime(0, "TRIGGER");
+            } else {
+                dev->setHardwareTime(0.0); // "CMD"
+                bsRadios[0][i]->activateRecv();
+                bsRadios[0][i]->activateXmit();
+            }
         }
         std::cout << __func__ << " done!" << std::endl;
     }
