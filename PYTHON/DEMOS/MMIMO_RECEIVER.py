@@ -95,7 +95,11 @@ def read_rx_samples(rx_mode, filename):
         # Check which data we have available
         data_types_avail = []
         pilots_avail = bool(hdf5.data['Pilot_Samples'])
-        ul_data_avail = bool(hdf5.data['UplinkData'])
+        if len(hdf5.data.keys()) > 1:
+            if bool(self.data['UplinkData']):
+                ul_data_avail = bool(hdf5.data['UplinkData'])
+        else:
+            ul_data_avail = False
 
         samples = dict()
         if pilots_avail:
@@ -106,6 +110,9 @@ def read_rx_samples(rx_mode, filename):
             data_types_avail.append("UL_DATA")
             samples.update({"UL_DATA": hdf5.uplink_samples})
             print("Uplink Data Available")
+        else:
+            print("No data found! exit now...")
+            sys.exit(-1)
 
         # Empty structure
         if not data_types_avail:
@@ -817,18 +824,21 @@ def rx_app(filename, user_params, this_plotter):
                 rx_data = full_rx_frame[ant_plot, :]
 
                 # Calculate the Demmel condition number.
-                demmelNumber = np.empty((1, chan_est.shape[4]), dtype='float32')
-                chan_est_tmp = np.squeeze(chan_est[num_cells - 1, :, :, frameIdx, :])
-                for sc in range(chan_est_tmp.shape[2]):
-                    # covariance matrix
-                    cov = np.matmul(chan_est_tmp[:, :, sc],
-                                    np.transpose(np.squeeze(chan_est_tmp[:, :, sc]), [1, 0]).conj())
-                    eigenvalues = np.abs(np.linalg.eigvals(cov))
-                    demmelNumber[0, sc] = np.sum(eigenvalues) / np.min(eigenvalues)
-                tmp = demmelNumber[0, list(ofdm_pilot_sc) + list(ofdm_data_sc)]
-                demmelNumber_ave = np.average(tmp)
+                if num_cl > 1:
+                    demmelNumber = np.empty((1, chan_est.shape[4]), dtype='float32')
+                    chan_est_tmp = np.squeeze(chan_est[num_cells - 1, :, :, frameIdx, :])
+                    for sc in range(chan_est_tmp.shape[2]):
+                        # covariance matrix
+                        cov = np.matmul(chan_est_tmp[:, :, sc],
+                                        np.transpose(np.squeeze(chan_est_tmp[:, :, sc]), [1, 0]).conj())
+                        eigenvalues = np.abs(np.linalg.eigvals(cov))
+                        demmelNumber[0, sc] = np.sum(eigenvalues) / np.min(eigenvalues)
+                    tmp = demmelNumber[0, list(ofdm_pilot_sc) + list(ofdm_data_sc)]
+                    demmelNumber_ave = np.average(tmp)
+                else:
+                    demmelNumber_ave = -999
 
-                # Update plotter data
+                    # Update plotter data
                 this_plotter.set_data(frameIdx,
                                       tx_sig,  # tx[num clients][num samples]
                                       rx_data,  # [numBsAnt, symLen]
@@ -934,15 +944,18 @@ def rx_app(filename, user_params, this_plotter):
                     rx_data.extend(IQ[ant_plot, :])
 
                     # Calculate the Demmel condition number.
-                    demmelNumber = np.empty((1, chan_est.shape[4]), dtype='float32')
-                    chan_est_tmp = np.squeeze(chan_est[num_cells - 1, :, :, frameIdx, :])
-                    for sc in range(chan_est_tmp.shape[2]):
-                        # covariance matrix
-                        cov = np.matmul(chan_est_tmp[:, :, sc], np.transpose(np.squeeze(chan_est_tmp[:, :, sc]), [1, 0]).conj())
-                        eigenvalues = np.abs(np.linalg.eigvals(cov))
-                        demmelNumber[0, sc] = np.sum(eigenvalues) / np.min(eigenvalues)
-                    tmp = demmelNumber[0, list(ofdm_pilot_sc) + list(ofdm_data_sc)]
-                    demmelNumber_ave = np.average(tmp)
+                    if num_cl > 1:
+                        demmelNumber = np.empty((1, chan_est.shape[4]), dtype='float32')
+                        chan_est_tmp = np.squeeze(chan_est[num_cells - 1, :, :, frameIdx, :])
+                        for sc in range(chan_est_tmp.shape[2]):
+                            # covariance matrix
+                            cov = np.matmul(chan_est_tmp[:, :, sc], np.transpose(np.squeeze(chan_est_tmp[:, :, sc]), [1, 0]).conj())
+                            eigenvalues = np.abs(np.linalg.eigvals(cov))
+                            demmelNumber[0, sc] = np.sum(eigenvalues) / np.min(eigenvalues)
+                        tmp = demmelNumber[0, list(ofdm_pilot_sc) + list(ofdm_data_sc)]
+                        demmelNumber_ave = np.average(tmp)
+                    else:
+                        demmelNumber_ave = -999
 
                     # TODO: Calculate Statistics
                     lts_evm_tmp = lts_evm[num_cells - 1, :, :, frameIdx]
@@ -1017,7 +1030,7 @@ if __name__ == '__main__':
     parser.add_option("--phaseCorr",  action="store_true", dest="phase_corr", default=True,  help="Apply phase correction [default: %default]")
     parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=1,     help="FFT Offset:# CP samples for FFT [default: %default]")
     parser.add_option("--numClPlot",  type="int",          dest="num_cl_plot",default=2,     help="Number of clients to plot. Max of 2 [default: %default]")
-    parser.add_option("--frame",      type="string",       dest="frame",      default="300:end",  help="Range of frames to analyze (as string). Examples: --frame='5' to analyze a single frame, --frame='5:200' for range from frame 5 to 200, --frame='5:end' all frames starting at frame 5 [default: %default]")
+    parser.add_option("--frame",      type="string",       dest="frame",      default="0:end",  help="Range of frames to analyze (as string). Examples: --frame='5' to analyze a single frame, --frame='5:200' for range from frame 5 to 200, --frame='5:end' all frames starting at frame 5 [default: %default]")
     (options, args) = parser.parse_args()
 
     # Params

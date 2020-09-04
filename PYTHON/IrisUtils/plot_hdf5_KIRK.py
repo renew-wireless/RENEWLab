@@ -95,44 +95,59 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
         match_filt_clr, frame_map, f_st, peak_map = hdf5_lib.frame_sanity(match_filt, k_lts, n_lts, n_frm_st, frm_plt, plt_ant=ant_i, cp = cp)
         frame_sanity_end = time.time()
 
-        # Find LTS peaks across frame
         ############### XXXXXX OBCH XXXXXX ##################
-        num_peaks_all_frames = []
-        for frameIdx in range(0, pilot_samples.shape[0]):
-            ueIdx = 0
-            bsAntIdx = 0
-            num_cells = 1
-            I = pilot_samples[frameIdx, num_cells - 1, ueIdx, bsAntIdx, 0:symbol_length * 2:2] / 2 ** 15
-            Q = pilot_samples[frameIdx, num_cells - 1, ueIdx, bsAntIdx, 1:symbol_length * 2:2] / 2 ** 15
-            IQ = I + (Q * 1j)
-            tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk = pilot_finder(IQ, pilot_type, flip=True,
-                                                                              pilot_seq=ofdm_pilot)
-            num_peaks_all_frames.append(lts_pks.size)
+        # Find LTS peaks across frame
+        n_frame = pilot_samples.shape[0]
+        n_cell = pilot_samples.shape[1]
+        n_ue = pilot_samples.shape[2]
+        n_ant = pilot_samples.shape[3]
+        seq_found = np.zeros((n_frame, n_cell, n_ue, n_ant))
+        num_pilots_per_sym = ((symbol_length-z_padding) // len(ofdm_pilot))
 
-            dbg2 = False
-            if dbg2:
-                fig = plt.figure(1234)
-                ax1 = fig.add_subplot(2, 1, 1)
-                ax1.grid(True)
-                ax1.plot(np.abs(IQ))
-                ax2 = fig.add_subplot(2, 1, 2)
-                ax2.grid(True)
-                ax2.stem(np.abs(lts_corr))
-                ax2.scatter(np.linspace(0.0, len(lts_corr), num=1000), pilot_thresh * np.ones(1000), color='r')
-                plt.show()
+        for frameIdx in range(n_frame):  # Frame
+            for cellIdx in range(n_cell):  # Cell
+                for ueIdx in range(n_ue):  # UE
+                    for bsAntIdx in range(n_ant):  # BS ANT
 
-        # Find percentage of LTS peaks within a symbol
-        # (e.g., in a 4096-sample pilot symbol, we expect 64, 64-long sequences)
-        num_pilots_per_sym = (symbol_length // len(ofdm_pilot))
-        peaks_pct = 100 * (np.array(num_peaks_all_frames)/num_pilots_per_sym)
-        fig = plt.figure()
-        ax1 = fig.add_subplot(1, 1, 1)
-        ax1.grid(True)
-        ax1.stem(peaks_pct)
-        ax1.set_ylabel('%')
-        ax1.set_xlabel('Frame #')
-        ax1.set_title('Percentage of Pilots Found (>100% possible due to threshold level)')
-        plt.show(block=False)
+                        I = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 0:symbol_length * 2:2] / 2 ** 15
+                        Q = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 1:symbol_length * 2:2] / 2 ** 15
+                        IQ = I + (Q * 1j)
+                        tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk = pilot_finder(IQ, pilot_type, flip=True,
+                                                                                          pilot_seq=ofdm_pilot)
+                        # Find percentage of LTS peaks within a symbol
+                        # (e.g., in a 4096-sample pilot symbol, we expect 64, 64-long sequences... assuming no CP)
+                        seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / num_pilots_per_sym)
+
+                        dbg2 = False
+                        if dbg2:
+                            fig = plt.figure(1234)
+                            ax1 = fig.add_subplot(2, 1, 1)
+                            ax1.grid(True)
+                            ax1.plot(np.abs(IQ))
+                            ax2 = fig.add_subplot(2, 1, 2)
+                            ax2.grid(True)
+                            ax2.stem(np.abs(lts_corr))
+                            ax2.scatter(np.linspace(0.0, len(lts_corr), num=1000), pilot_thresh * np.ones(1000), color='r')
+                            plt.show()
+
+        fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+        c = []
+        fig.suptitle('Pilot Map (Percentage of Detected Pilots Per Symbol) - NOTE: Might exceed 100% due to threshold')
+        for n_c in range(n_cell):
+            for n_u in range(n_ue):
+                c.append(axes[n_u, n_c].imshow(seq_found[:, n_c, n_u, :].T, vmin=0, vmax=100, cmap='Blues',
+                                               interpolation='nearest',
+                                               extent=[hdf5.n_frm_st, hdf5.n_frm_end, n_ant, 0],
+                                               aspect="auto"))
+                axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
+                axes[n_u, n_c].set_ylabel('Antenna #')
+                axes[n_u, n_c].set_xlabel('Frame #')
+                axes[n_u, n_c].set_xticks(np.arange(hdf5.n_frm_st, hdf5.n_frm_end, 1), minor=True)
+                axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
+                axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
+
+        cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, 100, 11), orientation='horizontal')
+        cbar.ax.set_xticklabels(['0%', '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'])
         ############### XXXXXX OBCH END XXXXXX ##################
 
         print(">>>> csi_from_pilots time: %f \n" % ( csi_from_pilots_end - csi_from_pilots_start) )
@@ -490,7 +505,7 @@ def main():
     hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
 
     if verify:
-        verify_hdf5(hdf5, ref_frame, ref_ant, ref_user, fr_strt, thresh, deep_inspect,sub_sample)
+        verify_hdf5(hdf5, ref_frame, ref_ant, ref_user, fr_strt, thresh, deep_inspect, sub_sample)
     if analyze:
         analyze_hdf5(hdf5)
     scrpt_end = time.time()

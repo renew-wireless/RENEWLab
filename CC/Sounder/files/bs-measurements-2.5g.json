@@ -5,10 +5,10 @@
 		 "hub_id" : "files/measurements-hub-serials.txt",
 		 "frequency" : 2.5e9,
 		 "channel" : "AB",
-		 "rxgainA" : 45,
-		 "txgainA" : 70,
-		 "rxgainB" : 45,
-		 "txgainB" : 70,
+		 "rxgainA" : 20,
+		 "txgainA" : 85,
+		 "rxgainB" : 20,
+		 "txgainB" : 85,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
 		     "GGGGGGGPGGGGGGG"
