@@ -12,6 +12,7 @@
 #include "include/comms-lib.h"
 #include "include/macros.h"
 #include "include/utils.h"
+#include <SoapySDR/Time.hpp>
 #include <atomic>
 #include <random>
 #include <unistd.h>
@@ -164,7 +165,43 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
     printf("receiver thread %d has %d radios\n", tid, radio_end - radio_start);
 
+    // prepare BS beacon in host buffer
+    std::vector<void*> beaconbuff(2);
+    std::vector<void*> zeros(2);
+    zeros[0] = calloc(config_->sampsPerSymbol, sizeof(int16_t) * 2);
+    zeros[1] = calloc(config_->sampsPerSymbol, sizeof(int16_t) * 2);
+    beaconbuff[0] = config_->beacon_ci16.data();
+    beaconbuff[1] = zeros[0];
+
+    size_t frameTimeLen = config_->sampsPerSymbol * config_->symbolsPerFrame;
+    size_t txFrameDelta = std::ceil(TIME_DELTA / (1e3 * frameTimeLen / config_->rate));
+    size_t txTimeDelta = txFrameDelta * frameTimeLen;
+
+    long long rxTimeBs(0);
+    long long txTimeBs(0);
+
+    // read rx_offset to align the FPGA time of the BS
+    // by performing dummy readStream()
+    std::vector<std::complex<int16_t>> syncbuffBs(config_->sampsPerSymbol * config_->symbolsPerFrame, 0);
+    std::vector<void*> syncrxbuffBs(2);
+    syncrxbuffBs[0] = syncbuffBs.data();
+
+    std::cout << "Sync BS host and FPGA timestamp..." << std::endl;
+    baseRadioSet_->radioRx(0, syncrxbuffBs.data(), config_->sampsPerSymbol, rxTimeBs);
+
+    // schedule the first beacon in the future
+    txTimeBs = rxTimeBs + config_->sampsPerSymbol * config_->symbolsPerFrame * 10;
+    baseRadioSet_->radioTx(0, beaconbuff.data(), 2, txTimeBs);
+    long long bsInitRxOffset = txTimeBs - rxTimeBs;
+    for (int it = 0; it < std::floor(bsInitRxOffset / config_->sampsPerSymbol); it++) {
+        baseRadioSet_->radioRx(0, syncrxbuffBs.data(), config_->sampsPerSymbol, rxTimeBs);
+    }
+
     int cursor = 0;
+    int frame_id = 0;
+    int symbol_id = 0;
+    int ant_id = 0;
+    std::cout << "Start BS main recv loop... " << std::endl;
     while (config_->running) {
         // receive data
         for (int it = radio_start; it < radio_end; it++) {
@@ -181,7 +218,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                     printf("thread %d buffer full\n", tid);
                     exit(0);
                 }
-                // Reserved until marked empty by consumer.
+                // Reserved until marked empty by consumer
             }
 
             // Receive data into buffers
@@ -190,16 +227,60 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 pkg[ch] = (Package*)(buffer + (cursor + ch) * packageLength);
                 samp[ch] = pkg[ch]->data;
             }
-            long long frameTime;
+
             assert(baseRadioSet_ != NULL);
-            if (baseRadioSet_->radioRx(it, samp, frameTime) < 0) {
-                config_->running = false;
-                break;
+            ant_id = it * bsSdrCh;
+
+            // schedule BS beacons to be sent from host for UHD devices
+            if (!kUseUHD) {
+                long long frameTime;
+                if (baseRadioSet_->radioRx(it, samp, frameTime) < 0) {
+                    config_->running = false;
+                    break;
+                }
+
+                frame_id = (int)(frameTime >> 32);
+                symbol_id = (int)((frameTime >> 16) & 0xFFFF);
+            } else {
+                for (int sf = 0; sf < config_->symbolsPerFrame; sf++) {
+                    int rx_len = config_->sampsPerSymbol;
+                    int r;
+
+                    if (sf == 0)
+                        frame_id++;
+
+                    // only write received pilot into samp
+                    // otherwise use syncrxbuffBs as a dummy buffer
+                    if (config_->isPilot(frame_id, sf)) {
+                        r = baseRadioSet_->radioRx(it, samp, rxTimeBs);
+                        symbol_id = sf;
+                    } else {
+                        r = baseRadioSet_->radioRx(it, syncrxbuffBs.data(), rxTimeBs);
+                    }
+
+                    if (r < 0) {
+                        config_->running = false;
+                        break;
+                    }
+                    if (r != rx_len) {
+                        std::cerr << "BAD Receive(" << r << "/" << rx_len
+                                  << ") at Time " << rxTimeBs
+                                  << ", frame count " << frame_id << std::endl;
+                    }
+
+                    // schedule next beacon in 10 frames
+                    // TODO: make 10 a system-level param
+                    if (sf == 0) {
+                        txTimeBs = rxTimeBs + config_->sampsPerSymbol * config_->symbolsPerFrame * 10;
+                        int r_tx = baseRadioSet_->radioTx(it, beaconbuff.data(), 2, txTimeBs);
+                        if (r_tx != config_->sampsPerSymbol)
+                            std::cerr << "BAD Transmit(" << r_tx << "/" << config_->sampsPerSymbol
+                                      << ") at Time " << txTimeBs
+                                      << ", frame count " << frame_id << std::endl;
+                    }
+                }
             }
 
-            int frame_id = (int)(frameTime >> 32);
-            int symbol_id = (int)((frameTime >> 16) & 0xFFFF);
-            int ant_id = it * bsSdrCh;
 #if DEBUG_PRINT
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
                 printf("receive thread %d, frame %d, symbol %d, cell %d, ant %d samples: %d %d %d %d %d %d %d %d ...\n",
@@ -208,6 +289,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                     pkg[ch]->data[5], pkg[ch]->data[6], pkg[ch]->data[7], pkg[ch]->data[8]);
             }
 #endif
+
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
                 new (pkg[ch]) Package(frame_id, symbol_id, 0, ant_id + ch);
                 // push EVENT_RX_SYMBOL event into the queue
@@ -320,6 +402,7 @@ void Receiver::clientTxRx(int tid)
             int r = clientRadioSet_->radioTx(tid, txbuff.data(), NUM_SAMPS, 1, txTime);
             if (r == NUM_SAMPS)
                 txTime += 0x10000;
+            std::cout << "radioTx() called..." << std::endl;
         }
     }
 }
@@ -386,12 +469,15 @@ void Receiver::clientSyncTxRx(int tid)
     int sync_index(-1);
     int rx_offset = 0;
     // Keep reading one frame worth of data until a beacon is found
+    // Perform initial beacon detection once every 10 frames
     while (config_->running && sync_index < 0) {
-        int r = clientRadioSet_->radioRx(tid, syncrxbuff.data(), SYNC_NUM_SAMPS, rxTime);
-
-        if (r != SYNC_NUM_SAMPS) {
-            std::cerr << "BAD SYNC Receive(" << r << "/" << SYNC_NUM_SAMPS << ") at Time " << rxTime << std::endl;
-            continue;
+        int r;
+        for (int find_beacon_retry = 0; find_beacon_retry < 10; find_beacon_retry++) {
+            r = clientRadioSet_->radioRx(tid, syncrxbuff.data(), SYNC_NUM_SAMPS, rxTime);
+            if (r != SYNC_NUM_SAMPS) {
+                std::cerr << "BAD SYNC Receive(" << r << "/" << SYNC_NUM_SAMPS << ") at Time " << rxTime << std::endl;
+                continue;
+            }
         }
         sync_index = CommsLib::find_beacon_avx(syncbuff0, config_->gold_cf32);
         if (sync_index < 0)
@@ -411,6 +497,9 @@ void Receiver::clientSyncTxRx(int tid)
     size_t resync_retry_max(100);
     size_t resync_success(0);
     rx_offset = 0;
+
+    std::cout << "Start main client txrx loop..." << std::endl;
+
     while (config_->running) {
         for (int sf = 0; sf < config_->symbolsPerFrame; sf++) {
             int rx_len = (sf == 0) ? NUM_SAMPS + rx_offset : NUM_SAMPS;
@@ -435,6 +524,7 @@ void Receiver::clientSyncTxRx(int tid)
                 rx_offset = 0;
                 if (resync) {
                     sync_index = CommsLib::find_beacon_avx(buff0, config_->gold_cf32);
+                    std::cout << "frame_cnt: " << frame_cnt << ", sync_index: " << sync_index << std::endl;
                     if (sync_index >= 0) {
                         rx_offset = sync_index - config_->beaconSize - config_->prefix;
                         rxTime += rx_offset;
@@ -458,13 +548,20 @@ void Receiver::clientSyncTxRx(int tid)
                     config_->running = false;
                     break;
                 }
-                txTime = rxTime + txTimeDelta + config_->clPilotSymbols[tid][0] * NUM_SAMPS - config_->txAdvance;
+
+                // TODO: calibrate offset for uhd devices with different rate
+                // no offset tested to work for up to 50MSa/s rate for x310
+                if (!kUseUHD)
+                    txTime = rxTime + txTimeDelta + config_->clPilotSymbols[tid][0] * NUM_SAMPS - config_->txAdvance;
+                else
+                    txTime = rxTime + txTimeDelta + config_->clPilotSymbols[tid][0] * NUM_SAMPS;
                 r = clientRadioSet_->radioTx(tid, pilotbuffA.data(), NUM_SAMPS, 2, txTime);
+
                 if (r < NUM_SAMPS)
                     std::cout << "BAD Write: " << r << "/" << NUM_SAMPS << std::endl;
                 if (config_->clSdrCh == 2) {
                     txTime = rxTime + txTimeDelta + config_->clPilotSymbols[tid][1] * NUM_SAMPS - config_->txAdvance;
-                    //Time += NUM_SAMPS;
+                    // Time += NUM_SAMPS;
                     r = clientRadioSet_->radioTx(tid, pilotbuffB.data(), NUM_SAMPS, 2, txTime);
                     if (r < NUM_SAMPS)
                         std::cout << "BAD Write: " << r << "/" << NUM_SAMPS << std::endl;

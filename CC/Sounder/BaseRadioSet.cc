@@ -430,6 +430,6 @@ int BaseRadioSet::radioRx(size_t radio_id, void* const* buffs, int numSamps, lon
         frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate);
         return ret;
     }
-    std::cout << "invalide radio id " << radio_id << std::endl;
+    std::cout << "invalid radio id " << radio_id << std::endl;
     return 0;
 }
