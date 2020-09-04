@@ -1,0 +1,45 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <title>RENEW Monitor</title>
+    <script src="//code.jquery.com/jquery-1.12.4.min.js" integrity="sha256-ZosEbRLbNQzLpnKIkEdrPv7lOy9C27hHQ+Xp8a4MxAQ=" crossorigin="anonymous"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.js" integrity="sha256-yr4fRk/GU1ehYJPAs8P4JlTgu0Hdsp4ZKrx8bDEDC3I=" crossorigin="anonymous"></script>
+    <script type="text/javascript" charset="utf-8">
+        $(document).ready(function() {
+            // Use a "/test" namespace.
+            // An application can open a connection on multiple namespaces, 
+            // and Socket.IO will multiplex all those connections on a single
+            // physical channel. If you don't use multiple channels, you can
+            // set the namespace to an empty string.
+            namespace = '/test';
+
+            // Connect to the Socket.IO server.
+            // The connection URL has the following format,
+            // relative to the current page:
+            //     http[s]://<domain>:<port>[/<namespace>]
+            var socket = io(namespace);
+
+            // Event handler for server sent data.
+            // The callback function is invoked whenever the server emits
+            // data to the client. The data is then displayed.
+            socket.on('my_response', function(msg, cb) {
+                $('#log').empty();
+                $('#log').append('<br>' + $('<div/>').text(msg.time).html());
+	        $('#log').append('<br><br><pre> Serial_Number     LMS7(C)    Zynq(C)    TX(C)     RX(C)</pre><hr>');
+                $(msg.data).each(function(index, value) {
+                    $('#log').append('<br>');
+                    $(value).each(function(index_inner, value_inner) {
+                        $('#log').append($('<div/>').text(value_inner).html() + '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp');
+                    });
+                });
+                if (cb)
+                    cb();
+            });
+        });
+    </script>
+</head>
+<body>
+    <h1>RENEW Monitor</h1>
+    <div id="log"></div>
+</body>
+</html>
