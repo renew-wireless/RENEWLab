@@ -1,4 +1,18 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
+"""
+ renew.py
+
+ The web application main file for the RENEW Dashboard.
+
+ Author(s):
+             Min Zhang: min.zhang@rice.edu
+
+-----------------------------------------------------------------------
+ Copyright © 2018-2020. Rice University.
+ RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+-----------------------------------------------------------------------
+"""
+
 import os
 from threading import Lock
 from flask import Flask, render_template
@@ -20,12 +34,18 @@ socketio = SocketIO(app, async_mode=async_mode)
 thread = None
 thread_lock = Lock()
 OVERHEAT_THRESH = 70.0  # degree C
+SENSOR_REFRESH_RATE = 90  # The default is 2 minutes. It takes around 
+                          # 30 seconds to scan all Irises, typically. 
 
 
 def background_thread():
-    """ send server generated events to web clients """
+    """
+    Send server generated events to web clients. 
+    
+    :return: None
+    """
     socketio.emit('my_response',
-            {'data': get_iris_sensor_readings(),
+                  {'data': get_iris_sensor_readings(),
                    'time': datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")},
                   namespace='/test')
     while True:
@@ -66,7 +86,10 @@ def test_connect():
 
 
 if __name__ == '__main__':
+    # If you want to broadcast the web app in the network, 
     # socketio.run(app, debug=False, host="0.0.0.0", port=3333)
+    
+    # If you want to use the web app on the server runing this web app,  
     socketio.run(app, debug=False, host="localhost", port=3333)
 
 
