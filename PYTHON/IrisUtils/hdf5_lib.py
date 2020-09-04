@@ -79,7 +79,7 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
     # take a time-domain lts sequence, concatenate more copies, flip, conjugate
     lts_t, lts_f = generate_training_seq(preamble_type='lts', seq_length=[
     ], cp = cp, upsample=1, reps=[])    # TD LTS sequences (x2.5), FD LTS sequences
-    # last 80 samps (assume 16 cp)
+    # DON'T assume cp!
     lts_tmp = lts_t[- cp - fft_size:]
     n_lts = len(lts_tmp)
     # no. of LTS sequences in a pilot SF
@@ -298,6 +298,62 @@ class hdf5_lib:
                 sys.exit(0)
         # return self.h5file
 
+    def filter_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16):
+        """
+        """
+        # dimensions of pilots_dump
+        n_frame = pilots_dump.shape[0]  # no. of captured frames
+        n_cell = pilots_dump.shape[1]  # no. of cells
+        n_ue = pilots_dump.shape[2]  # no. of UEs
+        n_ant = pilots_dump.shape[3]  # no. of BS antennas
+        n_iq = pilots_dump.shape[4]  # no. of IQ samples per frame
+
+        if ((n_iq % 2) != 0):
+            print("Size of iq samples:".format(n_iq))
+            raise Exception(
+                ' **** The length of iq samples per frames HAS to be an even number! **** ')
+
+        n_cmpx = n_iq // 2  # no. of complex samples
+        # no. of complex samples in a P subframe without pre- and post- fixes
+        n_csamp = n_cmpx - z_padding
+
+        idx_e = np.arange(0, n_iq, 2)  # even indices: real part of iq
+        # odd indices: imaginary part of iq
+        idx_o = np.arange(1, n_iq, 2)
+
+        # make a new data structure where the iq samples become complex numbers
+        cmpx_pilots = (pilots_dump[:, :, :, :, idx_e] +
+                       1j * pilots_dump[:, :, :, :, idx_o]) * 2 ** -15
+
+        # take a time-domain lts sequence, concatenate more copies, flip, conjugate
+        lts_t, lts_f = generate_training_seq(preamble_type='lts', seq_length=[
+        ], cp=cp, upsample=1, reps=[])  # TD LTS sequences (x2.5), FD LTS sequences
+        # DON'T assume cp!
+        lts_tmp = lts_t[- cp - fft_size:]
+        n_lts = len(lts_tmp)
+        # no. of LTS sequences in a pilot SF
+        k_lts = n_csamp // n_lts
+        # concatenate k LTS's to filter/correlate below
+        lts_seq_orig = np.tile(lts_tmp, k_lts)
+        lts_seq = lts_seq_orig[::-1]  # flip
+        # conjugate the local LTS sequence
+        lts_seq_conj = np.conjugate(lts_seq)
+
+        pool = mp.Pool(mp.cpu_count())
+        m_filt = np.empty(
+            [n_frame, n_cell, n_ue, n_ant, n_cmpx], dtype='complex64')
+        indexing_start = time.time()
+        for j in range(n_cell):
+            result_objects = [pool.apply_async(epd.extract_pilots_data,
+                                               args=(cmpx_pilots[i, j, :, :, :], lts_seq_conj, k_lts, n_lts, i)) for i
+                              in range(n_frame)]
+            for i in range(n_frame):
+                m_filt[i, j, :, :, :] = result_objects[i].get()[2]
+        indexing_end = time.time()
+        pool.close()
+
+        return m_filt, k_lts, n_lts, cmpx_pilots, lts_seq_orig
+
     def log2csi_hdf5(self, filename, offset=0):
         """Convert raw IQ log to CSI.
 
@@ -308,8 +364,15 @@ class hdf5_lib:
         Returns: None
 
         """
-        symbol_len = int(self.h5file['Data'].attrs['SYMBOL_LEN'])
-        num_cl = int(self.h5file['Data'].attrs['CL_NUM'])
+        print("inside log2csi")
+        if legacy:
+            h5log = h5py.File(filename,'r')
+            symbol_len = h5log.attrs['samples_per_user']
+            num_cl = h5log.attrs['num_mob_ant'] + 1
+            pilot_samples = h5log['Pilot_Samples']
+        else:
+            symbol_len = int(self.h5file['Data'].attrs['SYMBOL_LEN'])
+            num_cl = int(self.h5file['Data'].attrs['CL_NUM'])
 
         #compute CSI for each user and get a nice numpy array
         #Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier
@@ -325,6 +388,7 @@ class hdf5_lib:
                 h5f.attrs[k] = h5log.attrs[k]
         h5f.close()
         h5log.close()
+        print("finished log2csi")
 
     def get_data(self):
         """
@@ -446,7 +510,7 @@ class hdf5_lib:
         return self.metadata
 
     @staticmethod
-    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1):
+    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False):
         """Convert an Argos HDF5 log file with raw IQ in to CSI.
         Asumes 802.11 style LTS used for trace collection.
     
@@ -464,49 +528,99 @@ class hdf5_lib:
             h5log = h5py.File(filename,'r')
             csi,iq = samps2csi(h5log['Pilot_Samples'], h5log.attrs['num_mob_ant']+1, h5log.attrs['samples_per_user'])
         """
+        print("starting samps2csi")
         debug = False
         chunkstart = time.time()
-        samps = samps[::sub]
-        usersamps = np.reshape(
-            samps, (samps.shape[0], samps.shape[1], num_users, samps.shape[3], samps_per_user, 2))
-        # What is this? It is eiter 1 or 2: 2 LTSs??
-        pilot_rep = min([(samps_per_user-bound)//(fft_size+cp), 2])
-        iq = np.empty((samps.shape[0], samps.shape[1], num_users,
-                       samps.shape[3], pilot_rep, fft_size), dtype='complex64')
-        if debug:
-            print("chunkstart = {}, usersamps.shape = {}, samps.shape = {}, samps_per_user = {}, nbat= {}, iq.shape = {}".format(
-                chunkstart, usersamps.shape, samps.shape, samps_per_user, nbat, iq.shape))
-        for i in range(pilot_rep):  # 2 first symbols (assumed LTS) seperate estimates
-            iq[:, :, :, :, i, :] = (usersamps[:, :, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size, 0] +
-                                    usersamps[:, :, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size, 1]*1j)*2**-15
-    
-        iq = iq.swapaxes(3, 4)
-        if debug:
-            print("iq.shape after axes swapping: {}".format(iq.shape))
-    
-        fftstart = time.time()
-        csi = np.empty(iq.shape, dtype='complex64')
-        if fft_size == 64:
-            # Retrieve frequency-domain LTS sequence
-            _, lts_freq = generate_training_seq(
-                preamble_type='lts', seq_length=[], cp=32, upsample=1, reps=[])
-            pre_csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 5), 5)
-            csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 5), 5) * lts_freq
+        samps2csi_start = time.time()
+
+        if legacy:
+
+            offset = 47
+            usersamps = np.reshape(samps, (samps.shape[0], samps.shape[1], num_users, samps_per_user, 2))
             if debug:
-                print("csi.shape:{} lts_freq.shape: {}, pre_csi.shape = {}".format(
-                    csi.shape, lts_freq.shape, pre_csi.shape))
+                print(
+                    "chunkstart = {}, usersamps.shape = {}, samps.shape = {}, samps_per_user = {}, nbat= {}, iq.shape = {}".format(
+                        chunkstart, usersamps.shape, samps.shape, samps_per_user, nbat, iq.shape))
+            print("samps2csi checkpoint1 took %f seconds" % (time.time() - samps2csi_start))
+            iq = np.empty((samps.shape[0], samps.shape[1], num_users, 2, fft_size), dtype='complex64')
+            print("checkpoint2 took %f seconds" % (time.time() - samps2csi_start))
+            for i in range(2):  # 2 seperate estimates
+                iq[:, :, :, i, :] = (usersamps[:, :, :, offset + i * fft_size:offset + (i + 1) * fft_size, 0] +
+                                     usersamps[:, :, :, offset + i * fft_size:offset + (i + 1) * fft_size,
+                                     1] * 1j) * 2 ** -15
+            print("checkpoint3 took %f seconds" % (time.time() - samps2csi_start))
+            iq = iq.swapaxes(1,
+                             2)  # this is trickery to keep numpy vectorized (fast), then keep the axis in the order we want
+            iq = iq.swapaxes(2, 3)
+            if debug:
+                print("iq.shape after axes swapping: {}".format(iq.shape))
+            print("checkpoint4 took %f seconds" % (time.time() - samps2csi_start))
+            fftstart = time.time()
+            # csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 4),4)*lts.lts_freq
+            # a = pyfftw.empty_aligned(*iq.shape, dtype='complex64')
+            # a[:] = iq
+            # fft_object = pyfftw.builders.fft(a)
+            # csi = fft_object()
+
+            # csi = fft_a
+            csi = np.empty(iq.shape, dtype='complex64')
+            # pre_csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 4),4)
+
+            csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 4), 4) * lts.lts_freq
+
+            # pyfftw.interfaces.cache.enable()
+            # csi = pyfftw.interfaces.numpy_fft.fftshift(pyfftw.interfaces.numpy_fft.fft(iq, fft_size, 4),4)*lts.lts_freq
             endtime = time.time()
+            # print("checkpoint5 took %f seconds" % (samps2csi_start - time.time()))
+            print("Chunk time: %f fft time: %f" % (fftstart - chunkstart, endtime - fftstart))
+            csi = np.delete(csi, [0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63], 4)  # remove zero subcarriers
+            # print("samps2csi took %f seconds" % (samps2csi_start - time.time()))
+
+        else:
+            samps = samps[::sub]
+            usersamps = np.reshape(
+                samps, (samps.shape[0], samps.shape[1], num_users, samps.shape[3], samps_per_user, 2))
+            # What is this? It is eiter 1 or 2: 2 LTSs??
+            pilot_rep = min([(samps_per_user-bound)//(fft_size+cp), 2])
+            iq = np.empty((samps.shape[0], samps.shape[1], num_users,
+                           samps.shape[3], pilot_rep, fft_size), dtype='complex64')
             if debug:
-                print("chunk time: %f fft time: %f" %
-                      (fftstart - chunkstart, endtime - fftstart))
-            # remove zero subcarriers
-            csi = np.delete(csi, [0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63], 5)
+                print("chunkstart = {}, usersamps.shape = {}, samps.shape = {}, samps_per_user = {}, nbat= {}, iq.shape = {}".format(
+                    chunkstart, usersamps.shape, samps.shape, samps_per_user, nbat, iq.shape))
+            for i in range(pilot_rep):  # 2 first symbols (assumed LTS) seperate estimates
+                iq[:, :, :, :, i, :] = (usersamps[:, :, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size, 0] +
+                                        usersamps[:, :, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size, 1]*1j)*2**-15
+
+            iq = iq.swapaxes(3, 4)
+            if debug:
+                print("iq.shape after axes swapping: {}".format(iq.shape))
+
+            fftstart = time.time()
+            csi = np.empty(iq.shape, dtype='complex64')
+            if fft_size == 64:
+                # Retrieve frequency-domain LTS sequence
+                _, lts_freq = generate_training_seq(
+                    preamble_type='lts', seq_length=[], cp=32, upsample=1, reps=[])
+                pre_csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 5), 5)
+                csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 5), 5) * lts_freq
+                if debug:
+                    print("csi.shape:{} lts_freq.shape: {}, pre_csi.shape = {}".format(
+                        csi.shape, lts_freq.shape, pre_csi.shape))
+                endtime = time.time()
+                if debug:
+                    print("chunk time: %f fft time: %f" %
+                          (fftstart - chunkstart, endtime - fftstart))
+                # remove zero subcarriers
+                csi = np.delete(csi, [0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63], 5)
+                print("samps2csi took %f seconds" % (samps2csi_start - time.time()))
+
         return csi, iq
 
     @staticmethod
-    def samps2csi_large(samps, num_users, samps_per_user=224, offset=47, chunk_size=1000):
+    def samps2csi_large(samps, num_users, samps_per_user=224, offset=47, chunk_size=1000, legacy=False):
         """Wrapper function for samps2csi_main for to speed up large logs by leveraging data-locality. Chunk_size may need to be adjusted based on your computer."""
-    
+
+        samps2csi_start = time.time()
         if samps.shape[0] > chunk_size:
                     # rather than memmap let's just increase swap... should be just as fast.
                     #csi = np.memmap(os.path.join(_here,'temp1.mymemmap'), dtype='complex64', mode='w+', shape=(samps.shape[0], num_users, 2, samps.shape[1],52))
@@ -524,6 +638,8 @@ class hdf5_lib:
         else:
             csi, iq = samps2csi(
                 samps, num_users, samps_per_user=samps_per_user, offset=offset)
+
+        print("samps2csi took %f seconds" % (samps2csi_start - time.time()))
         return csi, iq
 
     @staticmethod

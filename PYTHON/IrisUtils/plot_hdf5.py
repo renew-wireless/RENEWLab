@@ -78,21 +78,20 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
 
     print(" symbol_length = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}".format(symbol_length, cp, prefix_len, postfix_len, z_padding))
 
-    print("********     verify_hdf5(): Calling csi_from_pilots and frame_sanity    *********")
+    print("********     verify_hdf5(): Calling filter_pilots and frame_sanity    *********")
     n_ue = num_cl
     frm_plt = min(default_frame, pilot_samples.shape[0] + n_frm_st)
 
     if deep_inspect:
-        csi_from_pilots_start = time.time()
-        csi_mat, match_filt, sub_fr_strt, cmpx_pilots, k_lts, n_lts, sf_start, pilots_rx_t_btc = csi_from_pilots(
-            pilot_samples, z_padding, fft_size = fft_size, cp = cp, frm_st_idx=n_frm_st, frame_to_plot=frm_plt, ref_ant=ant_i, ref_user = user_i)
-        csi_from_pilots_end = time.time()
+        filter_pilots_start = time.time()
+        match_filt, k_lts, n_lts, cmpx_pilots, lts_seq_orig = hdf5_lib.filter_pilots(pilot_samples, z_padding, fft_size = fft_size, cp = cp)
+        filter_pilots_end = time.time()
 
         frame_sanity_start = time.time()
         match_filt_clr, frame_map, f_st, peak_map = hdf5_lib.frame_sanity(match_filt, k_lts, n_lts, n_frm_st, frm_plt, plt_ant=ant_i, cp = cp)
         frame_sanity_end = time.time()
 
-        print(">>>> csi_from_pilots time: %f \n" % ( csi_from_pilots_end - csi_from_pilots_start) )
+        print(">>>> filter_pilots time: %f \n" % ( filter_pilots_end - filter_pilots_start) )
         print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
 
     # PLOTTER
@@ -241,6 +240,9 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
 
         fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
         fig.suptitle('Frames\' starting indices per antenna')
+        #plot channel analysis
+        show_plot(cmpx_pilots, lts_seq_orig, match_filt)
+
         for n_c in range(n_cell):
             for n_u in range(n_ue):
                 sf_strts = sub_fr_strt[:,n_c,n_u,:]
@@ -351,12 +353,170 @@ def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0):
 
     del csi  # free the memory
 
+def compute_legacy(hdf5):
+    '''
+    Parse and plot data from legacy files
+    '''
+
+    print("starting legacy function")
+    starttime = time.time()
+    show_plots = True
+    zoom = 0  # samples to zoom in around frame (to look at local behavior), 0 to disable
+    pl = 0
+    # static = h5py.File('ArgosCSI-96x8-2016-11-03-03-03-45_5GHz_static.hdf5', 'r')   #h5py.File('logs/ArgosCSI-76x2-2017-02-07-18-25-47.hdf5','r')
+    # static = h5py.File('trace-2020-5-26-15-27-29_1x8x3.hdf5','r')  # h5py.File('logs/ArgosCSI-76x2-2017-02-07-18-25-47.hdf5','r')
+    # env = h5py.File('logs/ArgosCSI-76x2-2017-02-07-18-25-47.hdf5','r')
+    # mobile = h5py.File('logs/ArgosCSI-76x2-2017-02-07-18-25-47.hdf5','r')
+
+    frame = 10  # frame to compute beamweights from
+    conjdata = []
+    zfdata = []
+    # print("main checkpoint1 time expended %f" % (starttime - time.time()))
+    for h5log in [hdf5]:  # , env, mobile]:
+        # read parameters for this measurement data
+        samps_per_user = h5log.attrs['samples_per_user']
+        num_users = h5log.attrs['num_mob_ant']
+        timestep = h5log.attrs['frame_length'] / 20e6
+        noise_meas_en = h5log.attrs.get('measured_noise', 1)
+
+        # compute CSI for each user and get a nice numpy array
+        csi, iq = hdf5_lib.samps2csi(h5log['Pilot_Samples'], num_users + noise_meas_en, samps_per_user,
+                                     legacy=True)  # Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier  #also, iq samples nicely chunked out, same dims, but subcarrier is sample.
+        if zoom > 0:  # zoom in too look at behavior around peak (and reduce processing time)
+            csi = csi[frame - zoom:frame + zoom, :, :, :, :]
+            frame = zoom  # recenter the plots (otherwise it errors)
+        noise = csi[:, -1, :, :, :]  # noise is last set of data.
+        userCSI = np.mean(csi[:, :num_users, :, :, :], 2)  # don't include noise, average over both LTSs
+
+        # example lts find:
+        user = 0
+        # so, this is pretty ugly, but we want all the samples (not just those chunked from samps2csi), so we not only convert ints to the complex floats, but also have to figure out where to chunk the user from.
+        lts_iq = h5log['Pilot_Samples'][frame, 0, user * samps_per_user:(user + 1) * samps_per_user, 0] * 1. + \
+                 h5log['Pilot_Samples'][frame, 0, user * samps_per_user:(user + 1) * samps_per_user, 1] * 1j
+        lts_iq /= 2 ** 15
+        offset = lts.findLTS(
+            lts_iq)  # Andrew wrote this, but I don't really like the way he did the convolve method...  works well enough for high SNRs.
+        offset = offset[0] + 32
+        print("LTS offset for user %d, frame %d: %d" % (user, frame, offset))
+
+        # compute beamweights based on the specified frame.
+        conjbws = np.transpose(np.conj(userCSI[frame, :, :, :]), (1, 0, 2))
+        zfbws = np.empty((userCSI.shape[2], userCSI.shape[1], userCSI.shape[3]), dtype='complex64')
+        for sc in range(userCSI.shape[3]):
+            zfbws[:, :, sc] = np.linalg.pinv(userCSI[frame, :, :, sc])
+
+        downlink = True
+        # calculate capacity based on these weights
+        # these return total capacity, per-user capacity, per-user/per-subcarrier capacity, SINR, single-user capacity(no inter-user interference), and SNR
+        conj = calCapacity(userCSI, noise, conjbws,
+                           downlink=downlink)  # conjcap_total,conjcap_u,conjcap_sc,conjSINR,conjcap_su_sc,conjcap_su_u,conjSNR
+        zf = calCapacity(userCSI, noise, zfbws,
+                         downlink=downlink)  # zfcap_total,zfcap_u,zfcap_sc,zfSINR,zfcap_su_sc,zfcap_su_u,zfSNR
+        # print("main checkpoint2 time expended %f" % (starttime - time.time()))
+
+        # plot stuff
+        if show_plots:
+            # Multiuser Conjugate
+            plt.figure(1000 * pl, figsize=(50, 10))
+            plt.plot(np.arange(0, csi.shape[0] * timestep, timestep)[:csi.shape[0]], conj[1])
+            # plt.ylim([0,2])
+            plt.xlabel('Time (s)')
+            plt.ylabel('Per User Capacity Conj (bps/Hz)')
+            plt.show(block=False)
+            # Multiuser Zeroforcing
+            plt.figure(1000 * pl + 1, figsize=(50, 10))
+            plt.plot(np.arange(0, csi.shape[0] * timestep, timestep)[:csi.shape[0]], zf[1])
+            # plt.ylim([0,2])
+            plt.xlabel('Time (s)')
+            plt.ylabel('Per User Capacity ZF (bps/Hz)')
+            plt.show(block=False)
+            # Single user (but show all users)
+            plt.figure(1000 * pl + 2, figsize=(50, 10))
+            plt.plot(np.arange(0, csi.shape[0] * timestep, timestep)[:csi.shape[0]], conj[-2])
+            # plt.ylim([0,2])
+            plt.xlabel('Time (s)')
+            plt.ylabel('SUBF Capacity Conj (bps/Hz)')
+            plt.show(block=False)
+            pl += 1
+        # print("main checkpoint3 time expended %f" % (starttime - time.time()))
+        # save for exporting to matlab (prettier plots)
+        conjdata.append(conj)
+        zfdata.append(zf)
+        # print("main checkpoint4 time expended %f" % (starttime - time.time()))
+
+        del csi, iq  # free the memory
+
+    endtime = time.time()
+    print("Total time: %f" % (endtime - starttime))
+
+def show_plot(cmpx_pilots, lts_seq_orig, match_filt):
+    '''
+    Plot channel analysis
+    '''
+
+    frame_to_plot = 0
+    frm_st_idx = 0
+    ref_ant = 0
+    test_mf = False
+    debug = False
+
+    fig = plt.figure()
+    ax1 = fig.add_subplot(3, 1, 1)
+    ax1.grid(True)
+    ax1.set_title(
+        'channel_analysis:csi_from_pilots(): Re of Rx pilot - ref frame {} and ref ant. {} (UE 0)'.format(
+            frame_to_plot, ref_ant))
+
+    if debug:
+        print("cmpx_pilots.shape = {}".format(cmpx_pilots.shape))
+
+    ax1.plot(
+        np.real(cmpx_pilots[frame_to_plot - frm_st_idx, 0, 0, ref_ant, :]))
+
+    z_pre = np.zeros(82, dtype='complex64')
+    z_post = np.zeros(68, dtype='complex64')
+    lts_t_rep = lts_seq_orig
+
+    if debug:
+
+        lts_t_rep_tst = np.append(z_pre, lts_t_rep)
+        lts_t_rep_tst = np.append(lts_t_rep_tst, z_post)
+
+        if test_mf:
+            w = np.random.normal(0, 0.1 / 2, len(lts_t_rep_tst)) + \
+                1j * np.random.normal(0, 0.1 / 2, len(lts_t_rep_tst))
+            lts_t_rep_tst = lts_t_rep_tst + w
+            cmpx_pilots = np.tile(
+                lts_t_rep_tst, (n_frame, cmpx_pilots.shape[1], cmpx_pilots.shape[2], cmpx_pilots.shape[3], 1))
+            print("if test_mf: Shape of lts_t_rep_tst: {} , cmpx_pilots.shape = {}".format(
+                lts_t_rep_tst.shape, cmpx_pilots.shape))
+
+        loc_sec = lts_t_rep_tst
+    else:
+        loc_sec = np.append(z_pre, lts_t_rep)
+        loc_sec = np.append(loc_sec, z_post)
+    ax2 = fig.add_subplot(3, 1, 2)
+    ax2.grid(True)
+    ax2.set_title(
+        'channel_analysis:csi_from_pilots(): Local LTS sequence zero padded')
+    ax2.plot(loc_sec)
+
+    ax3 = fig.add_subplot(3, 1, 3)
+    ax3.grid(True)
+    ax3.set_title(
+        'channel_analysis:csi_from_pilots(): MF (uncleared peaks) - ref frame {} and ref ant. {} (UE 0)'.format(
+            frame_to_plot, ref_ant))
+    ax3.stem(match_filt[frame_to_plot - frm_st_idx, 0, 0, ref_ant, :])
+    ax3.set_xlabel('Samples')
+
+
 def main():
     # Tested with inputs: ./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5 300  (for two users)
     #                     ./data_in/Argos-2019-3-30-12-20-50_1x8x1.hdf5 300  (for one user) 
     parser = OptionParser()
-    parser.add_option("--deep-inspect", action="store_true", dest="deep_inspect", help="Run script without analysis", default= False)
+    parser.add_option("--deep-inspect", action="store_true", dest="deep_inspect", help="Run script without analysis", default= True)
     parser.add_option("--ref-frame", type="int", dest="ref_frame", help="Frame number to plot", default=0)
+    parser.add_option("--legacy", action="store_true", dest="legacy", help="Parse and plot legacy hdf5 file", default=False)
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Reference antenna", default=0)
     parser.add_option("--ref-user", type="int", dest="ref_user", help="Reference User", default=0)
     parser.add_option("--n-frames", type="int", dest="n_frames_to_inspect", help="Number of frames to inspect", default=2000)
@@ -377,8 +537,9 @@ def main():
     verify = options.verify
     analyze = options.analyze
     sub_sample = options.sub_sample
+    legacy = options.legacy
 
-    filename = sys.argv[1]
+    filename = "./data_in/POWDER_DeployMeas/trace-2020-9-2-15-30-54_1x2x1_tx70_rx85_loc2.hdf5"  # sys.argv[1]
     scrpt_strt = time.time()
 
     if n_frames_to_inspect == 0:
@@ -399,11 +560,16 @@ def main():
     print(">> frame to plot = {}, ref. ant = {}, ref. user = {}, no. of frames to inspect = {}, starting frame = {} <<".format(ref_frame, ref_ant, ref_user, n_frames_to_inspect, fr_strt))
 
     # Instantiate
-    hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
-
-    if verify:
-        verify_hdf5(hdf5, ref_frame, ref_ant, ref_user, fr_strt, thresh, deep_inspect,sub_sample)
-    if analyze:
+    if legacy:
+        # TODO: Needs to be thoroughly tested!
+        # filename = 'ArgosCSI-96x8-2016-11-03-03-03-45_5GHz_static.hdf5'
+        hdf5 = h5py.File(str(filename), 'r')
+        compute_legacy(hdf5)
+    if verify and not legacy:
+        hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
+        verify_hdf5(hdf5, ref_frame, ref_ant, ref_user, fr_strt, thresh, deep_inspect, sub_sample)
+    if analyze and not legacy:
+        hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
         analyze_hdf5(hdf5)
     scrpt_end = time.time()
     print(">>>> Script Duration: time: %f \n" % ( scrpt_end - scrpt_strt) )

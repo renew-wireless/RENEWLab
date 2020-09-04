@@ -8,6 +8,8 @@ def extract_pilots_data(cmpx_pilots, lts_seq_conj, k_lts, n_lts, frame):
     unos = np.ones(l_lts_fc)
     v0 = signal.lfilter(lts_seq_conj, a, cmpx_pilots, axis=2)
     v1 = signal.lfilter(unos, a, (abs(cmpx_pilots)**2), axis=2)
+    #supress invalid floating point operation error
+    np.seterr(invalid='ignore')
     m_filt = (np.abs(v0)**2)/v1
 
     # clean up nan samples: replace nan with -1
