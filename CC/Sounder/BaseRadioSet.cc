@@ -31,16 +31,11 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         int radioNum = _cfg->nBsSdrs[c];
         nBsAntennas[c] = radioNum * _cfg->bsChannel.length();
 
-        if (!_cfg->hub_ids.empty()) {
+        if (!kUseUHD && !_cfg->hub_ids.empty()) {
             SoapySDR::Kwargs args;
-            // TODO: need to figure out what is hub for USRPs
-            if (!kUseUHD) {
-                args["driver"] = "remote";
-                args["serial"] = _cfg->hub_ids.at(c);
-            } else {
-                args["driver"] = "uhd";
-            }
+            args["driver"] = "remote";
             args["timeout"] = "1000000";
+            args["serial"] = _cfg->hub_ids.at(c);
             hubs.push_back(SoapySDR::Device::make(args));
         }
 
@@ -208,6 +203,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         }
 
         for (size_t i = 0; i < bsRadios[0].size(); i++) {
+            std::cout << "bsRadios i: " << i << std::endl;
             SoapySDR::Device* dev = bsRadios[0][i]->dev;
             if (!kUseUHD) {
                 bsRadios[0][i]->activateRecv();
