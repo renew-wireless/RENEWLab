@@ -203,7 +203,6 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         }
 
         for (size_t i = 0; i < bsRadios[0].size(); i++) {
-            std::cout << "bsRadios i: " << i << std::endl;
             SoapySDR::Device* dev = bsRadios[0][i]->dev;
             if (!kUseUHD) {
                 bsRadios[0][i]->activateRecv();
@@ -253,11 +252,11 @@ void BaseRadioSet::init(BaseRadioContext* context)
     } else {
         args["driver"] = "uhd";
         args["addr"] = _cfg->bs_sdr_ids[c][i];
+        std::cout << "Init bsRadios: " << args["addr"] << std::endl;
     }
     args["timeout"] = "1000000";
     try {
         bsRadios[c][i] = new Radio(args, SOAPY_SDR_CS16, channels, _cfg->rate);
-        std::cout << "Init bsRadios: " << args["addr"] << std::endl;
     } catch (std::runtime_error) {
         if (!kUseUHD)
             std::cerr << "Ignoring iris " << _cfg->bs_sdr_ids[c][i] << std::endl;
