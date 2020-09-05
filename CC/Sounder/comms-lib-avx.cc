@@ -20,7 +20,6 @@ find_beacon_avx: Correlation and Peak detection of a beacon with Gold code (2 re
 #define AVX_PACKED_SP 8 //single-precision
 #define AVX_PACKED_SI 16 // short int
 #define AVX_PACKED_CS 8 // complex short int
-// #define TEST_BENCH 1
 
 int CommsLib::find_beacon_avx(const std::vector<std::complex<float>>& iq, const std::vector<std::complex<float>>& seq)
 {
@@ -48,7 +47,7 @@ int CommsLib::find_beacon_avx(const std::vector<std::complex<float>>& iq, const 
     double diff2 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
 #endif
 
-    // calculate the adaptive theshold
+    // calculate the adaptive theshold 
     std::vector<float> consts1(seqLen, 1);
     clock_gettime(CLOCK_MONOTONIC, &tv);
     // calculate the moving sum of the abs of corr result and use as threshold
@@ -72,23 +71,23 @@ int CommsLib::find_beacon_avx(const std::vector<std::complex<float>>& iq, const 
 
 #ifdef TEST_BENCH
     std::cout << "Convolution AVX took " << diff1 << " usec" << std::endl;
-    std::cout << "Corr Abs AVX took " << diff2 << " usec" << std::endl;
+    std::cout << "Corr Abs AVX took "    << diff2 << " usec" << std::endl;
     std::cout << "Thresh calc AVX took " << diff3 << " usec" << std::endl;
     std::cout << "Peak Detect AVX took " << diff4 << " usec" << std::endl;
     printf("Saving Corr data\n");
     std::string filename = "corr_simd.bin";
     FILE* fc = fopen(filename.c_str(), "wb");
-    float* cdata_ptr = (float*)gold_corr_avx_2.data();
+    float* cdata_ptr = (float *)gold_corr_avx_2.data();
     fwrite(cdata_ptr, gold_corr_avx_2.size(), sizeof(float), fc);
     fclose(fc);
     filename = "thresh_simd.bin";
     FILE* fp = fopen(filename.c_str(), "wb");
-    float* tdata_ptr = (float*)thresh_avx.data();
+    float* tdata_ptr = (float *)thresh_avx.data();
     fwrite(tdata_ptr, thresh_avx.size(), sizeof(float), fp);
     fclose(fp);
     filename = "indata.bin";
     FILE* fi = fopen(filename.c_str(), "wb");
-    float* idata_ptr = (float*)iq.data();
+    float* idata_ptr = (float *)iq.data();
     fwrite(idata_ptr, iq.size() * 2, sizeof(float), fi);
     fclose(fi);
 #endif
@@ -365,8 +364,8 @@ std::vector<std::complex<float>> CommsLib::correlate_avx(std::vector<std::comple
     //std::copy(f.begin(), f.end(), std::back_inserter(in));
     //in.insert(in.end(), f.begin(), f.end());
     for (size_t i = length1 - 1; i < in.size(); i++) {
-        size_t j = i - length1 + 1;
-        in[i] = f[j];
+	size_t j = i - length1 + 1;
+	in[i] = f[j];
     }
     size_t length = in.size();
 
@@ -442,8 +441,8 @@ std::vector<float> CommsLib::correlate_avx_s(std::vector<float> const& f, std::v
     std::vector<float> in(length0 + length1 - 1, 0);
     //in.insert(in.end(), f.begin(), f.end());
     for (size_t i = length1 - 1; i < in.size(); i++) {
-        size_t j = i - length1 + 1;
-        in[i] = f[j];
+	size_t j = i - length1 + 1;
+	in[i] = f[j];
     }
     size_t length = in.size();
 

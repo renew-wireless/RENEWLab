@@ -143,17 +143,17 @@ int CommsLib::find_beacon(const std::vector<std::complex<double>>& iq)
 
 #ifdef TEST_BENCH
     std::cout << "Convolution took " << diff1 << " usec" << std::endl;
-    std::cout << "Corr Abs took " << diff2 << " usec" << std::endl;
+    std::cout << "Corr Abs took "    << diff2 << " usec" << std::endl;
     std::cout << "Thresh calc took " << diff3 << " usec" << std::endl;
     printf("Saving Corr data\n");
     std::string filename = "corr_data.bin";
     FILE* fc = fopen(filename.c_str(), "wb");
-    float* cdata_ptr = (float*)gold_corr_2.data();
+    float* cdata_ptr = (float *)gold_corr_2.data();
     fwrite(cdata_ptr, gold_corr_2.size(), sizeof(float), fc);
     fclose(fc);
     filename = "thresh_data.bin";
     FILE* fp = fopen(filename.c_str(), "wb");
-    float* tdata_ptr = (float*)thresh.data();
+    float* tdata_ptr = (float *)thresh.data();
     fwrite(tdata_ptr, thresh.size(), sizeof(float), fp);
     fclose(fp);
 #endif
