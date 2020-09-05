@@ -23,11 +23,6 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
     dev->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->radioRfFreq);
     dev->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->radioRfFreq);
 
-    std::cout << "Tx RF freq: " << dev->getFrequency(SOAPY_SDR_TX, ch, "RF")
-              << ", Rx RF freq: " << dev->getFrequency(SOAPY_SDR_RX, ch, "RF") << std::endl;
-    std::cout << "Tx BB freq: " << dev->getFrequency(SOAPY_SDR_TX, ch, "BB")
-              << ", Rx BB freq: " << dev->getFrequency(SOAPY_SDR_RX, ch, "BB") << std::endl;
-
     // Unified gains for both lime and frontend
     if (_cfg->single_gain) {
         dev->setGain(SOAPY_SDR_RX, ch, rxgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]

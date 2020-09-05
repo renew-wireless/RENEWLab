@@ -186,15 +186,16 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     std::vector<void*> syncrxbuffBs(2);
     syncrxbuffBs[0] = syncbuffBs.data();
 
-    std::cout << "Sync BS host and FPGA timestamp..." << std::endl;
-    baseRadioSet_->radioRx(0, syncrxbuffBs.data(), config_->sampsPerSymbol, rxTimeBs);
-
-    // schedule the first beacon in the future
-    txTimeBs = rxTimeBs + config_->sampsPerSymbol * config_->symbolsPerFrame * 10;
-    baseRadioSet_->radioTx(0, beaconbuff.data(), 2, txTimeBs);
-    long long bsInitRxOffset = txTimeBs - rxTimeBs;
-    for (int it = 0; it < std::floor(bsInitRxOffset / config_->sampsPerSymbol); it++) {
+    if (kUseUHD) {
+        std::cout << "Sync BS host and FPGA timestamp..." << std::endl;
         baseRadioSet_->radioRx(0, syncrxbuffBs.data(), config_->sampsPerSymbol, rxTimeBs);
+        // schedule the first beacon in the future
+        txTimeBs = rxTimeBs + config_->sampsPerSymbol * config_->symbolsPerFrame * 10;
+        baseRadioSet_->radioTx(0, beaconbuff.data(), 2, txTimeBs);
+        long long bsInitRxOffset = txTimeBs - rxTimeBs;
+        for (int it = 0; it < std::floor(bsInitRxOffset / config_->sampsPerSymbol); it++) {
+            baseRadioSet_->radioRx(0, syncrxbuffBs.data(), config_->sampsPerSymbol, rxTimeBs);
+        }
     }
 
     int cursor = 0;
@@ -524,7 +525,6 @@ void Receiver::clientSyncTxRx(int tid)
                 rx_offset = 0;
                 if (resync) {
                     sync_index = CommsLib::find_beacon_avx(buff0, config_->gold_cf32);
-                    std::cout << "frame_cnt: " << frame_cnt << ", sync_index: " << sync_index << std::endl;
                     if (sync_index >= 0) {
                         rx_offset = sync_index - config_->beaconSize - config_->prefix;
                         rxTime += rx_offset;
