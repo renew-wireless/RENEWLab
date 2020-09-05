@@ -53,7 +53,6 @@ public:
     std::string hub_file;
     std::string ref_sdr;
     std::vector<std::vector<std::string>> bs_sdr_ids;
-    std::vector<std::vector<std::string>> bs_sdr_ips;
     std::vector<std::string> hub_ids;
     std::vector<std::complex<float>> gold_cf32;
     std::vector<uint32_t> beacon;
@@ -81,7 +80,6 @@ public:
 
     // Clients features
     std::vector<std::string> cl_sdr_ids;
-    std::vector<std::string> cl_sdr_ips;
     size_t nClSdrs;
     size_t clSdrCh;
     size_t nClAntennas;

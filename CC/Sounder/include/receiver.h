@@ -54,7 +54,7 @@ struct Package {
 
 // each thread has a SampleBuffer
 struct SampleBuffer {
-    std::vector<char> buffer; // -> char*
+    std::vector<char> buffer;
     std::atomic_int* pkg_buf_inuse;
 };
 
