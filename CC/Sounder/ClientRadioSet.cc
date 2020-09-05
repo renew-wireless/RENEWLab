@@ -36,7 +36,10 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
     for (size_t i = 0; i < _cfg->nClSdrs; i++) {
         SoapySDR::Kwargs args;
         args["timeout"] = "1000000";
-        args["serial"] = _cfg->cl_sdr_ids.at(i);
+        if (!kUseUHD)
+            args["serial"] = _cfg->cl_sdr_ids.at(i);
+        else
+            args["addr"] = _cfg->cl_sdr_ids.at(i);
         try {
             radios.push_back(new Radio(args, SOAPY_SDR_CF32, channels, _cfg->rate));
         } catch (std::runtime_error) {
@@ -48,14 +51,16 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         auto dev = radios.back()->dev;
         SoapySDR::Kwargs info = dev->getHardwareInfo();
 
-        for (auto ch : { 0, 1 }) //channels)
-        {
+        // for (auto ch : { 0, 1 }) //channels)
+        for (auto ch : channels) {
             double rxgain = _cfg->clRxgain_vec[ch][i]; // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
             double txgain = _cfg->clTxgain_vec[ch][i]; // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
             radios.back()->dev_init(_cfg, ch, rxgain, txgain);
         }
 
-        initAGC(dev, _cfg);
+        // TODO: add uhd_cal
+        if (!kUseUHD)
+            initAGC(dev, _cfg);
     }
     radios.shrink_to_fit();
 
@@ -71,6 +76,8 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
 
         for (size_t i = 0; i < radios.size(); i++) {
             auto dev = radios[i]->dev;
+
+            // hw_frame is only for Iris
             if (_cfg->hw_framer) {
                 std::string corrConfString = "{\"corr_enabled\":true,\"corr_threshold\":" + std::to_string(1) + "}";
                 dev->writeSetting("CORR_CONFIG", corrConfString);
@@ -125,10 +132,16 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
                 else
                     dev->writeSetting("CORR_START", (_cfg->clChannel == "B") ? "B" : "A");
             } else {
-                dev->setHardwareTime(0, "TRIGGER");
-                radios[i]->activateRecv();
-                radios[i]->activateXmit();
-                dev->writeSetting("TRIGGER_GEN", "");
+                if (!kUseUHD) {
+                    dev->setHardwareTime(0, "TRIGGER");
+                    radios[i]->activateRecv();
+                    radios[i]->activateXmit();
+                    dev->writeSetting("TRIGGER_GEN", "");
+                } else {
+                    dev->setHardwareTime(0.0); // "CMD"
+                    radios[i]->activateRecv();
+                    radios[i]->activateXmit();
+                }
             }
         }
         std::cout << __func__ << " done!" << std::endl;
@@ -169,15 +182,19 @@ int ClientRadioSet::triggers(int i)
 int ClientRadioSet::radioRx(size_t radio_id, void* const* buffs, int numSamps, long long& frameTime)
 {
     if (radio_id < radios.size()) {
-	int ret(0);
+        int ret(0);
         if (_cfg->hw_framer) {
             ret = radios[radio_id]->recv(buffs, numSamps, frameTime);
-	} else {
+        } else {
             long long frameTimeNs(0);
             ret = radios[radio_id]->recv(buffs, numSamps, frameTimeNs);
             frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate);
-	}
-	return ret;
+#if DEBUG_RADIO
+            if (frameTimeNs < 2e9)
+                std::cout << "client " << radio_id << " received " << ret << " at " << frameTimeNs << std::endl;
+#endif
+        }
+        return ret;
     }
     std::cout << "invalid radio id " << radio_id << std::endl;
     return 0;
@@ -187,7 +204,7 @@ int ClientRadioSet::radioTx(size_t radio_id, const void* const* buffs, int numSa
 {
     if (_cfg->hw_framer) {
         return radios[radio_id]->xmit(buffs, numSamps, flags, frameTime);
-    } else { 
+    } else {
         long long frameTimeNs = SoapySDR::ticksToTimeNs(frameTime, _cfg->rate);
         return radios[radio_id]->xmit(buffs, numSamps, flags, frameTimeNs);
     }

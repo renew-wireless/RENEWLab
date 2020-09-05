@@ -1,6 +1,12 @@
 #ifndef MACROS_H
 #define MACROS_H
 
+#ifdef USE_UHD
+static constexpr bool kUseUHD = true;
+#else
+static constexpr bool kUseUHD = false;
+#endif
+
 #define DEBUG_PRINT 0
 #define DEBUG_RADIO 0
 #define DEBUG_PLOT 0
