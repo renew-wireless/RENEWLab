@@ -53,7 +53,8 @@ Config::Config(const std::string& jsonfile)
         pilot_seq = tddConf.value("pilot_seq", "lts-half");
 
         // BS
-        hub_file = tddConf.value("hub_id", "hub_serials.txt");
+        if (!kUseUHD)
+            hub_file = tddConf.value("hub_id", "hub_serials.txt");
         json sdr_id_files = tddConf.value("sdr_id", json::array());
         nCells = sdr_id_files.size();
         bs_sdr_file.assign(sdr_id_files.begin(), sdr_id_files.end());
@@ -62,7 +63,7 @@ Config::Config(const std::string& jsonfile)
             throw std::invalid_argument("error channel config: not any of A/B/AB!\n");
         auto jBsFrames = tddConf.value("frame_schedule", json::array());
         frames.assign(jBsFrames.begin(), jBsFrames.end());
-	single_gain = tddConf.value("single_gain", true);
+        single_gain = tddConf.value("single_gain", true);
         txgain[0] = tddConf.value("txgainA", 20);
         rxgain[0] = tddConf.value("rxgainA", 20);
         txgain[1] = tddConf.value("txgainB", 20);
@@ -83,7 +84,8 @@ Config::Config(const std::string& jsonfile)
             nBsSdrs[i] = bs_sdr_ids[i].size();
             nBsAntennas[i] = bsChannel.length() * nBsSdrs[i];
         }
-        Utils::loadDevices(hub_file, hub_ids);
+        if (!kUseUHD)
+            Utils::loadDevices(hub_file, hub_ids);
         symbolsPerFrame = frames.at(0).size();
 
         //std::vector<std::vector<size_t>> pilotSymbols = Utils::loadSymbols(frames, 'P');
@@ -124,8 +126,10 @@ Config::Config(const std::string& jsonfile)
     // Clients
     if (clPresent) {
         auto jClSdrs = tddConfCl.value("sdr_id", json::array());
+        // auto jClSdrs = tddConfCl.value("sdr_ip", json::array());
         nClSdrs = jClSdrs.size();
         cl_sdr_ids.assign(jClSdrs.begin(), jClSdrs.end());
+        // cl_sdr_ips.assign(jClSdrs.begin(), jClSdrs.end());
         clChannel = tddConfCl.value("channel", "A");
         if (clChannel != "A" && clChannel != "B" && clChannel != "AB")
             throw std::invalid_argument("error channel config: not any of A/B/AB!\n");
@@ -136,7 +140,7 @@ Config::Config(const std::string& jsonfile)
         clDataMod = tddConfCl.value("modulation", "QPSK");
         frame_mode = tddConfCl.value("frame_mode", "continuous_resync");
         hw_framer = tddConfCl.value("hw_framer", true);
-        txAdvance = tddConfCl.value("tx_advance", 250);
+        txAdvance = tddConfCl.value("tx_advance", 250); // 250
 
         auto jClTxgainA_vec = tddConfCl.value("txgainA", json::array());
         clTxgain_vec[0].assign(jClTxgainA_vec.begin(), jClTxgainA_vec.end());
@@ -171,7 +175,7 @@ Config::Config(const std::string& jsonfile)
             beacon_seq = tddConfCl.value("beacon_seq", "gold_ifft");
             pilot_seq = tddConfCl.value("pilot_seq", "lts-half");
             symbolsPerFrame = clFrames.at(0).size();
-	    single_gain = tddConfCl.value("single_gain", true);
+            single_gain = tddConfCl.value("single_gain", true);
         }
     }
 
@@ -214,6 +218,13 @@ Config::Config(const std::string& jsonfile)
 
     beacon = Utils::cint16_to_uint32(beacon_ci16, false, "QI");
     coeffs = Utils::cint16_to_uint32(gold_ifft_ci16, true, "QI");
+
+    int fracBeacon = subframeSize % beaconSize;
+    std::vector<std::complex<int16_t>> preBeacon(prefix, 0);
+    std::vector<std::complex<int16_t>> postBeacon(postfix + fracBeacon, 0);
+    beacon_ci16.insert(beacon_ci16.begin(), preBeacon.begin(), preBeacon.end());
+    beacon_ci16.insert(beacon_ci16.end(), postBeacon.begin(), postBeacon.end());
+    beacon = Utils::cint16_to_uint32(beacon_ci16, false, "QI");
 
     // compose pilot subframe
     if (fftSize != 64) {
@@ -429,4 +440,14 @@ unsigned Config::getCoreCount()
     std::cout << "number of CPU cores " << std::to_string(nCores) << std::endl;
 #endif
     return nCores;
+}
+
+extern "C"
+{
+    __attribute__((visibility("default"))) Config* Config_new(char *filename) {
+
+        Config *cfg = new Config(filename);
+
+        return cfg;
+    }
 }

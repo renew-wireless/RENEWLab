@@ -6,6 +6,14 @@ set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -g -O3 -mavx2 -mavx")
 
 find_package(nlohmann_json 3.2.0 REQUIRED)
 
+set(USE_UHD False CACHE STRING "USE_UHD defaulting to 'False'")
+message(STATUS "USE_UHD: ${USE_UHD}")
+
+if(${USE_UHD})
+  message(STATUS "Enabled USE_UHD: ${USE_UHD}")
+  add_definitions(-DUSE_UHD)
+endif()
+
 ########################################################################
 # SoapySDR dependency
 ########################################################################
@@ -33,5 +41,40 @@ message(STATUS "HDF5_INCLUDE_DIRS: ${HDF5_INCLUDE_DIRS}")
 message(STATUS "HDF5_LIBRARIES: ${HDF5_LIBRARIES}")
 include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS})
 
-add_executable(sounder main.cc ClientRadioSet.cc config.cc Radio.cc receiver.cc recorder.cc BaseRadioSet.cc BaseRadioSet-calibrate.cc comms-lib.cc comms-lib-avx.cc utils.cc signalHandler.cpp)
-target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe ${SoapySDR_LIBRARIES} ${HDF5_LIBRARIES} ${CMAKE_SOURCE_DIR}/mufft/libmuFFT.a ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse.a ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse3.a ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-avx.a)
+set(SOUNDER_SOURCES 
+    ClientRadioSet.cc
+    config.cc
+    Radio.cc
+    receiver.cc
+    recorder.cc
+    BaseRadioSet.cc
+    BaseRadioSet-calibrate.cc
+    comms-lib.cc
+    comms-lib-avx.cc
+    utils.cc
+    signalHandler.cpp)
+
+add_executable(sounder 
+    main.cc
+    ${SOUNDER_SOURCES})
+
+target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe
+    ${SoapySDR_LIBRARIES}
+    ${HDF5_LIBRARIES}
+    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT.a
+    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse.a
+    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse3.a
+    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-avx.a)
+
+add_library(sounder_module MODULE 
+    ${SOUNDER_SOURCES})
+
+target_link_libraries(sounder_module -lpthread -lhdf5_cpp --enable-threadsafe
+    -Wl,--whole-archive
+    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT.a
+    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse.a
+    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse3.a
+    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-avx.a
+    -Wl,--no-whole-archive
+    ${HDF5_LIBRARIES}
+    ${SoapySDR_LIBRARIES})

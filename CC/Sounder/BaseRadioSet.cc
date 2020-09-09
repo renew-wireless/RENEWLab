@@ -31,8 +31,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         int radioNum = _cfg->nBsSdrs[c];
         nBsAntennas[c] = radioNum * _cfg->bsChannel.length();
 
-        std::cout << radioNum << " radios in cell " << c << std::endl;
-        if (!_cfg->hub_ids.empty()) {
+        if (!kUseUHD && !_cfg->hub_ids.empty()) {
             SoapySDR::Kwargs args;
             args["driver"] = "remote";
             args["timeout"] = "1000000";
@@ -111,7 +110,8 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         while (threadCount > 0)
             ;
         // Measure Sync Delays now!
-        sync_delays(c);
+        if (!kUseUHD)
+            sync_delays(c);
     }
 
     if (radioNotFound) {
@@ -173,37 +173,46 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         tddConfStr += "]}";
         std::cout << tddConfStr << std::endl;
 #endif
-        for (size_t i = 0; i < bsRadios[0].size(); i++) {
-            SoapySDR::Device* dev = bsRadios[0][i]->dev;
-            dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
-            dev->writeSetting("TDD_MODE", "true");
-            dev->writeSetting("TDD_CONFIG", tddConfStr);
-        }
-
-        // write beacons to FPGA buffers
-        size_t ndx = 0;
-        for (size_t i = 0; i < bsRadios[0].size(); i++) {
-            SoapySDR::Device* dev = bsRadios[0][i]->dev;
-            dev->writeRegisters("BEACON_RAM", 0, _cfg->beacon);
-            for (char const& c : _cfg->bsChannel) {
-                bool isBeaconAntenna = !_cfg->beamsweep && ndx == _cfg->beacon_ant;
-                std::vector<unsigned> beacon_weights(nBsAntennas[0], isBeaconAntenna ? 1 : 0);
-                std::string tx_ram_wgt = "BEACON_RAM_WGT_";
-                if (_cfg->beamsweep) {
-                    for (int j = 0; j < nBsAntennas[0]; j++)
-                        beacon_weights[j] = CommsLib::hadamard2(ndx, j);
-                }
-                dev->writeRegisters(tx_ram_wgt + c, 0, beacon_weights);
-                ++ndx;
+        // write TDD schedule and beacons to FPFA buffers only for Iris
+        if (!kUseUHD) {
+            for (size_t i = 0; i < bsRadios[0].size(); i++) {
+                SoapySDR::Device* dev = bsRadios[0][i]->dev;
+                dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
+                dev->writeSetting("TDD_MODE", "true");
+                dev->writeSetting("TDD_CONFIG", tddConfStr);
             }
-            dev->writeSetting("BEACON_START", std::to_string(bsRadios[0].size()));
+
+            // write beacons to FPGA buffers
+            size_t ndx = 0;
+            for (size_t i = 0; i < bsRadios[0].size(); i++) {
+                SoapySDR::Device* dev = bsRadios[0][i]->dev;
+                dev->writeRegisters("BEACON_RAM", 0, _cfg->beacon);
+                for (char const& c : _cfg->bsChannel) {
+                    bool isBeaconAntenna = !_cfg->beamsweep && ndx == _cfg->beacon_ant;
+                    std::vector<unsigned> beacon_weights(nBsAntennas[0], isBeaconAntenna ? 1 : 0);
+                    std::string tx_ram_wgt = "BEACON_RAM_WGT_";
+                    if (_cfg->beamsweep) {
+                        for (int j = 0; j < nBsAntennas[0]; j++)
+                            beacon_weights[j] = CommsLib::hadamard2(ndx, j);
+                    }
+                    dev->writeRegisters(tx_ram_wgt + c, 0, beacon_weights);
+                    ++ndx;
+                }
+                dev->writeSetting("BEACON_START", std::to_string(bsRadios[0].size()));
+            }
         }
 
         for (size_t i = 0; i < bsRadios[0].size(); i++) {
             SoapySDR::Device* dev = bsRadios[0][i]->dev;
-            bsRadios[0][i]->activateRecv();
-            bsRadios[0][i]->activateXmit();
-            dev->setHardwareTime(0, "TRIGGER");
+            if (!kUseUHD) {
+                bsRadios[0][i]->activateRecv();
+                bsRadios[0][i]->activateXmit();
+                dev->setHardwareTime(0, "TRIGGER");
+            } else {
+                dev->setHardwareTime(0.0); // "CMD"
+                bsRadios[0][i]->activateRecv();
+                bsRadios[0][i]->activateXmit();
+            }
         }
         std::cout << __func__ << " done!" << std::endl;
     }
@@ -237,13 +246,22 @@ void BaseRadioSet::init(BaseRadioContext* context)
 
     auto channels = Utils::strToChannels(_cfg->bsChannel);
     SoapySDR::Kwargs args;
-    args["driver"] = "iris";
+    if (!kUseUHD) {
+        args["driver"] = "iris";
+        args["serial"] = _cfg->bs_sdr_ids[c][i];
+    } else {
+        args["driver"] = "uhd";
+        args["addr"] = _cfg->bs_sdr_ids[c][i];
+        std::cout << "Init bsRadios: " << args["addr"] << std::endl;
+    }
     args["timeout"] = "1000000";
-    args["serial"] = _cfg->bs_sdr_ids[c][i];
     try {
         bsRadios[c][i] = new Radio(args, SOAPY_SDR_CS16, channels, _cfg->rate);
     } catch (std::runtime_error) {
-        std::cerr << "Ignoring iris " << _cfg->bs_sdr_ids[c][i] << std::endl;
+        if (!kUseUHD)
+            std::cerr << "Ignoring iris " << _cfg->bs_sdr_ids[c][i] << std::endl;
+        else
+            std::cerr << "Ignoring uhd device " << _cfg->bs_sdr_ids[c][i] << std::endl;
         bsRadios[c][i] = NULL;
     }
 
@@ -309,7 +327,8 @@ void BaseRadioSet::radioTrigger(void)
 
 void BaseRadioSet::radioStart()
 {
-    radioTrigger();
+    if (!kUseUHD)
+        radioTrigger();
 }
 
 void BaseRadioSet::readSensors()
@@ -332,9 +351,11 @@ void BaseRadioSet::radioStop(void)
 {
     std::string tddConfStr = "{\"tdd_enabled\":false}";
     for (size_t i = 0; i < bsRadios[0].size(); i++) {
-        SoapySDR::Device* dev = bsRadios[0][i]->dev;
-        dev->writeSetting("TDD_CONFIG", tddConfStr);
-        dev->writeSetting("TDD_MODE", "false");
+        if (!kUseUHD) {
+            SoapySDR::Device* dev = bsRadios[0][i]->dev;
+            dev->writeSetting("TDD_CONFIG", tddConfStr);
+            dev->writeSetting("TDD_MODE", "false");
+        }
         bsRadios[0][i]->reset_DATA_clk_domain();
     }
 }
@@ -349,11 +370,20 @@ void BaseRadioSet::radioTx(const void* const* buffs)
 
 int BaseRadioSet::radioTx(size_t radio_id, const void* const* buffs, int flags, long long& frameTime)
 {
-    int w = bsRadios[0][radio_id]->xmit(buffs, _cfg->sampsPerSymbol, flags, frameTime);
+    int w;
+    // for UHD device xmit from host using frameTimeNs
+    if (!kUseUHD) {
+        w = bsRadios[0][radio_id]->xmit(buffs, _cfg->sampsPerSymbol, flags, frameTime);
+    } else {
+        long long frameTimeNs = SoapySDR::ticksToTimeNs(frameTime, _cfg->rate);
+        w = bsRadios[0][radio_id]->xmit(buffs, _cfg->sampsPerSymbol, flags, frameTimeNs);
+    }
 #if DEBUG_RADIO
     size_t chanMask;
     long timeoutUs(0);
+    SoapySDR::Device* dev = bsRadios[0][radio_id]->dev;
     int s = dev->readStreamStatus(bsRadio->txs, chanMask, flags, frameTime, timeoutUs);
+    int s = dev->readStreamStatus(SOAPY_SDR_TX, chanMask, flags, frameTime, timeoutUs);
     std::cout << "radio " << radio_id << " tx returned " << w << " and status " << s << std::endl;
 #endif
     return w;
@@ -372,16 +402,31 @@ int BaseRadioSet::radioRx(size_t radio_id, void* const* buffs, long long& frameT
 {
     if (radio_id < bsRadios[0].size()) {
         long long frameTimeNs = 0;
-
         int ret = bsRadios[0][radio_id]->recv(buffs, _cfg->sampsPerSymbol, frameTimeNs);
-        frameTime = frameTimeNs; //SoapySDR::timeNsToTicks(frameTimeNs, _rate);
+        // for UHD device recv using ticks
+        if (!kUseUHD)
+            frameTime = frameTimeNs; //SoapySDR::timeNsToTicks(frameTimeNs, _rate);
+        else
+            frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate);
 #if DEBUG_RADIO
         if (ret != _cfg->sampsPerSymbol)
             std::cout << "recv returned " << ret << " from radio " << radio_id << ", Expected "
                       << _cfg->sampsPerSymbol << std::endl;
         else
-            std::cout << "radio " << radio_id << "received " << ret << std::endl;
+            std::cout << "radio " << radio_id << "received " << ret << " at " << frameTime << std::endl;
 #endif
+        return ret;
+    }
+    std::cout << "invalid radio id " << radio_id << std::endl;
+    return 0;
+}
+
+int BaseRadioSet::radioRx(size_t radio_id, void* const* buffs, int numSamps, long long& frameTime)
+{
+    if (radio_id < bsRadios[0].size()) {
+        long long frameTimeNs = 0;
+        int ret = bsRadios[0][radio_id]->recv(buffs, numSamps, frameTimeNs);
+        frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate);
         return ret;
     }
     std::cout << "invalid radio id " << radio_id << std::endl;

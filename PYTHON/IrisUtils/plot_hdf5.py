@@ -29,12 +29,14 @@ import h5py
 import matplotlib.pyplot as plt
 import collections
 import time
+from find_lts import *
 from optparse import OptionParser
 from channel_analysis import *
 import hdf5_lib
 from hdf5_lib import *
 import matplotlib
 matplotlib.use("TkAgg")
+
 
 def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=0.001, deep_inspect=False, sub_sample=1):
     """
@@ -75,6 +77,8 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
     z_padding = prefix_len + postfix_len
     offset = int(prefix_len)
     fft_size = int(metadata['FFT_SIZE'])
+    pilot_type = metadata['PILOT_SEQ_TYPE'].astype(str)[0]
+    ofdm_pilot = np.array(metadata['OFDM_PILOT'])
 
     print(" symbol_length = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}".format(symbol_length, cp, prefix_len, postfix_len, z_padding))
 
@@ -90,9 +94,40 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
         frame_sanity_start = time.time()
         match_filt_clr, frame_map, f_st, peak_map = hdf5_lib.frame_sanity(match_filt, k_lts, n_lts, n_frm_st, frm_plt, plt_ant=ant_i, cp = cp)
         frame_sanity_end = time.time()
-
         print(">>>> filter_pilots time: %f \n" % ( filter_pilots_end - filter_pilots_start) )
         print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
+
+        # Find LTS peaks across frame
+        n_frame = pilot_samples.shape[0]
+        n_cell = pilot_samples.shape[1]
+        n_ue = pilot_samples.shape[2]
+        n_ant = pilot_samples.shape[3]
+        seq_found = np.zeros((n_frame, n_cell, n_ue, n_ant))
+        num_pilots_per_sym = ((symbol_length-z_padding) // len(ofdm_pilot))
+
+        for frameIdx in range(n_frame):    # Frame
+            for cellIdx in range(n_cell):  # Cell
+                for ueIdx in range(n_ue):  # UE
+                    for bsAntIdx in range(n_ant):  # BS ANT
+
+                        I = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 0:symbol_length * 2:2] / 2 ** 15
+                        Q = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 1:symbol_length * 2:2] / 2 ** 15
+                        IQ = I + (Q * 1j)
+                        tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk = pilot_finder(IQ, pilot_type, flip=True,
+                                                                                          pilot_seq=ofdm_pilot)
+                        # Find percentage of LTS peaks within a symbol
+                        # (e.g., in a 4096-sample pilot symbol, we expect 64, 64-long sequences... assuming no CP)
+                        seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / num_pilots_per_sym)
+
+                        dbg2 = False
+                        if dbg2:
+                            fig = plt.figure(1234)
+                            ax1 = fig.add_subplot(2, 1, 1)
+                            ax1.plot(np.abs(IQ))
+                            ax2 = fig.add_subplot(2, 1, 2)
+                            ax2.stem(np.abs(lts_corr))
+                            ax2.scatter(np.linspace(0.0, len(lts_corr), num=1000), pilot_thresh * np.ones(1000), color='r')
+                            plt.show()
 
     # PLOTTER
     # Plot pilots or data or both
@@ -253,12 +288,33 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
                 axes[n_u, n_c].set_xlabel('Frame no.')
                 axes[n_u, n_c].set_ylabel('Starting index')
                 axes[n_u, n_c].grid(True)
+
+        # PILOT MAP
+        fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+        c = []
+        fig.suptitle('Pilot Map (Percentage of Detected Pilots Per Symbol) - NOTE: Might exceed 100% due to threshold')
+        for n_c in range(n_cell):
+            for n_u in range(n_ue):
+                c.append(axes[n_u, n_c].imshow(seq_found[:, n_c, n_u, :].T, vmin=0, vmax=100, cmap='Blues',
+                                               interpolation='nearest',
+                                               extent=[hdf5.n_frm_st, hdf5.n_frm_end, n_ant, 0],
+                                               aspect="auto"))
+                axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
+                axes[n_u, n_c].set_ylabel('Antenna #')
+                axes[n_u, n_c].set_xlabel('Frame #')
+                axes[n_u, n_c].set_xticks(np.arange(hdf5.n_frm_st, hdf5.n_frm_end, 1), minor=True)
+                axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
+                axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
+        cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, 100, 11), orientation='horizontal')
+        cbar.ax.set_xticklabels(['0%', '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'])
+
+        # SHOW FIGURES
         plt.show()
- 
         print("** \tWARNING: If you attempt to plot a different frame after running this script, remember to subtract the frame_start you gave! **")
         print(">> \tE.g.: frame no. 1763 and frame_start = 1500 --> plot(match_filter_clr[<frame 1736 - 1500>, <cell>, <ue>, ref_antenna,:])\n")
     else:
         plt.show()
+
 
 def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0):
     '''
@@ -352,6 +408,7 @@ def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0):
     pl += 1
 
     del csi  # free the memory
+
 
 def compute_legacy(hdf5):
     '''
@@ -449,6 +506,7 @@ def compute_legacy(hdf5):
     endtime = time.time()
     print("Total time: %f" % (endtime - starttime))
 
+
 def show_plot(cmpx_pilots, lts_seq_orig, match_filt):
     '''
     Plot channel analysis
@@ -510,11 +568,55 @@ def show_plot(cmpx_pilots, lts_seq_orig, match_filt):
     ax3.set_xlabel('Samples')
 
 
+def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[]):
+    """
+    Find pilots from clients to each of the base station antennas
+
+    Input:
+        samples    - Raw samples from pilots and data.
+                     Dimensions: vector [1 x num samples]
+        pilot_type - Type of TX pilot (e.g., 802.11 LTS)
+        flip       - Needed for finding LTS function
+
+    Output:
+        pilot     - Received pilot (from multiple clients)
+        tx_pilot  - Transmitted pilot (same pilot sent by all clients)
+    """
+
+    if pilot_type.find('lts') != -1:
+        # LTS-based pilot
+        lts_thresh = 0.8
+        best_pk, lts_pks, lts_corr = find_lts(samples, thresh=lts_thresh, flip=flip, lts_seq=pilot_seq)
+
+        # full lts contains 2.5 64-sample-LTS sequences, we need only one symbol
+        lts, lts_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
+
+        if not (pilot_seq.size == 0):
+            # pilot provided, overwrite the one returned above
+            lts = pilot_seq
+
+        lts_syms_len = len(lts)
+        pilot_thresh = lts_thresh * np.max(lts_corr)
+        # We'll need the transmitted version of the pilot (for channel estimation, for example)
+        tx_pilot = [lts, lts_f]
+        lts_start = 0
+
+        # Check if LTS found
+        if not best_pk:
+            print("SISO_OFDM: No LTS Found! Continue...")
+            pilot = np.array([])
+            return tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk
+    else:
+        raise Exception("Only LTS Pilots supported at the moment")
+
+    return tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk
+
+
 def main():
     # Tested with inputs: ./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5 300  (for two users)
     #                     ./data_in/Argos-2019-3-30-12-20-50_1x8x1.hdf5 300  (for one user) 
     parser = OptionParser()
-    parser.add_option("--deep-inspect", action="store_true", dest="deep_inspect", help="Run script without analysis", default= True)
+    parser.add_option("--deep-inspect", action="store_true", dest="deep_inspect", help="Run script without analysis", default= False)
     parser.add_option("--ref-frame", type="int", dest="ref_frame", help="Frame number to plot", default=0)
     parser.add_option("--legacy", action="store_true", dest="legacy", help="Parse and plot legacy hdf5 file", default=False)
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Reference antenna", default=0)
@@ -539,7 +641,7 @@ def main():
     sub_sample = options.sub_sample
     legacy = options.legacy
 
-    filename = "./data_in/POWDER_DeployMeas/trace-2020-9-2-15-30-54_1x2x1_tx70_rx85_loc2.hdf5"  # sys.argv[1]
+    filename = sys.argv[1]
     scrpt_strt = time.time()
 
     if n_frames_to_inspect == 0:
