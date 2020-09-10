@@ -138,7 +138,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
                     radios[i]->activateXmit();
                     dev->writeSetting("TRIGGER_GEN", "");
                 } else {
-                    dev->setHardwareTime(0.0); // "CMD"
+                    dev->setHardwareTime(0); // "CMD"
                     radios[i]->activateRecv();
                     radios[i]->activateXmit();
                 }
