@@ -7,6 +7,9 @@ static constexpr bool kUseUHD = true;
 static constexpr bool kUseUHD = false;
 #endif
 
+static constexpr size_t kStreamContinuous = 1;
+static constexpr size_t kStreamEndBurst = 2;
+
 #define DEBUG_PRINT 0
 #define DEBUG_RADIO 0
 #define DEBUG_PLOT 0
@@ -22,5 +25,6 @@ static constexpr bool kUseUHD = false;
 #define MAX_FRAME_INC 2000
 #define TIME_DELTA 40 //ms
 #define SETTLE_TIME_MS 1
+#define BEACON_INTERVAL 20 // frames
 
 #endif
