@@ -140,7 +140,7 @@ Config::Config(const std::string& jsonfile)
         clDataMod = tddConfCl.value("modulation", "QPSK");
         frame_mode = tddConfCl.value("frame_mode", "continuous_resync");
         hw_framer = tddConfCl.value("hw_framer", true);
-        txAdvance = tddConfCl.value("tx_advance", kUseUHD ? 100 : 250); // 250
+        txAdvance = tddConfCl.value("tx_advance", 250); // 250
 
         auto jClTxgainA_vec = tddConfCl.value("txgainA", json::array());
         clTxgain_vec[0].assign(jClTxgainA_vec.begin(), jClTxgainA_vec.end());
