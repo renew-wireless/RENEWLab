@@ -256,7 +256,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
                 // only write received pilot into samp
                 // otherwise use syncrxbuffBs as a dummy buffer
-                if (config_->isPilot(frame_id, symbol_id))
+                if (config_->isPilot(frame_id, symbol_id) || config_->isData(frame_id, symbol_id))
                     r = baseRadioSet_->radioRx(it, samp, rxTimeBs);
                 else
                     r = baseRadioSet_->radioRx(it, syncrxbuffBs.data(), rxTimeBs);
