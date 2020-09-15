@@ -2,15 +2,14 @@
 """
  MMIMO_RECEIVER.py
 
- Simple massive MIMO receiver. Tested only for two clients but code can be easily expanded to more clients.
+ Simple massive MIMO receiver. Tested only for two clients but code can be expanded to more clients.
  
- -Three modes: simulation and real-time
+ -Two modes: simulation and real-time
      a) Sim (AWGN):      Simulation mode/Debug mode. Take time domain TX samples from specified
                          HDF5 file and pass them through an AWGN channel. Tested for up to 2 clients and a
                          variable number of BS antennas.
      a) Replay (REPLAY): Read HDF5 file and run mMIMO receiver on the
                          collected data
-     b) Real-Time (OTA): NOT SUPPORTED YET. Continuously read RX buffer as UEs are transmitting
 
  - Procedure:
      a) Read IQ
@@ -22,13 +21,20 @@
      g) Plotter
 
     Currently only supports one-cell system (one Base Station).
-    NOTE: Because of the HDF5 file formatting, this script only runs
-          when both the Base Station and Client are run together. E.g., using tddconfig.json
+    *** NOTE ***
+    We recommend to use this script with datasets generated from a joint BS/Client config file. This allows the sounder
+    to record the original data transmitted by the client and its parameters. Otherwise, certain functionalities like
+    EVM, and even the AWGN mode won't work.
 
-    Usage example: Run sounder script ("./CC/Sounder/sounder ./CC/Sounder/files/tddconfig.json")
+    Usage example:
+    1) Run sounder script ("./CC/Sounder/sounder ./CC/Sounder/files/<config>.json")
     This will run both the Base station and clients from same machine and will generate a log
     file inside "/CC/Sounder/logs".
-    Use file as input to this script: "python3 mmimo_receiver.py --file <path/filename>"
+    Use file as input to this script: "python3 MMIMO_RECEIVER.py --file <path/filename>"
+
+    2) Run sounder script in two terminals, one for base station config only, and one for client config only. The base
+    station will record a log file under "/CC/Sounder/logs".
+    Use file as input to this script: "python3 MMIMO_RECEIVER.py --file <path/filename>"
 
     To terminate - CLOSE FIGURE
 ---------------------------------------------------------------------
@@ -64,6 +70,7 @@ import matplotlib.cm as cm
 global running
 running = True
 
+
 #########################################
 #              Functions                #
 #########################################
@@ -96,7 +103,7 @@ def read_rx_samples(rx_mode, filename):
         data_types_avail = []
         pilots_avail = bool(hdf5.data['Pilot_Samples'])
         if len(hdf5.data.keys()) > 1:
-            if bool(self.data['UplinkData']):
+            if bool(hdf5.data['UplinkData']):
                 ul_data_avail = bool(hdf5.data['UplinkData'])
         else:
             ul_data_avail = False
@@ -597,6 +604,8 @@ def rx_app(filename, user_params, this_plotter):
     ###########################
     if "CL_SDR_ID" in metadata.keys():
         cl_present = True
+    else:
+        cl_present = False
 
     prefix_len = int(metadata['PREFIX_LEN'])
     postfix_len = int(metadata['POSTFIX_LEN'])
@@ -638,12 +647,14 @@ def rx_app(filename, user_params, this_plotter):
     if tmp.find(':') >= 0:
         frame0 = int(tmp.split(':')[0])
         frameEnd = tmp.split(':')[1]
-        if frameEnd.find('end') >= 0:
+        if frameEnd.find('end') >= 0 or int(frameEnd) > num_frames:
             iframes = range(frame0, num_frames)
         else:
             iframes = range(frame0, int(frameEnd))
     else:
+        frame0 = 0
         iframes = range(int(tmp), int(tmp)+1)
+        print("Using frame zero as reference!")
 
     # Verify dimensions
     assert pilot_dim[1] == num_cells
@@ -727,6 +738,10 @@ def rx_app(filename, user_params, this_plotter):
         lts_start_all = np.zeros([num_cells, num_cl, num_bs_ant, num_frames])
 
         if rx_mode == "AWGN":
+            if not cl_present:
+                print("AWGN not supported when client and base station are run separately (No client data available). "
+                      "Please run on REPLAY mode.")
+                sys.exit(-1)
             for frameIdx in range(num_frames):
                 # PER FRAME
                 # Code for debugging. Supports up to 2 clients and 8 BS ant. Uses TX symbols from HDF5 and passes them
@@ -840,6 +855,7 @@ def rx_app(filename, user_params, this_plotter):
 
                     # Update plotter data
                 this_plotter.set_data(frameIdx,
+                                      num_cl,  # of clients
                                       tx_sig,  # tx[num clients][num samples]
                                       rx_data,  # [numBsAnt, symLen]
                                       chan_est_vec,  # [numCl][fft size]
@@ -928,9 +944,14 @@ def rx_app(filename, user_params, this_plotter):
                     avg_evm = []
                     snr_from_evm = []
                     for clIdx in range(num_cl):
-                        evm_mat.append(abs(rxSymsWithCP[clIdx] - ofdm_data_mat[clIdx]) ** 2)
-                        avg_evm.append(np.mean(evm_mat[clIdx]))
-                        snr_from_evm.append(10 * np.log10(1 / avg_evm[clIdx]))
+                        if cl_present:
+                            evm_mat.append(abs(rxSymsWithCP[clIdx] - ofdm_data_mat[clIdx]) ** 2)
+                            avg_evm.append(np.mean(evm_mat[clIdx]))
+                            snr_from_evm.append(10 * np.log10(1 / avg_evm[clIdx]))
+                        else:
+                            avg_evm.append(-999)
+                            snr_from_evm.append(-999)
+
                         # Dim: chan_est[numCells, numCl, numBsAnt, numFrame, numSC]
                         chan_est_vec.append(chan_est[num_cells - 1, clIdx, ant_plot, frameIdx, :])
                         rx_H_est_plot.append(np.squeeze(np.matlib.repmat(complex('nan'), 1, len(chan_est_vec[clIdx]))))
@@ -963,6 +984,7 @@ def rx_app(filename, user_params, this_plotter):
 
                     # Update plotter data
                     this_plotter.set_data(frameIdx,
+                                          num_cl,  # of clients
                                           tx_sig,                                # tx[num clients][num samples]
                                           rx_data,                               # [numBsAnt, symLen]
                                           chan_est_vec,                          # [numCl][fft size]
@@ -1023,13 +1045,13 @@ if __name__ == '__main__':
     parser = OptionParser()
     # Params
     parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/<filename>.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
-    parser.add_option("--mode",       type="string",       dest="mode",       default="REPLAY", help="Options: REPLAY/AWGN/OTA [default: %default]")
+    parser.add_option("--mode",       type="string",       dest="mode",       default="REPLAY", help="Options: REPLAY/AWGN [default: %default]")
     parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
     parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=False,  help="Apply CFO correction (not recommended) [default: %default]")
     parser.add_option("--sfoCorr",    action="store_true", dest="sfo_corr",   default=False,  help="Apply SFO correction [default: %default]")
     parser.add_option("--phaseCorr",  action="store_true", dest="phase_corr", default=True,  help="Apply phase correction [default: %default]")
     parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=1,     help="FFT Offset:# CP samples for FFT [default: %default]")
-    parser.add_option("--numClPlot",  type="int",          dest="num_cl_plot",default=2,     help="Number of clients to plot. Max of 2 [default: %default]")
+    parser.add_option("--numClPlot",  type="int",          dest="num_cl_plot",default=2,     help="Number of clients to plot. Max of 2. [default: %default]")
     parser.add_option("--frame",      type="string",       dest="frame",      default="0:end",  help="Range of frames to analyze (as string). Examples: --frame='5' to analyze a single frame, --frame='5:200' for range from frame 5 to 200, --frame='5:end' all frames starting at frame 5 [default: %default]")
     (options, args) = parser.parse_args()
 

@@ -46,6 +46,7 @@ public:
     std::string pilot_seq;
     std::string beacon_seq;
     bool ulDataSymPresent;
+    std::string dataMod;
 
     // BS features
     size_t nCells;
@@ -87,7 +88,6 @@ public:
     bool clAgcEn;
     int clAgcGainInit;
     int txAdvance;
-    std::string clDataMod;
     std::vector<int> data_ind;
     std::vector<uint32_t> coeffs;
     std::vector<std::complex<int16_t>> coeffs_ci16;
