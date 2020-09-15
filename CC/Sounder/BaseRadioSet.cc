@@ -209,7 +209,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
                 bsRadios[0][i]->activateXmit();
                 dev->setHardwareTime(0, "TRIGGER");
             } else {
-                dev->setHardwareTime(0.0); // "CMD"
+                dev->setHardwareTime(0, "UNKNOWN_PPS"); // "CMD"
                 bsRadios[0][i]->activateRecv();
                 bsRadios[0][i]->activateXmit();
             }
