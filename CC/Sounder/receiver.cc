@@ -406,7 +406,6 @@ void Receiver::clientTxRx(int tid)
             int r = clientRadioSet_->radioTx(tid, txbuff.data(), NUM_SAMPS, 1, txTime);
             if (r == NUM_SAMPS)
                 txTime += 0x10000;
-            std::cout << "radioTx() called..." << std::endl;
         }
     }
 }
