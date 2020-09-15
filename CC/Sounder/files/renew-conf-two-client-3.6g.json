@@ -5,53 +5,52 @@
                  "hub_id" : "files/renew-hub-serials1.txt",
                  "frequency" : 3.6e9,
                  "channel" : "AB",
-                 "rxgainA" : 20,
-                 "txgainA" : 40,
-                 "rxgainB" : 20,
-                 "txgainB" : 40,
+                 "rxgainA" : 70,
+                 "txgainA" : 70,
+                 "rxgainB" : 70,
+                 "txgainB" : 70,
                  "rate" : 5e6,
                  "frame_schedule" : [
-                     "BGPPGGGGGGGGGGGGGGGG"
+                     "BGPPUGGGGGGGGGGGGGGG"
                  ],
                  "max_frame" : 4000,
-                 "subframe_size" : 640,
+                 "subframe_size" : 800,
                  "fft_size" : 64,
                  "cp_size" : 16,
-                 "prefix" : 82,
-                 "postfix" : 68,
+                 "prefix" : 160,
+                 "postfix" : 160,
                  "beacon_seq" : "gold_ifft",
                  "beamsweep" : true,
                  "sample_calibrate" : true,
                  "beacon_antenna" : 0,
-                 "pilot_seq" : "lts-half",
-		 "single_gain" : true
+                 "modulation" : "16QAM",
+                 "single_gain" : true
         },
 
         "Clients" : {
                  "sdr_id" : [
-                     "RF3C000045",
-                     "RF3C000025"
+                     "RF3E000080",
+                     "RF3E000214"
                  ],
                  "frequency" : 3.6e9,
                  "channel" : "A",
                  "agc_en" : false,
-                 "rxgainA" : [50, 50],
-                 "txgainA" : [40, 40],
-                 "rxgainB" : [50, 50],
-                 "txgainB" : [40, 40],
+                 "rxgainA" : [70, 70],
+                 "txgainA" : [70, 70],
+                 "rxgainB" : [70, 70],
+                 "txgainB" : [70, 70],
                  "rate" : 5e6,
                  "frame_schedule" : [
-                     "GGPGGGGGGGGGGGGGGGGG",
-                     "GGGPGGGGGGGGGGGGGGGG"
+                     "GDPGUGGGGGGGGGGGGGGG",
+                     "GDGPUGGGGGGGGGGGGGGG"
                  ],
                  "frame_mode" : "continuous_resync",
-                 "subframe_size" : 640,
+                 "subframe_size" : 800,
                  "fft_size" : 64,
                  "cp_size" : 16,
-                 "prefix" : 82,
-                 "postfix" : 68,
+                 "prefix" : 160,
+                 "postfix" : 160,
                  "beacon_seq" : "gold_ifft",
-                 "pilot_seq" : "lts-half",
-                 "modulation" : "16QAM"
+		 "hw_framer" : false
         }
 }

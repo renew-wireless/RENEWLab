@@ -24,6 +24,7 @@
 		 "beamsweep" : true,
                  "sample_calibrate" : false,
 		 "beacon_antenna" : 0,
+		 "modulation" : "QPSK",
 		 "single_gain" : true
 	}
 

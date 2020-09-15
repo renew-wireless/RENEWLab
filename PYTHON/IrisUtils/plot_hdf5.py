@@ -603,7 +603,7 @@ def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[]):
 
         # Check if LTS found
         if not best_pk:
-            print("SISO_OFDM: No LTS Found! Continue...")
+            # print("SISO_OFDM: No LTS Found! Continue...")
             pilot = np.array([])
             return tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk
     else:
