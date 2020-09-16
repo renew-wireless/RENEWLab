@@ -15,36 +15,75 @@
 
 import yagmail
 import os
+import socket
 
 
-MAIL_SENDER = os.environ.get('MAIL_USERNAME')
-MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
-MAIL_RECEIPIENTS = ['support@renew-wireless.org']
-MAIL_SUBJECT = '[RENEW] Overheat warning!'
-SERVER = os.environ.get('SERVER_NAME') or 'RENEW_SERVER'
+MAIL_SENDER = os.environ.get('MAIL_USERNAME') or 'renew.dashboard@gmail.com'
+MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD') or 'r123@d456'
+RECEIPIENT = os.environ.get('MAIL_RECEIPIENT') or 'support@renew-wireless.org'
+SERVER = os.environ.get('SERVER_NAME') or socket.gethostname()
 
 
-def send_email(utc_datetime, irises_sensors, thresh):
+def send_email_overheat(utc_datetime, irises_sensors, thresh):
     """
     Send an email of overheat warning from MAIL_SENDER to
-    MAIL_RECEIPIENTS.
+    MAIL_RECEIPIENT.
 
-    :param utc_datetime: UTC when the overheat warning is generated.
+    :param utc_datetime: UTC when the warning was generated.
     :param irises_sensors: A list of iris serial numbers and their
         corresponding temperatures on LMS7, Zynq, TX and RX sensors.
     :param thresh: The temperature threshold for sensor overheating.
 
     :return: None
     """
+    
     yag = yagmail.SMTP(user=MAIL_SENDER, password=MAIL_PASSWORD)
-    msg = "Some Iris modules on the base station connected to Server " +\
-      SERVER + " is over " + str(thresh) + " C.\n" + '<br>'\
-      + utc_datetime
+    subject = "[RENEW] Overheat alert!"
+    msg = 'Some Iris modules on the base station connected to Server ' + \
+          SERVER + ' are over ' + str(thresh) + ' C.\n\nSensor Log: ' + \
+          utc_datetime
+    msg += '\n\nserial_number,LMS7_temp,ZYNQ_temp,TX_temp,RX_temp'
 
     for iris_sensors in irises_sensors:
-        msg += '<br>'
-        for sensor in iris_sensors:
-            msg += sensor + ','
+        msg += '<br>' + iris_sensors['sn'] + ',' + iris_sensors['LMS7temp'] + \
+               ',' + iris_sensors['ZYNQtemp'] + ',' + iris_sensors['TXtemp'] +\
+               ',' + iris_sensors['RXtemp']
 
-    yag.send(to=MAIL_RECEIPIENTS, subject=MAIL_SUBJECT, contents=msg)
+    msg += '<br>Error Description:\n-100.00: sdr.readSensor() error\n' + \
+           '-101.00: does not exist in sensor readings\n-102.00: error ' + \
+           'when creating a SoapySDR instance'
+    
+    yag.send(to=[RECEIPIENT], subject=subject, contents=msg)
+
+
+
+def send_email_errors(utc_datetime, irises_sensors, thresh):
+    """
+    Send an email of Iris errors from MAIL_SENDER to MAIL_RECEIPIENT.
+
+    :param utc_datetime: UTC when the warning was generated.
+    :param irises_sensors: A list of iris serial numbers and their
+        corresponding temperatures on LMS7, Zynq, TX and RX sensors.
+    :param thresh: The threshold for sensor errors.
+
+    :return: None
+    """
+    
+    yag = yagmail.SMTP(user=MAIL_SENDER, password=MAIL_PASSWORD)
+    subject = "[RENEW] Sensor error alert!"
+    msg = 'Some Iris modules on the base station connected to Server ' + \
+          SERVER + 'have errors.\n\nSensor Log: ' + utc_datetime
+    msg += '\n\nserial_number,LMS7_temp,ZYNQ_temp,TX_temp,RX_temp'
+
+    for iris_sensors in irises_sensors:
+        msg += '<br>' + iris_sensors['sn'] + ',' + iris_sensors['LMS7temp'] + \
+               ',' + iris_sensors['ZYNQtemp'] + ',' + iris_sensors['TXtemp'] +\
+               ',' + iris_sensors['RXtemp']
+
+    msg += '<br>Error Desciption:\n-100.00: sdr.readSensor() error\n' + \
+           '-101.00: does not exist in sensor readings\n-102.00: error ' + \
+           'when creating a SoapySDR instance'
+    
+    yag.send(to=[RECEIPIENT], subject=subject, contents=msg)
+
 

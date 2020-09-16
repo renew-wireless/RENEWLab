@@ -24,13 +24,20 @@
             // data to the client. The data is then displayed.
             socket.on('my_response', function(msg, cb) {
                 $('#log').empty();
-                $('#log').append('<br>' + $('<div/>').text(msg.time).html());
-	        $('#log').append('<br><br><pre> Serial_Number     LMS7(C)    Zynq(C)    TX(C)     RX(C)</pre><hr>');
+                $('#log').append('<br><b>Server:</b> ' + $('<div/>').text(msg.server).html());
+                $('#log').append('<br>' + $('<div/>').text(msg.time).html() + ' UTC');
+                $('#log').append('<br><br>Error Codes:<br>')
+	        $('#log').append('<pre>-100.00: sdr.readSensor() error</pre>');
+	        $('#log').append('<pre>-101.00: does not exist in sensor readings</pre>');
+	        $('#log').append('<pre>-102.00: error when creating a SoapySDR instance</pre>');
+	        $('#log').append('<br><pre> Serial_Number     LMS7(C)    Zynq(C)    TX(C)     RX(C)</pre><hr>');
                 $(msg.data).each(function(index, value) {
                     $('#log').append('<br>');
-                    $(value).each(function(index_inner, value_inner) {
-                        $('#log').append($('<div/>').text(value_inner).html() + '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp');
-                    });
+                    $('#log').append(value['sn'] + '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp' + value['LMS7temp'] + '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp' + value['ZYNQtemp'] + '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp' + value['TXtemp'] + '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp' + value['RXtemp'])
+                    // below is for list of lists format
+                    //$(value).each(function(index_inner, value_inner) {
+                    //    $('#log').append($('<div/>').text(value_inner).html() + '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp');
+                    //});
                 });
                 if (cb)
                     cb();
