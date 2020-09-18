@@ -1,14 +1,14 @@
 {
 	"BaseStations" : {
-		 "cells" : 1,
-		 "sdr_id" : ["files/measurements-iris-serials.txt"],
+		 "cells" : 3,
+		 "sdr_id" : ["files/bs0.txt", "files/bs1.txt", "files/bs2.txt"],
 		 "hub_id" : "files/measurements-hub-serials.txt",
-		 "frequency" : 2.5e9,
+		 "frequency" : 3.6e9,
 		 "channel" : "AB",
-		 "rxgainA" : 20,
-		 "txgainA" : 85,
-		 "rxgainB" : 20,
-		 "txgainB" : 85,
+		 "rxgainA" : 70,
+		 "txgainA" : 70,
+		 "rxgainB" : 70,
+		 "txgainB" : 70,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
 		     "GGGGGGGPGGGGGGG"

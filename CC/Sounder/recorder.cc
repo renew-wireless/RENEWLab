@@ -340,7 +340,7 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
             if (cfg->pilot_sc[1].size() > 0)
                 write_attribute(mainGroup, "OFDM_PILOT_SC_VALS", cfg->pilot_sc[1]);
 
-            // Freq. Domain Data Symbols - OBCH
+            // Freq. Domain Data Symbols
             for (size_t i = 0; i < cfg->txdata_freq_dom.size(); i++) {
                 std::string var = std::string("OFDM_DATA_CL") + std::to_string(i);
                 write_attribute(mainGroup, var.c_str(), cfg->txdata_freq_dom[i]);
@@ -611,7 +611,7 @@ herr_t Recorder::record(int, int offset)
             maxFrameNumber = maxFrameNumber + MAX_FRAME_INC;
         }
 
-        DataspaceIndex hdfoffset = { pkg->frame_id, 0, 0, pkg->ant_id, 0 };
+        DataspaceIndex hdfoffset = { pkg->frame_id, pkg->cell_id, 0, pkg->ant_id, 0 };
 
         if (cfg->isPilot(pkg->frame_id, pkg->symbol_id)) {
             //assert(pilot_dataset >= 0);
