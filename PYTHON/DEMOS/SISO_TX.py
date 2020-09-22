@@ -211,7 +211,7 @@ def main():
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
     parser.add_option("--gain", type="float", dest="gain", help="Tx gain [0:105] (dB)", default=42.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=3.6e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=2.5e9)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
     parser.add_option("--waveFreq", type="float", dest="waveFreq", help="Baseband waveform freq (Hz)", default=None)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=1024)

@@ -1,6 +1,5 @@
-[![N|Solid](https://renew-wireless.org/figs/cropped-v4-qgkw8d-1024x320.png)](https://nodesource.com/products/nsolid)
+[![N|Solid](https://renew-wireless.org/figs/cropped-v4-qgkw8d-1024x320.png)](https://renew-wireless.org/)
 
-[![Build Status](https://travis-ci.org/joemccann/dillinger.svg?branch=master)](https://travis-ci.org/joemccann/dillinger)
 
 # RENEW Dashboard
 
@@ -90,7 +89,7 @@ $ xdg-open 'http://localhost:3333'
 ```
 Note: If listening on the public network, open http://ip-address-of-the-server:3333 on your web browser. 
 
-3. Database: renew.db 
+3. Database file renew.db is in SQLite format. 
 Note: Recommend to open with "DB Browser for SQLite". 
 
 

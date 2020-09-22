@@ -567,7 +567,7 @@ def main():
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
     parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=70.0)  # See documentation at top of file for info on gain range
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Rx gain (dB)", default=50.0)  # See documentation at top of file for info on gain range
-    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=3.597e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=2.5e9)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
     parser.add_option("--nOFDMsym", type="int", dest="nOFDMsym", help="Number of OFDM symbols", default=20)
     parser.add_option("--ltsCpLen", type="int", dest="ltsCpLen", help="Length of Cyclic Prefix - LTS", default=32)
