@@ -5,7 +5,7 @@
 
 
 # Description
-The *RENEWLab* software suite functions as the application layer of the RENEW massive MIMO platform [(official documentation)](https://docs.renew-wireless.org). It provides a user interface through a set of APIs. Users can generate, manipulate, transmit, and receive RF signals on the RENEW hardware by calling these APIs. 
+RENEWLab is a software toolbox for the RENEW massive MIMO platform [(official documentation)](https://docs.renew-wireless.org). It provides a user interface through a set of APIs. Users can generate, manipulate, transmit, and receive RF signals on the RENEW hardware by calling these APIs. 
 
 > The design goal of RENEWLab is to provide the RENEW software library and a quick starting point for users to design, program, and run their experiments on the RENEW massive MIMO platform. 
 
@@ -20,9 +20,7 @@ The RENEWLab software suite consists of four components.
      It provides a MATLAB-based library which allows users to rapidly develop physical layer algorithms using the MATLAB toolboxes with a highly simplified interface and to perform OTA tests. Please refer to the [RENEW official documentation](https://docs.renew-wireless.org/dev-suite/design-flows/matlab-design-flow/). 
 
   3. **C++ Development Suite**: 
-     It provides a set of projects for real-time transmission and receiption of RF signals and for a highly parallelized system with large processing throughput. It supports two projects. Please refer to the [RENEW official documentation](https://docs.renew-wireless.org/dev-suite/design-flows/cpp/).
-     - The Sounder framework for running channel sounding experiments
-     - The Beamformer framework (TODO) for running real-time uplink and downlink beamforming
+     It provides the Sounder framework for running channel sounding experiments. Please refer to the [RENEW official documentation](https://docs.renew-wireless.org/dev-suite/design-flows/cpp/). 
 
   4. **RENEW Dashboard**: 
      It provides a web GUI for the RENEW base station health monitoring and for users to run different software frameworks with ease. Please refer to the README under the WEBGUI/ directory. 
@@ -31,7 +29,7 @@ The RENEWLab software suite consists of four components.
 # Installation
 ### Clone this repository: 
 ```sh
-$ git clone replace.with.this.repository's.url
+$ git clone https://github.com/renew-wireless/RENEWLab.git
 ```
 
 ### Install common dependencies: 
@@ -50,23 +48,17 @@ Note: This installs the SoapySDR app and its dependencies which include SoapySDR
      ```sh
      $ sudo apt-get install python-scipy python-h5py python-json python-matplotlib transitions
      ```
-  2. If you are going to use the RENEW C++ Development Suite, please install its library as below. 
+  2. If you are going to use the RENEW C++ Development Suite, please install its library and dependencies as below. 
      ```sh
      $ ./install_cclibs.sh
+     $ cd CC/Sounder/mufft/
+     $ git submodule update --init
+     $ cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON ./
+     $ make -j
+     $ cd ../
+     $ cmake ./
+     $ make -j
      ```
-     There are multiple C++ projects in the RENEW C++ Development Suite. For each project, please install its own dependencies and build the project as below. 
-     
-      a. Sounder
-       ```sh
-       $ cd CC/Sounder/mufft/
-       $ git submodule update --init
-       $ cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON ./
-       $ make -j
-       $ cd ../
-       $ cmake ./
-       $ make -j
-       ```
-      b. Beamformer (TODO)
        
   3. If you are going to use the RENEW MATLAB Development Suite, there is no dependency needed for it. 
   4. If you are going to use the RENEW Dashboard, please follow the README in the WEBGUI/ directory to install dependencies. 
