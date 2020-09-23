@@ -8,11 +8,11 @@ SETUP
 5) I created 4 config files. Two for the client node moving around (Kirk at 2.5G and 3.6G) and two for the static base station node (David at 2.5G and 3.6G).
 
 Mapping:
-xxxxxxxxxx  - USTAR
+RF3E000179 - USTAR
 RF3E000119 – EBC (David)
 RF3E000145 - ACC
 RF3E000166 – Honors
-RF3E000179 – MEB
+RF3E000030 – MEB
 RF3E000157 – Client (Kirk)
 
 COLLECTION
