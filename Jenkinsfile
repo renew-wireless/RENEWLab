@@ -5,8 +5,8 @@ node('master') {
 	stage('Build') {
 		stage("Get mufft dependencies and build"){
 			dir ('CC/Sounder/mufft') {
-        sh "git submodule update --init"
-        sh "cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON ./ && make -j"
+				sh "git submodule update --init"
+				sh "cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON ./ && make -j"
 			}
 		}
 		
