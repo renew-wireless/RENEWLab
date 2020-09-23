@@ -23,6 +23,6 @@
 		     "RF3E000157"
 		 ],
 		 "hw_framer" : true,
-		 "single_gain" : true
+		 "single_gain" : false
 	}
 }

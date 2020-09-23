@@ -1,14 +1,14 @@
 {
 	"BaseStations" : {
-		 "cells" : 3,
-		 "sdr_id" : ["files/bs145.txt", "files/bs166.txt", "files/bs179.txt"],
+		 "cells" : 4,
+		 "sdr_id" : ["files/bs145.txt", "files/bs166.txt", "files/bs030.txt", "files/bs179.txt"],
 		 "hub_id" : "files/measurements-hub-serials.txt",
 		 "frequency" : 2.5e9,
 		 "channel" : "AB",
-		 "rxgainA" : 90,
-		 "txgainA" : 60,
-		 "rxgainB" : 90,
-		 "txgainB" : 60,
+		 "rxgainA" : 70,
+		 "txgainA" : 70,
+		 "rxgainB" : 70,
+		 "txgainB" : 70,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
 		     "GGGGGGGPGGGGGGG"
@@ -25,7 +25,7 @@
                  "sample_calibrate" : false,
 		 "beacon_antenna" : 0,
 		 "modulation" : "QPSK",
-		 "single_gain" : true
+		 "single_gain" : false
 	}
 
 }
