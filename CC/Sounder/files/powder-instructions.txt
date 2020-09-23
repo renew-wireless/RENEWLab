@@ -1,0 +1,33 @@
+Instructions:
+
+SETUP
+1) Make sure you have cloned the repo: https://github.com/renew-wireless/RENEWLab.git and you are in the feat_multiCellSounder branch.
+2) Run scripts in RENEWLab folder to install tools, i.e., ./install_pylibs.sh, ./install_cclibs.sh, ./install_soapy.sh.
+3) Go into CC/Sounder/ folder and run the commands shown in the README. This will run cmake and build the Sounder.
+4) To verify Soapy is working, you can run SoapySDRUtil --find and you should see the Irises connected to the network.
+5) I created 4 config files. Two for the client node moving around (Kirk at 2.5G and 3.6G) and two for the static base station node (David at 2.5G and 3.6G).
+
+Mapping:
+xxxxxxxxxx  - USTAR
+RF3E000119 – EBC (David)
+RF3E000145 - ACC
+RF3E000166 – Honors
+RF3E000179 – MEB
+RF3E000157 – Client (Kirk)
+
+COLLECTION
+1) Before starting the client, we want to measure noise at each node. Without the client transmitting, run the BS node:
+    a) From CC/Sounder/ folder- ./sounder files/david-config-2.5g.json
+    b) Verify a new data file has been generated in CC/Sounder/logs/
+    c) Rename this file by simply adding some indication that this is the noise, e.g., change trace-2020-9-22-10-1-23_3x2x1.hdf5 to trace-2020-9-22-10-1-23_3x2x1_NOISE.hdf5
+2) Go to location #1, start client, start base station nodes. There are cases where the Iris cannot be detected and this shows up:
+RF3E000157
+ERROR: the above client serials were not discovered in the network!
+
+not a big deal, just run it again.
+Also, ignore error: unexpected readStream error UNKNOWN
+3) On the BS, the script will automatically collect all frames and exit. Verify that a new HDF5 file has been created under /logs/
+4) No need to stop the client, move to the next location, start base station nodes, verify new file has been created... keep doing this for all locations.
+
+IMPORTANT
+1) The name in the data files have a timestamp. In the post-processing phase we will use this timestamp to determine where the client was when we collected the dataset. If anything fails during a run and we need to re-run, we need to check if a dataset was generated and make sure we make a note of this at the very least. Otherwise, having multiple files from the same location will make things confusing

@@ -1,6 +1,6 @@
 {
 	"Clients" : {
-		 "frequency" : 2.5e9,
+		 "frequency" : 3.6e9,
 		 "channel" : "A",
 		 "agc_en" : false,
 		 "rxgainA" : [60],

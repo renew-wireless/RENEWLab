@@ -1,7 +1,7 @@
 {
 	"BaseStations" : {
-		 "cells" : 3,
-		 "sdr_id" : ["files/bs145.txt", "files/bs166.txt", "files/bs179.txt"],
+		 "cells" : 1,
+		 "sdr_id" : ["files/bs119.txt"],
 		 "hub_id" : "files/measurements-hub-serials.txt",
 		 "frequency" : 2.5e9,
 		 "channel" : "AB",
