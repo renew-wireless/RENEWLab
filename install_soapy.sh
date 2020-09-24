@@ -130,5 +130,6 @@ echo /usr/local/lib/python3/dist-packages/ | sudo tee /usr/lib/python3/dist-pack
 
 # configure git hooks path
 git config core.hooksPath .githooks
+echo configure git hooks path
 
 
