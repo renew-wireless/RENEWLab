@@ -6,13 +6,13 @@ node('master') {
 		stage("Get mufft dependencies and build"){
 			dir ('CC/Sounder/mufft') {
 				sh "git submodule update --init"
-				sh "cmake ./ && make -j"
+				sh "cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON ./ && make -j"
 			}
 		}
 		
 		stage("Build Sounder"){
 			dir('CC/Sounder') {
-				sh "cmake ./ && make -j"
+				sh "make -j"
 			}
 		}
 
