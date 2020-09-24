@@ -8,7 +8,7 @@ echo $JENKINS_CI_BRANCH_NAME
 echo $JENKINS_BUILD_STATUS
 
 sed -i -e "/Build Status/ c $JENKINS_BUILD_STATUS" README.md
-git add REAMDME.md
+#git add REAMDME.md
 
 exit 0
 
