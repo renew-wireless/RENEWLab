@@ -1,13 +1,14 @@
 pipeline {
 	agent any
 	
+	options {
+		buildDiscarder(logRotator(numToKeepStr:'10'))
+	}
+	
 	stages {
 		stage('Preparaion') {
 			steps {
-				options {
-					echo 'Discard old builds ...'
-					buildDiscarder(logRotator(numToKeepStr:'10'))
-				}
+				echo 'Preparation ...'
 			}
 		}
 			
