@@ -18,5 +18,9 @@ node('master') {
 			sh "cmake ./ && make -j"
 		}
 	}
+	
+	options {
+		buildDiscarder(logRotator(daysToKeepStr: '30', numToKeepStr: '9'))
+	}
 
 }
