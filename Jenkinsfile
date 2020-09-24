@@ -4,7 +4,7 @@ node('master') {
 	
 	stage('Build') {
 		stage("Preparation"){
-			// sh "sed -i -e 's/jenkins_ci_branch_name/$BRANCH_NAME/g' README.md"
+			sh 'sed -i -e "s/jenkins_ci_branch_name/$BRANCH_NAME/1" README.md'
 		}
 		
 		stage("Get mufft dependencies and build"){
