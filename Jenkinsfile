@@ -1,10 +1,10 @@
-node('master') {
+pipeline {
 	
 	checkout scm
 	
-	stage("Preparation"){
-		sh 'sed -i -e "s/jenkins_ci_branch_name/$BRANCH_NAME/1" README.md'
-	}
+	// stage("Preparation"){
+	// 	sh 'sed -i -e "s/jenkins_ci_branch_name/$BRANCH_NAME/1" README.md'
+	// }
 	
 	stage("Build mufft"){
 		dir ('CC/Sounder/mufft') {
@@ -19,8 +19,8 @@ node('master') {
 		}
 	}
 	
-	options {
-		buildDiscarder(logRotator(daysToKeepStr: '30', numToKeepStr: '9'))
-	}
+	// options {
+	// 	buildDiscarder(logRotator(numToKeepStr: '9'))
+	// }
 
 }
