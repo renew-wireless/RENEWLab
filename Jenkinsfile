@@ -1,5 +1,4 @@
 pipeline {
-	echo 'Checkout source ...'	
 	agent any
 	
 	stages {
