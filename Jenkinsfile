@@ -1,4 +1,4 @@
-pipeline {
+node('master') {
 	
 	checkout scm
 	
