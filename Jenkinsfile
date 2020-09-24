@@ -1,11 +1,14 @@
 pipeline {
+	echo 'Checkout source ...'	
 	agent any
 	
 	stages {
 		stage('Preparaion') {
 			steps {
-				echo 'Checkout source ...'
-				checkout scm
+				options {
+					echo 'Discard old builds ...'
+					buildDiscarder(logRotator(numToKeepStr:'10'))
+				}
 			}
 		}
 			
