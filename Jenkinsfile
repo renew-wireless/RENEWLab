@@ -6,7 +6,7 @@ node('master') {
 		sh 'sed -i -e "s/jenkins_ci_branch_name/$BRANCH_NAME/1" README.md'
 	}
 	
-	stage("Get mufft dependencies and build"){
+	stage("Build mufft"){
 		dir ('CC/Sounder/mufft') {
 			sh "git submodule update --init"
 			sh "cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON ./ && make -j"
