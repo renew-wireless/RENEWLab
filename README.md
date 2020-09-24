@@ -4,7 +4,8 @@
 # RENEWLab
 
 
-[![Build Status](https://8435d1ad526d.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fdev&subject=Dev%20build%20duration%20${duration})](https://8435d1ad526d.ngrok.io/job/github_public_renewlab)
+[![Build Status](https://8435d1ad526d.ngrok.io/job/github_public_renewlab/badge/icon)](https://8435d1ad526d.ngrok.io/job/github_public_renewlab/)
+
 
 
 # Description
