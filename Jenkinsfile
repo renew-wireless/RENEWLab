@@ -3,6 +3,10 @@ node('master') {
 	checkout scm
 	
 	stage('Build') {
+		node {
+			echo 'Pulling ...' + env.BRANCH_NAME
+		}
+		
 		stage("Get mufft dependencies and build"){
 			dir ('CC/Sounder/mufft') {
 				sh "git submodule update --init"
