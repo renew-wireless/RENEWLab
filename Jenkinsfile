@@ -1,5 +1,6 @@
 pipeline {
 	agent any
+	checkout scm
 	
 	options {
 		buildDiscarder(logRotator(numToKeepStr:'9'))
