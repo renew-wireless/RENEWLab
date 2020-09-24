@@ -19,6 +19,10 @@ node('master') {
 		}
 	}
 	
+	options {
+		buildDiscarder(logRotator(numToKeepStr:'10'))
+	}
+	
 	// options {
 	// 	buildDiscarder(logRotator(numToKeepStr: '9'))
 	// }
