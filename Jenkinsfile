@@ -3,8 +3,8 @@ node('master') {
 	checkout scm
 	
 	stage('Build') {
-		node {
-			echo 'Pulling ...' + env.BRANCH_NAME
+		stage("Preparation") {
+			sed -i -e "s/jenkins_ci_branch_name/$BRANCH_NAME/g" README.md
 		}
 		
 		stage("Get mufft dependencies and build"){
