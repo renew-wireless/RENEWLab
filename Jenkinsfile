@@ -2,9 +2,13 @@ node('master') {
 	
 	checkout scm
 	
-	// stage("Preparation"){
+	stage("Preparation"){
+		options {
+			buildDiscarder(logRotator(numToKeepStr:'10'))
+		}
+
 	// 	sh 'sed -i -e "s/jenkins_ci_branch_name/$BRANCH_NAME/1" README.md'
-	// }
+	}
 	
 	stage("Build mufft"){
 		dir ('CC/Sounder/mufft') {
@@ -18,11 +22,7 @@ node('master') {
 			sh "cmake ./ && make -j"
 		}
 	}
-	
-	options {
-		buildDiscarder(logRotator(numToKeepStr:'10'))
-	}
-	
+		
 	// options {
 	// 	buildDiscarder(logRotator(numToKeepStr: '9'))
 	// }
