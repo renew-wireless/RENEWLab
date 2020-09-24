@@ -1,12 +1,10 @@
-pipeline {
-	agent any
-	
+node('master') {
 	checkout scm
 	
 	stage("Preparation"){
-		options {
-			buildDiscarder(logRotator(numToKeepStr:'10'))
-		}
+	// 	options {
+	// 		buildDiscarder(logRotator(numToKeepStr:'10'))
+	// 	}
 
 	// 	sh 'sed -i -e "s/jenkins_ci_branch_name/$BRANCH_NAME/1" README.md'
 	}
