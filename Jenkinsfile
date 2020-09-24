@@ -12,7 +12,7 @@ node('master') {
 		
 		stage("Build Sounder"){
 			dir('CC/Sounder') {
-				sh "cmake ./ && make -j"
+				sh "make -j"
 			}
 		}
 
