@@ -1,4 +1,5 @@
-node('master') {
+pipeline {
+	agent any
 	
 	checkout scm
 	
