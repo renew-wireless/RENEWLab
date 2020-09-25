@@ -10,13 +10,13 @@ pipeline {
 		stage ('Start') {
 			steps {
 				// send build started notifications
-				// slackSend (color: '#FFFF00', message: "GitHub Public RENEWLab Build STARTED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
+				slackSend (color: '#FFFF00', message: "GitHub Public RENEWLab Build STARTED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
 				
 				// send to email
-				emailext (subject: "GitHub Public RENEWLab Build STARTED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
+				/*emailext (subject: "GitHub Public RENEWLab Build STARTED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
 					  body: """<p>STARTED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
 					  	<p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
-					  to: "mz45@rice.edu") // $(BUILD_USER_EMAIL)")
+					  to: "mz45@rice.edu") // $(BUILD_USER_EMAIL)")*/
 			}
 		}
 		
@@ -49,9 +49,9 @@ pipeline {
 	
 	post {
 		success {
-			// slackSend (color: '#00FF00', message: "GitHub Public RENEWLab Build SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
+			slackSend (color: '#00FF00', message: "GitHub Public RENEWLab Build SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
 			
-			emailext subject: "GitHub Public RENEWLab Build SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
+			/*emailext subject: "GitHub Public RENEWLab Build SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
 				  body: """<p>SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
 				  	<p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
 				  recipientProviders: [
@@ -61,16 +61,16 @@ pipeline {
 				  ],
 				  replyTo: '$DEFAULT_REPLYTO',
 				  to: '$DEFAULT_RECIPIENTS'
-				  // to: "mz45@rice.edu") // $(BUILD_USER_EMAIL)")
+				  // to: "mz45@rice.edu") // $(BUILD_USER_EMAIL)")*/
 		}
 		
 		failure {
-			// slackSend (color: '#FF0000', message: "GitHub Public RENEWLab Build FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
+			slackSend (color: '#FF0000', message: "GitHub Public RENEWLab Build FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
 			
-			emailext (subject: "FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
+			/*emailext (subject: "FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
 				  body: """<p>FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
 				  <p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
-				  to: "mz45@rice.edu") // $(BUILD_USER_EMAIL)")
+				  to: "mz45@rice.edu") // $(BUILD_USER_EMAIL)")*/
 		}
 	}
 	
