@@ -16,9 +16,7 @@ pipeline {
 				emailext (subject: "GitHub Public RENEWLab Build STARTED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
 					  body: """<p>STARTED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
 					  	<p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
-					  //recipientProviders: [[$class: 'DevelopersRecipientProvider']]
-					  from: renew.dashboard@gmail.com,
-					  to: "min.zhang@rice.edu") // $(BUILD_USER_EMAIL)")
+					  to: "mz45@rice.edu") // $(BUILD_USER_EMAIL)")
 			}
 		}
 		
@@ -53,12 +51,17 @@ pipeline {
 		success {
 			// slackSend (color: '#00FF00', message: "GitHub Public RENEWLab Build SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
 			
-			emailext (subject: "GitHub Public RENEWLab Build SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
+			emailext subject: "GitHub Public RENEWLab Build SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
 				  body: """<p>SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
 				  	<p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
-				  // recipientProviders: [[$class: 'DevelopersRecipientProvider']]
-				  from: renew.dashboard@gmail.com,
-				  to: "min.zhang@rice.edu") // $(BUILD_USER_EMAIL)")
+				  recipientProviders: [
+					  [$class: 'CulpritsRecipientProvider'],
+					  [$class: 'DevelopersRecipientProvider'],
+					  [$class: 'RequesterRecipientProvider']
+				  ],
+				  replyTo: '$DEFAULT_REPLYTO',
+				  to: '$DEFAULT_RECIPIENTS'
+				  // to: "mz45@rice.edu") // $(BUILD_USER_EMAIL)")
 		}
 		
 		failure {
@@ -67,9 +70,7 @@ pipeline {
 			emailext (subject: "FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
 				  body: """<p>FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
 				  <p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
-				  // recipientProviders: [[$class: 'DevelopersRecipientProvider']]
-				  from: renew.dashboard@gmail.com,
-				  to: "min.zhang@rice.edu") // $(BUILD_USER_EMAIL)")
+				  to: "mz45@rice.edu") // $(BUILD_USER_EMAIL)")
 		}
 	}
 	
