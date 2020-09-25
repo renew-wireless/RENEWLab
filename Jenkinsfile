@@ -14,10 +14,11 @@ pipeline {
 				
 				// send to email
 				emailext (subject: "GitHub Public RENEWLab Build STARTED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
-					body: """<p>STARTED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
-						<p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
-					//recipientProviders: [[$class: 'DevelopersRecipientProvider']]
-					 to: "min.zhang@rice.edu") // $(BUILD_USER_EMAIL)")
+					  body: """<p>STARTED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
+					  	<p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
+					  //recipientProviders: [[$class: 'DevelopersRecipientProvider']]
+					  from: renew.dashboard@gmail.com,
+					  to: "min.zhang@rice.edu") // $(BUILD_USER_EMAIL)")
 			}
 		}
 		
@@ -53,10 +54,11 @@ pipeline {
 			// slackSend (color: '#00FF00', message: "GitHub Public RENEWLab Build SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
 			
 			emailext (subject: "GitHub Public RENEWLab Build SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
-				body: """<p>SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
-					<p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
-				// recipientProviders: [[$class: 'DevelopersRecipientProvider']]
-				 to: "min.zhang@rice.edu") // $(BUILD_USER_EMAIL)")
+				  body: """<p>SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
+				  	<p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
+				  // recipientProviders: [[$class: 'DevelopersRecipientProvider']]
+				  from: renew.dashboard@gmail.com,
+				  to: "min.zhang@rice.edu") // $(BUILD_USER_EMAIL)")
 		}
 		
 		failure {
@@ -66,6 +68,7 @@ pipeline {
 				  body: """<p>FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
 				  <p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
 				  // recipientProviders: [[$class: 'DevelopersRecipientProvider']]
+				  from: renew.dashboard@gmail.com,
 				  to: "min.zhang@rice.edu") // $(BUILD_USER_EMAIL)")
 		}
 	}
