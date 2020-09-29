@@ -126,3 +126,10 @@ sudo ldconfig
 export PYTHONPATH=/usr/local/lib/python3/dist-packages/:"${PYTHONPATH}"
 #echo export PYTHONPATH=/usr/local/lib/python3/dist-packages/:"\${PYTHONPATH}" | sudo tee /etc/profile.d/python3path.sh
 echo /usr/local/lib/python3/dist-packages/ | sudo tee /usr/lib/python3/dist-packages/SoapySDR.pth
+
+
+# configure git hooks path
+git config core.hooksPath .githooks
+echo configure git hooks path
+
+
