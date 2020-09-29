@@ -173,10 +173,6 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     beaconbuff[0] = config_->beacon_ci16.data();
     beaconbuff[1] = zeros[0];
 
-    size_t frameTimeLen = config_->sampsPerSymbol * config_->symbolsPerFrame;
-    size_t txFrameDelta = std::ceil(TIME_DELTA / (1e3 * frameTimeLen / config_->rate));
-    size_t txTimeDelta = txFrameDelta * frameTimeLen;
-
     long long rxTimeBs(0);
     long long txTimeBs(0);
 
