@@ -31,8 +31,16 @@ std::vector<size_t> Utils::strToChannels(const std::string& channel)
         channels = { 0 };
     else if (channel == "B")
         channels = { 1 };
-    else
+    else if (channel == "AB")
         channels = { 0, 1 };
+    else if (channel == "C")
+        channels = { 2 };
+    else if (channel == "D")
+        channels = { 3 };
+    else if (channel == "CD")
+        channels = { 2, 3 };
+    else if (channel == "ABCD")
+        channels = { 0, 1, 2, 3 };
     return (channels);
 }
 
