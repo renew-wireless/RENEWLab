@@ -261,8 +261,8 @@ int main(int argc, char const* argv[])
     int sync_index = CommsLib::find_beacon_avx(buffs, gold_sym_orig);
     clock_gettime(CLOCK_MONOTONIC, &tv2);
     double diff = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
-    std::cout << "SYNC Found at index " << sync_index - seqLen + 1 << std::endl;
-    std::cout << "TEST " << (((int)prefix == sync_index - seqLen + 1) ? "PASSED" : "FAILED") << std::endl;
+    std::cout << "SYNC Found at index " << sync_index - 2 * seqLen + 1 << std::endl;
+    std::cout << "TEST " << (((int)prefix == sync_index - 2 * seqLen + 1) ? "PASSED" : "FAILED") << std::endl;
     std::cout << "Correlation took " << diff << " usec" << std::endl;
 #else
     size_t symbolsPerFrame = 5;

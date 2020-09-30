@@ -224,7 +224,6 @@ Config::Config(const std::string& jsonfile)
     std::vector<std::complex<int16_t>> postBeacon(postfix + fracBeacon, 0);
     beacon_ci16.insert(beacon_ci16.begin(), preBeacon.begin(), preBeacon.end());
     beacon_ci16.insert(beacon_ci16.end(), postBeacon.begin(), postBeacon.end());
-    beacon = Utils::cint16_to_uint32(beacon_ci16, false, "QI");
 
     // compose pilot subframe
     if (fftSize != 64) {
