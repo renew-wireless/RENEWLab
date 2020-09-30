@@ -18,11 +18,12 @@
 		 ],
 	         "frame_mode" : "free_running",
 	         "hw_framer" : false,
+	         "tx_advance" : 100,
 		 "beacon_type" : "gold_ifft",
 		 "modulation" : "QPSK",
 		 "pilot_seq" : "lts-half",
 	         "sdr_id" : [
-		     "10.118.3.2"
+		     "10.118.2.2"
 		 ]
 	}
 }

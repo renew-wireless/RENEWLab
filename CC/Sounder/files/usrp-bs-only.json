@@ -8,7 +8,7 @@
 		 "txgainA" : 15,
 		 "rxgainB" : 20,
 		 "txgainB" : 15,
-		 "rate" : 50e6,
+		 "rate" : 20e6,
 		 "frame_schedule" : [
 		     "BGPGGGGGGGGGGGGGGGGG"
 		 ],
