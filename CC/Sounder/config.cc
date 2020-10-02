@@ -51,6 +51,7 @@ Config::Config(const std::string& jsonfile)
         tx_scale = tddConf.value("tx_scale", 0.5);
         beacon_seq = tddConf.value("beacon_seq", "gold_ifft");
         pilot_seq = tddConf.value("pilot_seq", "lts-half");
+        dataMod = tddConf.value("modulation", "QPSK");
 
         // BS
         if (!kUseUHD)
@@ -119,7 +120,6 @@ Config::Config(const std::string& jsonfile)
         // read commons from Client json config
         if (!clPresent) {
             nClSdrs = nClAntennas = std::count(frames.at(0).begin(), frames.at(0).end(), 'P');
-            clDataMod = tddConf.value("modulation", "QPSK");
         }
     }
 
@@ -137,7 +137,6 @@ Config::Config(const std::string& jsonfile)
         nClAntennas = nClSdrs * clSdrCh;
         clAgcEn = tddConfCl.value("agc_en", false);
         clAgcGainInit = tddConfCl.value("agc_gain_init", 70); // 0 to 108
-        clDataMod = tddConfCl.value("modulation", "QPSK");
         frame_mode = tddConfCl.value("frame_mode", "continuous_resync");
         hw_framer = tddConfCl.value("hw_framer", true);
         txAdvance = tddConfCl.value("tx_advance", 250); // 250
@@ -176,6 +175,7 @@ Config::Config(const std::string& jsonfile)
             pilot_seq = tddConfCl.value("pilot_seq", "lts-half");
             symbolsPerFrame = clFrames.at(0).size();
             single_gain = tddConfCl.value("single_gain", true);
+            dataMod = tddConfCl.value("modulation", "QPSK");
         }
     }
 
@@ -224,7 +224,6 @@ Config::Config(const std::string& jsonfile)
     std::vector<std::complex<int16_t>> postBeacon(postfix + fracBeacon, 0);
     beacon_ci16.insert(beacon_ci16.begin(), preBeacon.begin(), preBeacon.end());
     beacon_ci16.insert(beacon_ci16.end(), postBeacon.begin(), postBeacon.end());
-    beacon = Utils::cint16_to_uint32(beacon_ci16, false, "QI");
 
     // compose pilot subframe
     if (fftSize != 64) {
@@ -265,7 +264,7 @@ Config::Config(const std::string& jsonfile)
 
     // compose data subframe
     if (ulDataSymPresent) {
-        int mod_type = clDataMod == "64QAM" ? CommsLib::QAM64 : (clDataMod == "16QAM" ? CommsLib::QAM16 : CommsLib::QPSK);
+        int mod_type = dataMod == "64QAM" ? CommsLib::QAM64 : (dataMod == "16QAM" ? CommsLib::QAM16 : CommsLib::QPSK);
         std::cout << mod_type << std::endl;
         int mod_order = 1 << mod_type;
         std::cout << mod_order << std::endl;

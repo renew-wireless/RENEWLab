@@ -300,6 +300,9 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         // Number of Client Antennas
         write_attribute(mainGroup, "CL_NUM", (int)cfg->nClAntennas);
 
+        // Data modulation
+        write_attribute(mainGroup, "CL_MODULATION", cfg->dataMod);
+
         if (cfg->clPresent) {
             // Client antenna polarization
             write_attribute(mainGroup, "CL_CH_PER_RADIO", (int)cfg->clSdrCh);
@@ -324,9 +327,6 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
 
             // Set of client SDR IDs (vec of strings)
             write_attribute(mainGroup, "CL_SDR_ID", cfg->cl_sdr_ids);
-
-            // Data modulation
-            write_attribute(mainGroup, "CL_MODULATION", cfg->clDataMod);
         }
 
         if (cfg->ulDataSymPresent) {

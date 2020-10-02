@@ -23,12 +23,13 @@ ZYNQ = "Zynq Temperature"
 TX = "Tx temperature"
 
 
-def get_iris_serial_numbers_on_network():
+def get_iris_sns_on_network():
     """
     Scan the Irises on the network and return a list of serial numbers.
 
     :return irises: A list of Iris serial numbers detected on network.
     """
+    
     irises = os.popen("SoapySDRUtil --find --sparse").read()
     irises = irises.splitlines()
     # Filter out none Iris devices
@@ -39,36 +40,58 @@ def get_iris_serial_numbers_on_network():
     return irises
 
 
-def get_iris_sensor_readings():
+"""
+Error code: 
+    -100.0: sdr.readSensor() error
+    -101.0: this temperature does not exist in sensor readings
+    -102.0: error when creating a SoapySDR instance
+"""
+def get_sensors():
     """
     Read the temperatures of all Irises on the network.
 
     :return irises_sensors: A list of Irises and theirs temperatures.
     """
-    irises = get_iris_serial_numbers_on_network()
-    SoapySDR.Device.enumerate({"remote:timeout": "500000"})
-    sdrs = [SoapySDR.Device(dict(driver="iris", serial=s)) for s in irises]
+    
+    irises = get_iris_sns_on_network()
     irises_sensors = []
-    status = {}
-    for i, sdr in enumerate(sdrs):
-        sensors = sdr.listSensors()
-        for sensor in sensors:
-            info = sdr.getSensorInfo(sensor)
-            try:
-                status[info.name] = sdr.readSensor(sensor)
-            except Exception:
-                status[info.name] = '-1.0'
-                pass
-        irises_sensors.append([irises[i],
-                               "{:.2f}".format(float(status[LMS7])),
-                               "{:.2f}".format(float(status[ZYNQ])),
-                               "{:.2f}".format(float(status[TX])),
-                               "{:.2f}".format(float(status[RX]))])
+    for iris in irises:
+        stat, status = {}, {}
+        try:
+            SoapySDR.Device.enumerate({'remote:timeout': '1000000'})
+            sdr = SoapySDR.Device(dict(driver="iris", serial=iris))
+            sensors = sdr.listSensors()
+            for sensor in sensors:
+                info = sdr.getSensorInfo(sensor)
+                try:
+                    stat[info.name] = sdr.readSensor(sensor)
+                except Exception:
+                    stat[info.name] = '-100.0'
+                    pass
+                    
+            status['sn'] = iris
+            status['LMS7temp'] = stat[LMS7] if LMS7 in stat else '-101.0'
+            status['ZYNQtemp'] = stat[ZYNQ] if ZYNQ in stat else '101.0'
+            status['TXtemp'] = stat[TX] if TX in stat else '-101.0'
+            status['RXtemp'] = stat[RX] if RX in stat else '-101.0'
+            status['LMS7temp'] = "{:.2f}".format(float(status['LMS7temp']))
+            status['ZYNQtemp'] = "{:.2f}".format(float(status['ZYNQtemp']))
+            status['TXtemp'] = "{:.2f}".format(float(status['TXtemp']))
+            status['RXtemp'] = "{:.2f}".format(float(status['RXtemp']))
+        except:
+            status['sn'] = iris
+            status['LMS7temp'] = '-102.0'
+            status['ZYNQtemp'] = '-102.0'
+            status['TXtemp'] = '-102.0'
+            status['RXtemp'] = '-102.0'
+            pass
+
+        irises_sensors.append(status)
 
     return irises_sensors
 
 
-def check_overheating(irises_sensors, overheat_thresh):
+def check_overheat(irises_sensors, thresh):
     """
     Check all Irises' temperatures against the overheat threshold. 
     
@@ -79,16 +102,48 @@ def check_overheating(irises_sensors, overheat_thresh):
     :return boolean: True if any Iris's sensor indicates an overheat; 
         False if all Irises' temperatures are within the range. 
     """
+    
+    thresh = float(thresh)
     for iris_sensors in irises_sensors:
-        for sensor in iris_sensors[1:]:
-            if float(sensor) > overheat_thresh:
-                return True
+        if (float(iris_sensors['LMS7temp']) > thresh) or \
+                (float(iris_sensors['ZYNQtemp']) > thresh) or \
+                (float(iris_sensors['TXtemp']) > thresh) or \
+                (float(iris_sensors['RXtemp']) > thresh):
+            return True
+
+    return False
+
+
+def check_errors(irises_sensors, thresh):
+    """
+    Check all Irises' temperatures against the error threshold. 
+    
+    :param irises_sensors: A list of Irises and theirs temperatures.
+    :param error_thresh: The temperature threshold for sensor
+        errors. 
+
+    :return boolean: True if any Iris's sensor indicates errors;
+        False if all Irises' temperatures are within the range. 
+    """
+    
+    thresh = float(thresh)
+    for iris_sensors in irises_sensors:
+        if (float(iris_sensors['LMS7temp']) <= thresh) or \
+                (float(iris_sensors['ZYNQtemp']) <= thresh) or \
+                (float(iris_sensors['TXtemp']) <= thresh) or \
+                (float(iris_sensors['RXtemp']) <= thresh):
+            return True
 
     return False
 
 
 if __name__ == "__main__":
-    irises_sensors = get_iris_sensor_readings()
+    irises_sensors = get_sensors()
     print(irises_sensors)
-    print("Overheating? {}".format(check_overheating(irises_sensors, 50.0)))
+    print("Overheating>50C {}".format(check_overheat(irises_sensors, "50.0")))
+    print("Overheating>70C {}".format(check_overheat(irises_sensors, "70.0")))
+    print("Error?<=0C {}".format(check_errors(irises_sensors, "0.0")))
+    print("Error?<=-100C {}".format(check_errors(irises_sensors, "-100.0")))
+    print("Error?<=-200C {}".format(check_errors(irises_sensors, "-200.0")))
+
 

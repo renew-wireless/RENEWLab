@@ -23,6 +23,7 @@
                  "sample_calibrate" : false,
                  "beacon_antenna" : 0,
                  "pilot_seq" : "lts-half",
+                 "modulation" : "QPSK",
                  "single_gain" : true
         },
 

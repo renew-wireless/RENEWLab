@@ -23,6 +23,7 @@
 		 "beamsweep" : true,
                  "sample_calibrate" : true,
 		 "beacon_antenna" : 0,
+		 "modulation" : "16QAM",
 		 "pilot_seq" : "lts-half"
 	},
 

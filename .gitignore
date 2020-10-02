@@ -55,3 +55,6 @@ Thumbs.db
 
 # Virtual environment
 venv
+
+# Database
+renew.db
