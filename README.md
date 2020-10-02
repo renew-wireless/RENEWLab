@@ -38,6 +38,7 @@ $ ./config_ci.sh  Note: You must run this command immediately after the cd comma
 $ ./install_soapy.sh
 ```
 Note: This installs the SoapySDR app and its dependencies which include SoapySDR, SoapyRemote, and Sklk-SoapyIris. 
+Note for developers: Do not use _ in your branch name. Use - instead. 
 
 ### Install project-specific dependencies: 
   1. If you are going to use the RENEW Python Development Suite, please install its library as below. 
