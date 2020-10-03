@@ -54,7 +54,7 @@ public:
     CommsLib(std::string);
     ~CommsLib();
 
-    static std::vector<std::vector<double>> getSequence(int N, int type);
+    static std::vector<std::vector<float>> getSequence(int N, int type);
     static std::vector<std::complex<float>> modulate(std::vector<int>, int);
     static std::vector<int> getDataSc(int fftSize);
     static std::vector<int> getNullSc(int fftSize);
@@ -62,7 +62,7 @@ public:
     static std::vector<std::complex<float>> FFT(std::vector<std::complex<float>>, int);
     static std::vector<std::complex<float>> IFFT(std::vector<std::complex<float>>, int);
 
-    static int findLTS(const std::vector<std::complex<double>>& iq, int seqLen);
+    static int findLTS(const std::vector<std::complex<float>>& iq, int seqLen);
     template <typename T>
     //static std::vector<T> convolve(std::vector<T> const& f, std::vector<T> const& g);
     static std::vector<T> convolve(std::vector<T> const& f, std::vector<T> const& g)
@@ -84,7 +84,7 @@ public:
         }
         return out;
     }
-    static std::vector<std::complex<double>> csign(std::vector<std::complex<double>> iq);
+    static std::vector<std::complex<float>> csign(std::vector<std::complex<float>> iq);
     static inline int hadamard2(int i, int j) { return (__builtin_parity(i & j) != 0 ? -1 : 1); }
     static std::vector<float> magnitudeFFT(std::vector<std::complex<float>> const&, std::vector<float> const&, size_t);
     static std::vector<float> hannWindowFunction(size_t);
@@ -94,7 +94,7 @@ public:
     static float measureTone(std::vector<std::complex<float>> const&, std::vector<float> const&, double, double, size_t, const size_t delta = 10);
 
     // Functions using AVX
-    static int find_beacon(const std::vector<std::complex<double>>& iq);
+    static int find_beacon(const std::vector<std::complex<float>>& iq);
     static int find_beacon_avx(const std::vector<std::complex<float>>& iq, const std::vector<std::complex<float>>& seq);
     static std::vector<float> correlate_avx_s(std::vector<float> const& f, std::vector<float> const& g);
     static std::vector<int16_t> correlate_avx_si(std::vector<int16_t> const& f, std::vector<int16_t> const& g);

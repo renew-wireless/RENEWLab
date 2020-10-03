@@ -23,7 +23,7 @@
 #include <queue>
 //#include <itpp/itbase.h>
 
-int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
+int CommsLib::findLTS(const std::vector<std::complex<float>>& iq, int seqLen)
 {
     /*
      * Find 802.11-based LTS (Long Training Sequence)
@@ -35,29 +35,29 @@ int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
      */
 
     float lts_thresh = 0.8;
-    std::vector<std::vector<double>> lts_seq;
+    std::vector<std::vector<float>> lts_seq;
     int best_peak;
 
     // Original LTS sequence
     lts_seq = CommsLib::getSequence(seqLen, LTS_SEQ);
 
     // Re-arrange into complex vector, flip, and compute conjugate
-    std::vector<std::complex<double>> lts_sym(64);
-    std::vector<std::complex<double>> lts_sym_conj(lts_sym.size());
+    std::vector<std::complex<float>> lts_sym(64);
+    std::vector<std::complex<float>> lts_sym_conj(lts_sym.size());
     for (size_t i = 0; i < lts_sym.size(); i++) {
         // lts_seq is a 2x160 matrix (real/imag by seqLen=160 elements)
         // grab one symbol and flip around
-        lts_sym[i] = std::complex<double>(lts_seq[0][seqLen - 1 - i], lts_seq[1][seqLen - 1 - i]);
+        lts_sym[i] = std::complex<float>(lts_seq[0][seqLen - 1 - i], lts_seq[1][seqLen - 1 - i]);
         // conjugate
         lts_sym_conj[i] = std::conj(lts_sym[i]);
     }
 
     // Equivalent to numpy's sign function
-    std::vector<std::complex<double>> iq_sign = CommsLib::csign(iq);
+    auto iq_sign = CommsLib::csign(iq);
 
     // Convolution
-    std::vector<std::complex<double>> lts_corr = CommsLib::convolve(iq_sign, lts_sym_conj);
-    std::vector<double> lts_corr_abs(lts_corr.size());
+    std::vector<std::complex<float>> lts_corr = CommsLib::convolve(iq_sign, lts_sym_conj);
+    std::vector<float> lts_corr_abs(lts_corr.size());
     std::transform(lts_corr.begin(), lts_corr.end(), lts_corr_abs.begin(), computeAbs);
     double lts_limit = lts_thresh * *std::max_element(lts_corr_abs.begin(), lts_corr_abs.end());
 
@@ -78,7 +78,7 @@ int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
     return best_peak;
 }
 
-int CommsLib::find_beacon(const std::vector<std::complex<double>>& iq)
+int CommsLib::find_beacon(const std::vector<std::complex<float>>& iq)
 {
     //std::vector<std::vector<double>> gold_seq;
     int best_peak;
@@ -90,11 +90,11 @@ int CommsLib::find_beacon(const std::vector<std::complex<double>>& iq)
     struct timespec tv, tv2;
 
     // Re-arrange into complex vector, flip, and compute conjugate
-    std::vector<std::complex<double>> gold_sym(seqLen);
-    std::vector<std::complex<double>> gold_sym_conj(gold_sym.size());
+    std::vector<std::complex<float>> gold_sym(seqLen);
+    std::vector<std::complex<float>> gold_sym_conj(gold_sym.size());
     for (int i = 0; i < seqLen; i++) {
         // grab one symbol and flip around
-        gold_sym[i] = std::complex<double>(gold_seq[0][seqLen - 1 - i], gold_seq[1][seqLen - 1 - i]);
+        gold_sym[i] = std::complex<float>(gold_seq[0][seqLen - 1 - i], gold_seq[1][seqLen - 1 - i]);
         // conjugate
         gold_sym_conj[i] = std::conj(gold_sym[i]);
     }
@@ -109,7 +109,7 @@ int CommsLib::find_beacon(const std::vector<std::complex<double>>& iq)
 
     size_t gold_corr_size = gold_corr.size();
     size_t gold_corr_size_2 = gold_corr_size + seqLen;
-    std::vector<double> gold_corr_2(gold_corr_size_2);
+    std::vector<float> gold_corr_2(gold_corr_size_2);
     clock_gettime(CLOCK_MONOTONIC, &tv);
     for (size_t i = seqLen; i < gold_corr_size; i++) {
         gold_corr_2[i] = computePower(gold_corr[i] * std::conj(gold_corr[i - seqLen]));
@@ -119,19 +119,19 @@ int CommsLib::find_beacon(const std::vector<std::complex<double>>& iq)
     double diff2 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
 #endif
 
-    std::vector<double> const1(seqLen, 1);
+    std::vector<float> const1(seqLen, 1);
 
-    std::vector<double> corr_abs(gold_corr_size);
+    std::vector<float> corr_abs(gold_corr_size);
     clock_gettime(CLOCK_MONOTONIC, &tv);
     std::transform(gold_corr.begin(), gold_corr.end(), corr_abs.begin(), computePower);
-    auto corr_abs_filt = CommsLib::convolve<double>(corr_abs, const1);
+    auto corr_abs_filt = CommsLib::convolve<float>(corr_abs, const1);
     corr_abs_filt.push_back(0);
     clock_gettime(CLOCK_MONOTONIC, &tv2);
 #ifdef TEST_BENCH
     double diff3 = ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e3;
 #endif
 
-    std::vector<double> thresh(corr_abs_filt.begin(), corr_abs_filt.end());
+    std::vector<float> thresh(corr_abs_filt.begin(), corr_abs_filt.end());
     //std::vector<double> thresh(corr_abs_filt.size());
     //std::transform(corr_abs_filt.begin(), corr_abs_filt.end(), thresh.begin(),
     //    std::bind(std::multiplies<double>(), std::placeholders::_1, 0.0078)); // divide by 128
@@ -169,7 +169,7 @@ int CommsLib::find_beacon(const std::vector<std::complex<double>>& iq)
     return best_peak;
 }
 
-std::vector<std::complex<double>> CommsLib::csign(std::vector<std::complex<double>> iq)
+std::vector<std::complex<float>> CommsLib::csign(std::vector<std::complex<float>> iq)
 {
     /*
      * Return element-wise indication of the sign of a number (for complex vector).
@@ -180,10 +180,10 @@ std::vector<std::complex<double>> CommsLib::csign(std::vector<std::complex<doubl
      * where sign(x) is given by
      *     -1 if x < 0, 0 if x==0, 1 if x > 0
      */
-    std::vector<std::complex<double>> iq_sign;
+    std::vector<std::complex<float>> iq_sign;
     for (int i = 0; i < static_cast<int>(iq.size()); i++) {
         // sign(x.real) + 0j if x.real != 0 else sign(x.imag) + 0j
-        std::complex<double> x = iq[i];
+        std::complex<float> x = iq[i];
         if (x.real() != 0) {
             iq_sign.push_back((x.real() > 0) ? 1 : (x.real() < 0) ? -1 : 0);
         } else {
@@ -415,22 +415,22 @@ std::vector<std::complex<float>> CommsLib::modulate(std::vector<int> in, int typ
     return out;
 }
 
-std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
+std::vector<std::vector<float>> CommsLib::getSequence(int N, int type)
 {
-    std::vector<std::vector<double>> matrix;
+    std::vector<std::vector<float>> matrix;
 
     if (type == STS_SEQ) {
         // STS - 802.11 Short training sequence (one symbol)
         matrix.resize(2);
 
         // Normalized sequences
-        double sts_re[16] = {
+        float sts_re[16] = {
             0.29137692, -0.9219788, -0.04527321, 1.0,
             0.63942015, 1.0, -0.04527321, -0.9219788,
             0.29137692, 0.09784041, -0.53748065, -0.17586154,
             -0.05666628, -0.17586154, -0.53748065, 0.09784041
         };
-        double sts_im[16] = {
+        float sts_im[16] = {
             0.34804323, -0.06531818, -0.5540778, 0.0,
             0.05666628, 0.0, -0.5540778, -0.06531818,
             0.34804323, -0.91909665, -0.1420086, 0.9844149,
@@ -448,7 +448,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
         // LTS - 802.11 Long training sequence (160 samples == 2.5 symbols, cp length of 32 samples)
         matrix.resize(2);
 
-        double lts_re[160] = { -0.15625, 0.012284590458567165, 0.09171654912240956, -0.09188755526278, -0.002805944173488664,
+        float lts_re[160] = { -0.15625, 0.012284590458567165, 0.09171654912240956, -0.09188755526278, -0.002805944173488664,
             0.07507369706822604, -0.12732435990770957, -0.12188700906074086, -0.03504126073623884, -0.056455128448539,
             -0.060310100316213804, 0.06955684740689412, 0.08221832230305733, -0.1312626089753594, -0.05720634587149917,
             0.03691794200106715, 0.0625, 0.1192390885103326, -0.022483206307774027, 0.05866876712873733,
@@ -481,7 +481,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             0.0009889797089880949, 0.05333773437415131, 0.09754126073623881, -0.03831596747441851, -0.11513121478170157,
             0.05982384485901423, 0.021111770349329442, 0.09683188459112747, 0.0397496983535005, -0.005121250360419827 };
 
-        double lts_im[160] = { 0.0, -0.09759955359207202, -0.10587165981863113, -0.11512870891096853, -0.053774266476545984,
+        float lts_im[160] = { 0.0, -0.09759955359207202, -0.10587165981863113, -0.11512870891096853, -0.053774266476545984,
             0.07404041892509948, 0.020501379986300285, 0.01656621813913718, 0.15088834764831843, 0.021803920607437133,
             -0.08128612411572139, -0.014121958590578302, -0.09235655195372787, -0.06522722901814465, -0.039298588174111096,
             -0.0983441502870872, 0.0625, 0.004095594414801514, -0.1606573329526341, 0.01493899945069943,
@@ -527,7 +527,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
         // LTE Zadoff Chu Sequence: Generate the 25th root length-63 Zadoff-Chu sequence
         matrix.resize(2);
 
-        double lts_re[63] = { 1.0, -0.7971325072229225, 0.3653410243663958, -0.7330518718298251, 0.9801724878485435,
+        float lts_re[63] = { 1.0, -0.7971325072229225, 0.3653410243663958, -0.7330518718298251, 0.9801724878485435,
             0.955572805786141, -0.49999999999999617, 0.7660444431189757, -0.222520933956311, 0.6234898018587135,
             0.4562106573531701, 0.3653410243663966, 0.9555728057861371, 0.7660444431189751, -0.49999999999995753,
             -0.7330518718298601, 0.9801724878485425, -0.22252093395630812, 0.6234898018586816, -0.7971325072229237,
@@ -541,7 +541,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             0.7660444431189057, -0.5000000000002512, 0.9555728057860857, 0.9801724878483727, -0.7330518718292615,
             0.3653410243664768, -0.797132507222648, 1.0 };
 
-        double lts_im[63] = { 0.0, -0.6038044103254774, -0.9308737486442039, -0.6801727377709207, 0.1981461431993993,
+        float lts_im[63] = { 0.0, -0.6038044103254774, -0.9308737486442039, -0.6801727377709207, 0.1981461431993993,
             0.2947551744109033, -0.8660254037844408, -0.642787609686542, -0.9749279121818244, 0.7818314824680458,
             0.8898718088114649, -0.9308737486442037, 0.294755174410916, -0.6427876096865428, 0.8660254037844631,
             0.680172737770883, 0.19814614319940435, 0.9749279121818251, 0.7818314824680712, -0.6038044103254757,
@@ -566,7 +566,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
         // Gold IFFT Sequence - seq_length=128, cp=0, upsample=1
         matrix.resize(2);
 
-        double lts_re[128] = { -0.5646359, 0.4669951, 0.8769358, 0.5407985, -0.48144832,
+        float lts_re[128] = { -0.5646359, 0.4669951, 0.8769358, 0.5407985, -0.48144832,
             -0.88476783, 0.33639774, -0.43609348, -0.26278743, 0.6910331,
             -0.25535262, 0.11774132, 0.46892625, 0.77644444, -0.14834122,
             -0.13464923, -0.26617187, 0.1341292, 0.133574, 0.15594807,
@@ -593,7 +593,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             0.4192076, -0.42793053, 0.37122476, -0.008662291, 0.008916863,
             0.34757638, -0.35418823, 0.3462311 };
 
-        double lts_im[128] = { -0.5646359, 0.3462311, -0.35418823, 0.34757638, 0.008916863,
+        float lts_im[128] = { -0.5646359, 0.3462311, -0.35418823, 0.34757638, 0.008916863,
             -0.008662291, 0.37122476, -0.42793053, 0.4192076, 0.1736422,
             0.24096492, 0.22344504, -0.37271422, 0.4283689, 0.40922493,
             0.030798966, 0.53234375, 0.7384663, 0.19951832, -0.1321399,

@@ -187,14 +187,14 @@ Config::Config(const std::string& jsonfile)
     // 15reps of STS(16) + 2reps of gold_ifft(128)
     srand(time(NULL));
     const int seqLen = 128;
-    std::vector<std::vector<double>> gold_ifft = CommsLib::getSequence(seqLen, CommsLib::GOLD_IFFT);
-    std::vector<std::complex<int16_t>> gold_ifft_ci16 = Utils::double_to_cint16(gold_ifft);
+    auto gold_ifft = CommsLib::getSequence(seqLen, CommsLib::GOLD_IFFT);
+    auto gold_ifft_ci16 = Utils::float_to_cint16(gold_ifft);
     for (size_t i = 0; i < seqLen; i++) {
         gold_cf32.push_back(std::complex<float>(gold_ifft[0][i], gold_ifft[1][i]));
     }
 
-    std::vector<std::vector<double>> sts_seq = CommsLib::getSequence(0, CommsLib::STS_SEQ);
-    std::vector<std::complex<int16_t>> sts_seq_ci16 = Utils::double_to_cint16(sts_seq);
+    auto sts_seq = CommsLib::getSequence(0, CommsLib::STS_SEQ);
+    auto sts_seq_ci16 = Utils::float_to_cint16(sts_seq);
 
     // Populate STS (stsReps repetitions)
     int stsReps = 15;
@@ -242,8 +242,8 @@ Config::Config(const std::string& jsonfile)
     std::vector<std::complex<int16_t>> pre(prefix, 0);
     std::vector<std::complex<int16_t>> post(postfix + frac, 0);
 
-    pilotSym = CommsLib::getSequence(pilotSeqLen, CommsLib::LTS_SEQ);
-    std::vector<std::complex<int16_t>> lts_ci16 = Utils::double_to_cint16(pilotSym);
+    auto pilotSym = CommsLib::getSequence(pilotSeqLen, CommsLib::LTS_SEQ);
+    auto lts_ci16 = Utils::float_to_cint16(pilotSym);
     pilot_ci16.insert(pilot_ci16.begin(), pre.begin(), pre.end());
 
     for (int i = 0; i < pilotReps; i++)

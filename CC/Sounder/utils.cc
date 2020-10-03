@@ -36,7 +36,7 @@ std::vector<size_t> Utils::strToChannels(const std::string& channel)
     return (channels);
 }
 
-std::vector<std::complex<int16_t>> Utils::double_to_cint16(std::vector<std::vector<double>> in)
+std::vector<std::complex<int16_t>> Utils::float_to_cint16(std::vector<std::vector<float>> in)
 {
     int len = in[0].size();
     std::vector<std::complex<int16_t>> out(len, 0);
