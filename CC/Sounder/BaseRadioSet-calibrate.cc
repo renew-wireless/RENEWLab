@@ -462,12 +462,11 @@ void BaseRadioSet::collectCSI(bool& adjust)
         std::cout << "No need to sample calibrate with one Iris! skipping ..." << std::endl;
         return;
     }
-    std::vector<std::vector<double>> pilot;
     //std::vector<std::complex<float>> pilot_cf32;
     std::vector<std::complex<int16_t>> pilot_cint16;
     int type = CommsLib::LTS_SEQ;
     int seqLen = 160; // Sequence length
-    pilot = CommsLib::getSequence(seqLen, type);
+    auto pilot = CommsLib::getSequence(seqLen, type);
     // double array to complex 32-bit float vector
     double max_abs = 0;
     for (int i = 0; i < seqLen; i++) {
@@ -568,12 +567,8 @@ void BaseRadioSet::collectCSI(bool& adjust)
 
     bool good_csi = true;
     for (int i = 0; i < R; i++) {
-        std::vector<std::complex<double>> rx(_cfg->sampsPerSymbol);
         int k = ((i == ref_ant) ? ref_offset : ref_ant) * R + i;
-        std::transform(buff[k].begin(), buff[k].end(), rx.begin(),
-            [](std::complex<int16_t> cf) {
-                return std::complex<double>(cf.real() / 32768.0, cf.imag() / 32768.0);
-            });
+	auto rx = Utils::cint16_to_cfloat(buff[k]);
         int peak = CommsLib::findLTS(rx, seqLen);
         offset[i] = peak < 128 ? 0 : peak - 128;
         //std::cout << i << " " << offset[i] << std::endl;
