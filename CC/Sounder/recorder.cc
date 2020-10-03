@@ -368,19 +368,19 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
     }
     // catch failure caused by the H5File operations
     catch (FileIException error) {
-        error.printError();
+        error.printErrorStack();
         return -1;
     }
 
     // catch failure caused by the DataSet operations
     catch (DataSetIException error) {
-        error.printError();
+        error.printErrorStack();
         return -1;
     }
 
     // catch failure caused by the DataSpace operations
     catch (DataSpaceIException error) {
-        error.printError();
+        error.printErrorStack();
         return -1;
     }
     maxFrameNumber = MAX_FRAME_INC;
@@ -674,13 +674,13 @@ herr_t Recorder::record(int, int offset)
     }
     // catch failure caused by the H5File operations
     catch (FileIException error) {
-        error.printError();
+        error.printErrorStack();
         return -1;
     }
 
     // catch failure caused by the DataSet operations
     catch (DataSetIException error) {
-        error.printError();
+        error.printErrorStack();
         std::cout << "DataSet: Failed to record pilots from frame " << pkg->frame_id << " , UE " << cfg->getClientId(pkg->frame_id, pkg->symbol_id) << " antenna " << pkg->ant_id << " IQ " << IQ << std::endl;
         DataspaceIndex dims_pilot = {
             frame_number_pilot, cfg->nCells,
@@ -696,7 +696,7 @@ herr_t Recorder::record(int, int offset)
 
     // catch failure caused by the DataSpace operations
     catch (DataSpaceIException error) {
-        error.printError();
+        error.printErrorStack();
         return -1;
     }
 

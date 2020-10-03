@@ -5,6 +5,10 @@ if [[ `lsb_release -rs` == "16.04" ]]
 then
     HDF5_LIB=libhdf5-cpp-11
 fi
+if [[ `lsb_release -rs` == "20.04" ]]
+then
+    HDF5_LIB=libhdf5-cpp-103
+fi
 sudo apt -y install libhdf5-dev $HDF5_LIB
 
 BASEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -19,6 +23,6 @@ git checkout eab68e77
 mkdir -p build/
 cd build/
 cmake ..
-make -j
+make
 sudo make install
 cd ../..
