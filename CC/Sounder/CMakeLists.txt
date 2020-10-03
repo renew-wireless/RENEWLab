@@ -1,8 +1,8 @@
 cmake_minimum_required (VERSION 2.8)
 project (Sounder)
 
-set(CMAKE_C_FLAGS "-std=c99 -O3 -Wall")
-set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -g -O3 -mavx2 -mavx")
+set(CMAKE_C_FLAGS "-std=gnu11 -O3 -Wall")
+set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -g -O3 -march=native")
 
 find_package(nlohmann_json 3.2.0 REQUIRED)
 

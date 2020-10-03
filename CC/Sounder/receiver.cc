@@ -478,7 +478,11 @@ void Receiver::clientSyncTxRx(int tid)
                 continue;
             }
         }
+#ifdef __X86_64__
         sync_index = CommsLib::find_beacon_avx(syncbuff0, config_->gold_cf32);
+#else
+        sync_index = CommsLib::find_beacon(syncbuff0);
+#endif
         if (sync_index < 0)
             continue;
         std::cout << "Beacon detected at Time " << rxTime << ", sync_index: " << sync_index << std::endl;
@@ -525,7 +529,11 @@ void Receiver::clientSyncTxRx(int tid)
                 }
                 rx_offset = 0;
                 if (resync) {
+#ifdef __X86_64__
                     sync_index = CommsLib::find_beacon_avx(buff0, config_->gold_cf32);
+#else
+                    sync_index = CommsLib::find_beacon(buff0);
+#endif
                     if (sync_index >= 0) {
                         rx_offset = sync_index - config_->beaconSize - config_->prefix;
                         rxTime += rx_offset;

@@ -9,9 +9,10 @@ find_beacon_avx: Correlation and Peak detection of a beacon with Gold code (2 re
 ---------------------------------------------------------------------
 */
 
+#ifdef __X86_64__
+
 #include "include/comms-lib.h"
 #include <queue>
-//#include <itpp/itbase.h>
 #include <immintrin.h>
 #include <iomanip>
 
@@ -473,3 +474,7 @@ std::vector<float> CommsLib::correlate_avx_s(std::vector<float> const& f, std::v
     }
     return out;
 }
+#else
+// TODO: ADD NEON code for ARM support
+
+#endif
