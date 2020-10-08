@@ -321,6 +321,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 symbol_id++;
         }
     }
+    free(zeros[0]);
+    free(zeros[1]);
 }
 
 void* Receiver::clientTxRx_launch(void* in_context)
