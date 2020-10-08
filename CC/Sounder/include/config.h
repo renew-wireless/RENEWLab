@@ -63,6 +63,8 @@ public:
     bool beamsweep;
     std::vector<size_t> nBsSdrs;
     std::vector<size_t> nBsAntennas;
+    std::vector<size_t> nBsSdrsAgg;
+    size_t nBsSdrsAll;
     std::string bsChannel;
     std::vector<std::string> frames;
     std::string frame_mode;
@@ -114,6 +116,8 @@ public:
         return (2 * sampsPerSymbol * sizeof(short));
     }
     size_t getNumAntennas();
+    size_t getMaxNumAntennas();
+    size_t getTotNumAntennas();
     int getClientId(int, int);
     int getUlSFIndex(int, int);
     int getDlSFIndex(int, int);

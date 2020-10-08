@@ -84,7 +84,16 @@ Config::Config(const std::string& jsonfile)
             Utils::loadDevices(bs_sdr_file[i], bs_sdr_ids[i]);
             nBsSdrs[i] = bs_sdr_ids[i].size();
             nBsAntennas[i] = bsChannel.length() * nBsSdrs[i];
+            nBsSdrsAll += bs_sdr_ids[i].size();
         }
+
+	// Array with cummulative sum of SDRs in cells
+        nBsSdrsAgg.resize(nCells+1);
+        nBsSdrsAgg[0] = 0; //nBsSdrs[0];
+        for (size_t i = 0; i < nCells; i++) {
+            nBsSdrsAgg[i+1] = nBsSdrsAgg[i] + nBsSdrs[i];
+        }
+
         if (!kUseUHD)
             Utils::loadDevices(hub_file, hub_ids);
         symbolsPerFrame = frames.at(0).size();
@@ -339,7 +348,7 @@ Config::Config(const std::string& jsonfile)
         time_t now = time(0);
         tm* ltm = localtime(&now);
         int cell_num = nCells;
-        int ant_num = getNumAntennas();
+        int ant_num = getTotNumAntennas();
         std::string ulPresentStr = (ulDataSymPresent ? "uplink-" : "");
         std::string filename = "logs/trace-" + ulPresentStr + std::to_string(1900 + ltm->tm_year) + "-" + std::to_string(1 + ltm->tm_mon) + "-" + std::to_string(ltm->tm_mday) + "-" + std::to_string(ltm->tm_hour) + "-" + std::to_string(ltm->tm_min) + "-" + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num) + "x" + std::to_string(ant_num) + "x" + std::to_string(pilotSymsPerFrame) + ".hdf5";
         trace_file = tddConf.value("trace_file", filename);
@@ -349,7 +358,7 @@ Config::Config(const std::string& jsonfile)
     unsigned nCores = this->getCoreCount();
     core_alloc = nCores > RX_THREAD_NUM;
     if (bsPresent && (pilotSymsPerFrame + ulSymsPerFrame > 0)) {
-        rx_thread_num = (nCores >= 2 * RX_THREAD_NUM && nBsSdrs[0] >= RX_THREAD_NUM) ? RX_THREAD_NUM : 1;
+        rx_thread_num = (nCores >= 2 * RX_THREAD_NUM && nBsSdrsAll >= RX_THREAD_NUM) ? RX_THREAD_NUM : 1;
         task_thread_num = TASK_THREAD_NUM;
         if (clPresent && nCores < 1 + task_thread_num + rx_thread_num + nClSdrs)
             core_alloc = false;
@@ -359,7 +368,6 @@ Config::Config(const std::string& jsonfile)
         if (clPresent && nCores <= 1 + nClSdrs)
             core_alloc = false;
     }
-
     if (bsPresent && core_alloc) {
         printf("allocating %d cores to receive threads ... \n", rx_thread_num);
         printf("allocating %d cores to record threads ... \n", task_thread_num);
@@ -378,6 +386,33 @@ size_t Config::getNumAntennas()
     if (!bsPresent)
         return 1;
     return nBsSdrs[0] * bsChannel.length();
+}
+
+size_t Config::getMaxNumAntennas()
+{
+    /* Max number of antennas across cells */
+    if (!bsPresent)
+        return 1;
+
+    size_t maxNumSdr = 0;
+    for (size_t i = 0; i < nCells; i++) {
+        if(maxNumSdr < nBsSdrs[i])
+	    maxNumSdr = nBsSdrs[i];
+    }
+    return maxNumSdr * bsChannel.length();
+}
+
+size_t Config::getTotNumAntennas()
+{
+    /* Total number of antennas across cells */
+    if (!bsPresent)
+        return 1;
+
+    size_t totNumSdr = 0;
+    for (size_t i = 0; i < nCells; i++) {
+        totNumSdr += nBsSdrs[i];
+    }
+    return totNumSdr * bsChannel.length();
 }
 
 Config::~Config() {}

@@ -160,17 +160,10 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     std::atomic_int* pkg_buf_inuse = rx_buffer[tid].pkg_buf_inuse;
     char* buffer = rx_buffer[tid].buffer.data();
 
-    int num_radios;
-    std::vector<int> radio_start(config_->nCells);
-    std::vector<int> radio_end(config_->nCells);
-    for (int cell = 0; cell < config_->nCells; cell++) {
-        num_radios = config_->nBsSdrs[cell];
-        radio_start[cell] = tid * num_radios / thread_num_;
-        radio_end[cell] = (tid + 1) * num_radios / thread_num_;
-        printf("receiver thread %d has %d radios in cell %d \n", tid, radio_end[cell] - radio_start[cell], cell);
-    }
-    //int radio_start = tid * num_radios / thread_num_;
-    //int radio_end = (tid + 1) * num_radios / thread_num_;
+    int num_radios = static_cast<int>(config_->nBsSdrsAll); //config_->nBsSdrs[0]
+    int radio_start = tid * num_radios / thread_num_;
+    int radio_end = (tid + 1) * num_radios / thread_num_;
+    printf("receiver thread %d has %d radios \n", tid, radio_end - radio_start);
 
     // prepare BS beacon in host buffer
     std::vector<void*> beaconbuff(2);
@@ -208,113 +201,124 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     int frame_id = 0;
     int symbol_id = 0;
     int ant_id = 0;
+    int cell = 0;
     std::cout << "Start BS main recv loop... " << std::endl;
     while (config_->running) {
         // receive data
-        for (int cell = 0; cell < config_->nCells; cell++) {
-            for (int it = radio_start[cell]; it < radio_end[cell]; it++) {
-                Package* pkg[bsSdrCh];
-                void* samp[bsSdrCh];
-                // Set buffer status(es) to full; fail if full already
-                for (auto ch = 0; ch < bsSdrCh; ++ch) {
-                    int bit = 1 << (cursor + ch) % sizeof(std::atomic_int);
-                    int offs = (cursor + ch) / sizeof(std::atomic_int);
-                    int old = std::atomic_fetch_or(&pkg_buf_inuse[offs], bit); // now full
-                    // if buffer was full, exit
-                    if ((old & bit) != 0) {
-                        printf("thread %d buffer full\n", tid);
-                        exit(0);
-                    }
-                    // Reserved until marked empty by consumer
+        for (int it = radio_start; it < radio_end; it++) {
+            Package* pkg[bsSdrCh];
+            void* samp[bsSdrCh];
+
+            // Find cell this board belongs to...
+            for (int i = 0; i <= static_cast<int>(config_->nCells); i++) {
+                if (it < static_cast<int>(config_->nBsSdrsAgg[i])) {
+                    cell = i - 1;
+                    break;
+                }
+            }
+
+            int radio_idx = it - static_cast<int>(config_->nBsSdrsAgg[cell]);
+
+            // Set buffer status(es) to full; fail if full already
+            for (auto ch = 0; ch < bsSdrCh; ++ch) {
+                int bit = 1 << (cursor + ch) % sizeof(std::atomic_int);
+                int offs = (cursor + ch) / sizeof(std::atomic_int);
+                int old = std::atomic_fetch_or(&pkg_buf_inuse[offs], bit); // now full
+                // if buffer was full, exit
+                if ((old & bit) != 0) {
+                    printf("thread %d buffer full\n", tid);
+                    exit(0);
+                }
+                // Reserved until marked empty by consumer
+            }
+
+            // Receive data into buffers
+            size_t packageLength = sizeof(Package) + config_->getPackageDataLength();
+            for (auto ch = 0; ch < bsSdrCh; ++ch) {
+                pkg[ch] = (Package*)(buffer + (cursor + ch) * packageLength);
+                samp[ch] = pkg[ch]->data;
+            }
+
+            assert(baseRadioSet_ != NULL);
+            //ant_id = it * bsSdrCh;
+            ant_id = radio_idx * bsSdrCh;
+
+            // schedule BS beacons to be sent from host for UHD devices
+            if (!kUseUHD) {
+                long long frameTime;
+                if (baseRadioSet_->radioRx(radio_idx, cell, samp, frameTime) < 0) {
+                    config_->running = false;
+                    break;
                 }
 
-                // Receive data into buffers
-                size_t packageLength = sizeof(Package) + config_->getPackageDataLength();
-                for (auto ch = 0; ch < bsSdrCh; ++ch) {
-                    pkg[ch] = (Package*)(buffer + (cursor + ch) * packageLength);
-                    samp[ch] = pkg[ch]->data;
+                frame_id = (int)(frameTime >> 32);
+                symbol_id = (int)((frameTime >> 16) & 0xFFFF);
+            } else {
+                if (symbol_id == config_->symbolsPerFrame) {
+                    symbol_id = 0;
+                    frame_id++;
                 }
 
-                assert(baseRadioSet_ != NULL);
-                ant_id = it * bsSdrCh;
+                int rx_len = config_->sampsPerSymbol;
+                int r;
 
-                // schedule BS beacons to be sent from host for UHD devices
-                if (!kUseUHD) {
-                    long long frameTime;
-                    if (baseRadioSet_->radioRx(it, cell, samp, frameTime) < 0) {
-                        config_->running = false;
-                        break;
-                    }
+                // only write received pilot into samp
+                // otherwise use samp_buffer as a dummy buffer
+                if (config_->isPilot(frame_id, symbol_id) || config_->isData(frame_id, symbol_id))
+                    r = baseRadioSet_->radioRx(radio_idx, cell, samp, rxTimeBs);
+                else
+                    r = baseRadioSet_->radioRx(radio_idx, cell, samp_buffer.data(), rxTimeBs);
 
-                    frame_id = (int)(frameTime >> 32);
-                    symbol_id = (int)((frameTime >> 16) & 0xFFFF);
-                } else {
-                    if (symbol_id == config_->symbolsPerFrame) {
-                        symbol_id = 0;
-                        frame_id++;
-                    }
+                if (r < 0) {
+                    config_->running = false;
+                    break;
+                }
+                if (r != rx_len) {
+                    std::cerr << "BAD Receive(" << r << "/" << rx_len
+                              << ") at Time " << rxTimeBs
+                              << ", frame count " << frame_id << std::endl;
+                }
 
-                    int rx_len = config_->sampsPerSymbol;
-                    int r;
-
-                    // only write received pilot into samp
-                    // otherwise use samp_buffer as a dummy buffer
-                    if (config_->isPilot(frame_id, symbol_id) || config_->isData(frame_id, symbol_id))
-                        r = baseRadioSet_->radioRx(it, cell, samp, rxTimeBs);
-                    else
-                        r = baseRadioSet_->radioRx(it, cell, samp_buffer.data(), rxTimeBs);
-
-                    if (r < 0) {
-                        config_->running = false;
-                        break;
-                    }
-                    if (r != rx_len) {
-                        std::cerr << "BAD Receive(" << r << "/" << rx_len
-                                  << ") at Time " << rxTimeBs
+                // schedule next beacon in BEACON_INTERVAL frames
+                // FIXME?? From EACH cell or only one cell?
+                if (symbol_id == 0) {
+                    txTimeBs = rxTimeBs + config_->sampsPerSymbol * config_->symbolsPerFrame * BEACON_INTERVAL;
+                    int r_tx = baseRadioSet_->radioTx(radio_idx, cell, beaconbuff.data(), kStreamEndBurst, txTimeBs);
+                    if (r_tx != config_->sampsPerSymbol)
+                        std::cerr << "BAD Transmit(" << r_tx << "/" << config_->sampsPerSymbol
+                                  << ") at Time " << txTimeBs
                                   << ", frame count " << frame_id << std::endl;
-                    }
-
-                    // schedule next beacon in BEACON_INTERVAL frames
-		    // FIXME?? From EACH cell or only one cell?
-                    if (symbol_id == 0) {
-                        txTimeBs = rxTimeBs + config_->sampsPerSymbol * config_->symbolsPerFrame * BEACON_INTERVAL;
-                        int r_tx = baseRadioSet_->radioTx(it, cell, beaconbuff.data(), kStreamEndBurst, txTimeBs);
-                        if (r_tx != config_->sampsPerSymbol)
-                            std::cerr << "BAD Transmit(" << r_tx << "/" << config_->sampsPerSymbol
-                                      << ") at Time " << txTimeBs
-                                      << ", frame count " << frame_id << std::endl;
-                    }
                 }
+            }
 
 #if DEBUG_PRINT
-                for (auto ch = 0; ch < bsSdrCh; ++ch) {
-                    printf("receive thread %d, frame %d, symbol %d, cell %d, ant %d samples: %d %d %d %d %d %d %d %d ...\n",
-                        tid, frame_id, symbol_id, cell, ant_id + ch,
-                        pkg[ch]->data[1], pkg[ch]->data[2], pkg[ch]->data[3], pkg[ch]->data[4],
-                        pkg[ch]->data[5], pkg[ch]->data[6], pkg[ch]->data[7], pkg[ch]->data[8]);
-                }
+            for (auto ch = 0; ch < bsSdrCh; ++ch) {
+                printf("receive thread %d, frame %d, symbol %d, cell %d, ant %d samples: %d %d %d %d %d %d %d %d ...\n",
+                    tid, frame_id, symbol_id, cell, ant_id + ch,
+                    pkg[ch]->data[1], pkg[ch]->data[2], pkg[ch]->data[3], pkg[ch]->data[4],
+                    pkg[ch]->data[5], pkg[ch]->data[6], pkg[ch]->data[7], pkg[ch]->data[8]);
+            }
 #endif
 
-                for (auto ch = 0; ch < bsSdrCh; ++ch) {
-                    //new (pkg[ch]) Package(frame_id, symbol_id, 0, ant_id + ch);
-                    new (pkg[ch]) Package(frame_id, symbol_id, cell, ant_id + ch);
-                    // push EVENT_RX_SYMBOL event into the queue
-                    Event_data package_message;
-                    package_message.event_type = EVENT_RX_SYMBOL;
-                    // data records the position of this packet in the buffer & tid of this socket
-                    // (so that task thread could know which buffer it should visit)
-                    package_message.data = cursor + tid * buffer_chunk_size;
-                    if (!message_queue_->enqueue(local_ptok, package_message)) {
-                        printf("socket message enqueue failed\n");
-                        exit(0);
-                    }
-                    cursor++;
-                    cursor %= buffer_chunk_size;
+            for (auto ch = 0; ch < bsSdrCh; ++ch) {
+                //new (pkg[ch]) Package(frame_id, symbol_id, 0, ant_id + ch);
+                new (pkg[ch]) Package(frame_id, symbol_id, cell, ant_id + ch);
+                // push EVENT_RX_SYMBOL event into the queue
+                Event_data package_message;
+                package_message.event_type = EVENT_RX_SYMBOL;
+                // data records the position of this packet in the buffer & tid of this socket
+                // (so that task thread could know which buffer it should visit)
+                package_message.data = cursor + tid * buffer_chunk_size;
+                if (!message_queue_->enqueue(local_ptok, package_message)) {
+                    printf("socket message enqueue failed\n");
+                    exit(0);
                 }
-
-                if (kUseUHD)
-                    symbol_id++;
+                cursor++;
+                cursor %= buffer_chunk_size;
             }
+
+            if (kUseUHD)
+                symbol_id++;
         }
     }
 }
