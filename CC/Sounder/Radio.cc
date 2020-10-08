@@ -31,17 +31,15 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
                   << ", Rx gain: " << dev->getGain(SOAPY_SDR_RX, ch) << std::endl;
     } else {
         if (!kUseUHD) {
-            dev->setGain(SOAPY_SDR_RX, ch, "LNA", 30); //std::min(30.0, rxgain)); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
+            dev->setGain(SOAPY_SDR_RX, ch, "LNA", std::min(30.0, rxgain)); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
             dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0);
             dev->setGain(SOAPY_SDR_RX, ch, "PGA", 3);
             dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
-            dev->setGain(SOAPY_SDR_RX, ch, "ATTN", -6); // _cfg->radioRfFreq < 3e9 ? -12 : 0);
-            dev->setGain(SOAPY_SDR_TX, ch, "PAD", 37); //std::min(42.0, txgain)); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
+            dev->setGain(SOAPY_SDR_RX, ch, "ATTN", _cfg->radioRfFreq < 3e9 ? -12 : 0);
+            dev->setGain(SOAPY_SDR_TX, ch, "PAD", std::min(42.0, txgain)); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
             dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 0);
-            dev->setGain(SOAPY_SDR_TX, ch, "PA2", 17);
+            dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0);
             dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6);
-            dev->setGain(SOAPY_SDR_TX, ch, "PA1", 14);
-            dev->setGain(SOAPY_SDR_TX, ch, "PA3", 31.5);
         } else {
             dev->setGain(SOAPY_SDR_RX, ch, "PGA0", std::min(31.5, rxgain));
             dev->setGain(SOAPY_SDR_TX, ch, "PGA0", std::min(31.5, txgain));
