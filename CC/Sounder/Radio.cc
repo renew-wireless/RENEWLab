@@ -113,11 +113,11 @@ int Radio::activateRecv(const long long rxTime, const size_t numSamps, int flags
         SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST
     };
     int flag_args = soapyFlags[flags];
-    // for USRP device start rx stream SETTLE_TIME_SEC sec in the future
+    // for USRP device start rx stream UHD_INIT_TIME_SEC sec in the future
     if (!kUseUHD)
         return dev->activateStream(rxs, flag_args, rxTime, numSamps);
     else
-        return dev->activateStream(rxs, SOAPY_SDR_HAS_TIME, SETTLE_TIME_MS*1e9, 0);
+        return dev->activateStream(rxs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC*1e9, 0);
 }
 
 void Radio::deactivateRecv(void)
@@ -142,11 +142,11 @@ int Radio::xmit(const void* const* buffs, int samples, int flags, long long& fra
 
 void Radio::activateXmit(void)
 {
-    // for USRP device start tx stream SETTLE_TIME_SEC sec in the future
+    // for USRP device start tx stream UHD_INIT_TIME_SEC sec in the future
     if (!kUseUHD)
         dev->activateStream(txs);
     else
-        dev->activateStream(txs, SOAPY_SDR_HAS_TIME, SETTLE_TIME_SEC*1e9, 0);
+        dev->activateStream(txs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC*1e9, 0);
 }
 
 void Radio::deactivateXmit(void)
