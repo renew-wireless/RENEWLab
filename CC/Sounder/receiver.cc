@@ -250,7 +250,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 int rx_len = config_->sampsPerSymbol;
                 int r;
 
-                // only write received pilot into samp
+                // only write received pilot or data into samp
                 // otherwise use samp_buffer as a dummy buffer
                 if (config_->isPilot(frame_id, symbol_id) || config_->isData(frame_id, symbol_id))
                     r = baseRadioSet_->radioRx(it, samp, rxTimeBs);
@@ -303,6 +303,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 cursor %= buffer_chunk_size;
             }
 
+	    // for UHD device update symbol_id on host
             if (kUseUHD)
                 symbol_id++;
         }
@@ -497,8 +498,9 @@ void Receiver::clientSyncTxRx(int tid)
     size_t resync_success(0);
     rx_offset = 0;
 
-    // for UHD first pilot should not have an END_BURST flag
+    // for UHD device, the first pilot should not have an END_BURST flag
     int flags = (kUseUHD && config_->clSdrCh == 2) ? 1 : 2;
+    int flagsTxUlData;
 
     std::cout << "Start main client txrx loop..." << std::endl;
 
@@ -550,8 +552,7 @@ void Receiver::clientSyncTxRx(int tid)
                     break;
                 }
 
-                // TODO: calibrate offset for uhd devices with different rate
-                // no offset tested to work for up to 50MSa/s rate for x310
+                // config_->txAdvance needs calibration based on SDR model and sampling rate
                 txTime = rxTime + txTimeDelta + config_->clPilotSymbols[tid][0] * NUM_SAMPS - config_->txAdvance;
 
                 r = clientRadioSet_->radioTx(tid, pilotbuffA.data(), NUM_SAMPS, flags, txTime);
@@ -566,10 +567,15 @@ void Receiver::clientSyncTxRx(int tid)
                     if (r < NUM_SAMPS)
                         std::cout << "BAD Write: " << r << "/" << NUM_SAMPS << std::endl;
                 }
+
                 if (config_->ulDataSymPresent) {
                     for (size_t s = 0; s < txSyms; s++) {
                         txTime = rxTime + txTimeDelta + config_->clULSymbols[tid][s] * NUM_SAMPS - config_->txAdvance;
-                        r = clientRadioSet_->radioTx(tid, txbuff.data(), NUM_SAMPS, 2, txTime);
+                        if (kUseUHD && s < (txSyms - 1))
+                            flagsTxUlData = 1; // HAS_TIME
+                        else
+                            flagsTxUlData = 2; // HAS_TIME & END_BURST, fixme
+                        r = clientRadioSet_->radioTx(tid, txbuff.data(), NUM_SAMPS, flagsTxUlData, txTime);
                         if (r < NUM_SAMPS)
                             std::cout << "BAD Write: " << r << "/" << NUM_SAMPS << std::endl;
                     }
