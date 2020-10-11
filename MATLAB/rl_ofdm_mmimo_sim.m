@@ -49,7 +49,10 @@ N_BS_ANT                = 64;               % N_BS_ANT >> N_UE
 N_UPLINK_SYMBOLS        = N_OFDM_SYMS;
 N_0                     = 1e-2;
 H_var                   = 1;
-SAVE_RX_DATA = 0;
+
+DO_SAVE_RX_DATA = 0;
+DO_APPLY_HW_IMPERFECTION = 1;
+DO_RECIPROCAL_CALIBRATION = 1;
 
 % LTS for CFO and channel estimation
 lts_f = [0 1 -1 -1 1 1 -1 1 -1 1 -1 -1 -1 -1 -1 1 1 -1 -1 1 -1 1 -1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1];
@@ -73,9 +76,47 @@ demod_fcn_qpsk = @(x) double(2*(real(x)>0) + 1*(imag(x)>0));
 demod_fcn_16qam = @(x) (8*(real(x)>0)) + (4*(abs(real(x))<0.6325)) + (2*(imag(x)>0)) + (1*(abs(imag(x))<0.6325));
 demod_fcn_64qam = @(x) (32*(real(x)>0)) + (16*(abs(real(x))<0.6172)) + (8*((abs(real(x))<(0.9258))&&((abs(real(x))>(0.3086))))) + (4*(imag(x)>0)) + (2*(abs(imag(x))<0.6172)) + (1*((abs(imag(x))<(0.9258))&&((abs(imag(x))>(0.3086)))));
 
-%% Generate a payload of random integers
-tx_ul_data = randi(MOD_ORDER, N_UE, N_DATA_SYMS) - 1;
+%% Generate mMIMO tranceivers random phase vector [-pi, pi]
+if DO_APPLY_HW_IMPERFECTION
+    rng('shuffle');
+    dl_tx_hw_phase = exp((2 * pi * repmat(rand(N_BS_ANT, 1), 1, N_SC) - pi) * 1j);
+    dl_rx_hw_phase = exp((2 * pi * repmat(rand(N_UE, 1), 1, N_SC) - pi) * 1j);
+    ul_tx_hw_phase = exp((2 * pi * repmat(rand(N_UE, 1), 1, N_SC) - pi) * 1j);
+    ul_rx_hw_phase = exp((2 * pi * repmat(rand(N_BS_ANT, 1), 1, N_SC) - pi) * 1j);
 
+else
+    dl_tx_hw_phase = ones(N_BS_ANT, N_SC);
+    ul_rx_hw_phase = ones(N_BS_ANT, N_SC);
+    dl_rx_hw_phase = ones(N_UE, N_SC);
+    ul_tx_hw_phase = ones(N_UE, N_SC);
+end
+
+%% BS Calibration
+calib_mat = ones(N_BS_ANT, N_SC);
+if DO_RECIPROCAL_CALIBRATION
+    tx_ref_hw_phase = exp((2 * pi * rand - pi) * 1j);
+    rx_ref_hw_phase = exp((2 * pi * rand - pi) * 1j);
+
+    ul_tx_calib = lts_t * tx_ref_hw_phase;
+    H_ref = sqrt(H_var / 2) .* (randn(N_BS_ANT, 1) + 1i*randn(N_BS_ANT, 1));
+    Z_mat = sqrt(1e-3 / 2) * (randn(N_BS_ANT, length(ul_tx_calib)) + 1i*randn(N_BS_ANT, length(ul_tx_calib)));
+    ul_rx_calib = H_ref * ul_tx_calib + Z_mat;
+    ul_rx_calib_fft = fft(ul_rx_calib, N_SC, 2) .* ul_rx_hw_phase;
+    h_ul_calib = ul_rx_calib_fft .* repmat(lts_f, N_BS_ANT, 1);
+
+    dl_tx_calib = repmat(lts_t, N_BS_ANT, 1);
+    Z_mat = sqrt(1e-3 / 2) * (randn(N_BS_ANT, length(dl_tx_calib)) + 1i*randn(N_BS_ANT, length(dl_tx_calib)));
+    dl_rx_calib = repmat(H_ref, 1, length(dl_tx_calib)) .* dl_tx_calib + Z_mat;
+    dl_rx_calib_fft = fft(ul_rx_calib, N_SC, 2) * rx_ref_hw_phase;
+    h_dl_calib = dl_rx_calib_fft .* repmat(lts_f, N_BS_ANT, 1);
+
+    calib_mat(:, SC_IND_DATA) = h_dl_calib(:, SC_IND_DATA) ./ h_ul_calib(:, SC_IND_DATA);
+end
+
+%% Uplink
+
+% Generate a payload of random integers
+tx_ul_data = randi(MOD_ORDER, N_UE, N_DATA_SYMS) - 1;
 
 % Map the data values on to complex symbols
 switch MOD_ORDER
@@ -91,7 +132,6 @@ switch MOD_ORDER
         fprintf('Invalid MOD_ORDER (%d)!  Must be in [2, 4, 16, 64]\n', MOD_ORDER);
         return;
 end
-
 
 % Reshape the symbol vector to a matrix with one column per OFDM symbol
 tx_ul_syms_mat = reshape(tx_ul_syms, N_UE, length(SC_IND_DATA), N_OFDM_SYMS);
@@ -111,11 +151,14 @@ end
 ifft_in_mat = zeros(N_UE, N_SC, N_OFDM_SYMS);
 
 % Insert the data and pilot values; other subcarriers will remain at 0
-ifft_in_mat(:, SC_IND_DATA, :)   = tx_ul_syms_mat;
+ifft_in_mat(:, SC_IND_DATA, :) = tx_ul_syms_mat;
 ifft_in_mat(:, SC_IND_PILOTS, :) = pt_pilots_mat;
 
+% Apply hardware phase distortion
+ifft_in_hw_mat = ifft_in_mat .* repmat(ul_tx_hw_phase, 1, 1, N_OFDM_SYMS);
+
 %Perform the IFFT
-tx_payload_mat = ifft(ifft_in_mat, N_SC, 2);
+tx_payload_mat = ifft(ifft_in_hw_mat, N_SC, 2);
 
 % Insert the cyclic prefix
 if(CP_LEN > 0)
@@ -127,6 +170,7 @@ end
 tx_payload_vec = reshape(tx_payload_mat, N_UE, numel(tx_payload_mat(1,:,:)));
 tx_pilot_vec = zeros(N_UE, SYM_LEN * (N_UE+1)); % additional pilot as noise
 for i=1:N_UE
+    lts_t = ifft(lts_f .* ul_tx_hw_phase(i, :), 64);
     tx_pilot_vec(i, (i-1)*SYM_LEN+1:i*SYM_LEN) = [lts_t(64-CP_LEN+1:64) lts_t];
 end
 
@@ -134,12 +178,14 @@ end
 tx_vec = [tx_pilot_vec tx_payload_vec];
 tx_vec_air = TX_SCALE .* tx_vec ./ repmat(max(abs(tx_vec),[],2), 1, size(tx_vec, 2));
 
-%% Uplink
 % Rayleight + AWGN:
+
 rng('shuffle');
+
 Z_mat = sqrt(N_0/2) * ( randn(N_BS_ANT,length(tx_vec_air) ) + 1i*randn(N_BS_ANT,length(tx_vec_air) ) );     % UL noise matrix
 H = sqrt(H_var/2) .* ( randn(N_BS_ANT, N_UE) + 1i*randn(N_BS_ANT, N_UE) );                                  % Spatial Channel Matrix
-rx_vec_air = H*tx_vec_air + Z_mat;
+
+rx_vec_air = H * tx_vec_air + Z_mat;
 %rx_vec_air = rx_vec_air./repmat(max(abs(rx_vec_air'))', 1, size(rx_vec_air, 2));
 
 rx_pilot_vec = zeros(N_BS_ANT, N_SC, N_UE);
@@ -151,26 +197,27 @@ lts_f_mat = zeros(N_BS_ANT, N_SC, N_UE);
 for i = 1:N_UE
     lts_f_mat(:, :, i) = repmat(lts_f, N_BS_ANT, 1);
 end
-csi_mat = fft(rx_pilot_vec, N_SC, 2) .* lts_f_mat;
+csi_mat = fft(rx_pilot_vec, N_SC, 2) .* repmat(ul_rx_hw_phase, 1, 1, N_UE) .* lts_f_mat;
 
 rx_payload_vec=rx_vec_air(:, (N_UE+1)*SYM_LEN+1:end);
 rx_payload_mat = reshape(rx_payload_vec, N_BS_ANT, SYM_LEN, N_OFDM_SYMS); % first two are preamble
 rx_payload_mat_noCP = rx_payload_mat(:, CP_LEN+1:end, :);
-fft_out_mat = fft(rx_payload_mat_noCP, N_SC, 2);
+fft_out_mat = fft(rx_payload_mat_noCP, N_SC, 2)  .* repmat(ul_rx_hw_phase, 1, 1, N_OFDM_SYMS);
 
 precoding_mat = zeros(N_BS_ANT, N_SC, N_UE);
 demult_mat = zeros(N_UE, N_SC, N_OFDM_SYMS);
 sc_csi_mat = zeros(N_BS_ANT, N_UE);
 for j=1:N_SC
     sc_csi_mat = squeeze(csi_mat(:, j, :));
-    zf_mat=pinv(sc_csi_mat);
-    demult_mat(:, j, :) = zf_mat*squeeze(fft_out_mat(:, j, :));
-    precoding_mat(:, j, :) = zf_mat.';
+    zf_mat = pinv(sc_csi_mat);
+    demult_mat(:, j, :) = zf_mat * squeeze(fft_out_mat(:, j, :));
+    dl_zf_mat = pinv(diag(calib_mat(:, i)) * sc_csi_mat);
+    precoding_mat(:, j, :) = dl_zf_mat.'; %zf_mat.';
 end
 
-pilots_f_mat = demult_mat(:,SC_IND_PILOTS,:);
-pilots_f_mat_comp = pilots_f_mat.*pt_pilots_mat;
-pilot_phase_err = squeeze(angle(mean(pilots_f_mat_comp,2)));
+pilots_f_mat = demult_mat(:, SC_IND_PILOTS, :);
+pilots_f_mat_comp = pilots_f_mat .* pt_pilots_mat;
+pilot_phase_err = squeeze(angle(mean(pilots_f_mat_comp, 2)));
 
 pilot_phase_corr = zeros(N_UE, N_SC, N_OFDM_SYMS);
 for i=1:N_SC
@@ -214,37 +261,42 @@ ul_snrs = 10*log10(1 ./ ul_aevms);
 
 
 %% Downlink
+
 tx_dl_data = tx_ul_data; % use same data for downlink as uplink
 tx_dl_syms = tx_ul_syms; % use same data symbols for downlink as uplink
 % Reshape the symbol vector to a matrix with one column per OFDM symbol
 tx_dl_syms_mat = reshape(tx_dl_syms, N_UE, length(SC_IND_DATA), N_OFDM_SYMS);
 
-tx_mult_mat = zeros(N_BS_ANT, N_SC, N_OFDM_SYMS+2);
+tx_mult_mat = zeros(N_BS_ANT, N_SC, N_OFDM_SYMS + 2);
 for i=1:N_SC
     lts_f_vec = lts_f(i)*ones(N_UE, 1);
-    tx_mult_f = [lts_f_vec lts_f_vec squeeze(ifft_in_mat(:,i,:))];
-    tx_mult_mat(:,i,:) = squeeze(precoding_mat(:,i,:))*tx_mult_f; % N_BS_ANT * N_SC * N_OFDM_SYMS
+    tx_mult_f = [lts_f_vec lts_f_vec squeeze(ifft_in_mat(:, i, :))];
+    tx_mult_mat(:, i, :) = squeeze(precoding_mat(:, i, :)) * tx_mult_f; % N_BS_ANT * N_SC * N_OFDM_SYMS
 end
-ifft_out_mat = ifft(tx_mult_mat, N_SC, 2);
+
+tx_mult_hw_mat = tx_mult_mat .* repmat(dl_tx_hw_phase, 1, 1, N_OFDM_SYMS + 2);
+ifft_out_mat = ifft(tx_mult_hw_mat, N_SC, 2);
+
 % Insert the cyclic prefix
 if(CP_LEN > 0)
-    tx_cp = ifft_out_mat(:, (end-CP_LEN+1 : end), :);
+    tx_cp = ifft_out_mat(:, (end - CP_LEN + 1:end), :);
     tx_dl_mat = cat(2, tx_cp, ifft_out_mat); %[tx_cp; tx_payload_mat];
 else
     tx_dl_mat = ifft_out_mat;
 end
 
-tx_dl_vec = reshape(tx_dl_mat, N_BS_ANT, numel(tx_dl_mat(1,:,:)));
-tx_dl_vec = TX_SCALE .* tx_dl_vec ./ repmat(max(abs(tx_dl_vec),[],2), 1, length(tx_dl_vec));
+tx_dl_vec = reshape(tx_dl_mat, N_BS_ANT, numel(tx_dl_mat(1, :, :)));
+tx_dl_vec = TX_SCALE .* tx_dl_vec ./ repmat(max(abs(tx_dl_vec), [], 2), 1, length(tx_dl_vec));
 
-Z_dl_mat = sqrt(N_0/2) * ( randn(N_UE,length(tx_dl_vec) ) + 1i*randn(N_UE,length(tx_dl_vec) ) );   % DL noise matrix
+Z_dl_mat = sqrt(N_0/2) * (randn(N_UE,length(tx_dl_vec)) + 1i*randn(N_UE,length(tx_dl_vec))); % DL noise matrix
 rx_dl_vec = (1/(sqrt(N_BS_ANT))) .* H.'*tx_dl_vec + Z_dl_mat;
 
-rx_dl_mat = reshape(rx_dl_vec, N_UE, SYM_LEN, N_OFDM_SYMS+2);
+rx_dl_mat = reshape(rx_dl_vec, N_UE, SYM_LEN, N_OFDM_SYMS + 2);
 if(CP_LEN > 0)
     rx_dl_mat = rx_dl_mat(:, CP_LEN+1:end, :);
 end
-rx_dl_f_mat = fft(rx_dl_mat, N_SC, 2);
+
+rx_dl_f_mat = fft(rx_dl_mat, N_SC, 2) .* repmat(dl_rx_hw_phase, 1, 1, N_OFDM_SYMS + 2);
 rx_lts1_f = rx_dl_f_mat(:, :, 1);
 rx_lts2_f = rx_dl_f_mat(:, :, 2);
 dl_syms_f_mat = rx_dl_f_mat(:, :, 3:end);
@@ -579,7 +631,7 @@ fprintf('Num Bits:   %d\n', N_UE * N_DATA_SYMS * log2(MOD_ORDER) );
 fprintf('DL Sym Errors:  %d (of %d total symbols)\n', dl_sym_errs, N_UE * N_DATA_SYMS);
 fprintf('DL Bit Errors:  %d (of %d total bits)\n', dl_bit_errs, N_UE * N_DATA_SYMS * log2(MOD_ORDER));
 
-if SAVE_RX_DATA
+if DO_SAVE_RX_DATA
     %%% save uplink rx signal
     rx_save_vec = [rx_vec_air(:, 1:N_UE*SYM_LEN) rx_vec_air(:, (N_UE+1)*SYM_LEN+1:end)];
     rx_save_mat = reshape(rx_save_vec, size(rx_vec_air, 1), SYM_LEN, N_OFDM_SYMS+N_UE);
