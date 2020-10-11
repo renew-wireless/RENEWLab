@@ -97,17 +97,17 @@ if DO_RECIPROCAL_CALIBRATION
     tx_ref_hw_phase = exp((2 * pi * rand - pi) * 1j);
     rx_ref_hw_phase = exp((2 * pi * rand - pi) * 1j);
 
-    ul_tx_calib = lts_t * tx_ref_hw_phase;
+    ul_tx_calib = ifft(lts_f * tx_ref_hw_phase);
     H_ref = sqrt(H_var / 2) .* (randn(N_BS_ANT, 1) + 1i*randn(N_BS_ANT, 1));
-    Z_mat = sqrt(1e-3 / 2) * (randn(N_BS_ANT, length(ul_tx_calib)) + 1i*randn(N_BS_ANT, length(ul_tx_calib)));
+    Z_mat = sqrt(1e-4 / 2) * (randn(N_BS_ANT, length(ul_tx_calib)) + 1i*randn(N_BS_ANT, length(ul_tx_calib)));
     ul_rx_calib = H_ref * ul_tx_calib + Z_mat;
     ul_rx_calib_fft = fft(ul_rx_calib, N_SC, 2) .* ul_rx_hw_phase;
     h_ul_calib = ul_rx_calib_fft .* repmat(lts_f, N_BS_ANT, 1);
 
-    dl_tx_calib = repmat(lts_t, N_BS_ANT, 1);
-    Z_mat = sqrt(1e-3 / 2) * (randn(N_BS_ANT, length(dl_tx_calib)) + 1i*randn(N_BS_ANT, length(dl_tx_calib)));
-    dl_rx_calib = repmat(H_ref, 1, length(dl_tx_calib)) .* dl_tx_calib + Z_mat;
-    dl_rx_calib_fft = fft(ul_rx_calib, N_SC, 2) * rx_ref_hw_phase;
+    dl_tx_calib = ifft(repmat(lts_f, N_BS_ANT, 1) .* dl_tx_hw_phase, N_SC, 2);
+    Z_mat = sqrt(1e-4 / 2) * (randn(N_BS_ANT, length(dl_tx_calib)) + 1i*randn(N_BS_ANT, length(dl_tx_calib)));
+    dl_rx_calib = repmat(H_ref, 1, N_SC) .* dl_tx_calib + Z_mat;
+    dl_rx_calib_fft = fft(dl_rx_calib, N_SC, 2) * rx_ref_hw_phase;
     h_dl_calib = dl_rx_calib_fft .* repmat(lts_f, N_BS_ANT, 1);
 
     calib_mat(:, SC_IND_DATA) = h_dl_calib(:, SC_IND_DATA) ./ h_ul_calib(:, SC_IND_DATA);
