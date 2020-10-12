@@ -22,7 +22,7 @@ public:
 
     void do_it();
     int getRecordedFrameNum();
-    std::string getTraceFileName() {return cfg->trace_file;}
+    std::string getTraceFileName() { return cfg->trace_file; }
 
 private:
     struct EventHandlerContext {
@@ -70,6 +70,7 @@ private:
     hsize_t cdims_data[5];
 #endif
 
+    size_t buffer_chunk_size;
     size_t maxFrameNumber;
     moodycamel::ConcurrentQueue<Event_data> task_queue_;
     moodycamel::ConcurrentQueue<Event_data> message_queue_;

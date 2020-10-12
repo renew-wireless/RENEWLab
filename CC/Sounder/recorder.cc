@@ -27,7 +27,6 @@ Recorder::Recorder(Config* cfg)
 {
     this->cfg = cfg;
     //size_t buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas();
-    size_t buffer_chunk_size;
     if (cfg->bsPresent)
         buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * (cfg->getTotNumAntennas() / cfg->rx_thread_num);
     else
@@ -596,7 +595,7 @@ void Recorder::taskThread(EventHandlerContext* context)
 herr_t Recorder::record(int, int offset)
 {
     //size_t buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas();
-    size_t buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * (cfg->getTotNumAntennas() / cfg->rx_thread_num);
+    buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * (cfg->getTotNumAntennas() / cfg->rx_thread_num);
     int buffer_id = offset / buffer_chunk_size;
     offset = offset - buffer_id * buffer_chunk_size;
     // read info
