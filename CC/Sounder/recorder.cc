@@ -31,7 +31,7 @@ Recorder::Recorder(Config* cfg)
     if (cfg->bsPresent)
         buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * (cfg->getTotNumAntennas() / cfg->rx_thread_num);
     else
-	buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getTotNumAntennas();
+        buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getTotNumAntennas();
 
     std::cout << "buffer_chunk_size " << buffer_chunk_size << std::endl;
     task_queue_ = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
@@ -180,7 +180,7 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
     frame_number_pilot = MAX_FRAME_INC; //cfg->maxFrame;
     DataspaceIndex dims_pilot = {
         frame_number_pilot, cfg->nCells,
-        cfg->pilotSymsPerFrame, cfg->getMaxNumAntennas(), IQ 
+        cfg->pilotSymsPerFrame, cfg->getMaxNumAntennas(), IQ
     };
     DataspaceIndex max_dims_pilot = { H5S_UNLIMITED, cfg->nCells, cfg->pilotSymsPerFrame, cfg->getMaxNumAntennas(), IQ };
 
@@ -283,9 +283,9 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         write_attribute(mainGroup, "BS_BEACON_ANT", (int)cfg->beacon_ant);
 
         // Number of antennas on Base Station
-        write_attribute(mainGroup, "BS_NUM_ANT", (int)cfg->getNumAntennas());  // TODO: REMOVE SOON, REPLACE BY PER CELL
+        write_attribute(mainGroup, "BS_NUM_ANT", (int)cfg->getNumAntennas()); // TODO: REMOVE SOON, REPLACE BY PER CELL
 
-	// Number of antennas on Base Station (per cell)
+        // Number of antennas on Base Station (per cell)
         std::vector<std::string> bs_ant_num_per_cell(cfg->bs_sdr_ids.size());
         for (size_t i = 0; i < bs_ant_num_per_cell.size(); ++i) {
             bs_ant_num_per_cell[i] = std::to_string(cfg->bs_sdr_ids[i].size() * (int)cfg->bsChannel.length());
@@ -721,15 +721,14 @@ int Recorder::getRecordedFrameNum()
     return maxFrameNumber;
 }
 
-extern "C"
+extern "C" {
+Recorder* Recorder_new(Config* cfg)
 {
-    Recorder* Recorder_new(Config *cfg){
-        Recorder *rec = new Recorder(cfg);
-        return rec;
-    }
-
-    void Recorder_start(Recorder *rec){rec->do_it();}
-    int Recorder_getRecordedFrameNum(Recorder *rec){return rec->getRecordedFrameNum();}
-    const char* Recorder_getTraceFileName(Recorder *rec){return rec->getTraceFileName().c_str();}
+    Recorder* rec = new Recorder(cfg);
+    return rec;
 }
 
+void Recorder_start(Recorder* rec) { rec->do_it(); }
+int Recorder_getRecordedFrameNum(Recorder* rec) { return rec->getRecordedFrameNum(); }
+const char* Recorder_getTraceFileName(Recorder* rec) { return rec->getTraceFileName().c_str(); }
+}

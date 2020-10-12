@@ -87,11 +87,11 @@ Config::Config(const std::string& jsonfile)
             nBsSdrsAll += bs_sdr_ids[i].size();
         }
 
-	// Array with cummulative sum of SDRs in cells
-        nBsSdrsAgg.resize(nCells+1);
+        // Array with cummulative sum of SDRs in cells
+        nBsSdrsAgg.resize(nCells + 1);
         nBsSdrsAgg[0] = 0; //nBsSdrs[0];
         for (size_t i = 0; i < nCells; i++) {
-            nBsSdrsAgg[i+1] = nBsSdrsAgg[i] + nBsSdrs[i];
+            nBsSdrsAgg[i + 1] = nBsSdrsAgg[i] + nBsSdrs[i];
         }
 
         if (!kUseUHD)
@@ -396,8 +396,8 @@ size_t Config::getMaxNumAntennas()
 
     size_t maxNumSdr = 0;
     for (size_t i = 0; i < nCells; i++) {
-        if(maxNumSdr < nBsSdrs[i])
-	    maxNumSdr = nBsSdrs[i];
+        if (maxNumSdr < nBsSdrs[i])
+            maxNumSdr = nBsSdrs[i];
     }
     return maxNumSdr * bsChannel.length();
 }
@@ -476,12 +476,12 @@ unsigned Config::getCoreCount()
     return nCores;
 }
 
-extern "C"
+extern "C" {
+__attribute__((visibility("default"))) Config* Config_new(char* filename)
 {
-    __attribute__((visibility("default"))) Config* Config_new(char *filename) {
 
-        Config *cfg = new Config(filename);
+    Config* cfg = new Config(filename);
 
-        return cfg;
-    }
+    return cfg;
+}
 }
