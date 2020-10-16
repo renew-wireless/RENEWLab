@@ -51,14 +51,13 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         auto dev = radios.back()->dev;
         SoapySDR::Kwargs info = dev->getHardwareInfo();
 
-        // for (auto ch : { 0, 1 }) //channels)
         for (auto ch : channels) {
             double rxgain = _cfg->clRxgain_vec[ch][i]; // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
             double txgain = _cfg->clTxgain_vec[ch][i]; // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
             radios.back()->dev_init(_cfg, ch, rxgain, txgain);
         }
 
-        // TODO: add uhd_cal
+        // Init AGC only for Iris device
         if (!kUseUHD)
             initAGC(dev, _cfg);
     }

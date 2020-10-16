@@ -3,12 +3,12 @@
 	         "cells" : 1,
 	         "sdr_id" : ["files/usrp-bs-serials.txt"],
 		 "frequency" : 3.6e9,
-		 "channel" : "A",
+		 "channel" : "AB",
 		 "rxgainA" : 20,
-		 "txgainA" : 15,
+		 "txgainA" : 20,
 		 "rxgainB" : 20,
-		 "txgainB" : 15,
-		 "rate" : 50e6,
+		 "txgainB" : 20,
+		 "rate" : 20e6,
 		 "frame_schedule" : [
 		     "BGPGGGGGGGGGGGGGGGGG"
 		 ],

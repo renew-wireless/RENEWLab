@@ -159,11 +159,11 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     // this is assuming buffer_chunk_size is at least 2
     std::atomic_int* pkg_buf_inuse = rx_buffer[tid].pkg_buf_inuse;
     char* buffer = rx_buffer[tid].buffer.data();
-    int num_radios = config_->nBsSdrs[0];
+
+    int num_radios = static_cast<int>(config_->nBsSdrsAll); //config_->nBsSdrs[0]
     int radio_start = tid * num_radios / thread_num_;
     int radio_end = (tid + 1) * num_radios / thread_num_;
-
-    printf("receiver thread %d has %d radios\n", tid, radio_end - radio_start);
+    printf("receiver thread %d has %d radios \n", tid, radio_end - radio_start);
 
     // prepare BS beacon in host buffer
     std::vector<void*> beaconbuff(2);
@@ -187,13 +187,13 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
     if (kUseUHD) {
         std::cout << "Sync BS host and FPGA timestamp..." << std::endl;
-        baseRadioSet_->radioRx(0, samp_buffer.data(), config_->sampsPerSymbol, rxTimeBs);
+        baseRadioSet_->radioRx(0, 0, samp_buffer.data(), config_->sampsPerSymbol, rxTimeBs);
         // schedule the first beacon in the future
         txTimeBs = rxTimeBs + config_->sampsPerSymbol * config_->symbolsPerFrame * BEACON_INTERVAL;
-        baseRadioSet_->radioTx(0, beaconbuff.data(), 2, txTimeBs);
+        baseRadioSet_->radioTx(0, 0, beaconbuff.data(), 2, txTimeBs);
         long long bsInitRxOffset = txTimeBs - rxTimeBs;
         for (int it = 0; it < std::floor(bsInitRxOffset / config_->sampsPerSymbol); it++) {
-            baseRadioSet_->radioRx(0, samp_buffer.data(), config_->sampsPerSymbol, rxTimeBs);
+            baseRadioSet_->radioRx(0, 0, samp_buffer.data(), config_->sampsPerSymbol, rxTimeBs);
         }
     }
 
@@ -201,12 +201,23 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     int frame_id = 0;
     int symbol_id = 0;
     int ant_id = 0;
+    int cell = 0;
     std::cout << "Start BS main recv loop... " << std::endl;
     while (config_->running) {
         // receive data
         for (int it = radio_start; it < radio_end; it++) {
             Package* pkg[bsSdrCh];
             void* samp[bsSdrCh];
+
+            // Find cell this board belongs to...
+            for (int i = 0; i <= static_cast<int>(config_->nCells); i++) {
+                if (it < static_cast<int>(config_->nBsSdrsAgg[i])) {
+                    cell = i - 1;
+                    break;
+                }
+            }
+
+            int radio_idx = it - static_cast<int>(config_->nBsSdrsAgg[cell]);
 
             // Set buffer status(es) to full; fail if full already
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
@@ -229,12 +240,13 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             }
 
             assert(baseRadioSet_ != NULL);
-            ant_id = it * bsSdrCh;
+            //ant_id = it * bsSdrCh;
+            ant_id = radio_idx * bsSdrCh;
 
             // schedule BS beacons to be sent from host for UHD devices
             if (!kUseUHD) {
                 long long frameTime;
-                if (baseRadioSet_->radioRx(it, samp, frameTime) < 0) {
+                if (baseRadioSet_->radioRx(radio_idx, cell, samp, frameTime) < 0) {
                     config_->running = false;
                     break;
                 }
@@ -250,12 +262,12 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 int rx_len = config_->sampsPerSymbol;
                 int r;
 
-                // only write received pilot into samp
+                // only write received pilot or data into samp
                 // otherwise use samp_buffer as a dummy buffer
                 if (config_->isPilot(frame_id, symbol_id) || config_->isData(frame_id, symbol_id))
-                    r = baseRadioSet_->radioRx(it, samp, rxTimeBs);
+                    r = baseRadioSet_->radioRx(radio_idx, cell, samp, rxTimeBs);
                 else
-                    r = baseRadioSet_->radioRx(it, samp_buffer.data(), rxTimeBs);
+                    r = baseRadioSet_->radioRx(radio_idx, cell, samp_buffer.data(), rxTimeBs);
 
                 if (r < 0) {
                     config_->running = false;
@@ -268,9 +280,10 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 }
 
                 // schedule next beacon in BEACON_INTERVAL frames
+                // FIXME?? From EACH cell or only one cell?
                 if (symbol_id == 0) {
                     txTimeBs = rxTimeBs + config_->sampsPerSymbol * config_->symbolsPerFrame * BEACON_INTERVAL;
-                    int r_tx = baseRadioSet_->radioTx(it, beaconbuff.data(), kStreamEndBurst, txTimeBs);
+                    int r_tx = baseRadioSet_->radioTx(radio_idx, cell, beaconbuff.data(), kStreamEndBurst, txTimeBs);
                     if (r_tx != config_->sampsPerSymbol)
                         std::cerr << "BAD Transmit(" << r_tx << "/" << config_->sampsPerSymbol
                                   << ") at Time " << txTimeBs
@@ -281,14 +294,15 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 #if DEBUG_PRINT
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
                 printf("receive thread %d, frame %d, symbol %d, cell %d, ant %d samples: %d %d %d %d %d %d %d %d ...\n",
-                    tid, frame_id, symbol_id, 0, ant_id + ch,
+                    tid, frame_id, symbol_id, cell, ant_id + ch,
                     pkg[ch]->data[1], pkg[ch]->data[2], pkg[ch]->data[3], pkg[ch]->data[4],
                     pkg[ch]->data[5], pkg[ch]->data[6], pkg[ch]->data[7], pkg[ch]->data[8]);
             }
 #endif
 
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
-                new (pkg[ch]) Package(frame_id, symbol_id, 0, ant_id + ch);
+                //new (pkg[ch]) Package(frame_id, symbol_id, 0, ant_id + ch);
+                new (pkg[ch]) Package(frame_id, symbol_id, cell, ant_id + ch);
                 // push EVENT_RX_SYMBOL event into the queue
                 Event_data package_message;
                 package_message.event_type = EVENT_RX_SYMBOL;
@@ -303,10 +317,13 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 cursor %= buffer_chunk_size;
             }
 
+	    // for UHD device update symbol_id on host
             if (kUseUHD)
                 symbol_id++;
         }
     }
+    free(zeros[0]);
+    free(zeros[1]);
 }
 
 void* Receiver::clientTxRx_launch(void* in_context)
@@ -497,8 +514,9 @@ void Receiver::clientSyncTxRx(int tid)
     size_t resync_success(0);
     rx_offset = 0;
 
-    // for UHD first pilot should not have an END_BURST flag
+    // for UHD device, the first pilot should not have an END_BURST flag
     int flags = (kUseUHD && config_->clSdrCh == 2) ? 1 : 2;
+    int flagsTxUlData;
 
     std::cout << "Start main client txrx loop..." << std::endl;
 
@@ -550,8 +568,7 @@ void Receiver::clientSyncTxRx(int tid)
                     break;
                 }
 
-                // TODO: calibrate offset for uhd devices with different rate
-                // no offset tested to work for up to 50MSa/s rate for x310
+                // config_->txAdvance needs calibration based on SDR model and sampling rate
                 txTime = rxTime + txTimeDelta + config_->clPilotSymbols[tid][0] * NUM_SAMPS - config_->txAdvance;
 
                 r = clientRadioSet_->radioTx(tid, pilotbuffA.data(), NUM_SAMPS, flags, txTime);
@@ -566,10 +583,15 @@ void Receiver::clientSyncTxRx(int tid)
                     if (r < NUM_SAMPS)
                         std::cout << "BAD Write: " << r << "/" << NUM_SAMPS << std::endl;
                 }
+
                 if (config_->ulDataSymPresent) {
                     for (size_t s = 0; s < txSyms; s++) {
                         txTime = rxTime + txTimeDelta + config_->clULSymbols[tid][s] * NUM_SAMPS - config_->txAdvance;
-                        r = clientRadioSet_->radioTx(tid, txbuff.data(), NUM_SAMPS, 2, txTime);
+                        if (kUseUHD && s < (txSyms - 1))
+                            flagsTxUlData = 1; // HAS_TIME
+                        else
+                            flagsTxUlData = 2; // HAS_TIME & END_BURST, fixme
+                        r = clientRadioSet_->radioTx(tid, txbuff.data(), NUM_SAMPS, flagsTxUlData, txTime);
                         if (r < NUM_SAMPS)
                             std::cout << "BAD Write: " << r << "/" << NUM_SAMPS << std::endl;
                     }

@@ -26,7 +26,13 @@ const int DS_SIM = 5;
 Recorder::Recorder(Config* cfg)
 {
     this->cfg = cfg;
-    size_t buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas();
+    //size_t buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas();
+    size_t buffer_chunk_size;
+    if (cfg->bsPresent)
+        buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * (cfg->getTotNumAntennas() / cfg->rx_thread_num);
+    else
+        buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getTotNumAntennas();
+
     std::cout << "buffer_chunk_size " << buffer_chunk_size << std::endl;
     task_queue_ = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
     message_queue_ = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
@@ -174,16 +180,16 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
     frame_number_pilot = MAX_FRAME_INC; //cfg->maxFrame;
     DataspaceIndex dims_pilot = {
         frame_number_pilot, cfg->nCells,
-        cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
+        cfg->pilotSymsPerFrame, cfg->getMaxNumAntennas(), IQ
     };
-    DataspaceIndex max_dims_pilot = { H5S_UNLIMITED, cfg->nCells, cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ };
+    DataspaceIndex max_dims_pilot = { H5S_UNLIMITED, cfg->nCells, cfg->pilotSymsPerFrame, cfg->getMaxNumAntennas(), IQ };
 
     frame_number_data = MAX_FRAME_INC; //cfg->maxFrame;
     DataspaceIndex dims_data = {
         frame_number_data, cfg->nCells,
-        cfg->ulSymsPerFrame, cfg->getNumAntennas(), IQ
+        cfg->ulSymsPerFrame, cfg->getMaxNumAntennas(), IQ
     };
-    DataspaceIndex max_dims_data = { H5S_UNLIMITED, cfg->nCells, cfg->ulSymsPerFrame, cfg->getNumAntennas(), IQ };
+    DataspaceIndex max_dims_data = { H5S_UNLIMITED, cfg->nCells, cfg->ulSymsPerFrame, cfg->getMaxNumAntennas(), IQ };
 
     try {
         Exception::dontPrint();
@@ -277,7 +283,14 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         write_attribute(mainGroup, "BS_BEACON_ANT", (int)cfg->beacon_ant);
 
         // Number of antennas on Base Station
-        write_attribute(mainGroup, "BS_NUM_ANT", (int)cfg->getNumAntennas());
+        write_attribute(mainGroup, "BS_NUM_ANT", (int)cfg->getNumAntennas()); // TODO: REMOVE SOON, REPLACE BY PER CELL
+
+        // Number of antennas on Base Station (per cell)
+        std::vector<std::string> bs_ant_num_per_cell(cfg->bs_sdr_ids.size());
+        for (size_t i = 0; i < bs_ant_num_per_cell.size(); ++i) {
+            bs_ant_num_per_cell[i] = std::to_string(cfg->bs_sdr_ids[i].size() * (int)cfg->bsChannel.length());
+        }
+        write_attribute(mainGroup, "BS_ANT_NUM_PER_CELL", bs_ant_num_per_cell);
 
         // Number of symbols in a frame
         write_attribute(mainGroup, "BS_FRAME_LEN", cfg->symbolsPerFrame);
@@ -340,7 +353,7 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
             if (cfg->pilot_sc[1].size() > 0)
                 write_attribute(mainGroup, "OFDM_PILOT_SC_VALS", cfg->pilot_sc[1]);
 
-            // Freq. Domain Data Symbols - OBCH
+            // Freq. Domain Data Symbols
             for (size_t i = 0; i < cfg->txdata_freq_dom.size(); i++) {
                 std::string var = std::string("OFDM_DATA_CL") + std::to_string(i);
                 write_attribute(mainGroup, var.c_str(), cfg->txdata_freq_dom[i]);
@@ -410,7 +423,7 @@ void Recorder::openHDF5()
     int ndims = pilot_filespace.getSimpleExtentNdims();
     DataspaceIndex dims_pilot = {
         frame_number_pilot, cfg->nCells,
-        cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
+        cfg->pilotSymsPerFrame, cfg->getMaxNumAntennas(), IQ
     };
     if (H5D_CHUNKED == pilot_prop.getLayout())
         cndims_pilot = pilot_prop.getChunk(ndims, dims_pilot);
@@ -439,7 +452,7 @@ void Recorder::openHDF5()
         cout << "dim data chunk = " << cndims_data << std::endl;
         DataspaceIndex dims_data = {
             frame_number_data, cfg->nCells,
-            cfg->ulSymsPerFrame, cfg->getNumAntennas(), IQ
+            cfg->ulSymsPerFrame, cfg->getMaxNumAntennas(), IQ
         };
         cout << "New Data Dataset Dimension " << ndims << ",";
         for (auto i = 0; i < DS_SIM - 1; ++i)
@@ -459,7 +472,7 @@ void Recorder::closeHDF5()
     frame_number_pilot = frameNumber;
     DataspaceIndex dims_pilot = {
         frame_number_pilot, cfg->nCells,
-        cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
+        cfg->pilotSymsPerFrame, cfg->getMaxNumAntennas(), IQ
     };
     pilot_dataset->extend(dims_pilot);
     pilot_prop.close();
@@ -471,7 +484,7 @@ void Recorder::closeHDF5()
         frame_number_data = frameNumber;
         DataspaceIndex dims_data = {
             frame_number_data, cfg->nCells,
-            cfg->ulSymsPerFrame, cfg->getNumAntennas(), IQ
+            cfg->ulSymsPerFrame, cfg->getMaxNumAntennas(), IQ
         };
         data_dataset->extend(dims_data);
         data_prop.close();
@@ -582,7 +595,9 @@ void Recorder::taskThread(EventHandlerContext* context)
 // do Crop
 herr_t Recorder::record(int, int offset)
 {
-    size_t buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas();
+    //size_t buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas();
+    size_t buffer_chunk_size;
+    buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * (cfg->getTotNumAntennas() / cfg->rx_thread_num);
     int buffer_id = offset / buffer_chunk_size;
     offset = offset - buffer_id * buffer_chunk_size;
     // read info
@@ -610,9 +625,7 @@ herr_t Recorder::record(int, int offset)
             openHDF5();
             maxFrameNumber = maxFrameNumber + MAX_FRAME_INC;
         }
-
-        DataspaceIndex hdfoffset = { pkg->frame_id, 0, 0, pkg->ant_id, 0 };
-
+        DataspaceIndex hdfoffset = { pkg->frame_id, pkg->cell_id, 0, pkg->ant_id, 0 };
         if (cfg->isPilot(pkg->frame_id, pkg->symbol_id)) {
             //assert(pilot_dataset >= 0);
             // Are we going to extend the dataset?
@@ -622,28 +635,25 @@ herr_t Recorder::record(int, int offset)
                     frame_number_pilot = std::min(frame_number_pilot, cfg->max_frame + 1);
                 DataspaceIndex dims_pilot = {
                     frame_number_pilot, cfg->nCells,
-                    cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
+                    cfg->pilotSymsPerFrame, cfg->getMaxNumAntennas(), IQ
                 };
                 pilot_dataset->extend(dims_pilot);
 #if DEBUG_PRINT
                 std::cout << "FrameId " << pkg->frame_id << ", (Pilot) Extent to " << frame_number_pilot << " Frames" << std::endl;
 #endif
             }
-
             hdfoffset[DS_SYMS_PER_FRAME] = cfg->getClientId(pkg->frame_id, pkg->symbol_id);
 
             // Select a hyperslab in extended portion of the dataset
             DataSpace pilot_filespace(pilot_dataset->getSpace());
             DataspaceIndex count = { 1, 1, 1, 1, IQ };
             pilot_filespace.selectHyperslab(H5S_SELECT_SET, count, hdfoffset);
-
             // define memory space
             DataSpace pilot_memspace(DS_DIM, count, NULL);
             pilot_dataset->write(pkg->data, PredType::NATIVE_INT16,
                 pilot_memspace, pilot_filespace);
             pilot_filespace.close();
         } else if (cfg->isData(pkg->frame_id, pkg->symbol_id)) {
-
             //assert(data_dataset >= 0);
             // Are we going to extend the dataset?
             if (pkg->frame_id >= frame_number_data) {
@@ -652,21 +662,18 @@ herr_t Recorder::record(int, int offset)
                     frame_number_data = std::min(frame_number_data, cfg->max_frame + 1);
                 DataspaceIndex dims_data = {
                     frame_number_data, cfg->nCells,
-                    cfg->ulSymsPerFrame, cfg->getNumAntennas(), IQ
+                    cfg->ulSymsPerFrame, cfg->getMaxNumAntennas(), IQ
                 };
                 data_dataset->extend(dims_data);
 #if DEBUG_PRINT
                 std::cout << "FrameId " << pkg->frame_id << ", (Data) Extent to " << frame_number_data << " Frames" << std::endl;
 #endif
             }
-
             hdfoffset[DS_SYMS_PER_FRAME] = cfg->getUlSFIndex(pkg->frame_id, pkg->symbol_id);
-
             // Select a hyperslab in extended portion of the dataset
             DataSpace data_filespace(data_dataset->getSpace());
             DataspaceIndex count = { 1, 1, 1, 1, IQ };
             data_filespace.selectHyperslab(H5S_SELECT_SET, count, hdfoffset);
-
             // define memory space
             DataSpace data_memspace(DS_DIM, count, NULL);
             data_dataset->write(pkg->data, PredType::NATIVE_INT16, data_memspace, data_filespace);
@@ -682,9 +689,10 @@ herr_t Recorder::record(int, int offset)
     catch (DataSetIException error) {
         error.printError();
         std::cout << "DataSet: Failed to record pilots from frame " << pkg->frame_id << " , UE " << cfg->getClientId(pkg->frame_id, pkg->symbol_id) << " antenna " << pkg->ant_id << " IQ " << IQ << std::endl;
+
         DataspaceIndex dims_pilot = {
             frame_number_pilot, cfg->nCells,
-            cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
+            cfg->pilotSymsPerFrame, cfg->getMaxNumAntennas(), IQ
         };
         int ndims = data_dataset->getSpace().getSimpleExtentNdims();
         std::cout << "Dataset Dimension is " << ndims << ",";
@@ -714,15 +722,14 @@ int Recorder::getRecordedFrameNum()
     return maxFrameNumber;
 }
 
-extern "C"
+extern "C" {
+Recorder* Recorder_new(Config* cfg)
 {
-    Recorder* Recorder_new(Config *cfg){
-        Recorder *rec = new Recorder(cfg);
-        return rec;
-    }
-
-    void Recorder_start(Recorder *rec){rec->do_it();}
-    int Recorder_getRecordedFrameNum(Recorder *rec){return rec->getRecordedFrameNum();}
-    const char* Recorder_getTraceFileName(Recorder *rec){return rec->getTraceFileName().c_str();}
+    Recorder* rec = new Recorder(cfg);
+    return rec;
 }
 
+void Recorder_start(Recorder* rec) { rec->do_it(); }
+int Recorder_getRecordedFrameNum(Recorder* rec) { return rec->getRecordedFrameNum(); }
+const char* Recorder_getTraceFileName(Recorder* rec) { return rec->getTraceFileName().c_str(); }
+}

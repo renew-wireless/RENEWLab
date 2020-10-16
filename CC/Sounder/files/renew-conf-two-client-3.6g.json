@@ -28,7 +28,7 @@
 
         "Clients" : {
                  "sdr_id" : [
-                     "RF3E000241"
+                     "RF3E000029"
                  ],
                  "frequency" : 3.6e9,
                  "channel" : "AB",
