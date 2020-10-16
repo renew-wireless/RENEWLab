@@ -1,6 +1,6 @@
 # RENEWLab
 
-[![Build Status](https://8435d1ad526d.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Ffeature-ci)](https://8435d1ad526d.ngrok.io/job/github_public_renewlab/job/feature-ci/)
+[![Build Status](https://0789a74e8b5e.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Ffeat-build-status)](https://0789a74e8b5e.ngrok.io/job/github_public_renewlab/job/feat-build-status/)
 
 
 # Description
