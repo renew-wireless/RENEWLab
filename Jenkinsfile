@@ -21,7 +21,7 @@ pipeline {
 		stage ("Start") {
 			steps {
 				echo "CI started ..."
-				slackSend (color: '#FFFF00', message: "GitHub Public RENEWLab Build STARTED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
+				slackSend (color: '#FFFF00', message: "Build STARTED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
 			}
 		}
 		
@@ -96,12 +96,12 @@ pipeline {
 	post {
 		success {
 			echo "CI passed!"
-			slackSend (color: '#00FF00', message: "GitHub Public RENEWLab Build SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
+			slackSend (color: '#00FF00', message: "Build SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
 		}
 		
 		failure {
 			echo "CI failed!"
-			slackSend (color: '#FF0000', message: "GitHub Public RENEWLab Build FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
+			slackSend (color: '#FF0000', message: "Build FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
 		}
 	}
 }
