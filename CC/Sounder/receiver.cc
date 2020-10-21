@@ -186,14 +186,18 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
         samp_buffer[1] = samp_buffer1.data();
 
     if (kUseUHD) {
-        std::cout << "Sync BS host and FPGA timestamp..." << std::endl;
-        baseRadioSet_->radioRx(0, 0, samp_buffer.data(), config_->sampsPerSymbol, rxTimeBs);
-        // schedule the first beacon in the future
+        // For multi-USRP BS perform dummy radioRx to avoid initial late packets
+        int bs_sync_ret = -1;
+        std::cout << "Sync BS host and FPGA timestamp for thread " << tid << "..." << std::endl;
+        while (bs_sync_ret < 0) {
+            bs_sync_ret = baseRadioSet_->radioRx(tid, 0, samp_buffer.data(), config_->sampsPerSymbol, rxTimeBs);
+        }
+        // Schedule the first beacon in the future
         txTimeBs = rxTimeBs + config_->sampsPerSymbol * config_->symbolsPerFrame * BEACON_INTERVAL;
-        baseRadioSet_->radioTx(0, 0, beaconbuff.data(), 2, txTimeBs);
+        baseRadioSet_->radioTx(tid, 0, beaconbuff.data(), 2, txTimeBs);
         long long bsInitRxOffset = txTimeBs - rxTimeBs;
         for (int it = 0; it < std::floor(bsInitRxOffset / config_->sampsPerSymbol); it++) {
-            baseRadioSet_->radioRx(0, 0, samp_buffer.data(), config_->sampsPerSymbol, rxTimeBs);
+            baseRadioSet_->radioRx(tid, 0, samp_buffer.data(), config_->sampsPerSymbol, rxTimeBs);
         }
     }
 
@@ -202,7 +206,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     int symbol_id = 0;
     int ant_id = 0;
     int cell = 0;
-    std::cout << "Start BS main recv loop... " << std::endl;
+    std::cout << "Start BS main recv loop in thread " << tid << "... " << std::endl;
     while (config_->running) {
         // receive data
         for (int it = radio_start; it < radio_end; it++) {
@@ -317,7 +321,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 cursor %= buffer_chunk_size;
             }
 
-	    // for UHD device update symbol_id on host
+            // for UHD device update symbol_id on host
             if (kUseUHD)
                 symbol_id++;
         }
@@ -484,6 +488,16 @@ void Receiver::clientSyncTxRx(int tid)
     long long txTime(0);
     int sync_index(-1);
     int rx_offset = 0;
+
+    // For USRP clients skip UHD_INIT_TIME_SEC to avoid late packets
+    if (kUseUHD) {
+        cl_sync_ret = -1;
+        sleep(UHD_INIT_TIME_SEC);
+        while (cl_sync_ret < 0) {
+            cl_sync_ret = clientRadioSet_->radioRx(tid, syncrxbuff.data(), SYNC_NUM_SAMPS, rxTime);
+        }
+    }
+
     // Keep reading one frame worth of data until a beacon is found
     // Perform initial beacon detection once every BEACON_INTERVAL frames
     while (config_->running && sync_index < 0) {
