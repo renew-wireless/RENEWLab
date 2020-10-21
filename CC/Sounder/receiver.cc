@@ -491,7 +491,7 @@ void Receiver::clientSyncTxRx(int tid)
 
     // For USRP clients skip UHD_INIT_TIME_SEC to avoid late packets
     if (kUseUHD) {
-        cl_sync_ret = -1;
+        int cl_sync_ret = -1;
         sleep(UHD_INIT_TIME_SEC);
         while (cl_sync_ret < 0) {
             cl_sync_ret = clientRadioSet_->radioRx(tid, syncrxbuff.data(), SYNC_NUM_SAMPS, rxTime);
