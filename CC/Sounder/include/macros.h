@@ -20,7 +20,7 @@ static constexpr size_t kStreamEndBurst = 2;
 
 // TASK & SOCKET thread number
 #define TASK_THREAD_NUM 1
-#define RX_THREAD_NUM 2
+#define RX_THREAD_NUM 4
 
 #define MAX_FRAME_INC 2000
 #define TIME_DELTA 40 //ms
