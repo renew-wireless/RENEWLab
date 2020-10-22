@@ -358,7 +358,7 @@ Config::Config(const std::string& jsonfile)
     unsigned nCores = this->getCoreCount();
     core_alloc = nCores > RX_THREAD_NUM;
     if (bsPresent && (pilotSymsPerFrame + ulSymsPerFrame > 0)) {
-        rx_thread_num = (nCores >= 2 * RX_THREAD_NUM) ? RX_THREAD_NUM : 1;
+        rx_thread_num = (nCores >= 2 * RX_THREAD_NUM) ? std::min(RX_THREAD_NUM, static_cast<int>(nBsSdrsAll)) : 1;
         task_thread_num = TASK_THREAD_NUM;
         if (clPresent && nCores < 1 + task_thread_num + rx_thread_num + nClSdrs)
             core_alloc = false;

@@ -160,10 +160,10 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     std::atomic_int* pkg_buf_inuse = rx_buffer[tid].pkg_buf_inuse;
     char* buffer = rx_buffer[tid].buffer.data();
 
-    int num_radios = static_cast<int>(config_->nBsSdrsAll); //config_->nBsSdrs[0]
-    int radio_start = tid * num_radios / thread_num_;
-    int radio_end = (tid + 1) * num_radios / thread_num_;
-    printf("receiver thread %d has %d radios \n", tid, radio_end - radio_start);
+    size_t num_radios = config_->nBsSdrsAll; //config_->nBsSdrs[0]
+    size_t radio_start = tid * num_radios / thread_num_;
+    size_t radio_end = (tid + 1) * num_radios / thread_num_;
+    printf("receiver thread %d has %zu radios \n", tid, radio_end - radio_start);
 
     // prepare BS beacon in host buffer
     std::vector<void*> beaconbuff(2);
@@ -190,15 +190,15 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
         // For multi-USRP BS perform dummy radioRx to avoid initial late packets
         int bs_sync_ret = -1;
         std::cout << "Sync BS host and FPGA timestamp for thread " << tid << "..." << std::endl;
-        for (int it = radio_start; it < radio_end; it++) {
+        for (size_t it = radio_start; it < radio_end; it++) {
             // Find cell this USRP belongs to..,
-            for (int i = 0; i <= static_cast<int>(config_->nCells); i++) {
-                if (it < static_cast<int>(config_->nBsSdrsAgg[i])) {
+            for (size_t i = 0; i <= config_->nCells; i++) {
+                if (it < config_->nBsSdrsAgg[i]) {
                     cell = i - 1;
                     break;
                 }
             }
-            int radio_idx = it - static_cast<int>(config_->nBsSdrsAgg[cell]);
+            size_t radio_idx = it - config_->nBsSdrsAgg[cell];
             bs_sync_ret = -1;
             while (bs_sync_ret < 0) {
                 bs_sync_ret = baseRadioSet_->radioRx(radio_idx, cell, samp_buffer.data(), config_->sampsPerSymbol, rxTimeBs);
@@ -223,19 +223,19 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
         }
 
         // Receive data
-        for (int it = radio_start; it < radio_end; it++) {
+        for (size_t it = radio_start; it < radio_end; it++) {
             Package* pkg[bsSdrCh];
             void* samp[bsSdrCh];
 
             // Find cell this board belongs to...
-            for (int i = 0; i <= static_cast<int>(config_->nCells); i++) {
-                if (it < static_cast<int>(config_->nBsSdrsAgg[i])) {
+            for (size_t i = 0; i <= config_->nCells; i++) {
+                if (it < config_->nBsSdrsAgg[i]) {
                     cell = i - 1;
                     break;
                 }
             }
 
-            int radio_idx = it - static_cast<int>(config_->nBsSdrsAgg[cell]);
+            size_t radio_idx = it - config_->nBsSdrsAgg[cell];
 
             // Set buffer status(es) to full; fail if full already
             for (auto ch = 0; ch < bsSdrCh; ++ch) {
