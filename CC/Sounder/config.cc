@@ -80,6 +80,7 @@ Config::Config(const std::string& jsonfile)
         bs_sdr_ids.resize(nCells);
         nBsSdrs.resize(nCells);
         nBsAntennas.resize(nCells);
+        nBsSdrsAll = 0;
         for (size_t i = 0; i < nCells; i++) {
             Utils::loadDevices(bs_sdr_file[i], bs_sdr_ids[i]);
             nBsSdrs[i] = bs_sdr_ids[i].size();

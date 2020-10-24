@@ -163,7 +163,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     int num_radios = static_cast<int>(config_->nBsSdrsAll); //config_->nBsSdrs[0]
     int radio_start = tid * num_radios / thread_num_;
     int radio_end = (tid + 1) * num_radios / thread_num_;
-    printf("receiver thread %d has %d radios \n", tid, radio_end - radio_start);
+    printf("receiver thread %d has %d radios (out of %d)\n", tid, radio_end - radio_start, num_radios);
 
     // prepare BS beacon in host buffer
     std::vector<void*> beaconbuff(2);
@@ -317,7 +317,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 cursor %= buffer_chunk_size;
             }
 
-	    // for UHD device update symbol_id on host
+            // for UHD device update symbol_id on host
             if (kUseUHD)
                 symbol_id++;
         }

@@ -99,7 +99,7 @@ int Radio::recv(void* const* buffs, int samples, long long& frameTime)
 {
     int flags(0);
     int r = dev->readStream(rxs, buffs, samples, flags, frameTime, 1000000);
-    if (r != samples)
+    if (r < 0)
         std::cerr << "time: " << frameTime << ", unexpected readStream error " << SoapySDR::errToStr(r) << ", flag: " << flags << std::endl;
     return r;
 }
@@ -117,7 +117,7 @@ int Radio::activateRecv(const long long rxTime, const size_t numSamps, int flags
     if (!kUseUHD)
         return dev->activateStream(rxs, flag_args, rxTime, numSamps);
     else
-        return dev->activateStream(rxs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC*1e9, 0);
+        return dev->activateStream(rxs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC * 1e9, 0);
 }
 
 void Radio::deactivateRecv(void)
@@ -146,7 +146,7 @@ void Radio::activateXmit(void)
     if (!kUseUHD)
         dev->activateStream(txs);
     else
-        dev->activateStream(txs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC*1e9, 0);
+        dev->activateStream(txs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC * 1e9, 0);
 }
 
 void Radio::deactivateXmit(void)
