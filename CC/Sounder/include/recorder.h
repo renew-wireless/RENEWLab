@@ -51,6 +51,7 @@ private:
     Config* cfg;
     std::unique_ptr<Receiver> receiver_;
     SampleBuffer* rx_buffer_;
+    size_t rx_thread_buff_size_;
 
     H5std_string hdf5name;
     H5std_string hdf5group;

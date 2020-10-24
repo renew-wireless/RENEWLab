@@ -26,47 +26,41 @@ const int DS_SIM = 5;
 Recorder::Recorder(Config* cfg)
 {
     this->cfg = cfg;
-    //size_t buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas();
-    size_t buffer_chunk_size;
-    if (cfg->bsPresent)
-        buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * (cfg->getTotNumAntennas() / cfg->rx_thread_num);
-    else
-        buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getTotNumAntennas();
+    size_t ant_per_rx_thread = cfg->bsPresent ? cfg->getTotNumAntennas() / cfg->rx_thread_num : 1;
+    rx_thread_buff_size_ = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * ant_per_rx_thread;
+    std::cout << "rx_thread_buff_size_ " << rx_thread_buff_size_ << std::endl;
+    task_queue_ = moodycamel::ConcurrentQueue<Event_data>(rx_thread_buff_size_ * 36);
+    message_queue_ = moodycamel::ConcurrentQueue<Event_data>(rx_thread_buff_size_ * 36);
 
-    std::cout << "buffer_chunk_size " << buffer_chunk_size << std::endl;
-    task_queue_ = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
-    message_queue_ = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
-    int rx_thread_num = cfg->rx_thread_num;
-    int task_thread_num = cfg->task_thread_num;
-
-    if (rx_thread_num > 0) {
+    if (cfg->rx_thread_num > 0) {
         // initialize rx buffers
-        rx_buffer_ = new SampleBuffer[rx_thread_num];
+        rx_buffer_ = new SampleBuffer[cfg->rx_thread_num];
         int intsize = sizeof(std::atomic_int);
-        int arraysize = (buffer_chunk_size + intsize - 1) / intsize;
+        int arraysize = (rx_thread_buff_size_ + intsize - 1) / intsize;
         size_t packageLength = sizeof(Package) + cfg->getPackageDataLength();
-        for (int i = 0; i < rx_thread_num; i++) {
-            rx_buffer_[i].buffer.resize(buffer_chunk_size * packageLength);
+        for (size_t i = 0; i < cfg->rx_thread_num; i++) {
+            rx_buffer_[i].buffer.resize(rx_thread_buff_size_ * packageLength);
             rx_buffer_[i].pkg_buf_inuse = new std::atomic_int[arraysize];
             std::fill_n(rx_buffer_[i].pkg_buf_inuse, arraysize, 0);
         }
     }
+
+    // Receiver object will be used for both BS and clients
     try {
-        receiver_.reset(new Receiver(rx_thread_num, cfg, &message_queue_));
+        receiver_.reset(new Receiver(cfg->rx_thread_num, cfg, &message_queue_));
     } catch (std::exception& e) {
         std::cout << e.what() << '\n';
         receiver_.reset();
         exit(1);
     }
 
-    if (task_thread_num > 0) {
-        // task threads
-        // task_ptok.resize(task_thread_num);
+    if (cfg->task_thread_num > 0) {
+        // spawn task threads
         pthread_attr_t detached_attr;
         pthread_attr_init(&detached_attr);
         pthread_attr_setdetachstate(&detached_attr, PTHREAD_CREATE_DETACHED);
 
-        for (int i = 0; i < task_thread_num; i++) {
+        for (size_t i = 0; i < cfg->task_thread_num; i++) {
             EventHandlerContext* context = new EventHandlerContext;
             pthread_t task_thread;
             context->obj_ptr = this;
@@ -595,11 +589,8 @@ void Recorder::taskThread(EventHandlerContext* context)
 // do Crop
 herr_t Recorder::record(int, int offset)
 {
-    //size_t buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas();
-    size_t buffer_chunk_size;
-    buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * (cfg->getTotNumAntennas() / cfg->rx_thread_num);
-    int buffer_id = offset / buffer_chunk_size;
-    offset = offset - buffer_id * buffer_chunk_size;
+    int buffer_id = offset / rx_thread_buff_size_;
+    offset = offset - buffer_id * rx_thread_buff_size_;
     // read info
     size_t packageLength = sizeof(Package) + cfg->getPackageDataLength();
     char* cur_ptr_buffer = rx_buffer_[buffer_id].buffer.data() + offset * packageLength;
