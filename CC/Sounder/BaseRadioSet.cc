@@ -204,14 +204,25 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
                 }
             }
 
-            for (size_t i = 0; i < bsRadios[c].size(); i++) {
-                SoapySDR::Device* dev = bsRadios[c][i]->dev;
-                if (!kUseUHD) {
+            if (!kUseUHD) {
+                for (size_t i = 0; i < bsRadios[c].size(); i++) {
+                    SoapySDR::Device* dev = bsRadios[c][i]->dev;
                     bsRadios[c][i]->activateRecv();
                     bsRadios[c][i]->activateXmit();
                     dev->setHardwareTime(0, "TRIGGER");
-                } else {
-                    dev->setHardwareTime(0, "UNKNOWN_PPS"); // "CMD"
+                }
+            } else {
+                // Set freq and time source for multiple USRPs
+                for (size_t i = 0; i < bsRadios[c].size(); i++) {
+                    SoapySDR::Device* dev = bsRadios[c][i]->dev;
+                    dev->setClockSource("external");
+                    dev->setTimeSource("external");
+                    dev->setHardwareTime(0, "PPS");
+                }
+                // Wait for pps sync pulse
+                std::this_thread::sleep_for(std::chrono::seconds(2));
+                // Activate Rx and Tx streamers
+                for (size_t i = 0; i < bsRadios[c].size(); i++) {
                     bsRadios[c][i]->activateRecv();
                     bsRadios[c][i]->activateXmit();
                 }

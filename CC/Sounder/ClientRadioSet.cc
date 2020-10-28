@@ -36,10 +36,13 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
     for (size_t i = 0; i < _cfg->nClSdrs; i++) {
         SoapySDR::Kwargs args;
         args["timeout"] = "1000000";
-        if (!kUseUHD)
+        if (!kUseUHD) {
+            args["driver"] = "iris";
             args["serial"] = _cfg->cl_sdr_ids.at(i);
-        else
+        } else {
+            args["driver"] = "uhd";
             args["addr"] = _cfg->cl_sdr_ids.at(i);
+        }
         try {
             radios.push_back(new Radio(args, SOAPY_SDR_CF32, channels, _cfg->rate));
         } catch (std::runtime_error) {
@@ -137,7 +140,10 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
                     radios[i]->activateXmit();
                     dev->writeSetting("TRIGGER_GEN", "");
                 } else {
-                    dev->setHardwareTime(0, "UNKNOWN_PPS"); // "CMD"
+                    // For USRP clients always use the internal clock
+                    dev->setTimeSource("internal");
+                    dev->setClockSource("internal");
+                    dev->setHardwareTime(0, "UNKNOWN_PPS");
                     radios[i]->activateRecv();
                     radios[i]->activateXmit();
                 }

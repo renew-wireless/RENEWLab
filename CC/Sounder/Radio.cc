@@ -83,7 +83,9 @@ Radio::Radio(const SoapySDR::Kwargs& args, const char soapyFmt[],
     }
     rxs = dev->setupStream(SOAPY_SDR_RX, soapyFmt, channels);
     txs = dev->setupStream(SOAPY_SDR_TX, soapyFmt, channels);
-    reset_DATA_clk_domain();
+
+    if (!kUseUHD)
+        reset_DATA_clk_domain();
 }
 
 Radio::~Radio(void)
