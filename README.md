@@ -58,7 +58,7 @@ Note for developers: Do not use _ in your branch name. Use - instead.
      $ cd ../
      $ mkdir build
      $ cd build
-     $ cmake .. -DCMAKE_RELEASE_TYPE=Release -DLOG_LEVEL=info && make -j
+     $ cmake .. -DCMAKE_BUILD_TYPE=Release -DLOG_LEVEL=info && make -j
      ```
        
   3. If you are going to use the RENEW MATLAB Development Suite, there is no dependency needed for it. 

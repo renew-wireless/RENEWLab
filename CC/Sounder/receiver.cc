@@ -185,7 +185,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
         throw std::runtime_error("Memory allocation error");
     }
 
-    MLPD_INFO("Process %d -- Loop Rx Allocated memory at: %p, approx size: %lu\n", tid, zeroes_memory, (sizeof(int16_t) * 2) * config_->samps_per_symbol());
+    MLPD_SYMBOL("Process %d -- Loop Rx Allocated memory at: %p, approx size: %lu\n", tid, zeroes_memory, (sizeof(int16_t) * 2) * config_->samps_per_symbol());
     beaconbuff.at(0u) = config_->beacon_ci16().data();
     beaconbuff.at(1u) = zeroes_memory;
 
@@ -351,8 +351,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
         if (kUseUHD == true)
             symbol_id++;
     }
-
-    MLPD_INFO("Process %d -- Loop Rx Freed memory at: %p\n", tid, zeroes_memory);
+    MLPD_SYMBOL("Process %d -- Loop Rx Freed memory at: %p\n", tid, zeroes_memory);
     free(zeroes_memory);
 }
 
@@ -379,12 +378,12 @@ void Receiver::clientTxRx(int tid)
     unsigned txFrameDelta = (unsigned)(std::ceil(TIME_DELTA / frameTime));
     int NUM_SAMPS = config_->samps_per_symbol();
 
-    if (config_->core_alloc()) {
+    if (config_->core_alloc() == true) {
         int core = tid + 1 + config_->rx_thread_num() + config_->task_thread_num();
-        printf("pinning client thread %d to core %d\n", tid, core);
+        MLPD_INFO("Pinning client thread %d to core %d\n", tid, core);
         if (pin_to_core(core) != 0) {
-            printf("pin client thread %d to core %d failed\n", tid, core);
-            exit(0);
+            MLPD_ERROR("Pin client thread %d to core %d failed in client txrx\n", tid, core);
+            throw std::runtime_error("Pin client thread to core failed in client txr");
         }
     }
 
@@ -485,7 +484,7 @@ void Receiver::clientSyncTxRx(int tid)
     std::vector<void*> zeros(2);
     for (auto& memory : zeros) {
         memory = calloc(NUM_SAMPS, sizeof(float) * 2);
-        MLPD_INFO("Process %d -- Client Sync Tx Rx Allocated memory at %p approx size: %lu\n", tid, memory, (NUM_SAMPS * sizeof(float) * 2));
+        MLPD_SYMBOL("Process %d -- Client Sync Tx Rx Allocated memory at %p approx size: %lu\n", tid, memory, (NUM_SAMPS * sizeof(float) * 2));
         if (memory == NULL) {
             throw std::runtime_error("Error allocating memory");
         }
@@ -650,7 +649,7 @@ void Receiver::clientSyncTxRx(int tid)
     } // end while
 
     for (auto memory : zeros) {
-        MLPD_INFO("Process %d -- Client Sync Tx Rx Freed memory at %p\n", tid, memory);
+        MLPD_SYMBOL("Process %d -- Client Sync Tx Rx Freed memory at %p\n", tid, memory);
         free(memory);
     }
     zeros.clear();
