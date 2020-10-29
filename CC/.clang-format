@@ -94,7 +94,7 @@ RawStringFormats:
   - Delimiter:       pb
     Language:        TextProto
     BasedOnStyle:    google
-ReflowComments:  true
+ReflowComments:  false
 SortIncludes:    true
 SortUsingDeclarations: true
 SpaceAfterCStyleCast: false
@@ -112,4 +112,3 @@ Standard:        Cpp11
 TabWidth:        8
 UseTab:          Never
 ...
-

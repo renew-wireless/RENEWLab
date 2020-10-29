@@ -462,25 +462,25 @@ void Receiver::clientSyncTxRx(int tid)
     std::vector<std::complex<float>> syncbuff0(SYNC_NUM_SAMPS, 0);
     std::vector<std::complex<float>> syncbuff1(SYNC_NUM_SAMPS, 0);
     std::vector<void*> syncrxbuff(2);
-    syncrxbuff[0] = syncbuff0.data();
-
-    std::vector<std::complex<float>> buff0(NUM_SAMPS, 0);
-    std::vector<std::complex<float>> buff1(NUM_SAMPS, 0);
-    std::vector<void*> rxbuff(2);
-    rxbuff[0] = buff0.data();
+    syncrxbuff.at(0) = syncbuff0.data();
 
     std::vector<void*> pilotbuffA(2);
     std::vector<void*> pilotbuffB(2);
     std::vector<void*> zeros(2);
-    zeros[0] = calloc(NUM_SAMPS, sizeof(float) * 2);
-    zeros[1] = calloc(NUM_SAMPS, sizeof(float) * 2);
-    pilotbuffA[0] = config_->pilot_cf32.data();
-    if (config_->clSdrCh == 2) {
-        pilotbuffA[1] = zeros[0];
-        pilotbuffB[1] = config_->pilot_cf32.data();
-        pilotbuffB[0] = zeros[1];
-        syncrxbuff[1] = syncbuff1.data();
-        rxbuff[1] = buff1.data();
+    for (auto& memory : zeros) {
+        memory = calloc(NUM_SAMPS, sizeof(float) * 2);
+        MLPD_INFO("Process %d -- Client Sync Tx Rx Allocated memory at %p approx size: %lu\n", tid, memory, (NUM_SAMPS * sizeof(float) * 2));
+        if (memory == NULL) {
+            throw std::runtime_error("Error allocating memory");
+        }
+    }
+
+    pilotbuffA.at(0) = config_->pilot_cf32().data();
+    if (config_->cl_sdr_ch() == 2) {
+        pilotbuffA.at(1) = zeros.at(0);
+        pilotbuffB.at(1) = config_->pilot_cf32().data();
+        pilotbuffB.at(0) = zeros.at(1);
+        syncrxbuff.at(1) = syncbuff1.data();
     }
 
     std::vector<void*> txbuff(2);
@@ -526,6 +526,7 @@ void Receiver::clientSyncTxRx(int tid)
     }
 
     // Read rx_offset to align with the begining of a frame
+    assert((rx_offset > 0) && (rx_offset <= SYNC_NUM_SAMPS));
     clientRadioSet_->radioRx(tid, syncrxbuff.data(), rx_offset, rxTime);
 
     // Main client read/write loop.
@@ -541,12 +542,13 @@ void Receiver::clientSyncTxRx(int tid)
     int flags = (kUseUHD && config_->clSdrCh == 2) ? 1 : 2;
     int flagsTxUlData;
 
-    std::cout << "Start main client txrx loop..." << std::endl;
+    MLPD_INFO("Start main client txrx loop... tid=%d\n", tid);
 
-    while (config_->running) {
-        for (int sf = 0; sf < config_->symbolsPerFrame; sf++) {
-            int rx_len = (sf == 0) ? NUM_SAMPS + rx_offset : NUM_SAMPS;
-            int r = clientRadioSet_->radioRx(tid, rxbuff.data(), rx_len, rxTime);
+    while (config_->running() == true) {
+        for (int sf = 0; sf < config_->symbols_per_frame(); sf++) {
+            int rx_len = (sf == 0) ? (NUM_SAMPS + rx_offset) : NUM_SAMPS;
+            assert((rx_len > 0) && (rx_len < SYNC_NUM_SAMPS));
+            int r = clientRadioSet_->radioRx(tid, syncrxbuff.data(), rx_len, rxTime);
             if (r < 0) {
                 config_->running = false;
                 break;
