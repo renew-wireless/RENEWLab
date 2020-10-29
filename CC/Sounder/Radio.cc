@@ -14,7 +14,7 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
         dev->setFrequency(SOAPY_SDR_RX, ch, "BB", _cfg->nco());
         dev->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->nco());
     } else {
-        std::cout << "Init USRP channel: " << ch << std::endl;
+        MLPD_INFO("Init USRP channel: %d\n", ch);
         dev->setAntenna(SOAPY_SDR_TX, ch, "TX/RX");
         dev->setAntenna(SOAPY_SDR_RX, ch, "RX2"); // or "TX/RX"
         dev->setFrequency(SOAPY_SDR_RX, ch, "BB", 0);
@@ -28,10 +28,9 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
     if (_cfg->single_gain()) {
         dev->setGain(SOAPY_SDR_RX, ch, rxgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
         dev->setGain(SOAPY_SDR_TX, ch, txgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
-        std::cout << "Tx gain: " << dev->getGain(SOAPY_SDR_TX, ch)
-                  << ", Rx gain: " << dev->getGain(SOAPY_SDR_RX, ch) << std::endl;
+        MLPD_INFO("Tx gain: %lf, Rx gain: %lf\n", dev->getGain(SOAPY_SDR_TX, ch), dev->getGain(SOAPY_SDR_RX, ch));
     } else {
-        if (!kUseUHD) {
+        if (kUseUHD == false) {
             dev->setGain(SOAPY_SDR_RX, ch, "LNA", std::min(30.0, rxgain)); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
             dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0);
             dev->setGain(SOAPY_SDR_RX, ch, "PGA", 0);
@@ -69,7 +68,7 @@ void Radio::drain_buffers(std::vector<void*> buffs, int symSamp)
         r = dev->readStream(rxs, buffs.data(), symSamp, flags, frameTime, 0);
         i++;
     }
-    //std::cout << "Number of reads needed to drain: " << i << std::endl;
+    MLPD_TRACE("Number of reads needed to drain: %d\n", i);
 }
 
 Radio::Radio(const SoapySDR::Kwargs& args, const char soapyFmt[],

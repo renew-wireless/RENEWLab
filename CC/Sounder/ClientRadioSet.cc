@@ -193,7 +193,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
                 }
             }
         }
-        std::cout << __func__ << " done!" << std::endl;
+        MLPD_INFO("%s done!\n", __func__);
     }
 }
 

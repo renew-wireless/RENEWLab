@@ -430,7 +430,7 @@ Config::Config(const std::string& jsonfile)
     // Multi-threading settings
     unsigned nCores = this->getCoreCount();
     core_alloc_ = nCores > RX_THREAD_NUM;
-    if (bs_present_ && (pilot_syms_per_frame_ + ul_syms_per_frame_ > 0)) {
+    if ((bs_present_ == true) && (pilot_syms_per_frame_ + ul_syms_per_frame_ > 0)) {
         rx_thread_num_ = (nCores >= (2 * RX_THREAD_NUM)) ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_bdrs_all_)) : 1;
 
         task_thread_num_ = TASK_THREAD_NUM;
@@ -445,51 +445,61 @@ Config::Config(const std::string& jsonfile)
         if (client_present_ && nCores <= 1 + num_cl_sdrs_)
             core_alloc_ = false;
     }
-    if (bs_present_ && core_alloc_) {
-        printf("allocating %d cores to receive threads ... \n", rx_thread_num_);
-        printf(
-            "allocating %d cores to record threads ... \n", task_thread_num_);
+    if ((bs_present_ == true) && (core_alloc_ == true)) {
+        MLPD_INFO("Allocating %d cores to receive threads ... \n", rx_thread_num_);
+        MLPD_INFO("Allocating %d cores to record threads ... \n", task_thread_num_);
     }
 
-    if (client_present_ && core_alloc_)
-        printf("allocating %zu cores to client threads ... \n", num_cl_sdrs_);
-
+    if ((client_present_ == true) && (core_alloc_ == true)) {
+        MLPD_INFO("Allocating %zu cores to client threads ... \n", num_cl_sdrs_);
+    }
     running_ = true;
-    std::cout << "Configuration file was successfully parsed!" << std::endl;
+    MLPD_INFO("Configuration file was successfully parsed!\n");
 }
 
 size_t Config::getNumAntennas()
 {
-    if (this->bs_present_ == false)
-        return 1;
-    return n_bs_sdrs_.at(0) * bs_channel_.length();
+    size_t ret;
+    if (this->bs_present_ == false) {
+        ret = 1;
+    } else {
+        ret = (n_bs_sdrs_.at(0) * bs_channel_.length());
+    }
+    return ret;
 }
 
 size_t Config::getMaxNumAntennas()
 {
+    size_t ret;
     /* Max number of antennas across cells */
-    if (this->bs_present_ == false)
-        return 1;
-
-    size_t maxNumSdr = 0;
-    for (size_t i = 0; i < num_cells_; i++) {
-        if (maxNumSdr < n_bs_sdrs_.at(i))
-            maxNumSdr = n_bs_sdrs_.at(i);
+    if (this->bs_present_ == false) {
+        ret = 1;
+    } else {
+        size_t maxNumSdr = 0;
+        for (size_t i = 0; i < num_cells_; i++) {
+            if (maxNumSdr < n_bs_sdrs_.at(i)) {
+                maxNumSdr = n_bs_sdrs_.at(i);
+            }
+        }
+        ret = (maxNumSdr * bs_channel_.length());
     }
-    return maxNumSdr * bs_channel_.length();
+    return ret;
 }
 
 size_t Config::getTotNumAntennas()
 {
+    size_t ret;
     /* Total number of antennas across cells */
-    if (this->bs_present_ == false)
-        return 1;
-
-    size_t totNumSdr = 0;
-    for (size_t i = 0; i < num_cells_; i++) {
-        totNumSdr += n_bs_sdrs_.at(i);
+    if (this->bs_present_ == false) {
+        ret = 1;
+    } else {
+        size_t totNumSdr = 0;
+        for (size_t i = 0; i < num_cells_; i++) {
+            totNumSdr += n_bs_sdrs_.at(i);
+        }
+        ret = totNumSdr * bs_channel_.length();
     }
-    return totNumSdr * bs_channel_.length();
+    return ret;
 }
 
 Config::~Config() {}
@@ -501,7 +511,7 @@ int Config::getClientId(int frame_id, int symbol_id)
     it = find(pilot_symbols_.at(fid).begin(), pilot_symbols_.at(fid).end(),
         symbol_id);
     if (it != pilot_symbols_.at(fid).end()) {
-        return it - pilot_symbols_.at(fid).begin();
+        return (it - pilot_symbols_.at(fid).begin());
     }
     return -1;
 }
@@ -513,7 +523,7 @@ int Config::getUlSFIndex(int frame_id, int symbol_id)
     it = find(
         ul_symbols_.at(fid).begin(), ul_symbols_.at(fid).end(), symbol_id);
     if (it != ul_symbols_.at(fid).end()) {
-        return it - ul_symbols_.at(fid).begin();
+        return (it - ul_symbols_.at(fid).begin());
     }
     return -1;
 }
@@ -525,7 +535,7 @@ int Config::getDlSFIndex(int frame_id, int symbol_id)
     it = find(
         dl_symbols_.at(fid).begin(), dl_symbols_.at(fid).end(), symbol_id);
     if (it != dl_symbols_.at(fid).end())
-        return it - dl_symbols_.at(fid).begin();
+        return (it - dl_symbols_.at(fid).begin());
     return -1;
 }
 
@@ -549,11 +559,11 @@ bool Config::isData(int frame_id, int symbol_id)
 
 unsigned Config::getCoreCount()
 {
-    unsigned nCores = std::thread::hardware_concurrency();
+    unsigned n_cores = std::thread::hardware_concurrency();
 #if DEBUG_PRINT
     std::cout << "number of CPU cores " << std::to_string(nCores) << std::endl;
 #endif
-    return nCores;
+    return n_cores;
 }
 
 extern "C" {
@@ -561,7 +571,6 @@ __attribute__((visibility("default"))) Config* Config_new(char* filename)
 {
 
     Config* cfg = new Config(filename);
-
     return cfg;
 }
 }

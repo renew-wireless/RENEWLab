@@ -78,8 +78,8 @@ std::vector<pthread_t> Receiver::startClientThreads()
             profile->ptr = this;
             // start socket thread
             if (pthread_create(&cl_thread_, NULL, Receiver::clientTxRx_launch, profile) != 0) {
-                perror("socket client thread create failed");
-                exit(0);
+                MLPD_ERROR("Socket client thread create failed in start client threads");
+                throw std::runtime_error("Socket client thread create failed in start client threads");
             }
             client_threads[i] = cl_thread_;
         }
@@ -101,9 +101,9 @@ std::vector<pthread_t> Receiver::startRecvThreads(SampleBuffer* rx_buffer, unsig
         context->tid = i;
         context->buffer = rx_buffer;
         // start socket thread
-        if (pthread_create(&created_threads[i], NULL, Receiver::loopRecv_launch, context) != 0) {
-            perror("socket recv thread create failed");
-            exit(0);
+        if (pthread_create(&created_threads.at(i), NULL, Receiver::loopRecv_launch, context) != 0) {
+            MLPD_ERROR("Socket recv thread create failed");
+            throw std::runtime_error("Socket recv thread create failed");
         }
     }
 
@@ -116,14 +116,16 @@ std::vector<pthread_t> Receiver::startRecvThreads(SampleBuffer* rx_buffer, unsig
 void Receiver::completeRecvThreads(const std::vector<pthread_t>& recv_thread)
 {
     for (std::vector<pthread_t>::const_iterator it = recv_thread.begin();
-         it != recv_thread.end(); ++it)
+         it != recv_thread.end(); ++it) {
         pthread_join(*it, NULL);
+    }
 }
 
 void Receiver::go()
 {
-    if (baseRadioSet_ != NULL)
+    if (baseRadioSet_ != NULL) {
         baseRadioSet_->radioStart(); // hardware trigger
+    }
 }
 
 void* Receiver::loopRecv_launch(void* in_context)
@@ -140,19 +142,18 @@ void* Receiver::loopRecv_launch(void* in_context)
 
 void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 {
-    if (config_->core_alloc()) {
-        printf("pinning thread %d to core %d\n", tid, core_id + tid);
+    if (config_->core_alloc() == true) {
+        MLPD_INFO("Pinning thread %d to core %d\n", tid, core_id + tid);
         if (pin_to_core(core_id + tid) != 0) {
-            printf("pin thread %d to core %d failed\n", tid, core_id + tid);
-            exit(0);
+            MLPD_ERROR("Pin thread %d to core %d failed\n", tid, core_id + tid);
+            throw std::runtime_error("Pin thread to core failed");
         }
     }
 
     // Use mutex to sychronize data receiving across threads
-    if (config_->num_cl_sdrs() > 0 && config_->n_bs_sdrs().at(0) > 0) {
+    if ((config_->num_cl_sdrs() > 0) && (config_->n_bs_sdrs().at(0) > 0)) {
         pthread_mutex_lock(&mutex);
-        printf("Recv Thread %d: waiting for release\n", tid);
-
+        MLPD_INFO("Recv Thread %d: waiting for release\n", tid);
         pthread_cond_wait(&cond, &mutex);
         pthread_mutex_unlock(&mutex); // unlocking for all other threads
     }
@@ -172,8 +173,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     size_t num_radios = config_->num_bs_bdrs_all(); //config_->n_bs_sdrs()[0]
     size_t radio_start = (tid * num_radios) / thread_num_;
     size_t radio_end = ((tid + 1) * num_radios) / thread_num_;
-    MLPD_INFO("Receiver thread %zu has %d radios\n", tid, radio_end - radio_start);
-    MLPD_TRACE(" -- %d - radio start: %d, end: %d, radios %d, thread: %d\n", tid, radio_start, radio_end, num_radios, thread_num_);
+    MLPD_INFO("Receiver thread %d has %zu radios\n", tid, radio_end - radio_start);
+    MLPD_TRACE(" -- %d - radio start: %zu, end: %zu, radios %zu, thread: %d\n", tid, radio_start, radio_end, num_radios, thread_num_);
     assert(config_->num_bs_bdrs_all() == 8);
 
     // prepare BS beacon in host buffer
@@ -533,7 +534,8 @@ void Receiver::clientSyncTxRx(int tid)
                 MLPD_WARN("BAD SYNC Receive( %d / %d ) at Time %lld\n", r, SYNC_NUM_SAMPS, rxTime);
             }
         }
-        sync_index = CommsLib::find_beacon_avx(reinterpret_cast<std::vector<std::complex<float>>&>(syncrxbuff.at(0)), config_->gold_cf32());
+        //TODO syncbuff0 is sloppy here since we recevied into syncrxbuff.data(), r bytes.
+        sync_index = CommsLib::find_beacon_avx(syncbuff0, config_->gold_cf32());
 
         if (sync_index >= 0) {
             MLPD_INFO("Beacon detected at Time %lld, sync_index: %d\n", rxTime, sync_index);
@@ -542,8 +544,17 @@ void Receiver::clientSyncTxRx(int tid)
     }
 
     // Read rx_offset to align with the begining of a frame
-    assert((rx_offset > 0) && (rx_offset <= SYNC_NUM_SAMPS));
-    clientRadioSet_->radioRx(tid, syncrxbuff.data(), rx_offset, rxTime);
+    assert((rx_offset >= 0) && (rx_offset <= SYNC_NUM_SAMPS));
+    if (config_->running() == true) {
+        MLPD_INFO("Start main client txrx loop... tid=%d\n", tid);
+        if (rx_offset > 0) {
+            int rx_data;
+            rx_data = clientRadioSet_->radioRx(tid, syncrxbuff.data(), rx_offset, rxTime);
+            if (rx_data != rx_offset) {
+                MLPD_WARN("Rx data: %d : %d failed to align sync read\n", rx_data, rx_offset);
+            }
+        }
+    }
 
     // Main client read/write loop.
     size_t frame_cnt = 0;
@@ -557,8 +568,6 @@ void Receiver::clientSyncTxRx(int tid)
     // for UHD device, the first pilot should not have an END_BURST flag
     int flags = (((kUseUHD == true) && (config_->cl_sdr_ch() == 2))) ? 1 : 2;
     int flagsTxUlData;
-
-    MLPD_INFO("Start main client txrx loop... tid=%d\n", tid);
 
     while (config_->running() == true) {
         for (int sf = 0; sf < config_->symbols_per_frame(); sf++) {
@@ -583,9 +592,8 @@ void Receiver::clientSyncTxRx(int tid)
                 rx_offset = 0;
                 if (resync == true) {
                     //Need to bound the beacon detection to the last 'r not the size of the memory (vector)
-                    //TODO: Remove the copy
-                    std::vector<std::complex<float>> radio_rx_data(reinterpret_cast<std::vector<std::complex<float>>&>(syncrxbuff.at(0)).begin(),
-                        reinterpret_cast<std::vector<std::complex<float>>&>(syncrxbuff.at(0)).begin() + r);
+                    //TODO: Remove the copy and direct access to syncbuff0
+                    std::vector<std::complex<float>> radio_rx_data(syncbuff0.begin(), syncbuff0.begin() + r);
                     sync_index = CommsLib::find_beacon_avx(radio_rx_data, config_->gold_cf32());
                     if (sync_index >= 0) {
                         rx_offset = sync_index - config_->beacon_size() - config_->prefix();

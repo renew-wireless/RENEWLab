@@ -536,7 +536,7 @@ void Recorder::closeHDF5()
     }
 
     this->file_->close();
-    MLPD_TRACE("Saving HD5F: %d frames saved\n", frame_number);
+    MLPD_INFO("Saving HD5F: %d frames saved\n", frame_number);
 }
 
 Recorder::~Recorder()
