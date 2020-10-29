@@ -8,43 +8,50 @@
 */
 
 #include "include/recorder.h"
+#include "include/logger.h"
 #include "include/macros.h"
 #include "include/signalHandler.hpp"
 #include "include/utils.h"
 
 // buffer length of each rx thread
-const int Recorder::SAMPLE_BUFFER_FRAME_NUM = 80;
-// buffer length of recording part
-const int Recorder::TASK_BUFFER_FRAME_NUM = 60;
+const int Recorder::kSampleBufferFrameNum = 80;
 // dequeue bulk size, used to reduce the overhead of dequeue in main thread
-const int Recorder::dequeue_bulk_size = 5;
+const int Recorder::KDequeueBulkSize = 5;
 // pilot dataset size increment
-const int Recorder::config_pilot_extent_step = 400;
+const int Recorder::kConfigPilotExtentStep = 400;
 // data dataset size increment
-const int Recorder::config_data_extent_step = 400;
-const int DS_SIM = 5;
-Recorder::Recorder(Config* cfg)
-{
-    this->cfg = cfg;
-    //size_t buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas();
-    size_t buffer_chunk_size;
-    if (cfg->bsPresent)
-        buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * (cfg->getTotNumAntennas() / cfg->rx_thread_num);
-    else
-        buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getTotNumAntennas();
+const int Recorder::kConfigDataExtentStep = 400;
 
-    std::cout << "buffer_chunk_size " << buffer_chunk_size << std::endl;
+#if (DEBUG_PRINT)
+const int kDsSim = 5;
+#endif
+
+Recorder::Recorder(Config* in_cfg)
+{
+    cfg_ = in_cfg;
+    file_ = nullptr;
+    pilot_dataset_ = nullptr;
+    data_dataset_ = nullptr;
+
+    size_t buffer_chunk_size;
+    if (cfg_->bs_present() == true)
+        buffer_chunk_size = kSampleBufferFrameNum * cfg_->symbols_per_frame() * (cfg_->getTotNumAntennas() / cfg_->rx_thread_num());
+    else
+        buffer_chunk_size = kSampleBufferFrameNum * cfg_->symbols_per_frame() * cfg_->getTotNumAntennas();
+
     task_queue_ = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
     message_queue_ = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
-    int rx_thread_num = cfg->rx_thread_num;
-    int task_thread_num = cfg->task_thread_num;
+    int rx_thread_num = cfg_->rx_thread_num();
+    int task_thread_num = cfg_->task_thread_num();
+
+    MLPD_TRACE("Recorder construction - rx thread: %d, task tread %d, chunk size: %zu\n", rx_thread_num, task_thread_num, buffer_chunk_size);
 
     if (rx_thread_num > 0) {
         // initialize rx buffers
         rx_buffer_ = new SampleBuffer[rx_thread_num];
         int intsize = sizeof(std::atomic_int);
         int arraysize = (buffer_chunk_size + intsize - 1) / intsize;
-        size_t packageLength = sizeof(Package) + cfg->getPackageDataLength();
+        size_t packageLength = sizeof(Package) + cfg_->getPackageDataLength();
         for (int i = 0; i < rx_thread_num; i++) {
             rx_buffer_[i].buffer.resize(buffer_chunk_size * packageLength);
             rx_buffer_[i].pkg_buf_inuse = new std::atomic_int[arraysize];
@@ -52,16 +59,14 @@ Recorder::Recorder(Config* cfg)
         }
     }
     try {
-        receiver_.reset(new Receiver(rx_thread_num, cfg, &message_queue_));
+        receiver_.reset(new Receiver(rx_thread_num, cfg_, &message_queue_));
     } catch (std::exception& e) {
         std::cout << e.what() << '\n';
-        receiver_.reset();
-        exit(1);
+        gc();
+        throw runtime_error("Error Setting up the Receiver");
     }
 
     if (task_thread_num > 0) {
-        // task threads
-        // task_ptok.resize(task_thread_num);
         pthread_attr_t detached_attr;
         pthread_attr_init(&detached_attr);
         pthread_attr_setdetachstate(&detached_attr, PTHREAD_CREATE_DETACHED);
@@ -71,86 +76,122 @@ Recorder::Recorder(Config* cfg)
             pthread_t task_thread;
             context->obj_ptr = this;
             context->id = i;
+            MLPD_TRACE("Launching task thread with id: %d\n", i);
             if (pthread_create(&task_thread, &detached_attr, Recorder::taskThread_launch, context) != 0) {
-                perror("task thread create failed");
-                exit(0);
+                delete context;
+                gc();
+                throw runtime_error("Task thread create failed");
             }
         }
     }
 }
 
+void Recorder::gc(void)
+{
+    MLPD_TRACE("Garbage collect\n");
+    this->receiver_.reset();
+    if (this->cfg_->rx_thread_num() > 0) {
+        for (size_t i = 0; i < this->cfg_->rx_thread_num(); i++) {
+            delete[] this->rx_buffer_[i].pkg_buf_inuse;
+        }
+        delete[] this->rx_buffer_;
+    }
+
+    if (this->pilot_dataset_ != nullptr) {
+        MLPD_TRACE("Pilot Dataset exists during garbage collection\n");
+        this->pilot_dataset_->close();
+        delete this->pilot_dataset_;
+        this->pilot_dataset_ = nullptr;
+    }
+
+    if (this->data_dataset_ != nullptr) {
+        MLPD_TRACE("Data dataset exists during garbage collection\n");
+        this->data_dataset_->close();
+        delete this->data_dataset_;
+        this->data_dataset_ = nullptr;
+    }
+
+    if (this->file_ != nullptr) {
+        MLPD_TRACE("File exists exists during garbage collection\n");
+        this->file_->close();
+        delete this->file_;
+        this->file_ = nullptr;
+    }
+}
+
 void Recorder::finishHDF5()
 {
-    // delete group;
-    delete file;
+    MLPD_TRACE("Finish HD5F file\n");
+    delete this->file_;
+    this->file_ = nullptr;
 }
 
-static void write_attribute(Group& g, const char name[], double val)
+static void write_attribute(H5::Group& g, const char name[], double val)
 {
     hsize_t dims[] = { 1 };
-    DataSpace attr_ds = DataSpace(1, dims);
-    Attribute att = g.createAttribute(name, PredType::NATIVE_DOUBLE, attr_ds);
-    att.write(PredType::NATIVE_DOUBLE, &val);
+    H5::DataSpace attr_ds = H5::DataSpace(1, dims);
+    H5::Attribute att = g.createAttribute(name, H5::PredType::NATIVE_DOUBLE, attr_ds);
+    att.write(H5::PredType::NATIVE_DOUBLE, &val);
 }
 
-static void write_attribute(Group& g, const char name[], const std::vector<double>& val)
+static void write_attribute(H5::Group& g, const char name[], const std::vector<double>& val)
 {
     size_t size = val.size();
     hsize_t dims[] = { size };
-    DataSpace attr_ds = DataSpace(1, dims);
-    Attribute att = g.createAttribute(name, PredType::NATIVE_DOUBLE, attr_ds);
-    att.write(PredType::NATIVE_DOUBLE, &val[0]);
+    H5::DataSpace attr_ds = H5::DataSpace(1, dims);
+    H5::Attribute att = g.createAttribute(name, H5::PredType::NATIVE_DOUBLE, attr_ds);
+    att.write(H5::PredType::NATIVE_DOUBLE, &val[0]);
 }
 
-static void write_attribute(Group& g, const char name[], const std::vector<std::complex<float>>& val)
+static void write_attribute(H5::Group& g, const char name[], const std::vector<std::complex<float>>& val)
 {
     size_t size = val.size();
     hsize_t dims[] = { 2 * size };
-    DataSpace attr_ds = DataSpace(1, dims);
-    Attribute att = g.createAttribute(name, PredType::NATIVE_DOUBLE, attr_ds);
+    H5::DataSpace attr_ds = H5::DataSpace(1, dims);
+    H5::Attribute att = g.createAttribute(name, H5::PredType::NATIVE_DOUBLE, attr_ds);
     double val_pair[2 * size];
     for (size_t j = 0; j < size; j++) {
         val_pair[2 * j + 0] = std::real(val[j]);
         val_pair[2 * j + 1] = std::imag(val[j]);
     }
-    att.write(PredType::NATIVE_DOUBLE, &val_pair[0]);
+    att.write(H5::PredType::NATIVE_DOUBLE, &val_pair[0]);
 }
 
-static void write_attribute(Group& g, const char name[], int val)
+static void write_attribute(H5::Group& g, const char name[], int val)
 {
     hsize_t dims[] = { 1 };
-    DataSpace attr_ds = DataSpace(1, dims);
-    Attribute att = g.createAttribute(name, PredType::STD_I32BE, attr_ds);
-    att.write(PredType::NATIVE_INT, &val);
+    H5::DataSpace attr_ds = H5::DataSpace(1, dims);
+    H5::Attribute att = g.createAttribute(name, H5::PredType::STD_I32BE, attr_ds);
+    att.write(H5::PredType::NATIVE_INT, &val);
 }
 
-static void write_attribute(Group& g, const char name[], const std::vector<int>& val)
+static void write_attribute(H5::Group& g, const char name[], const std::vector<int>& val)
 {
     size_t size = val.size();
     hsize_t dims[] = { size };
-    DataSpace attr_ds = DataSpace(1, dims);
-    Attribute att = g.createAttribute(name, PredType::STD_I32BE, attr_ds);
-    att.write(PredType::NATIVE_INT, &val[0]);
+    H5::DataSpace attr_ds = H5::DataSpace(1, dims);
+    H5::Attribute att = g.createAttribute(name, H5::PredType::STD_I32BE, attr_ds);
+    att.write(H5::PredType::NATIVE_INT, &val[0]);
 }
 
-static void write_attribute(Group& g, const char name[], const std::string& val)
+static void write_attribute(H5::Group& g, const char name[], const std::string& val)
 {
     hsize_t dims[] = { 1 };
-    DataSpace attr_ds = DataSpace(1, dims);
-    StrType strdatatype(PredType::C_S1, H5T_VARIABLE); // of variable length characters
-    Attribute att = g.createAttribute(name, strdatatype, attr_ds);
+    H5::DataSpace attr_ds = H5::DataSpace(1, dims);
+    H5::StrType strdatatype(H5::PredType::C_S1, H5T_VARIABLE); // of variable length characters
+    H5::Attribute att = g.createAttribute(name, strdatatype, attr_ds);
     att.write(strdatatype, val);
 }
 
-static void write_attribute(Group& g, const char name[], const std::vector<std::string>& val)
+static void write_attribute(H5::Group& g, const char name[], const std::vector<std::string>& val)
 {
     if (val.empty())
         return;
     size_t size = val.size();
-    StrType strdatatype(PredType::C_S1, H5T_VARIABLE); // of variable length characters
+    H5::StrType strdatatype(H5::PredType::C_S1, H5T_VARIABLE); // of variable length characters
     hsize_t dims[] = { size };
-    DataSpace attr_ds = DataSpace(1, dims);
-    Attribute att = g.createAttribute(name, strdatatype, attr_ds);
+    H5::DataSpace attr_ds = H5::DataSpace(1, dims);
+    H5::Attribute att = g.createAttribute(name, strdatatype, attr_ds);
     const char* cStrArray[size];
 
     for (size_t i = 0; i < size; ++i)
@@ -170,294 +211,293 @@ typedef hsize_t DataspaceIndex[DS_DIM];
 
 herr_t Recorder::initHDF5(const std::string& hdf5)
 {
-    hdf5name = hdf5;
-    hdf5group = "/"; // make sure it starts with '/'
-    std::cout << "Set HDF5 File to " << hdf5name << " and group to " << hdf5group << std::endl;
+    MLPD_TRACE("Init HD5F file: %s\n", hdf5.c_str());
+    this->hdf5_name_ = hdf5;
 
     // dataset dimension
-    hsize_t IQ = 2 * cfg->sampsPerSymbol;
+    hsize_t IQ = 2 * this->cfg_->samps_per_symbol();
     DataspaceIndex cdims = { 1, 1, 1, 1, IQ }; // pilot chunk size, TODO: optimize size
-    frame_number_pilot = MAX_FRAME_INC; //cfg->maxFrame;
+    this->frame_number_pilot_ = MAX_FRAME_INC; //this->cfg_->maxFrame;
     DataspaceIndex dims_pilot = {
-        frame_number_pilot, cfg->nCells,
-        cfg->pilotSymsPerFrame, cfg->getMaxNumAntennas(), IQ
+        this->frame_number_pilot_, this->cfg_->num_cells(),
+        this->cfg_->pilot_syms_per_frame(), this->cfg_->getMaxNumAntennas(), IQ
     };
-    DataspaceIndex max_dims_pilot = { H5S_UNLIMITED, cfg->nCells, cfg->pilotSymsPerFrame, cfg->getMaxNumAntennas(), IQ };
+    DataspaceIndex max_dims_pilot = { H5S_UNLIMITED, this->cfg_->num_cells(), this->cfg_->pilot_syms_per_frame(), this->cfg_->getMaxNumAntennas(), IQ };
 
-    frame_number_data = MAX_FRAME_INC; //cfg->maxFrame;
+    this->frame_number_data_ = MAX_FRAME_INC; //this->cfg_->maxFrame;
     DataspaceIndex dims_data = {
-        frame_number_data, cfg->nCells,
-        cfg->ulSymsPerFrame, cfg->getMaxNumAntennas(), IQ
+        this->frame_number_data_, this->cfg_->num_cells(),
+        this->cfg_->ul_syms_per_frame(), this->cfg_->getMaxNumAntennas(), IQ
     };
-    DataspaceIndex max_dims_data = { H5S_UNLIMITED, cfg->nCells, cfg->ulSymsPerFrame, cfg->getMaxNumAntennas(), IQ };
+    DataspaceIndex max_dims_data = { H5S_UNLIMITED, this->cfg_->num_cells(), this->cfg_->ul_syms_per_frame(), this->cfg_->getMaxNumAntennas(), IQ };
 
     try {
-        Exception::dontPrint();
+        H5::Exception::dontPrint();
 
-        file = new H5File(hdf5name, H5F_ACC_TRUNC);
-        //group = new Group(file->createGroup("/Data"));
-        auto mainGroup = file->createGroup("/Data");
-        pilot_prop.setChunk(DS_DIM, cdims);
+        this->file_ = new H5::H5File(this->hdf5_name_, H5F_ACC_TRUNC);
+        auto mainGroup = this->file_->createGroup("/Data");
+        this->pilot_prop_.setChunk(DS_DIM, cdims);
 
-        DataSpace pilot_dataspace(DS_DIM, dims_pilot, max_dims_pilot);
-        file->createDataSet("/Data/Pilot_Samples", PredType::STD_I16BE,
-            pilot_dataspace, pilot_prop);
+        H5::DataSpace pilot_dataspace(DS_DIM, dims_pilot, max_dims_pilot);
+        this->file_->createDataSet("/Data/Pilot_Samples", H5::PredType::STD_I16BE,
+            pilot_dataspace, this->pilot_prop_);
         pilot_dataspace.close();
 
         // ******* COMMON ******** //
         // TX/RX Frequency
-        write_attribute(mainGroup, "FREQ", cfg->freq);
+        write_attribute(mainGroup, "FREQ", this->cfg_->freq());
 
         // BW
-        write_attribute(mainGroup, "RATE", cfg->rate);
+        write_attribute(mainGroup, "RATE", this->cfg_->rate());
 
         // Number of samples on each symbol (excluding prefix/postfix)
-        write_attribute(mainGroup, "SYMBOL_LEN_NO_PAD", cfg->subframeSize);
+        write_attribute(mainGroup, "SYMBOL_LEN_NO_PAD", this->cfg_->subframe_size());
 
         // Number of samples for prefix (padding)
-        write_attribute(mainGroup, "PREFIX_LEN", cfg->prefix);
+        write_attribute(mainGroup, "PREFIX_LEN", this->cfg_->prefix());
 
         // Number of samples for postfix (padding)
-        write_attribute(mainGroup, "POSTFIX_LEN", cfg->postfix);
+        write_attribute(mainGroup, "POSTFIX_LEN", this->cfg_->postfix());
 
         // Number of samples on each symbol including prefix and postfix
-        write_attribute(mainGroup, "SYMBOL_LEN", cfg->sampsPerSymbol);
+        write_attribute(mainGroup, "SYMBOL_LEN", this->cfg_->samps_per_symbol());
 
         // Size of FFT
-        write_attribute(mainGroup, "FFT_SIZE", cfg->fftSize);
+        write_attribute(mainGroup, "FFT_SIZE", this->cfg_->fft_size());
 
         // Length of cyclic prefix
-        write_attribute(mainGroup, "CP_LEN", cfg->cpSize);
+        write_attribute(mainGroup, "CP_LEN", this->cfg_->cp_size());
 
         // Beacon sequence type (string)
-        write_attribute(mainGroup, "BEACON_SEQ_TYPE", cfg->beacon_seq);
+        write_attribute(mainGroup, "BEACON_SEQ_TYPE", this->cfg_->beacon_seq());
 
         // Pilot sequence type (string)
-        write_attribute(mainGroup, "PILOT_SEQ_TYPE", cfg->pilot_seq);
+        write_attribute(mainGroup, "PILOT_SEQ_TYPE", this->cfg_->pilot_seq());
 
         // ******* Base Station ******** //
 
         // Hub IDs (vec of strings)
-        write_attribute(mainGroup, "BS_HUB_ID", cfg->hub_ids);
+        write_attribute(mainGroup, "BS_HUB_ID", this->cfg_->hub_ids());
 
         // BS SDR IDs
         // *** first, how many boards in each cell? ***
-        std::vector<std::string> bs_sdr_num_per_cell(cfg->bs_sdr_ids.size());
+        std::vector<std::string> bs_sdr_num_per_cell(this->cfg_->bs_sdr_ids().size());
         for (size_t i = 0; i < bs_sdr_num_per_cell.size(); ++i) {
-            bs_sdr_num_per_cell[i] = std::to_string(cfg->bs_sdr_ids[i].size());
+            bs_sdr_num_per_cell[i] = std::to_string(this->cfg_->bs_sdr_ids().at(i).size());
         }
         write_attribute(mainGroup, "BS_SDR_NUM_PER_CELL", bs_sdr_num_per_cell);
 
         // *** second, reshape matrix into vector ***
         std::vector<std::string> bs_sdr_id;
-        for (auto&& v : cfg->bs_sdr_ids) {
+        for (auto&& v : this->cfg_->bs_sdr_ids()) {
             bs_sdr_id.insert(bs_sdr_id.end(), v.begin(), v.end());
         }
         write_attribute(mainGroup, "BS_SDR_ID", bs_sdr_id);
 
         // Number of Base Station Cells
-        write_attribute(mainGroup, "BS_NUM_CELLS", (int)cfg->nCells);
+        write_attribute(mainGroup, "BS_NUM_CELLS", (int)this->cfg_->num_cells());
 
         // How many RF channels per Iris board are enabled ("single" or "dual")
-        write_attribute(mainGroup, "BS_CH_PER_RADIO", (int)cfg->bsChannel.length());
+        write_attribute(mainGroup, "BS_CH_PER_RADIO", (int)this->cfg_->bs_channel().length());
 
         // Frame schedule (vec of strings for now, this should change to matrix when we go to multi-cell)
-        write_attribute(mainGroup, "BS_FRAME_SCHED", cfg->frames);
+        write_attribute(mainGroup, "BS_FRAME_SCHED", this->cfg_->frames());
 
         // RX Gain RF channel A
-        write_attribute(mainGroup, "BS_RX_GAIN_A", cfg->rxgain[0]);
+        write_attribute(mainGroup, "BS_RX_GAIN_A", this->cfg_->rx_gain().at(0));
 
         // TX Gain RF channel A
-        write_attribute(mainGroup, "BS_TX_GAIN_A", cfg->txgain[0]);
+        write_attribute(mainGroup, "BS_TX_GAIN_A", this->cfg_->tx_gain().at(0));
 
         // RX Gain RF channel B
-        write_attribute(mainGroup, "BS_RX_GAIN_B", cfg->rxgain[1]);
+        write_attribute(mainGroup, "BS_RX_GAIN_B", this->cfg_->rx_gain().at(1));
 
         // TX Gain RF channel B
-        write_attribute(mainGroup, "BS_TX_GAIN_B", cfg->txgain[1]);
+        write_attribute(mainGroup, "BS_TX_GAIN_B", this->cfg_->tx_gain().at(1));
 
         // Beamsweep (true or false)
-        write_attribute(mainGroup, "BS_BEAMSWEEP", cfg->beamsweep ? 1 : 0);
+        write_attribute(mainGroup, "BS_BEAMSWEEP", this->cfg_->beam_sweep() ? 1 : 0);
 
         // Beacon Antenna
-        write_attribute(mainGroup, "BS_BEACON_ANT", (int)cfg->beacon_ant);
+        write_attribute(mainGroup, "BS_BEACON_ANT", (int)this->cfg_->beacon_ant());
 
         // Number of antennas on Base Station
-        write_attribute(mainGroup, "BS_NUM_ANT", (int)cfg->getNumAntennas()); // TODO: REMOVE SOON, REPLACE BY PER CELL
+        write_attribute(mainGroup, "BS_NUM_ANT", (int)this->cfg_->getNumAntennas()); // TODO: REMOVE SOON, REPLACE BY PER CELL
 
         // Number of antennas on Base Station (per cell)
-        std::vector<std::string> bs_ant_num_per_cell(cfg->bs_sdr_ids.size());
+        std::vector<std::string> bs_ant_num_per_cell(this->cfg_->bs_sdr_ids().size());
         for (size_t i = 0; i < bs_ant_num_per_cell.size(); ++i) {
-            bs_ant_num_per_cell[i] = std::to_string(cfg->bs_sdr_ids[i].size() * (int)cfg->bsChannel.length());
+            bs_ant_num_per_cell[i] = std::to_string(this->cfg_->bs_sdr_ids().at(i).size() * (int)this->cfg_->bs_channel().length());
         }
         write_attribute(mainGroup, "BS_ANT_NUM_PER_CELL", bs_ant_num_per_cell);
 
         // Number of symbols in a frame
-        write_attribute(mainGroup, "BS_FRAME_LEN", cfg->symbolsPerFrame);
+        write_attribute(mainGroup, "BS_FRAME_LEN", this->cfg_->symbols_per_frame());
 
         // Number of uplink symbols per frame
-        write_attribute(mainGroup, "UL_SYMS", (int)cfg->ulSymsPerFrame);
+        write_attribute(mainGroup, "UL_SYMS", (int)this->cfg_->ul_syms_per_frame());
 
         // ******* Clients ******** //
         // Freq. Domain Pilot symbols
-        std::vector<double> split_vec_pilot(2 * cfg->pilotSym[0].size());
-        for (size_t i = 0; i < cfg->pilotSym[0].size(); i++) {
-            split_vec_pilot[2 * i + 0] = cfg->pilotSym[0][i];
-            split_vec_pilot[2 * i + 1] = cfg->pilotSym[1][i];
+        std::vector<double> split_vec_pilot(2 * this->cfg_->pilot_sym().at(0).size());
+        for (size_t i = 0; i < this->cfg_->pilot_sym().at(0).size(); i++) {
+            split_vec_pilot[2 * i + 0] = this->cfg_->pilot_sym().at(0).at(i);
+            split_vec_pilot[2 * i + 1] = this->cfg_->pilot_sym().at(1).at(i);
         }
         write_attribute(mainGroup, "OFDM_PILOT", split_vec_pilot);
 
         // Number of Pilots
-        write_attribute(mainGroup, "PILOT_NUM", (int)cfg->pilotSymsPerFrame);
+        write_attribute(mainGroup, "PILOT_NUM", (int)this->cfg_->pilot_syms_per_frame());
 
         // Number of Client Antennas
-        write_attribute(mainGroup, "CL_NUM", (int)cfg->nClAntennas);
+        write_attribute(mainGroup, "CL_NUM", (int)this->cfg_->num_cl_antennas());
 
         // Data modulation
-        write_attribute(mainGroup, "CL_MODULATION", cfg->dataMod);
+        write_attribute(mainGroup, "CL_MODULATION", this->cfg_->data_mod());
 
-        if (cfg->clPresent) {
+        if (this->cfg_->client_present() == true) {
             // Client antenna polarization
-            write_attribute(mainGroup, "CL_CH_PER_RADIO", (int)cfg->clSdrCh);
+            write_attribute(mainGroup, "CL_CH_PER_RADIO", (int)this->cfg_->cl_sdr_ch());
 
             // Client AGC enable flag
-            write_attribute(mainGroup, "CL_AGC_EN", cfg->clAgcEn ? 1 : 0);
+            write_attribute(mainGroup, "CL_AGC_EN", this->cfg_->cl_agc_en() ? 1 : 0);
 
             // RX Gain RF channel A
-            write_attribute(mainGroup, "CL_RX_GAIN_A", cfg->clRxgain_vec[0]);
+            write_attribute(mainGroup, "CL_RX_GAIN_A", this->cfg_->cl_rxgain_vec().at(0));
 
             // TX Gain RF channel A
-            write_attribute(mainGroup, "CL_TX_GAIN_A", cfg->clTxgain_vec[0]);
+            write_attribute(mainGroup, "CL_TX_GAIN_A", this->cfg_->cl_txgain_vec().at(0));
 
             // RX Gain RF channel B
-            write_attribute(mainGroup, "CL_RX_GAIN_B", cfg->clRxgain_vec[1]);
+            write_attribute(mainGroup, "CL_RX_GAIN_B", this->cfg_->cl_rxgain_vec().at(1));
 
             // TX Gain RF channel B
-            write_attribute(mainGroup, "CL_TX_GAIN_B", cfg->clTxgain_vec[1]);
+            write_attribute(mainGroup, "CL_TX_GAIN_B", this->cfg_->cl_txgain_vec().at(1));
 
             // Client frame schedule (vec of strings)
-            write_attribute(mainGroup, "CL_FRAME_SCHED", cfg->clFrames);
+            write_attribute(mainGroup, "CL_FRAME_SCHED", this->cfg_->cl_frames());
 
             // Set of client SDR IDs (vec of strings)
-            write_attribute(mainGroup, "CL_SDR_ID", cfg->cl_sdr_ids);
+            write_attribute(mainGroup, "CL_SDR_ID", this->cfg_->cl_sdr_ids());
         }
 
-        if (cfg->ulDataSymPresent) {
+        if (this->cfg_->ul_data_sym_present()) {
             // Data subcarriers
-            if (cfg->data_ind.size() > 0)
-                write_attribute(mainGroup, "OFDM_DATA_SC", cfg->data_ind);
+            if (this->cfg_->data_ind().size() > 0)
+                write_attribute(mainGroup, "OFDM_DATA_SC", this->cfg_->data_ind());
 
             // Pilot subcarriers (indexes)
-            if (cfg->pilot_sc[0].size() > 0)
-                write_attribute(mainGroup, "OFDM_PILOT_SC", cfg->pilot_sc[0]);
-            if (cfg->pilot_sc[1].size() > 0)
-                write_attribute(mainGroup, "OFDM_PILOT_SC_VALS", cfg->pilot_sc[1]);
+            if (this->cfg_->pilot_sc().at(0).size() > 0)
+                write_attribute(mainGroup, "OFDM_PILOT_SC", this->cfg_->pilot_sc().at(0));
+            if (this->cfg_->pilot_sc().at(1).size() > 0)
+                write_attribute(mainGroup, "OFDM_PILOT_SC_VALS", this->cfg_->pilot_sc().at(1));
 
             // Freq. Domain Data Symbols
-            for (size_t i = 0; i < cfg->txdata_freq_dom.size(); i++) {
+            for (size_t i = 0; i < this->cfg_->txdata_freq_dom().size(); i++) {
                 std::string var = std::string("OFDM_DATA_CL") + std::to_string(i);
-                write_attribute(mainGroup, var.c_str(), cfg->txdata_freq_dom[i]);
+                write_attribute(mainGroup, var.c_str(), this->cfg_->txdata_freq_dom().at(i));
             }
 
             // Time Domain Data Symbols
-            for (size_t i = 0; i < cfg->txdata_time_dom.size(); i++) {
+            for (size_t i = 0; i < this->cfg_->txdata_time_dom().size(); i++) {
                 std::string var = std::string("OFDM_DATA_TIME_CL") + std::to_string(i);
-                write_attribute(mainGroup, var.c_str(), cfg->txdata_time_dom[i]);
+                write_attribute(mainGroup, var.c_str(), this->cfg_->txdata_time_dom().at(i));
             }
         }
         // ********************* //
 
-        pilot_prop.close();
-        if (cfg->ulSymsPerFrame > 0) {
-            DataSpace data_dataspace(DS_DIM, dims_data, max_dims_data);
-            data_prop.setChunk(DS_DIM, cdims);
-            file->createDataSet("/Data/UplinkData",
-                PredType::STD_I16BE, data_dataspace, data_prop);
-            data_prop.close();
+        this->pilot_prop_.close();
+        if (this->cfg_->ul_syms_per_frame() > 0) {
+            H5::DataSpace data_dataspace(DS_DIM, dims_data, max_dims_data);
+            this->data_prop_.setChunk(DS_DIM, cdims);
+            this->file_->createDataSet("/Data/UplinkData",
+                H5::PredType::STD_I16BE, data_dataspace, this->data_prop_);
+            this->data_prop_.close();
         }
         //status = H5Gclose(group_id);
         //if (status < 0 ) return status;
-        file->close();
+        this->file_->close();
     }
     // catch failure caused by the H5File operations
-    catch (FileIException error) {
-        error.printError();
+    catch (H5::FileIException& error) {
+        error.printErrorStack();
         return -1;
     }
 
     // catch failure caused by the DataSet operations
-    catch (DataSetIException error) {
-        error.printError();
+    catch (H5::DataSetIException& error) {
+        error.printErrorStack();
         return -1;
     }
 
     // catch failure caused by the DataSpace operations
-    catch (DataSpaceIException error) {
-        error.printError();
+    catch (H5::DataSpaceIException& error) {
+        error.printErrorStack();
         return -1;
     }
-    maxFrameNumber = MAX_FRAME_INC;
+    this->max_frame_number_ = MAX_FRAME_INC;
     return 0; // successfully terminated
 }
 
 void Recorder::openHDF5()
 {
-    file->openFile(hdf5name, H5F_ACC_RDWR);
+    MLPD_TRACE("Open HDF5 file\n");
+    this->file_->openFile(this->hdf5_name_, H5F_ACC_RDWR);
     // Get Dataset for pilot and check the shape of it
-    pilot_dataset = new DataSet(file->openDataSet("/Data/Pilot_Samples"));
+    this->pilot_dataset_ = new H5::DataSet(this->file_->openDataSet("/Data/Pilot_Samples"));
 
     // Get the dataset's dataspace and creation property list.
-    DataSpace pilot_filespace(pilot_dataset->getSpace());
-    pilot_prop = pilot_dataset->getCreatePlist();
+    H5::DataSpace pilot_filespace(this->pilot_dataset_->getSpace());
+    this->pilot_prop_.copy(this->pilot_dataset_->getCreatePlist());
 
     // Get information to obtain memory dataspace.
     // DataspaceIndex dims_pilot = {
-    //    frame_number_pilot, cfg->nCells,
-    //    cfg->pilotSymsPerFrame, cfg->getNumAntennas(), IQ
+    //    this->frame_number_pilot_, this->cfg_->num_cells(),
+    //    this->cfg_->pilot_syms_per_frame(), this->cfg_->getNumAntennas(), IQ
     //};
     // herr_t status_n = pilot_filespace.getSimpleExtentDims(dims_pilot);
 
 #if DEBUG_PRINT
-    hsize_t IQ = 2 * cfg->sampsPerSymbol;
+    hsize_t IQ = 2 * this->cfg_->samps_per_symbol();
     int cndims_pilot = 0;
     int ndims = pilot_filespace.getSimpleExtentNdims();
     DataspaceIndex dims_pilot = {
-        frame_number_pilot, cfg->nCells,
-        cfg->pilotSymsPerFrame, cfg->getMaxNumAntennas(), IQ
+        this->frame_number_pilot_, this->cfg_->num_cells(),
+        this->cfg_->pilot_syms_per_frame(), this->cfg_->getMaxNumAntennas(), IQ
     };
-    if (H5D_CHUNKED == pilot_prop.getLayout())
-        cndims_pilot = pilot_prop.getChunk(ndims, dims_pilot);
+    if (H5D_CHUNKED == this->pilot_prop_.getLayout())
+        cndims_pilot = this->pilot_prop_.getChunk(ndims, dims_pilot);
     using std::cout;
     cout << "dim pilot chunk = " << cndims_pilot << std::endl;
     cout << "New Pilot Dataset Dimension: [";
-    for (auto i = 0; i < DS_SIM - 1; ++i)
+    for (auto i = 0; i < kDsSim - 1; ++i)
         cout << dims_pilot[i] << ",";
-    cout << dims_pilot[DS_SIM - 1] << "]" << std::endl;
+    cout << dims_pilot[kDsSim - 1] << "]" << std::endl;
 #endif
     pilot_filespace.close();
     // Get Dataset for DATA (If Enabled) and check the shape of it
-    if (cfg->ulSymsPerFrame > 0) {
-        data_dataset = new DataSet(file->openDataSet("/Data/UplinkData"));
+    if (this->cfg_->ul_syms_per_frame() > 0) {
+        this->data_dataset_ = new H5::DataSet(this->file_->openDataSet("/Data/UplinkData"));
 
-        DataSpace data_filespace(data_dataset->getSpace());
-        data_prop = data_dataset->getCreatePlist();
+        H5::DataSpace data_filespace(this->data_dataset_->getSpace());
+        this->data_prop_.copy(this->data_dataset_->getCreatePlist());
 
 #if DEBUG_PRINT
         int ndims = data_filespace.getSimpleExtentNdims();
         // status_n = data_filespace.getSimpleExtentDims(dims_data);
         int cndims_data = 0;
         DataspaceIndex cdims_data = { 1, 1, 1, 1, IQ }; // data chunk size, TODO: optimize size
-        if (H5D_CHUNKED == data_prop.getLayout())
-            cndims_data = data_prop.getChunk(ndims, cdims_data);
+        if (H5D_CHUNKED == this->data_prop_.getLayout())
+            cndims_data = this->data_prop_.getChunk(ndims, cdims_data);
         cout << "dim data chunk = " << cndims_data << std::endl;
         DataspaceIndex dims_data = {
-            frame_number_data, cfg->nCells,
-            cfg->ulSymsPerFrame, cfg->getMaxNumAntennas(), IQ
+            this->frame_number_data_, this->cfg_->num_cells(),
+            this->cfg_->ul_syms_per_frame(), this->cfg_->getMaxNumAntennas(), IQ
         };
         cout << "New Data Dataset Dimension " << ndims << ",";
-        for (auto i = 0; i < DS_SIM - 1; ++i)
+        for (auto i = 0; i < kDsSim - 1; ++i)
             cout << dims_pilot[i] << ",";
-        cout << dims_pilot[DS_SIM - 1] << std::endl;
+        cout << dims_pilot[kDsSim - 1] << std::endl;
 #endif
         data_filespace.close();
     }
@@ -465,75 +505,79 @@ void Recorder::openHDF5()
 
 void Recorder::closeHDF5()
 {
-    unsigned frameNumber = maxFrameNumber;
-    hsize_t IQ = 2 * cfg->sampsPerSymbol;
+    MLPD_TRACE("Close HD5F file\n");
+    unsigned frame_number = this->max_frame_number_;
+    hsize_t IQ = 2 * this->cfg_->samps_per_symbol();
 
     // Resize Pilot Dataset
-    frame_number_pilot = frameNumber;
+    this->frame_number_pilot_ = frame_number;
     DataspaceIndex dims_pilot = {
-        frame_number_pilot, cfg->nCells,
-        cfg->pilotSymsPerFrame, cfg->getMaxNumAntennas(), IQ
+        this->frame_number_pilot_, this->cfg_->num_cells(),
+        this->cfg_->pilot_syms_per_frame(), this->cfg_->getMaxNumAntennas(), IQ
     };
-    pilot_dataset->extend(dims_pilot);
-    pilot_prop.close();
-    pilot_dataset->close();
-    delete pilot_dataset;
+    this->pilot_dataset_->extend(dims_pilot);
+    this->pilot_prop_.close();
+    this->pilot_dataset_->close();
+    delete this->pilot_dataset_;
+    this->pilot_dataset_ = nullptr;
 
     // Resize Data Dataset (If Needed)
-    if (cfg->ulSymsPerFrame > 0) {
-        frame_number_data = frameNumber;
+    if (this->cfg_->ul_syms_per_frame() > 0) {
+        this->frame_number_data_ = frame_number;
         DataspaceIndex dims_data = {
-            frame_number_data, cfg->nCells,
-            cfg->ulSymsPerFrame, cfg->getMaxNumAntennas(), IQ
+            this->frame_number_data_, this->cfg_->num_cells(),
+            this->cfg_->ul_syms_per_frame(), this->cfg_->getMaxNumAntennas(), IQ
         };
-        data_dataset->extend(dims_data);
-        data_prop.close();
-        data_dataset->close();
+        this->data_dataset_->extend(dims_data);
+        this->data_prop_.close();
+        this->data_dataset_->close();
+        delete this->data_dataset_;
+        this->data_dataset_ = nullptr;
     }
 
-    file->close();
-
-    std::cout << "Saving HDF5, " << frameNumber << " frames saved." << std::endl;
+    this->file_->close();
+    MLPD_TRACE("Saving HD5F: %d frames saved\n", frame_number);
 }
 
 Recorder::~Recorder()
 {
-    if (cfg->rx_thread_num > 0) {
-        for (size_t i = 0; i < cfg->rx_thread_num; i++)
-            delete[] rx_buffer_[i].pkg_buf_inuse;
-        delete[] rx_buffer_;
-    }
+    this->gc();
 }
 
 void Recorder::do_it()
 {
-    if (cfg->core_alloc && pin_to_core(0) != 0) {
+    MLPD_TRACE("Recorder work thread\n");
+    if (this->cfg_->core_alloc() && pin_to_core(0) != 0) {
         perror("pinning main thread to core 0 failed");
         exit(0);
     }
 
-    if (cfg->clPresent) {
-        auto client_threads = receiver_->startClientThreads();
+    if (this->cfg_->client_present()) {
+        auto client_threads = this->receiver_->startClientThreads();
     }
 
-    if (cfg->rx_thread_num > 0) {
-        if (initHDF5(cfg->trace_file) < 0)
+    if (this->cfg_->rx_thread_num() > 0) {
+        if (initHDF5(this->cfg_->trace_file()) < 0)
             exit(1);
         openHDF5();
 
         // create socket buffer and socket threads
-        auto recv_thread = receiver_->startRecvThreads(rx_buffer_, 1);
+        auto recv_thread = this->receiver_->startRecvThreads(this->rx_buffer_, 1);
     } else
-        receiver_->go(); // only beamsweeping
+        this->receiver_->go(); // only beamsweeping
 
-    moodycamel::ProducerToken ptok(task_queue_);
-    moodycamel::ConsumerToken ctok(message_queue_);
+    moodycamel::ProducerToken ptok(this->task_queue_);
+    moodycamel::ConsumerToken ctok(this->message_queue_);
 
-    Event_data events_list[dequeue_bulk_size];
+    Event_data events_list[KDequeueBulkSize];
     int ret = 0;
-    while (cfg->running && !SignalHandler::gotExitSignal()) {
+    while (this->cfg_->running() && !SignalHandler::gotExitSignal()) {
         // get a bulk of events
-        ret = message_queue_.try_dequeue_bulk(ctok, events_list, dequeue_bulk_size);
+        ret = this->message_queue_.try_dequeue_bulk(ctok, events_list, KDequeueBulkSize);
+        //if (ret > 0)
+        //{
+        //    MLPD_TRACE("Message(s) received: %d\n", ret );
+        //}
         // handle each event
         for (int bulk_count = 0; bulk_count < ret; bulk_count++) {
             Event_data& event = events_list[bulk_count];
@@ -544,22 +588,24 @@ void Recorder::do_it()
                 Event_data do_record_task;
                 do_record_task.event_type = TASK_RECORD;
                 do_record_task.data = offset;
-                if (!task_queue_.try_enqueue(ptok, do_record_task)) {
-                    printf("queue limit has reached! try to increase queue size.\n");
-                    if (!task_queue_.enqueue(ptok, do_record_task)) {
-                        printf("record task enqueue failed\n");
+                if (!this->task_queue_.try_enqueue(ptok, do_record_task)) {
+                    std::cerr << "Queue limit has reached! try to increase queue size." << std::endl;
+                    if (!this->task_queue_.enqueue(ptok, do_record_task)) {
+                        std::cerr << "Record task enqueue failed" << std::endl;
                         exit(0);
                     }
                 }
             }
         }
     }
-    cfg->running = false;
-    receiver_.reset();
-    if (cfg->bsPresent && cfg->rx_thread_num > 0)
+    this->cfg_->running(false);
+    this->receiver_.reset();
+    if ((this->cfg_->bs_present() == true) && (this->cfg_->rx_thread_num() > 0)) {
         closeHDF5();
-    if (cfg->rx_thread_num > 0)
+    }
+    if (this->cfg_->rx_thread_num() > 0) {
         finishHDF5();
+    }
 }
 
 void* Recorder::taskThread_launch(void* in_context)
@@ -567,26 +613,21 @@ void* Recorder::taskThread_launch(void* in_context)
     EventHandlerContext* context = (EventHandlerContext*)in_context;
     Recorder* recorder = context->obj_ptr;
     recorder->taskThread(context);
-    return 0;
+    return nullptr;
 }
 
 void Recorder::taskThread(EventHandlerContext* context)
 {
     int tid = context->id;
     delete context;
-    printf("task thread %d starts\n", tid);
-
-    // task_ptok[tid].reset(new moodycamel::ProducerToken(message_queue_));
+    MLPD_TRACE("Task thread: %d started\n", tid);
 
     Event_data event;
     bool ret = false;
-    while (cfg->running) {
-        ret = task_queue_.try_dequeue(event);
-        if (!ret)
-            continue;
-
+    while (this->cfg_->running() == true) {
+        ret = this->task_queue_.try_dequeue(event);
         // do different tasks according to task type
-        if (event.event_type == TASK_RECORD) {
+        if ((ret == true) && (event.event_type == TASK_RECORD)) {
             record(tid, event.data);
         }
     }
@@ -595,137 +636,149 @@ void Recorder::taskThread(EventHandlerContext* context)
 // do Crop
 herr_t Recorder::record(int, int offset)
 {
-    //size_t buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * cfg->getNumAntennas();
-    size_t buffer_chunk_size;
-    buffer_chunk_size = SAMPLE_BUFFER_FRAME_NUM * cfg->symbolsPerFrame * (cfg->getTotNumAntennas() / cfg->rx_thread_num);
+    herr_t ret = 0;
+    size_t buffer_chunk_size = kSampleBufferFrameNum * this->cfg_->symbols_per_frame() * (this->cfg_->getTotNumAntennas() / this->cfg_->rx_thread_num());
     int buffer_id = offset / buffer_chunk_size;
-    offset = offset - buffer_id * buffer_chunk_size;
+    int buffer_offset = offset - (buffer_id * buffer_chunk_size);
+
     // read info
-    size_t packageLength = sizeof(Package) + cfg->getPackageDataLength();
-    char* cur_ptr_buffer = rx_buffer_[buffer_id].buffer.data() + offset * packageLength;
-    Package* pkg = (Package*)cur_ptr_buffer;
+    size_t package_length = sizeof(Package) + this->cfg_->getPackageDataLength();
+    char* cur_ptr_buffer = this->rx_buffer_[buffer_id].buffer.data() + (buffer_offset * package_length);
+    Package* pkg = reinterpret_cast<Package*>(cur_ptr_buffer);
+
+    //Generates a ton of messages
+    //MLPD_TRACE( "Tid: %d -- Record chunk size: %zu, buffer id: %d, buffer offset: %d, length %zu, offset %d\n",
+    //            tid, buffer_chunk_size, buffer_id, buffer_offset, package_length, offset );
+
 #if DEBUG_PRINT
     printf("record            frame %d, symbol %d, cell %d, ant %d samples: %d %d %d %d %d %d %d %d ....\n",
         pkg->frame_id, pkg->symbol_id, pkg->cell_id, pkg->ant_id,
         pkg->data[1], pkg->data[2], pkg->data[3], pkg->data[4],
         pkg->data[5], pkg->data[6], pkg->data[7], pkg->data[8]);
 #endif
-    hsize_t IQ = 2 * cfg->sampsPerSymbol;
-    if (cfg->max_frame != 0 && pkg->frame_id > cfg->max_frame) {
+    hsize_t IQ = 2 * this->cfg_->samps_per_symbol();
+    if ((this->cfg_->max_frame()) != 0 && (pkg->frame_id > this->cfg_->max_frame())) {
         closeHDF5();
-        goto clean_exit;
-    }
-    try {
-        Exception::dontPrint();
-        // Update the max frame number.
-        // Note that the 'frameid' might be out of order.
-        if (pkg->frame_id > maxFrameNumber) {
-            // Open the hdf5 file if we haven't.
-            closeHDF5();
-            openHDF5();
-            maxFrameNumber = maxFrameNumber + MAX_FRAME_INC;
-        }
-        DataspaceIndex hdfoffset = { pkg->frame_id, pkg->cell_id, 0, pkg->ant_id, 0 };
-        if (cfg->isPilot(pkg->frame_id, pkg->symbol_id)) {
-            //assert(pilot_dataset >= 0);
-            // Are we going to extend the dataset?
-            if (pkg->frame_id >= frame_number_pilot) {
-                frame_number_pilot += config_pilot_extent_step;
-                if (cfg->max_frame != 0)
-                    frame_number_pilot = std::min(frame_number_pilot, cfg->max_frame + 1);
-                DataspaceIndex dims_pilot = {
-                    frame_number_pilot, cfg->nCells,
-                    cfg->pilotSymsPerFrame, cfg->getMaxNumAntennas(), IQ
-                };
-                pilot_dataset->extend(dims_pilot);
-#if DEBUG_PRINT
-                std::cout << "FrameId " << pkg->frame_id << ", (Pilot) Extent to " << frame_number_pilot << " Frames" << std::endl;
-#endif
+        MLPD_TRACE("Closing file due to frame id %d : %zu max\n", pkg->frame_id, this->cfg_->max_frame());
+    } else {
+        try {
+            H5::Exception::dontPrint();
+            // Update the max frame number.
+            // Note that the 'frameid' might be out of order.
+            if (pkg->frame_id > this->max_frame_number_) {
+                // Open the hdf5 file if we haven't.
+                closeHDF5();
+                openHDF5();
+                this->max_frame_number_ = this->max_frame_number_ + MAX_FRAME_INC;
             }
-            hdfoffset[DS_SYMS_PER_FRAME] = cfg->getClientId(pkg->frame_id, pkg->symbol_id);
-
-            // Select a hyperslab in extended portion of the dataset
-            DataSpace pilot_filespace(pilot_dataset->getSpace());
-            DataspaceIndex count = { 1, 1, 1, 1, IQ };
-            pilot_filespace.selectHyperslab(H5S_SELECT_SET, count, hdfoffset);
-            // define memory space
-            DataSpace pilot_memspace(DS_DIM, count, NULL);
-            pilot_dataset->write(pkg->data, PredType::NATIVE_INT16,
-                pilot_memspace, pilot_filespace);
-            pilot_filespace.close();
-        } else if (cfg->isData(pkg->frame_id, pkg->symbol_id)) {
-            //assert(data_dataset >= 0);
-            // Are we going to extend the dataset?
-            if (pkg->frame_id >= frame_number_data) {
-                frame_number_data += config_data_extent_step;
-                if (cfg->max_frame != 0)
-                    frame_number_data = std::min(frame_number_data, cfg->max_frame + 1);
-                DataspaceIndex dims_data = {
-                    frame_number_data, cfg->nCells,
-                    cfg->ulSymsPerFrame, cfg->getMaxNumAntennas(), IQ
-                };
-                data_dataset->extend(dims_data);
+            DataspaceIndex hdfoffset = { pkg->frame_id, pkg->cell_id, 0, pkg->ant_id, 0 };
+            if (this->cfg_->isPilot(pkg->frame_id, pkg->symbol_id)) {
+                //assert(this->pilot_dataset_ >= 0);
+                // Are we going to extend the dataset?
+                if (pkg->frame_id >= this->frame_number_pilot_) {
+                    this->frame_number_pilot_ += kConfigPilotExtentStep;
+                    if (this->cfg_->max_frame() != 0) {
+                        this->frame_number_pilot_ = std::min(this->frame_number_pilot_, this->cfg_->max_frame() + 1);
+                    }
+                    DataspaceIndex dims_pilot = {
+                        this->frame_number_pilot_, this->cfg_->num_cells(),
+                        this->cfg_->pilot_syms_per_frame(), this->cfg_->getMaxNumAntennas(), IQ
+                    };
+                    this->pilot_dataset_->extend(dims_pilot);
 #if DEBUG_PRINT
-                std::cout << "FrameId " << pkg->frame_id << ", (Data) Extent to " << frame_number_data << " Frames" << std::endl;
+                    std::cout << "FrameId " << pkg->frame_id << ", (Pilot) Extent to " << this->frame_number_pilot_ << " Frames" << std::endl;
 #endif
+                }
+                hdfoffset[DS_SYMS_PER_FRAME] = this->cfg_->getClientId(pkg->frame_id, pkg->symbol_id);
+
+                // Select a hyperslab in extended portion of the dataset
+                H5::DataSpace pilot_filespace(this->pilot_dataset_->getSpace());
+                DataspaceIndex count = { 1, 1, 1, 1, IQ };
+                pilot_filespace.selectHyperslab(H5S_SELECT_SET, count, hdfoffset);
+                // define memory space
+                H5::DataSpace pilot_memspace(DS_DIM, count, NULL);
+                this->pilot_dataset_->write(pkg->data, H5::PredType::NATIVE_INT16,
+                    pilot_memspace, pilot_filespace);
+                pilot_filespace.close();
+            } else if (this->cfg_->isData(pkg->frame_id, pkg->symbol_id)) {
+                //assert(this->data_dataset_ >= 0);
+                // Are we going to extend the dataset?
+                if (pkg->frame_id >= this->frame_number_data_) {
+                    this->frame_number_data_ += kConfigDataExtentStep;
+                    if (this->cfg_->max_frame() != 0)
+                        this->frame_number_data_ = std::min(this->frame_number_data_, this->cfg_->max_frame() + 1);
+                    DataspaceIndex dims_data = {
+                        this->frame_number_data_, this->cfg_->num_cells(),
+                        this->cfg_->ul_syms_per_frame(), this->cfg_->getMaxNumAntennas(), IQ
+                    };
+                    this->data_dataset_->extend(dims_data);
+#if DEBUG_PRINT
+                    std::cout << "FrameId " << pkg->frame_id << ", (Data) Extent to " << this->frame_number_data_ << " Frames" << std::endl;
+#endif
+                }
+                hdfoffset[DS_SYMS_PER_FRAME] = this->cfg_->getUlSFIndex(pkg->frame_id, pkg->symbol_id);
+                // Select a hyperslab in extended portion of the dataset
+                H5::DataSpace data_filespace(this->data_dataset_->getSpace());
+                DataspaceIndex count = { 1, 1, 1, 1, IQ };
+                data_filespace.selectHyperslab(H5S_SELECT_SET, count, hdfoffset);
+                // define memory space
+                H5::DataSpace data_memspace(DS_DIM, count, NULL);
+                this->data_dataset_->write(pkg->data, H5::PredType::NATIVE_INT16, data_memspace, data_filespace);
             }
-            hdfoffset[DS_SYMS_PER_FRAME] = cfg->getUlSFIndex(pkg->frame_id, pkg->symbol_id);
-            // Select a hyperslab in extended portion of the dataset
-            DataSpace data_filespace(data_dataset->getSpace());
-            DataspaceIndex count = { 1, 1, 1, 1, IQ };
-            data_filespace.selectHyperslab(H5S_SELECT_SET, count, hdfoffset);
-            // define memory space
-            DataSpace data_memspace(DS_DIM, count, NULL);
-            data_dataset->write(pkg->data, PredType::NATIVE_INT16, data_memspace, data_filespace);
         }
-    }
-    // catch failure caused by the H5File operations
-    catch (FileIException error) {
-        error.printError();
-        return -1;
-    }
+        // catch failure caused by the H5File operations
+        catch (H5::FileIException& error) {
+            error.printErrorStack();
+            ret = -1;
+            throw;
+        }
+        // catch failure caused by the DataSet operations
+        catch (H5::DataSetIException& error) {
+            error.printErrorStack();
 
-    // catch failure caused by the DataSet operations
-    catch (DataSetIException error) {
-        error.printError();
-        std::cout << "DataSet: Failed to record pilots from frame " << pkg->frame_id << " , UE " << cfg->getClientId(pkg->frame_id, pkg->symbol_id) << " antenna " << pkg->ant_id << " IQ " << IQ << std::endl;
+            MLPD_WARN("DataSet: Failed to record pilots from frame: %d , UE %d antenna %d IQ %llu\n",
+                pkg->frame_id, this->cfg_->getClientId(pkg->frame_id, pkg->symbol_id), pkg->ant_id, IQ);
 
-        DataspaceIndex dims_pilot = {
-            frame_number_pilot, cfg->nCells,
-            cfg->pilotSymsPerFrame, cfg->getMaxNumAntennas(), IQ
-        };
-        int ndims = data_dataset->getSpace().getSimpleExtentNdims();
-        std::cout << "Dataset Dimension is " << ndims << ",";
-        for (auto i = 0; i < DS_DIM - 1; ++i)
-            std::cout << dims_pilot[i] << ",";
-        std::cout << dims_pilot[DS_DIM - 1] << std::endl;
-        return -1;
-    }
+            DataspaceIndex dims_pilot = {
+                this->frame_number_pilot_, this->cfg_->num_cells(),
+                this->cfg_->pilot_syms_per_frame(), this->cfg_->getMaxNumAntennas(), IQ
+            };
+            int ndims = this->data_dataset_->getSpace().getSimpleExtentNdims();
 
-    // catch failure caused by the DataSpace operations
-    catch (DataSpaceIException error) {
-        error.printError();
-        return -1;
-    }
+            std::stringstream ss;
+            ss.str(std::string());
+            ss << "Dataset Dimension is: " << ndims;
+            for (auto i = 0; i < DS_DIM - 1; ++i) {
+                ss << dims_pilot[i] << ",";
+            }
+            ss << dims_pilot[DS_DIM - 1];
+            MLPD_TRACE("%s", ss.str().c_str());
+            ret = -1;
+            throw;
+        }
+        // catch failure caused by the DataSpace operations
+        catch (H5::DataSpaceIException& error) {
+            error.printErrorStack();
+            ret = -1;
+            throw;
+        }
+    } /* End else */
 
-clean_exit:
-
-    // after finish
-    int bit = 1 << offset % sizeof(std::atomic_int);
-    int offs = offset / sizeof(std::atomic_int);
-    std::atomic_fetch_and(&rx_buffer_[buffer_id].pkg_buf_inuse[offs], ~bit); // now empty
-    return 0;
+    int bit = 1 << (buffer_offset % sizeof(std::atomic_int));
+    int offs = (buffer_offset / sizeof(std::atomic_int));
+    std::atomic_fetch_and(&this->rx_buffer_[buffer_id].pkg_buf_inuse[offs], ~bit); // now empty
+    return ret;
 }
 
 int Recorder::getRecordedFrameNum()
 {
-    return maxFrameNumber;
+    return this->max_frame_number_;
 }
 
 extern "C" {
-Recorder* Recorder_new(Config* cfg)
+Recorder* Recorder_new(Config* in_cfg)
 {
-    Recorder* rec = new Recorder(cfg);
+    Recorder* rec = new Recorder(in_cfg);
     return rec;
 }
 

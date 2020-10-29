@@ -1,4 +1,5 @@
 #include "include/Radio.h"
+#include "include/logger.h"
 #include "include/macros.h"
 #include <SoapySDR/Errors.hpp>
 #include <iostream>
@@ -8,10 +9,10 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
     // these params are sufficient to set before DC offset and IQ imbalance calibration
     if (!kUseUHD) {
         dev->setAntenna(SOAPY_SDR_RX, ch, "TRX");
-        dev->setBandwidth(SOAPY_SDR_RX, ch, _cfg->bwFilter);
-        dev->setBandwidth(SOAPY_SDR_TX, ch, _cfg->bwFilter);
-        dev->setFrequency(SOAPY_SDR_RX, ch, "BB", _cfg->nco);
-        dev->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->nco);
+        dev->setBandwidth(SOAPY_SDR_RX, ch, _cfg->bw_filter());
+        dev->setBandwidth(SOAPY_SDR_TX, ch, _cfg->bw_filter());
+        dev->setFrequency(SOAPY_SDR_RX, ch, "BB", _cfg->nco());
+        dev->setFrequency(SOAPY_SDR_TX, ch, "BB", _cfg->nco());
     } else {
         std::cout << "Init USRP channel: " << ch << std::endl;
         dev->setAntenna(SOAPY_SDR_TX, ch, "TX/RX");
@@ -20,11 +21,11 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
         dev->setFrequency(SOAPY_SDR_TX, ch, "BB", 0);
     }
 
-    dev->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->radioRfFreq);
-    dev->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->radioRfFreq);
+    dev->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->radio_rf_freq());
+    dev->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->radio_rf_freq());
 
     // Unified gains for both lime and frontend
-    if (_cfg->single_gain) {
+    if (_cfg->single_gain()) {
         dev->setGain(SOAPY_SDR_RX, ch, rxgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
         dev->setGain(SOAPY_SDR_TX, ch, txgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
         std::cout << "Tx gain: " << dev->getGain(SOAPY_SDR_TX, ch)
@@ -35,7 +36,7 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
             dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0);
             dev->setGain(SOAPY_SDR_RX, ch, "PGA", 0);
             dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
-            dev->setGain(SOAPY_SDR_RX, ch, "ATTN", _cfg->radioRfFreq < 3e9 ? -12 : 0);
+            dev->setGain(SOAPY_SDR_RX, ch, "ATTN", _cfg->radio_rf_freq() < 3e9 ? -12 : 0);
             dev->setGain(SOAPY_SDR_TX, ch, "PAD", std::min(42.0, txgain)); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
             dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 0);
             dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0);
@@ -101,8 +102,13 @@ int Radio::recv(void* const* buffs, int samples, long long& frameTime)
 {
     int flags(0);
     int r = dev->readStream(rxs, buffs, samples, flags, frameTime, 1000000);
-    if (r != samples)
-        std::cerr << "time: " << frameTime << ", unexpected readStream error " << SoapySDR::errToStr(r) << ", flag: " << flags << std::endl;
+    if (r < 0) {
+        MLPD_ERROR("Time: %lld, readStream error: %d - %s, flags: %d\n", frameTime, r, SoapySDR::errToStr(r), flags);
+        MLPD_TRACE("Samples: %d, Frame time: %lld\n", samples, frameTime);
+    } else if (r < samples) {
+        MLPD_ERROR("Time: %lld, readStream returned less than requested samples: %d : %d, flags: %d\n", frameTime, r, samples, flags);
+    }
+
     return r;
 }
 
@@ -119,7 +125,7 @@ int Radio::activateRecv(const long long rxTime, const size_t numSamps, int flags
     if (!kUseUHD)
         return dev->activateStream(rxs, flag_args, rxTime, numSamps);
     else
-        return dev->activateStream(rxs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC*1e9, 0);
+        return dev->activateStream(rxs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC * 1e9, 0);
 }
 
 void Radio::deactivateRecv(void)
@@ -148,7 +154,7 @@ void Radio::activateXmit(void)
     if (!kUseUHD)
         dev->activateStream(txs);
     else
-        dev->activateStream(txs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC*1e9, 0);
+        dev->activateStream(txs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC * 1e9, 0);
 }
 
 void Radio::deactivateXmit(void)
