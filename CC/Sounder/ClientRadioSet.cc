@@ -81,8 +81,10 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
             SoapySDR::Kwargs info = dev->getHardwareInfo();
 
             for (auto ch : channels) {
-                double rxgain = _cfg->cl_rxgain_vec().at(ch).at(i); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
-                double txgain = _cfg->cl_txgain_vec().at(ch).at(i); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
+                double rxgain = _cfg->cl_rxgain_vec().at(ch).at(
+                    i); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
+                double txgain = _cfg->cl_txgain_vec().at(ch).at(
+                    i); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
                 radios.back()->dev_init(_cfg, ch, rxgain, txgain);
             }
 

@@ -26,17 +26,26 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
 
     // Unified gains for both lime and frontend
     if (_cfg->single_gain()) {
-        dev->setGain(SOAPY_SDR_RX, ch, rxgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
-        dev->setGain(SOAPY_SDR_TX, ch, txgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
-        MLPD_INFO("Tx gain: %lf, Rx gain: %lf\n", dev->getGain(SOAPY_SDR_TX, ch), dev->getGain(SOAPY_SDR_RX, ch));
+        dev->setGain(
+            SOAPY_SDR_RX, ch, rxgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
+        dev->setGain(
+            SOAPY_SDR_TX, ch, txgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
+        MLPD_INFO("Tx gain: %lf, Rx gain: %lf\n",
+            dev->getGain(SOAPY_SDR_TX, ch), dev->getGain(SOAPY_SDR_RX, ch));
     } else {
         if (kUseUHD == false) {
-            dev->setGain(SOAPY_SDR_RX, ch, "LNA", std::min(30.0, rxgain)); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
+            dev->setGain(SOAPY_SDR_RX, ch, "LNA",
+                std::min(
+                    30.0, rxgain)); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
             dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0);
             dev->setGain(SOAPY_SDR_RX, ch, "PGA", 0);
-            dev->setGain(SOAPY_SDR_RX, ch, "LNA2", 17); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
-            dev->setGain(SOAPY_SDR_RX, ch, "ATTN", _cfg->radio_rf_freq() < 3e9 ? -12 : 0);
-            dev->setGain(SOAPY_SDR_TX, ch, "PAD", std::min(42.0, txgain)); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
+            dev->setGain(SOAPY_SDR_RX, ch, "LNA2",
+                17); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
+            dev->setGain(SOAPY_SDR_RX, ch, "ATTN",
+                _cfg->radio_rf_freq() < 3e9 ? -12 : 0);
+            dev->setGain(SOAPY_SDR_TX, ch, "PAD",
+                std::min(
+                    42.0, txgain)); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
             dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 0);
             dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0);
             dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6);
@@ -102,48 +111,47 @@ int Radio::recv(void* const* buffs, int samples, long long& frameTime)
     int flags(0);
     int r = dev->readStream(rxs, buffs, samples, flags, frameTime, 1000000);
     if (r < 0) {
-        MLPD_ERROR("Time: %lld, readStream error: %d - %s, flags: %d\n", frameTime, r, SoapySDR::errToStr(r), flags);
+        MLPD_ERROR("Time: %lld, readStream error: %d - %s, flags: %d\n",
+            frameTime, r, SoapySDR::errToStr(r), flags);
         MLPD_TRACE("Samples: %d, Frame time: %lld\n", samples, frameTime);
     } else if (r < samples) {
-        MLPD_ERROR("Time: %lld, readStream returned less than requested samples: %d : %d, flags: %d\n", frameTime, r, samples, flags);
+        MLPD_ERROR("Time: %lld, readStream returned less than requested "
+                   "samples: %d : %d, flags: %d\n",
+            frameTime, r, samples, flags);
     }
 
     return r;
 }
 
-int Radio::activateRecv(const long long rxTime, const size_t numSamps, int flags)
+int Radio::activateRecv(
+    const long long rxTime, const size_t numSamps, int flags)
 {
-    int soapyFlags[] = {
-        0,
-        SOAPY_SDR_HAS_TIME,
-        SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST,
-        SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST
-    };
+    int soapyFlags[]
+        = { 0, SOAPY_SDR_HAS_TIME, SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST,
+              SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST };
     int flag_args = soapyFlags[flags];
     // for USRP device start rx stream UHD_INIT_TIME_SEC sec in the future
     if (!kUseUHD)
         return dev->activateStream(rxs, flag_args, rxTime, numSamps);
     else
-        return dev->activateStream(rxs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC * 1e9, 0);
+        return dev->activateStream(
+            rxs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC * 1e9, 0);
 }
 
-void Radio::deactivateRecv(void)
-{
-    dev->deactivateStream(rxs);
-}
+void Radio::deactivateRecv(void) { dev->deactivateStream(rxs); }
 
-int Radio::xmit(const void* const* buffs, int samples, int flags, long long& frameTime)
+int Radio::xmit(
+    const void* const* buffs, int samples, int flags, long long& frameTime)
 {
-    int soapyFlags[] = {
-        0,
-        SOAPY_SDR_HAS_TIME,
-        SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST,
-        SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST
-    };
+    int soapyFlags[]
+        = { 0, SOAPY_SDR_HAS_TIME, SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST,
+              SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST };
     int flag_args = soapyFlags[flags];
-    int r = dev->writeStream(txs, buffs, samples, flag_args, frameTime, 1000000);
+    int r
+        = dev->writeStream(txs, buffs, samples, flag_args, frameTime, 1000000);
     if (r != samples)
-        std::cerr << "unexpected writeStream error " << SoapySDR::errToStr(r) << std::endl;
+        std::cerr << "unexpected writeStream error " << SoapySDR::errToStr(r)
+                  << std::endl;
     return (r);
 }
 
@@ -153,13 +161,11 @@ void Radio::activateXmit(void)
     if (!kUseUHD)
         dev->activateStream(txs);
     else
-        dev->activateStream(txs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC * 1e9, 0);
+        dev->activateStream(
+            txs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC * 1e9, 0);
 }
 
-void Radio::deactivateXmit(void)
-{
-    dev->deactivateStream(txs);
-}
+void Radio::deactivateXmit(void) { dev->deactivateStream(txs); }
 
 int Radio::getTriggers(void) const
 {

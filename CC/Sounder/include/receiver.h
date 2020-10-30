@@ -80,10 +80,12 @@ public:
     };
 
 public:
-    Receiver(int n_rx_threads, Config* config, moodycamel::ConcurrentQueue<Event_data>* in_queue);
+    Receiver(int n_rx_threads, Config* config,
+        moodycamel::ConcurrentQueue<Event_data>* in_queue);
     ~Receiver();
 
-    std::vector<pthread_t> startRecvThreads(SampleBuffer* rx_buffer, unsigned in_core_id = 0);
+    std::vector<pthread_t> startRecvThreads(
+        SampleBuffer* rx_buffer, unsigned in_core_id = 0);
     void completeRecvThreads(const std::vector<pthread_t>& recv_thread);
     std::vector<pthread_t> startClientThreads();
     void go();

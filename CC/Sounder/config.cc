@@ -32,8 +32,7 @@ Config::Config(const std::string& jsonfile)
     if (bs_present_ == true) {
         ss.str(std::string());
         ss.clear();
-        ss << tddConf << std::endl
-           << std::endl;
+        ss << tddConf << std::endl << std::endl;
         MLPD_INFO("Base Stations present: %s", ss.str().c_str());
     }
     ss.str(std::string());
@@ -46,8 +45,7 @@ Config::Config(const std::string& jsonfile)
     if (client_present_ == true) {
         ss.str(std::string());
         ss.clear();
-        ss << tddConfCl << std::endl
-           << std::endl;
+        ss << tddConfCl << std::endl << std::endl;
         MLPD_INFO("Clients present: %s", ss.str().c_str());
     }
     ss.str(std::string());
@@ -430,8 +428,11 @@ Config::Config(const std::string& jsonfile)
     // Multi-threading settings
     unsigned nCores = this->getCoreCount();
     core_alloc_ = nCores > RX_THREAD_NUM;
-    if ((bs_present_ == true) && (pilot_syms_per_frame_ + ul_syms_per_frame_ > 0)) {
-        rx_thread_num_ = (nCores >= (2 * RX_THREAD_NUM)) ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_bdrs_all_)) : 1;
+    if ((bs_present_ == true)
+        && (pilot_syms_per_frame_ + ul_syms_per_frame_ > 0)) {
+        rx_thread_num_ = (nCores >= (2 * RX_THREAD_NUM))
+            ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_bdrs_all_))
+            : 1;
 
         task_thread_num_ = TASK_THREAD_NUM;
         if ((client_present_ == true)
@@ -446,12 +447,15 @@ Config::Config(const std::string& jsonfile)
             core_alloc_ = false;
     }
     if ((bs_present_ == true) && (core_alloc_ == true)) {
-        MLPD_INFO("Allocating %d cores to receive threads ... \n", rx_thread_num_);
-        MLPD_INFO("Allocating %d cores to record threads ... \n", task_thread_num_);
+        MLPD_INFO(
+            "Allocating %d cores to receive threads ... \n", rx_thread_num_);
+        MLPD_INFO(
+            "Allocating %d cores to record threads ... \n", task_thread_num_);
     }
 
     if ((client_present_ == true) && (core_alloc_ == true)) {
-        MLPD_INFO("Allocating %zu cores to client threads ... \n", num_cl_sdrs_);
+        MLPD_INFO(
+            "Allocating %zu cores to client threads ... \n", num_cl_sdrs_);
     }
     running_ = true;
     MLPD_INFO("Configuration file was successfully parsed!\n");
