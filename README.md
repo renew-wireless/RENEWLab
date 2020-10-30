@@ -56,7 +56,9 @@ Note for developers: Do not use _ in your branch name. Use - instead.
      $ git submodule update --init
      $ cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON ./ && make -j
      $ cd ../
-     $ cmake ./ && make -j
+     $ mkdir build
+     $ cd build
+     $ cmake .. -DCMAKE_BUILD_TYPE=Release -DLOG_LEVEL=info && make -j
      ```
        
   3. If you are going to use the RENEW MATLAB Development Suite, there is no dependency needed for it. 
