@@ -115,7 +115,7 @@ int Radio::recv(void* const* buffs, int samples, long long& frameTime)
             frameTime, r, SoapySDR::errToStr(r), flags);
         MLPD_TRACE("Samples: %d, Frame time: %lld\n", samples, frameTime);
     } else if (r < samples) {
-        MLPD_ERROR("Time: %lld, readStream returned less than requested "
+        MLPD_WARN("Time: %lld, readStream returned less than requested "
                    "samples: %d : %d, flags: %d\n",
             frameTime, r, samples, flags);
     }
