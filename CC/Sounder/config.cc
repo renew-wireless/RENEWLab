@@ -59,24 +59,6 @@ Config::Config(const std::string& jsonfile)
         json sdr_id_files = tddConf.value("sdr_id", json::array());
         nCells = sdr_id_files.size();
         bs_sdr_file.assign(sdr_id_files.begin(), sdr_id_files.end());
-        bsChannel = tddConf.value("channel", "A");
-        if (bsChannel != "A" && bsChannel != "B" && bsChannel != "AB")
-            throw std::invalid_argument("error channel config: not any of A/B/AB!\n");
-        auto jBsFrames = tddConf.value("frame_schedule", json::array());
-        frames.assign(jBsFrames.begin(), jBsFrames.end());
-        single_gain = tddConf.value("single_gain", true);
-        txgain[0] = tddConf.value("txgainA", 20);
-        rxgain[0] = tddConf.value("rxgainA", 20);
-        txgain[1] = tddConf.value("txgainB", 20);
-        rxgain[1] = tddConf.value("rxgainB", 20);
-        calTxGain[0] = tddConf.value("calTxGainA", 10);
-        calTxGain[1] = tddConf.value("calTxGainB", 10);
-        sampleCalEn = tddConf.value("sample_calibrate", false);
-        imbalanceCalEn = tddConf.value("imbalance_calibrate", false);
-        beamsweep = tddConf.value("beamsweep", false);
-        beacon_ant = tddConf.value("beacon_antenna", 0);
-        max_frame = tddConf.value("max_frame", 0);
-
         bs_sdr_ids.resize(nCells);
         nBsSdrs.resize(nCells);
         nBsAntennas.resize(nCells);
@@ -97,43 +79,102 @@ Config::Config(const std::string& jsonfile)
 
         if (!kUseUHD)
             Utils::loadDevices(hub_file, hub_ids);
-        symbolsPerFrame = frames.at(0).size();
 
-        //std::vector<std::vector<size_t>> pilotSymbols = Utils::loadSymbols(frames, 'P');
-        //std::vector<std::vector<size_t>> ULSymbols = Utils::loadSymbols(frames, 'T');
-        //std::vector<std::vector<size_t>> DLSymbols = Utils::loadSymbols(frames, 'R');
+        bsChannel = tddConf.value("channel", "A");
+        if (bsChannel != "A" && bsChannel != "B" && bsChannel != "AB")
+            throw std::invalid_argument("error channel config: not any of A/B/AB!\n");
+        auto jBsFrames = tddConf.value("frame_schedule", json::array());
+        reciprocal_calib = tddConf.value("reciprocal_calibration", false);
+        cal_ref_sdr_id = tddConf.value("ref_sdr_index", 0);
 
-        pilotSymbols.resize(frames.size());
-        ULSymbols.resize(frames.size());
-        DLSymbols.resize(frames.size());
-        for (auto fr = frames.begin(); fr != frames.end(); ++fr) {
-            size_t f = fr - frames.begin();
-            for (int g = 0; g < symbolsPerFrame; g++) {
-                switch ((*fr)[g]) {
-                case 'P':
-                    pilotSymbols[f].push_back(g);
-                    break;
-                case 'U':
-                    ULSymbols[f].push_back(g);
-                    break;
-                case 'D':
-                    DLSymbols[f].push_back(g);
-                    break;
-                default:
-                    break;
+        if (reciprocal_calib) {
+            calib_frames.resize(nCells);
+            for (size_t c = 0; c < nCells; c++) {
+                calib_frames[c].resize(nBsSdrs[c]);
+                size_t nChannels = bsChannel.size();
+                calib_frames[c][cal_ref_sdr_id] = std::string(nChannels * nBsSdrs[c], 'G');
+                calib_frames[c][cal_ref_sdr_id].replace(nChannels * cal_ref_sdr_id, 1, "P");
+                for (size_t i = 0; i < nBsSdrs[c]; i++) {
+                    if (i != cal_ref_sdr_id) {
+                        calib_frames[c][i] = std::string(bsChannel.size() * nBsSdrs[c], 'G');
+                        for (size_t ch = 0; ch < nChannels; ch++) {
+                            calib_frames[c][i].replace(i * nChannels + ch, 1, "P");
+                        }
+                        calib_frames[c][i].replace(nChannels * cal_ref_sdr_id, 1, "R");
+                        calib_frames[c][cal_ref_sdr_id].replace(nChannels * i, 1, "R");
+                    }
                 }
             }
+            pilotSymsPerFrame = 2;
+            ulSymsPerFrame = 0;
+            dlSymsPerFrame = 0;
+        } else {
+            frames.assign(jBsFrames.begin(), jBsFrames.end());
+            assert(frames.size() == nCells);
+            for (unsigned int c = 0; c < nCells; c++) {
+                size_t frame_size = frames[c].size();
+                for (size_t s = 0; s < frame_size; s++) {
+                    char sym_type = frames[c].at(s);
+                    if (sym_type == 'P')
+                        frames[c].replace(s, 1, "R"); // uplink pilots
+                    else if (sym_type == 'U')
+                        frames[c].replace(s, 1, "R"); // uplink data
+                    else if (sym_type == 'D')
+                        frames[c].replace(s, 1, "T"); // downlink data
+                }
+            }
+            symbolsPerFrame = frames[0].size();
+
+            pilotSymbols = Utils::loadSymbols(frames, 'P');
+            ULSymbols = Utils::loadSymbols(frames, 'T');
+            DLSymbols = Utils::loadSymbols(frames, 'R');
+            pilotSymsPerFrame = pilotSymbols[0].size();
+            ulSymsPerFrame = ULSymbols[0].size();
+            dlSymsPerFrame = DLSymbols[0].size();
+            // read commons from Client json config
+            if (!clPresent) {
+                nClSdrs = nClAntennas = std::count(frames.at(0).begin(), frames.at(0).end(), 'P');
+            }
         }
-        pilotSymsPerFrame = pilotSymbols[0].size();
-        ulSymsPerFrame = ULSymbols[0].size();
-        dlSymsPerFrame = DLSymbols[0].size();
-        // read commons from Client json config
-        if (!clPresent) {
-            nClSdrs = nClAntennas = std::count(frames.at(0).begin(), frames.at(0).end(), 'P');
-        }
+
+        single_gain = tddConf.value("single_gain", true);
+        txgain[0] = tddConf.value("txgainA", 20);
+        rxgain[0] = tddConf.value("rxgainA", 20);
+        txgain[1] = tddConf.value("txgainB", 20);
+        rxgain[1] = tddConf.value("rxgainB", 20);
+        calTxGain[0] = tddConf.value("calTxGainA", 10);
+        calTxGain[1] = tddConf.value("calTxGainB", 10);
+        sampleCalEn = tddConf.value("sample_calibrate", false);
+        imbalanceCalEn = tddConf.value("imbalance_calibrate", false);
+        beamsweep = tddConf.value("beamsweep", false);
+        beacon_ant = tddConf.value("beacon_antenna", 0);
+        max_frame = tddConf.value("max_frame", 0);
+
+        //pilotSymbols.resize(frames.size());
+        //ULSymbols.resize(frames.size());
+        //DLSymbols.resize(frames.size());
+        //for (auto fr = frames.begin(); fr != frames.end(); ++fr) {
+        //    size_t f = fr - frames.begin();
+        //    for (int g = 0; g < symbolsPerFrame; g++) {
+        //        switch ((*fr)[g]) {
+        //        case 'P':
+        //            pilotSymbols[f].push_back(g);
+        //            break;
+        //        case 'U':
+        //            ULSymbols[f].push_back(g);
+        //            break;
+        //        case 'D':
+        //            DLSymbols[f].push_back(g);
+        //            break;
+        //        default:
+        //            break;
+        //        }
+        //    }
+        //}
     }
 
     // Clients
+    assert(!(clPresent and reciprical_calib));
     if (clPresent) {
         auto jClSdrs = tddConfCl.value("sdr_id", json::array());
         // auto jClSdrs = tddConfCl.value("sdr_ip", json::array());
@@ -189,8 +230,7 @@ Config::Config(const std::string& jsonfile)
         }
     }
 
-    ulDataSymPresent = (bsPresent && !ULSymbols[0].empty())
-        || (clPresent && !clULSymbols[0].empty());
+    ulDataSymPresent = !reciprocal_calib && ((bsPresent && !ULSymbols[0].empty()) || (clPresent && !clULSymbols[0].empty()));
 
     // compose Beacon subframe:
     // STS Sequence (for AGC) + GOLD Sequence (for Sync)
@@ -350,8 +390,13 @@ Config::Config(const std::string& jsonfile)
         tm* ltm = localtime(&now);
         int cell_num = nCells;
         int ant_num = getTotNumAntennas();
-        std::string ulPresentStr = (ulDataSymPresent ? "uplink-" : "");
-        std::string filename = "logs/trace-" + ulPresentStr + std::to_string(1900 + ltm->tm_year) + "-" + std::to_string(1 + ltm->tm_mon) + "-" + std::to_string(ltm->tm_mday) + "-" + std::to_string(ltm->tm_hour) + "-" + std::to_string(ltm->tm_min) + "-" + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num) + "x" + std::to_string(ant_num) + "x" + std::to_string(pilotSymsPerFrame) + ".hdf5";
+        std::string filename;
+        if (reciprocal_calib) {
+            std::string ulPresentStr = (ulDataSymPresent ? "uplink-" : "");
+            filename = "logs/trace-" + ulPresentStr + std::to_string(1900 + ltm->tm_year) + "-" + std::to_string(1 + ltm->tm_mon) + "-" + std::to_string(ltm->tm_mday) + "-" + std::to_string(ltm->tm_hour) + "-" + std::to_string(ltm->tm_min) + "-" + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num) + "x" + std::to_string(ant_num) + "x" + std::to_string(pilotSymsPerFrame) + ".hdf5";
+        } else
+            filename = "logs/trace-reciprocal-calib" + std::to_string(1900 + ltm->tm_year) + "-" + std::to_string(1 + ltm->tm_mon) + "-" + std::to_string(ltm->tm_mday) + "-" + std::to_string(ltm->tm_hour) + "-" + std::to_string(ltm->tm_min) + "-" + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num) + "x" + std::to_string(ant_num) + ".hdf5";
+
         trace_file = tddConf.value("trace_file", filename);
     }
 
@@ -399,6 +444,8 @@ size_t Config::getMaxNumAntennas()
     for (size_t i = 0; i < nCells; i++) {
         if (maxNumSdr < nBsSdrs[i])
             maxNumSdr = nBsSdrs[i];
+        if (reciprocal_calib)
+            maxNumSdr--;
     }
     return maxNumSdr * bsChannel.length();
 }

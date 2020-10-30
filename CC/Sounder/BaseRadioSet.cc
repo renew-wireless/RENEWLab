@@ -135,72 +135,65 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
             std::cout << "sample offset calibration done!" << std::endl;
         }
 
-        std::vector<std::string> _tddSched;
-        _tddSched.resize(_cfg->frames.size());
-        // change symbol letter to Soapy equivalent
-        for (unsigned int f = 0; f < _cfg->frames.size(); f++) {
-            _tddSched[f] = _cfg->frames[f];
-            for (size_t s = 0; s < _cfg->frames[f].size(); s++) {
-                char c = _cfg->frames[f].at(s);
-                if (c == 'P')
-                    _tddSched[f].replace(s, 1, "R"); // uplink pilots
-                else if (c == 'U')
-                    _tddSched[f].replace(s, 1, "R"); // uplink data
-                else if (c == 'D')
-                    _tddSched[f].replace(s, 1, "T"); // downlink data
-            }
-            std::cout << _tddSched[f] << std::endl;
-        }
-
-#ifdef JSON
         json tddConf;
         tddConf["tdd_enabled"] = true;
         tddConf["frame_mode"] = "free_running";
         tddConf["max_frame"] = _cfg->max_frame;
-        tddConf["frames"] = _tddSched;
         tddConf["symbol_size"] = _cfg->sampsPerSymbol;
-        tddConf["beacon_start"] = _cfg->prefix;
-        tddConf["beacon_stop"] = _cfg->prefix + _cfg->beaconSize;
-        std::string tddConfStr = tddConf.dump();
-#else
-        std::string tddConfStr = "{\"tdd_enabled\":true,\"frame_mode\":\"free_running\"";
-        tddConfStr += ",\"symbol_size\":" + std::to_string(_cfg->sampsPerSymbol);
-        tddConfStr += ",\"beacon_start\":" + std::to_string(_cfg->prefix);
-        tddConfStr += ",\"beacon_stop\":" + std::to_string(_cfg->prefix + _cfg->beaconSize);
-        tddConfStr += ",\"frames\":[";
-        for (size_t f = 0; f < _cfg->frames.size(); f++)
-            tddConfStr += (f == _cfg->frames.size() - 1) ? "\"" + _tddSched[f] + "\"" : "\"" + _tddSched[f] + "\",";
-        tddConfStr += "]}";
-        std::cout << tddConfStr << std::endl;
-#endif
+
+        std::vector<std::vector<std::string>> _tddSched;
 
         // write TDD schedule and beacons to FPFA buffers only for Iris
         for (size_t c = 0; c < _cfg->nCells; c++) {
             if (!kUseUHD) {
+                if (_cfg->reciprocal_calib) {
+                    _tddSched.resize(bsRadios[c].size());
+                    for (size_t i = 0; i < bsRadios[c].size(); i++) {
+                        tddConf["frames"] = json::array();
+                        tddConf["frames"].push_back(_cfg->calib_frames[c][i]);
+                        std::cout << "Cell " << c << ", Sdr " << i << " calibration schedule : "
+                                  << _cfg->calib_frames[c][i]
+                                  << std::endl;
+                        std::string tddConfStr = tddConf.dump();
+                        SoapySDR::Device* dev = bsRadios[c][i]->dev;
+                        dev->writeSetting("TDD_CONFIG", tddConfStr);
+                    }
+                } else {
+                    tddConf["frames"] = json::array();
+                    tddConf["frames"].push_back(_cfg->frames[c]);
+                    std::cout << "Cell " << c << " FPGA schedule: "
+                              << _cfg->frames[c] << std::endl;
+                    tddConf["beacon_start"] = _cfg->prefix;
+                    tddConf["beacon_stop"] = _cfg->prefix + _cfg->beaconSize;
+                    std::string tddConfStr = tddConf.dump();
+                    for (size_t i = 0; i < bsRadios[c].size(); i++) {
+                        SoapySDR::Device* dev = bsRadios[c][i]->dev;
+                        dev->writeSetting("TDD_CONFIG", tddConfStr);
+                    }
+
+                    // write beacons to FPGA buffers
+                    size_t ndx = 0;
+                    for (size_t i = 0; i < bsRadios[c].size(); i++) {
+                        SoapySDR::Device* dev = bsRadios[c][i]->dev;
+                        dev->writeRegisters("BEACON_RAM", 0, _cfg->beacon);
+                        for (char const& ch : _cfg->bsChannel) {
+                            bool isBeaconAntenna = !_cfg->beamsweep && ndx == _cfg->beacon_ant;
+                            std::vector<unsigned> beacon_weights(nBsAntennas[c], isBeaconAntenna ? 1 : 0);
+                            std::string tx_ram_wgt = "BEACON_RAM_WGT_";
+                            if (_cfg->beamsweep) {
+                                for (int j = 0; j < nBsAntennas[c]; j++)
+                                    beacon_weights[j] = CommsLib::hadamard2(ndx, j);
+                            }
+                            dev->writeRegisters(tx_ram_wgt + ch, 0, beacon_weights);
+                            ++ndx;
+                        }
+                        dev->writeSetting("BEACON_START", std::to_string(bsRadios[c].size()));
+                    }
+                }
                 for (size_t i = 0; i < bsRadios[c].size(); i++) {
                     SoapySDR::Device* dev = bsRadios[c][i]->dev;
                     dev->writeSetting("TX_SW_DELAY", "30"); // experimentally good value for dev front-end
                     dev->writeSetting("TDD_MODE", "true");
-                    dev->writeSetting("TDD_CONFIG", tddConfStr);
-                }
-
-                // write beacons to FPGA buffers
-                size_t ndx = 0;
-                for (size_t i = 0; i < bsRadios[c].size(); i++) {
-                    SoapySDR::Device* dev = bsRadios[c][i]->dev;
-                    dev->writeRegisters("BEACON_RAM", 0, _cfg->beacon);
-                    for (char const& ch : _cfg->bsChannel) {
-                        bool isBeaconAntenna = !_cfg->beamsweep && ndx == _cfg->beacon_ant;
-                        std::vector<unsigned> beacon_weights(nBsAntennas[c], isBeaconAntenna ? 1 : 0);
-                        std::string tx_ram_wgt = "BEACON_RAM_WGT_";
-                        if (_cfg->beamsweep) {
-                            for (int j = 0; j < nBsAntennas[c]; j++)
-                                beacon_weights[j] = CommsLib::hadamard2(ndx, j);
-                        }
-                        dev->writeRegisters(tx_ram_wgt + ch, 0, beacon_weights);
-                        ++ndx;
-                    }
-                    dev->writeSetting("BEACON_START", std::to_string(bsRadios[c].size()));
                 }
             }
 

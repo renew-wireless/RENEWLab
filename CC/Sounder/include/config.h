@@ -52,7 +52,6 @@ public:
     size_t nCells;
     std::vector<std::string> bs_sdr_file;
     std::string hub_file;
-    std::string ref_sdr;
     std::vector<std::vector<std::string>> bs_sdr_ids;
     std::vector<std::string> hub_ids;
     std::vector<std::complex<float>> gold_cf32;
@@ -67,6 +66,7 @@ public:
     size_t nBsSdrsAll;
     std::string bsChannel;
     std::vector<std::string> frames;
+    std::vector<std::vector<std::string>> calib_frames;
     std::string frame_mode;
     bool hw_framer;
     size_t max_frame;
@@ -80,6 +80,8 @@ public:
     bool sampleCalEn;
     bool imbalanceCalEn;
     std::string trace_file;
+    bool reciprocal_calib;
+    size_t cal_ref_sdr_id;
 
     // Clients features
     std::vector<std::string> cl_sdr_ids;

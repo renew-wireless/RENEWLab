@@ -292,6 +292,9 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         // Number of uplink symbols per frame
         write_attribute(mainGroup, "UL_SYMS", (int)cfg->ulSymsPerFrame);
 
+        // Reciprocal Calibration Mode
+        write_attribute(mainGroup, "RECIPROCAL_CALIB", cfg->reciprocal_calib ? 1 : 0);
+
         // ******* Clients ******** //
         // Freq. Domain Pilot symbols
         std::vector<double> split_vec_pilot(2 * cfg->pilotSym[0].size());
