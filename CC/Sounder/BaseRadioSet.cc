@@ -481,8 +481,7 @@ int BaseRadioSet::radioRx(size_t radio_id, size_t cell_id, void* const* buffs,
         ret = bsRadios[cell_id][radio_id]->recv(buffs, numSamps, frameTimeNs);
         // for UHD device recv using ticks
         if (kUseUHD == false)
-            frameTime
-                = frameTimeNs; //SoapySDR::timeNsToTicks(frameTimeNs, _rate);
+            frameTime = frameTimeNs;
         else
             frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate());
 #if DEBUG_RADIO

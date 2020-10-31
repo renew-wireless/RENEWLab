@@ -441,9 +441,10 @@ Config::Config(const std::string& jsonfile)
         time_t now = time(0);
         tm* ltm = localtime(&now);
         int cell_num = num_cells_;
-        int ant_num = getTotNumAntennas();
         std::string filename;
         if (reciprocal_calib_) {
+            size_t ant_num
+                = getTotNumAntennas() - 1; // FIXME: How about multi-cell?
             filename = "logs/trace-reciprocal-calib-"
                 + std::to_string(1900 + ltm->tm_year) + "-"
                 + std::to_string(1 + ltm->tm_mon) + "-"
@@ -453,6 +454,7 @@ Config::Config(const std::string& jsonfile)
                 + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num)
                 + "x" + std::to_string(ant_num) + ".hdf5";
         } else {
+            size_t ant_num = getTotNumAntennas();
             std::string ul_present_str
                 = (ul_data_sym_present_ ? "uplink-" : "");
             filename = "logs/trace-" + ul_present_str

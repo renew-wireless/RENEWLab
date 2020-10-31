@@ -358,11 +358,6 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         write_attribute(
             mainGroup, "BS_BEACON_ANT", (int)this->cfg_->beacon_ant());
 
-        // Number of antennas on Base Station
-        write_attribute(mainGroup, "BS_NUM_ANT",
-            (int)this->cfg_
-                ->getNumAntennas()); // TODO: REMOVE SOON, REPLACE BY PER CELL
-
         // Number of antennas on Base Station (per cell)
         std::vector<std::string> bs_ant_num_per_cell(
             this->cfg_->bs_sdr_ids().size());
@@ -699,7 +694,6 @@ void Recorder::taskThread(EventHandlerContext* context)
     }
 }
 
-// do Crop
 herr_t Recorder::record(int, int offset)
 {
     herr_t ret = 0;
