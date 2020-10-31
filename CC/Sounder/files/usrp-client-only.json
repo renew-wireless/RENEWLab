@@ -1,20 +1,20 @@
 {
 	"Clients" : {
 		 "frequency" : 3.6e9,
-		 "channel" : "A",
+		 "channel" : "AB",
 		 "agc_en" : false,
-		 "rxgainA" : [20],
-		 "txgainA" : [15],
-		 "rxgainB" : [20],
-		 "txgainB" : [15],
-		 "rate" : 20e6,
+		 "rxgainA" : [60],
+		 "txgainA" : [40],
+		 "rxgainB" : [60],
+		 "txgainB" : [40],
+		 "rate" : 25e6,
 		 "fft_size" : 64,
 		 "subframe_size" : 640,
 		 "cp_size" : 16,
 		 "prefix" : 82,
 		 "postfix" : 68,
 		 "frame_schedule" : [
-		     "GGPGGGGGGGGGGGGGGGGG"
+		     "GGPPGUGGGGGGGGGGGGGG"
 		 ],
 	         "frame_mode" : "free_running",
 	         "hw_framer" : false,
@@ -23,7 +23,7 @@
 		 "modulation" : "QPSK",
 		 "pilot_seq" : "lts-half",
 	         "sdr_id" : [
-		     "10.118.2.2"
+		     "10.118.2.1"
 		 ]
 	}
 }

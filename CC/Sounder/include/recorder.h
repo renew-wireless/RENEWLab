@@ -14,15 +14,14 @@
 #include "H5Cpp.h"
 #include "receiver.h"
 
-using namespace H5;
 class Recorder {
 public:
-    Recorder(Config* cfg);
+    Recorder(Config* in_cfg);
     ~Recorder();
 
     void do_it();
     int getRecordedFrameNum();
-    std::string getTraceFileName() { return cfg->trace_file; }
+    std::string getTraceFileName() { return this->cfg_->trace_file(); }
 
 private:
     struct EventHandlerContext {
@@ -36,42 +35,40 @@ private:
     void closeHDF5();
     void finishHDF5();
     static void* taskThread_launch(void* in_context);
+    void gc(void);
 
     // buffer length of each rx thread
-    static const int SAMPLE_BUFFER_FRAME_NUM;
-    // buffer length of recording part
-    static const int TASK_BUFFER_FRAME_NUM;
+    static const int kSampleBufferFrameNum;
     // dequeue bulk size, used to reduce the overhead of dequeue in main thread
-    static const int dequeue_bulk_size;
+    static const int KDequeueBulkSize;
     // pilot dataset size increment
-    static const int config_pilot_extent_step;
+    static const int kConfigPilotExtentStep;
     // data dataset size increment
-    static const int config_data_extent_step;
+    static const int kConfigDataExtentStep;
 
-    Config* cfg;
+    Config* cfg_;
     std::unique_ptr<Receiver> receiver_;
     SampleBuffer* rx_buffer_;
     size_t rx_thread_buff_size_;
 
-    H5std_string hdf5name;
-    H5std_string hdf5group;
+    H5std_string hdf5_name_;
 
-    H5File* file;
+    H5::H5File* file_;
     // Group* group;
-    DSetCreatPropList pilot_prop;
-    DSetCreatPropList data_prop;
+    H5::DSetCreatPropList pilot_prop_;
+    H5::DSetCreatPropList data_prop_;
 
-    DataSet* pilot_dataset;
-    DataSet* data_dataset;
+    H5::DataSet* pilot_dataset_;
+    H5::DataSet* data_dataset_;
 
-    size_t frame_number_pilot;
-    size_t frame_number_data;
+    size_t frame_number_pilot_;
+    size_t frame_number_data_;
 #if DEBUG_PRINT
     hsize_t cdims_pilot[5];
     hsize_t cdims_data[5];
 #endif
 
-    size_t maxFrameNumber;
+    size_t max_frame_number_;
     moodycamel::ConcurrentQueue<Event_data> task_queue_;
     moodycamel::ConcurrentQueue<Event_data> message_queue_;
     // std::vector<std::unique_ptr<moodycamel::ProducerToken>> task_ptok; //[TASK_THREAD_NUM];

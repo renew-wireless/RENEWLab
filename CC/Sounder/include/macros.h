@@ -25,7 +25,7 @@ static constexpr size_t kStreamEndBurst = 2;
 #define MAX_FRAME_INC 2000
 #define TIME_DELTA 40 //ms
 #define SETTLE_TIME_MS 1
-#define UHD_INIT_TIME_SEC 1 // radio init time for UHD devices
+#define UHD_INIT_TIME_SEC 3 // radio init time for UHD devices
 #define BEACON_INTERVAL 20 // frames
 
 #endif

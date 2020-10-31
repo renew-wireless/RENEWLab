@@ -1,6 +1,5 @@
 {
 	"BaseStations" : {
-		 "cells" : 1,
 		 "sdr_id" : ["files/renew-iris-serials1.txt"],
 		 "hub_id" : "files/renew-hub-serials1.txt",
 		 "frequency" : 3.6e9,

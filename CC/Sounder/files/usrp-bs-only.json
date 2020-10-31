@@ -8,9 +8,9 @@
 		 "txgainA" : 20,
 		 "rxgainB" : 20,
 		 "txgainB" : 20,
-		 "rate" : 20e6,
+		 "rate" : 25e6,
 		 "frame_schedule" : [
-		     "BGPGGGGGGGGGGGGGGGGG"
+		     "BGPPGUGGGGGGGGGGGGGG"
 		 ],
 		 "max_frame" : 0,
 		 "subframe_size" : 640,
@@ -23,7 +23,7 @@
 	         "sample_calibrate" : false,
 		 "beacon_antenna" : 0,
 		 "modulation" : "QPSK",
-		 "pilot_seq" : "lts-half"
+	         "pilot_seq" : "lts-half"
 	}
 
 }
