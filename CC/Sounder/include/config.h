@@ -32,7 +32,7 @@ public:
     inline size_t core_alloc(void) const { return this->core_alloc_; }
     inline int subframe_size(void) const { return this->subframe_size_; }
     inline int samps_per_symbol(void) const { return this->samps_per_symbol_; }
-    inline int symbols_per_frame(void) const
+    inline size_t symbols_per_frame(void) const
     {
         return this->symbols_per_frame_;
     }
@@ -256,11 +256,11 @@ private:
     double
         radio_rf_freq_; // RF frequency set frame_modeon the radio after NCO adjustments
     double bw_filter_;
-    int subframe_size_;
-    int samps_per_symbol_;
-    int prefix_;
-    int postfix_;
-    int symbols_per_frame_;
+    size_t subframe_size_;
+    size_t samps_per_symbol_;
+    size_t prefix_;
+    size_t postfix_;
+    size_t symbols_per_frame_;
     size_t pilot_syms_per_frame_;
     size_t ul_syms_per_frame_;
     size_t dl_syms_per_frame_; // No accessor

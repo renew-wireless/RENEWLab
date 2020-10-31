@@ -444,7 +444,7 @@ Config::Config(const std::string& jsonfile)
         int ant_num = getTotNumAntennas();
         std::string filename;
         if (reciprocal_calib_) {
-            filename = "logs/trace-reciprocal-calib"
+            filename = "logs/trace-reciprocal-calib-"
                 + std::to_string(1900 + ltm->tm_year) + "-"
                 + std::to_string(1 + ltm->tm_mon) + "-"
                 + std::to_string(ltm->tm_mday) + "-"
@@ -476,7 +476,8 @@ Config::Config(const std::string& jsonfile)
         rx_thread_num_ = (num_cores >= (2 * RX_THREAD_NUM))
             ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_sdrs_all_))
             : 1;
-
+        if (reciprocal_calib_)
+            rx_thread_num_ = 2;
         task_thread_num_ = TASK_THREAD_NUM;
         if ((client_present_ == true)
             && (num_cores
@@ -528,7 +529,7 @@ size_t Config::getMaxNumAntennas()
                 maxNumSdr = n_bs_sdrs_.at(i);
             }
             if (reciprocal_calib_) {
-                maxNumSdr--;
+                maxNumSdr--; // exclude the ref sdr
             }
         }
         ret = (maxNumSdr * bs_channel_.length());

@@ -178,7 +178,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     // use token to speed up
     moodycamel::ProducerToken local_ptok(*message_queue_);
 
-    const int bsSdrCh = config_->bs_channel().length();
+    const size_t num_channels = config_->bs_channel().length();
     size_t packageLength = sizeof(Package) + config_->getPackageDataLength();
     int buffer_chunk_size = rx_buffer[0].buffer.size() / packageLength;
 
@@ -188,12 +188,27 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     char* buffer = rx_buffer[tid].buffer.data();
 
     size_t num_radios = config_->num_bs_sdrs_all(); //config_->n_bs_sdrs()[0]
-    size_t radio_start = (tid * num_radios) / thread_num_;
-    size_t radio_end = ((tid + 1) * num_radios) / thread_num_;
+    std::vector<size_t> radio_ids_in_thread;
+    if (config_->reciprocal_calib()) {
+        if (tid == 0)
+            radio_ids_in_thread.push_back(config_->cal_ref_sdr_id());
+        else
+            // FIXME: Does this work in multi-cell case?
+            for (size_t it = 0; it < config_->num_bs_sdrs_all(); it++)
+                if (it != config_->cal_ref_sdr_id())
+                    radio_ids_in_thread.push_back(it);
+    } else {
+        size_t radio_start = (tid * num_radios) / thread_num_;
+        size_t radio_end = ((tid + 1) * num_radios) / thread_num_;
+        for (size_t it = radio_start; it < radio_end; it++)
+            radio_ids_in_thread.push_back(it);
+    }
     MLPD_INFO(
-        "Receiver thread %d has %zu radios\n", tid, radio_end - radio_start);
-    MLPD_TRACE(" -- %d - radio start: %zu, end: %zu, radios %zu, thread: %d\n",
-        tid, radio_start, radio_end, num_radios, thread_num_);
+        "Receiver thread %d has %zu radios\n", tid, radio_ids_in_thread.size());
+    MLPD_TRACE(
+        " -- %d - radio start: %zu, end: %zu, total radios %zu, thread: %d\n",
+        tid, radio_ids_in_thread.front(), radio_ids_in_thread.back(),
+        num_radios, thread_num_);
 
     // prepare BS beacon in host buffer
     std::vector<void*> beaconbuff(2);
@@ -222,7 +237,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
         config_->samps_per_symbol() * config_->symbols_per_frame(), 0);
     std::vector<void*> samp_buffer(2);
     samp_buffer[0] = samp_buffer0.data();
-    if (bsSdrCh == 2)
+    if (num_channels == 2)
         samp_buffer[1] = samp_buffer1.data();
 
     int cell = 0;
@@ -230,7 +245,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
         // For multi-USRP BS perform dummy radioRx to avoid initial late packets
         int bs_sync_ret = -1;
         MLPD_INFO("Sync BS host and FPGA timestamp for thread %d\n", tid);
-        for (size_t it = radio_start; it < radio_end; it++) {
+        for (auto& it : radio_ids_in_thread) {
             // Find cell this USRP belongs to..,
             for (size_t i = 0; i <= config_->num_cells(); i++) {
                 if (it < config_->n_bs_sdrs_agg().at(i)) {
@@ -248,9 +263,9 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     }
 
     int cursor = 0;
-    int frame_id = 0;
-    int symbol_id = 0;
-    int ant_id = 0;
+    size_t frame_id = 0;
+    size_t symbol_id = 0;
+    size_t ant_id = 0;
     cell = 0;
     MLPD_INFO("Start BS main recv loop in thread %d\n", tid);
     while (config_->running() == true) {
@@ -264,9 +279,9 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
         }
 
         // Receive data
-        for (size_t it = radio_start; it < radio_end; it++) {
-            Package* pkg[bsSdrCh];
-            void* samp[bsSdrCh];
+        for (auto& it : radio_ids_in_thread) {
+            Package* pkg[num_channels];
+            void* samp[num_channels];
 
             // Find cell this board belongs to...
             for (size_t i = 0; i <= config_->num_cells(); i++) {
@@ -279,7 +294,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             size_t radio_idx = it - config_->n_bs_sdrs_agg().at(cell);
 
             // Set buffer status(es) to full; fail if full already
-            for (auto ch = 0; ch < bsSdrCh; ++ch) {
+            for (size_t ch = 0; ch < num_channels; ++ch) {
                 int bit = 1 << (cursor + ch) % sizeof(std::atomic_int);
                 int offs = (cursor + ch) / sizeof(std::atomic_int);
                 int old = std::atomic_fetch_or(
@@ -295,14 +310,14 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             // Receive data into buffers
             size_t packageLength
                 = sizeof(Package) + config_->getPackageDataLength();
-            for (auto ch = 0; ch < bsSdrCh; ++ch) {
+            for (size_t ch = 0; ch < num_channels; ++ch) {
                 pkg[ch] = (Package*)(buffer + (cursor + ch) * packageLength);
                 samp[ch] = pkg[ch]->data;
             }
 
             assert(baseRadioSet_ != NULL);
-            // ant_id = it * bsSdrCh;
-            ant_id = radio_idx * bsSdrCh;
+            // ant_id = it * num_channels;
+            ant_id = radio_idx * num_channels;
 
             // Schedule BS beacons to be sent from host for USRPs
             if (!kUseUHD) {
@@ -313,8 +328,20 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                     break;
                 }
 
-                frame_id = (int)(frameTime >> 32);
-                symbol_id = (int)((frameTime >> 16) & 0xFFFF);
+                frame_id = (size_t)(frameTime >> 32);
+                symbol_id = (size_t)((frameTime >> 16) & 0xFFFF);
+                if (config_->reciprocal_calib()) {
+                    if (radio_idx == config_->cal_ref_sdr_id()) {
+                        ant_id = symbol_id < radio_idx * num_channels
+                            ? symbol_id
+                            : symbol_id - num_channels;
+                        symbol_id = 0; // downlink reciprocal pilot
+                    } else {
+                        if (radio_idx >= config_->cal_ref_sdr_id())
+                            ant_id -= num_channels;
+                        symbol_id = 1; // uplink reciprocal pilot
+                    }
+                }
             } else {
                 int rx_len = config_->samps_per_symbol();
                 int r;
@@ -355,7 +382,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             }
 
 #if DEBUG_PRINT
-            for (auto ch = 0; ch < bsSdrCh; ++ch) {
+            for (auto ch = 0; ch < num_channels; ++ch) {
                 printf("receive thread %d, frame %d, symbol %d, cell %d, ant "
                        "%d samples: %d %d %d %d %d %d %d %d ...\n",
                     tid, frame_id, symbol_id, cell, ant_id + ch,
@@ -365,7 +392,11 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             }
 #endif
 
-            for (auto ch = 0; ch < bsSdrCh; ++ch) {
+            size_t num_packets = config_->reciprocal_calib()
+                    && radio_idx == config_->cal_ref_sdr_id()
+                ? 1
+                : num_channels; // receive only on one channel at the ref antenna
+            for (size_t ch = 0; ch < num_packets; ++ch) {
                 // new (pkg[ch]) Package(frame_id, symbol_id, 0, ant_id + ch);
                 new (pkg[ch]) Package(frame_id, symbol_id, cell, ant_id + ch);
                 // push EVENT_RX_SYMBOL event into the queue
@@ -634,7 +665,7 @@ void Receiver::clientSyncTxRx(int tid)
     int flagsTxUlData;
 
     while (config_->running() == true) {
-        for (int sf = 0; sf < config_->symbols_per_frame(); sf++) {
+        for (size_t sf = 0; sf < config_->symbols_per_frame(); sf++) {
             int rx_len = (sf == 0) ? (NUM_SAMPS + rx_offset) : NUM_SAMPS;
             assert((rx_len > 0) && (rx_len < SYNC_NUM_SAMPS));
             int r = clientRadioSet_->radioRx(
