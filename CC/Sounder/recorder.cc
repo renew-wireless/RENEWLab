@@ -168,6 +168,15 @@ static void write_attribute(H5::Group& g, const char name[],
     att.write(H5::PredType::NATIVE_DOUBLE, &val_pair[0]);
 }
 
+static void write_attribute(H5::Group& g, const char name[], size_t val)
+{
+    hsize_t dims[] = { 1 };
+    H5::DataSpace attr_ds = H5::DataSpace(1, dims);
+    H5::Attribute att
+        = g.createAttribute(name, H5::PredType::STD_U32BE, attr_ds);
+    att.write(H5::PredType::NATIVE_UINT, &val);
+}
+
 static void write_attribute(H5::Group& g, const char name[], int val)
 {
     hsize_t dims[] = { 1 };
