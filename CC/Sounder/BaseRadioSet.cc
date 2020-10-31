@@ -166,17 +166,14 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         tddConf["max_frame"] = _cfg->max_frame();
         tddConf["symbol_size"] = _cfg->samps_per_symbol();
 
-        std::vector<std::vector<std::string>> _tddSched;
-
         // write TDD schedule and beacons to FPFA buffers only for Iris
         for (size_t c = 0; c < _cfg->num_cells(); c++) {
             if (!kUseUHD) {
                 if (_cfg->reciprocal_calib()) {
-                    _tddSched.resize(bsRadios[c].size());
                     for (size_t i = 0; i < bsRadios[c].size(); i++) {
                         tddConf["frames"] = json::array();
                         tddConf["frames"].push_back(_cfg->calib_frames()[c][i]);
-                        std::cout << "Cell " << c << ", Sdr " << i
+                        std::cout << "Cell " << c << ", SDR " << i
                                   << " calibration schedule : "
                                   << _cfg->calib_frames()[c][i] << std::endl;
                         std::string tddConfStr = tddConf.dump();

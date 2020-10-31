@@ -557,6 +557,8 @@ Config::~Config() {}
 
 int Config::getClientId(int frame_id, int symbol_id)
 {
+    if (reciprocal_calib_)
+        return symbol_id;
     std::vector<size_t>::iterator it;
     int fid = frame_id % frames_.size();
     it = find(pilot_symbols_.at(fid).begin(), pilot_symbols_.at(fid).end(),

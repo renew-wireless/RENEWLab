@@ -744,7 +744,8 @@ herr_t Recorder::record(int, int offset)
             }
             DataspaceIndex hdfoffset
                 = { pkg->frame_id, pkg->cell_id, 0, pkg->ant_id, 0 };
-            if (this->cfg_->isPilot(pkg->frame_id, pkg->symbol_id)) {
+            if (this->cfg_->reciprocal_calib()
+                || this->cfg_->isPilot(pkg->frame_id, pkg->symbol_id)) {
                 //assert(this->pilot_dataset_ >= 0);
                 // Are we going to extend the dataset?
                 if (pkg->frame_id >= this->frame_number_pilot_) {
