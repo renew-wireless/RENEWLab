@@ -168,7 +168,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     }
 
     // Use mutex to sychronize data receiving across threads
-    if ((config_->num_cl_sdrs() > 0) && (config_->n_bs_sdrs().at(0) > 0)) {
+    if (config_->reciprocal_calib()
+        || ((config_->num_cl_sdrs() > 0) && (config_->num_bs_sdrs_all() > 0))) {
         pthread_mutex_lock(&mutex);
         MLPD_INFO("Recv Thread %d: waiting for release\n", tid);
         pthread_cond_wait(&cond, &mutex);
@@ -462,11 +463,6 @@ void Receiver::clientTxRx(int tid)
                 "Pin client thread to core failed in client txr");
         }
     }
-
-    //while(!d_mutex.try_lock()){}
-    //thread_count++;
-    //std::cout << "Thread " << tid << ", txSyms " << txSyms << ", rxSyms " << rxSyms << ", txStartSym " << txStartSym << ", rate " << config_->rate << ", txFrameDelta " << txFrameDelta << ", nsamps " << NUM_SAMPS << std::endl;
-    //d_mutex.unlock();
 
     std::vector<std::complex<float>> buffs(NUM_SAMPS, 0);
     std::vector<void*> rxbuff(2);
