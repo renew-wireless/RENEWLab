@@ -42,7 +42,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
             try {
                 hubs.push_back(SoapySDR::Device::make(args));
             } catch (const std::exception& e) {
-                MLPD_WARN(
+                MLPD_ERROR(
                     "Caught exception in call to SDR make: %s\n", e.what());
             } catch (...) {
                 MLPD_WARN("Unknown exception");
@@ -447,11 +447,9 @@ int BaseRadioSet::radioTx(size_t radio_id, size_t cell_id,
 #if DEBUG_RADIO
     size_t chanMask;
     long timeoutUs(0);
-    SoapySDR::Device* dev = bsRadios[cell_id][radio_id]->dev;
-    int s = dev->readStreamStatus(
-        bsRadio->txs, chanMask, flags, frameTime, timeoutUs);
-    int s = dev->readStreamStatus(
-        SOAPY_SDR_TX, chanMask, flags, frameTime, timeoutUs);
+    auto* dev = bsRadios[cell_id][radio_id]->dev;
+    auto* txs = bsRadios[cell_id][radio_id]->txs;
+    int s = dev->readStreamStatus(txs, chanMask, flags, frameTime, timeoutUs);
     std::cout << "cell " << cell_id << " radio " << radio_id << " tx returned "
               << w << " and status " << s << std::endl;
 #endif
