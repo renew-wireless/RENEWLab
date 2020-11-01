@@ -160,20 +160,7 @@ Config::Config(const std::string& jsonfile)
             pilot_symbols_ = Utils::loadSymbols(frames_, 'P');
             ul_symbols_ = Utils::loadSymbols(frames_, 'U');
             dl_symbols_ = Utils::loadSymbols(frames_, 'D');
-            for (unsigned int c = 0; c < num_cells_; c++) {
-                size_t frame_size = frames_[c].size();
-                for (size_t s = 0; s < frame_size; s++) {
-                    char sym_type = frames_[c].at(s);
-                    if (sym_type == 'P')
-                        frames_[c].replace(s, 1, "R"); // uplink pilots
-                    else if (sym_type == 'U')
-                        frames_[c].replace(s, 1, "R"); // uplink data
-                    else if (sym_type == 'D')
-                        frames_[c].replace(s, 1, "T"); // downlink data
-                }
-            }
             symbols_per_frame_ = frames_.at(0).size();
-
             pilot_syms_per_frame_ = pilot_symbols_.at(0).size();
             ul_syms_per_frame_ = ul_symbols_.at(0).size();
             dl_syms_per_frame_ = dl_symbols_.at(0).size();

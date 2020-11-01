@@ -182,7 +182,18 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
                     }
                 } else {
                     tddConf["frames"] = json::array();
-                    tddConf["frames"].push_back(_cfg->frames()[c]);
+                    size_t frame_size = _cfg->frames()[c].size();
+                    std::string fw_frame = _cfg->frames()[c];
+                    for (size_t s = 0; s < frame_size; s++) {
+                        char sym_type = fw_frame.at(s);
+                        if (sym_type == 'P')
+                            fw_frame.replace(s, 1, "R"); // uplink pilots
+                        else if (sym_type == 'U')
+                            fw_frame.replace(s, 1, "R"); // uplink data
+                        else if (sym_type == 'D')
+                            fw_frame.replace(s, 1, "T"); // downlink data
+                    }
+                    tddConf["frames"].push_back(fw_frame);
                     std::cout << "Cell " << c
                               << " FPGA schedule: " << _cfg->frames()[c]
                               << std::endl;
