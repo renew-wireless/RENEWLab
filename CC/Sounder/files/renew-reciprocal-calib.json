@@ -9,13 +9,12 @@
 		 "rxgainB" : 70,
 		 "txgainB" : 70,
 		 "rate" : 5e6,
-		 "max_frame" : 2000,
+		 "max_frame" : 4000,
 		 "subframe_size" : 800,
 		 "fft_size" : 64,
 		 "cp_size" : 16,
 		 "prefix" : 160,
 		 "postfix" : 160,
-		 "ref_sdr_index" : 8,
 		 "reciprocal_calibration" : true
 	}
 

@@ -123,7 +123,7 @@ Config::Config(const std::string& jsonfile)
         if (kUseUHD == false)
             Utils::loadDevices(hub_file_, hub_ids_);
         reciprocal_calib_ = tddConf.value("reciprocal_calibration", false);
-        cal_ref_sdr_id_ = tddConf.value("ref_sdr_index", 0);
+        cal_ref_sdr_id_ = tddConf.value("ref_sdr_index", num_bs_sdrs_all_ - 1);
 
         if (reciprocal_calib_ == true) {
             calib_frames_.resize(num_cells_);
