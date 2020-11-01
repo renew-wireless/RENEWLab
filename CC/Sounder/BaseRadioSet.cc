@@ -176,6 +176,11 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
                         std::string tddConfStr = tddConf.dump();
                         SoapySDR::Device* dev = bsRadios.at(c).at(i)->dev;
                         dev->writeSetting("TDD_CONFIG", tddConfStr);
+                        // write pilot to FPGA buffers
+                        for (char const& c : _cfg->bs_channel()) {
+                            std::string tx_ram = "TX_RAM_";
+                            dev->writeRegisters(tx_ram + c, 0, _cfg->pilot());
+                        }
                     }
                 } else {
                     tddConf["frames"] = json::array();
