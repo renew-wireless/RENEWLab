@@ -26,7 +26,7 @@ public:
 private:
     struct EventHandlerContext {
         Recorder* obj_ptr;
-        int id;
+        size_t id;
     };
     herr_t record(int tid, int offset);
     void taskThread(EventHandlerContext* context);
@@ -49,6 +49,7 @@ private:
     Config* cfg_;
     std::unique_ptr<Receiver> receiver_;
     SampleBuffer* rx_buffer_;
+    size_t rx_thread_buff_size_;
 
     H5std_string hdf5_name_;
 

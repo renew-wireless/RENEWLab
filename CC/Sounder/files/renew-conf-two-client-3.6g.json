@@ -11,7 +11,7 @@
                  "txgainB" : 70,
                  "rate" : 5e6,
                  "frame_schedule" : [
-                     "BGPPGGGGGGGGGGGGGGGG"
+		     "BGGGGGPPGGGGGGGGGGGG"
                  ],
                  "max_frame" : 4000,
                  "subframe_size" : 800,
@@ -19,11 +19,8 @@
                  "cp_size" : 16,
                  "prefix" : 160,
                  "postfix" : 160,
-                 "beamsweep" : true,
-                 "sample_calibrate" : false,
-                 "beacon_antenna" : 0,
-                 "modulation" : "16QAM",
-                 "single_gain" : true
+                 "beamsweep" : false,
+                 "beacon_antenna" : 0
         },
 
         "Clients" : {
@@ -32,14 +29,13 @@
                  ],
                  "frequency" : 3.6e9,
                  "channel" : "AB",
-                 "agc_en" : false,
                  "rxgainA" : [70],
                  "txgainA" : [70],
                  "rxgainB" : [70],
                  "txgainB" : [70],
                  "rate" : 5e6,
                  "frame_schedule" : [
-                     "GGPPGGGGGGGGGGGGGGGG"
+		     "GGGGGGPPGGGGGGGGGGGG"
                  ],
                  "frame_mode" : "continuous_resync",
                  "subframe_size" : 800,
@@ -47,6 +43,7 @@
                  "cp_size" : 16,
                  "prefix" : 160,
                  "postfix" : 160,
+		 "tx_advance" : 135,
 		 "hw_framer" : false
         }
 }

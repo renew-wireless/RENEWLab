@@ -32,9 +32,9 @@ private:
     // use for create pthread
     struct BaseRadioContext {
         BaseRadioSet* brs;
-        std::atomic_int* threadCount;
-        int tid;
-        int cell;
+        std::atomic_uint* threadCount;
+        size_t tid;
+        size_t cell;
     };
     void init(BaseRadioContext* context);
     void configure(BaseRadioContext* context);
@@ -43,7 +43,7 @@ private:
     static void* configure_launch(void* in_context);
 
     void radioTrigger(void);
-    void sync_delays(int cellIdx);
+    void sync_delays(size_t cellIdx);
     SoapySDR::Device* baseRadio(size_t cellId);
     void collectCSI(bool&);
     void dciqCalibrationProc(size_t);

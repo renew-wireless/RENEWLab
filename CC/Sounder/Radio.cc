@@ -116,7 +116,7 @@ int Radio::recv(void* const* buffs, int samples, long long& frameTime)
         MLPD_TRACE("Samples: %d, Frame time: %lld\n", samples, frameTime);
     } else if (r < samples) {
         MLPD_WARN("Time: %lld, readStream returned less than requested "
-                   "samples: %d : %d, flags: %d\n",
+                  "samples: %d : %d, flags: %d\n",
             frameTime, r, samples, flags);
     }
 

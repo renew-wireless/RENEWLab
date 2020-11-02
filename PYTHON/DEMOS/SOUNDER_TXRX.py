@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
  SOUNDER_TXRX.py
 
@@ -99,7 +99,6 @@ import signal
 import math
 import pdb
 import json
-import matplotlib.pyplot as plt
 import pickle
 import scipy.io as sio 
 from functools import partial
@@ -200,13 +199,17 @@ def rx_thread(sdr, rxStream, numSamps, txSymNum, both_channels):
     print("Exiting RX Thread, Read %d Frames" % rxFrNum)
 
 
-def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms, txSymNum, threshold, tx_advance,
+def siso_sounder(hub, serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms, txSymNum, threshold, tx_advance,
                  prefix_length, postfix_length, both_channels, wait_trigger, calibrate, record, use_trig, tx_power_loop, agc_en):
     global bsdr, msdr, txStreamM, rxStreamB
 
     print("setting %s as eNB and %s as UE" % (serial1, serial2))
     bsdr = SoapySDR.Device(dict(serial=serial1))
     msdr = SoapySDR.Device(dict(serial=serial2))
+    if hub != "":
+        trig_dev = SoapySDR.Device(dict(serial=hub, driver="remote"))
+    else:
+        trig_dev = bsdr
 
     # Some default sample rates
     for i, sdr in enumerate([bsdr, msdr]):
@@ -255,7 +258,7 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
 
     # pdb.set_trace()
     if use_trig:
-        bsdr.writeSetting("SYNC_DELAYS", "")
+        trig_dev.writeSetting("SYNC_DELAYS", "")
 
     # Packet size
     symSamp = numSamps + prefix_length + postfix_length
@@ -367,7 +370,7 @@ def siso_sounder(serial1, serial2, rate, freq, txgain, rxgain, numSamps, numSyms
         msdr.writeSetting("CORR_START", "A")
 
     signal.signal(signal.SIGINT, partial(signal_handler, rate, numSyms, use_trig))
-    bsdr.writeSetting("TRIGGER_GEN", "")
+    trig_dev.writeSetting("TRIGGER_GEN", "")
     txth = threading.Thread(target=tx_thread, args=(msdr, rate, txStreamM, rxStreamM, nb_data, symSamp, numSyms, txSymNum, numSyms-txSymNum-1))
     txth.start()
     if record:
@@ -417,6 +420,7 @@ def main():
     parser = OptionParser()
     parser.add_option("--bsnode", type="string", dest="bsnode", help="serial number of the master (base station node) device", default="")
     parser.add_option("--clnode", type="string", dest="clnode", help="serial number of the slave (client node) device", default="")
+    parser.add_option("--hub", type="string", dest="hub", help="Hub node", default="")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=30.0)  # Check top of file for info on gain range
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Rx gain (dB)", default=30.0)  # Check top of file for info on gain range
@@ -438,6 +442,7 @@ def main():
     (options, args) = parser.parse_args()
 
     siso_sounder(
+        hub=options.hub,
         serial1=options.bsnode,
         serial2=options.clnode,
         rate=options.rate,

@@ -1,7 +1,6 @@
 /*
  Copyright (c) 2018-2019, Rice University 
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
- Author(s): Rahman Doost-Mohamamdy: doost@rice.edu
  
 ---------------------------------------------------------------------
  Reads configuration parameters from file 
@@ -73,7 +72,7 @@ Config::Config(const std::string& jsonfile)
         if (kUseUHD == false) {
             hub_file_ = tddConf.value("hub_id", "hub_serials.txt");
         }
-        json sdr_id_files = tddConf.value("sdr_id", json::array());
+        auto sdr_id_files = tddConf.value("sdr_id", json::array());
         num_cells_ = sdr_id_files.size();
         bs_sdr_file_.assign(sdr_id_files.begin(), sdr_id_files.end());
         bs_channel_ = tddConf.value("channel", "A");
@@ -82,8 +81,6 @@ Config::Config(const std::string& jsonfile)
             throw std::invalid_argument(
                 "error channel config: not any of A/B/AB!\n");
         }
-        auto jBsFrames = tddConf.value("frame_schedule", json::array());
-        frames_.assign(jBsFrames.begin(), jBsFrames.end());
         single_gain_ = tddConf.value("single_gain", true);
         tx_gain_.push_back(tddConf.value("txgainA", 20));
         rx_gain_.push_back(tddConf.value("rxgainA", 20));
@@ -105,15 +102,15 @@ Config::Config(const std::string& jsonfile)
         bs_sdr_ids_.resize(num_cells_);
         n_bs_sdrs_.resize(num_cells_);
         n_bs_antennas_.resize(num_cells_);
-        num_bs_bdrs_all_ = 0;
+        num_bs_sdrs_all_ = 0;
         for (size_t i = 0u; i < num_cells_; i++) {
             Utils::loadDevices(bs_sdr_file_.at(i), bs_sdr_ids_.at(i));
             n_bs_sdrs_.at(i) = bs_sdr_ids_.at(i).size();
             n_bs_antennas_.at(i) = bs_channel_.length() * n_bs_sdrs_.at(i);
-            num_bs_bdrs_all_ += bs_sdr_ids_.at(i).size();
+            num_bs_sdrs_all_ += bs_sdr_ids_.at(i).size();
             MLPD_TRACE("Loading devices - cell %zu, sdrs %zu, antennas: %zu, "
                        "total bs srds: %zu\n",
-                i, n_bs_sdrs_.at(i), n_bs_antennas_.at(i), num_bs_bdrs_all_);
+                i, n_bs_sdrs_.at(i), n_bs_antennas_.at(i), num_bs_sdrs_all_);
         }
 
         // Array with cummulative sum of SDRs in cells
@@ -125,42 +122,60 @@ Config::Config(const std::string& jsonfile)
 
         if (kUseUHD == false)
             Utils::loadDevices(hub_file_, hub_ids_);
-        symbols_per_frame_ = frames_.at(0).size();
+        reciprocal_calib_ = tddConf.value("reciprocal_calibration", false);
+        cal_ref_sdr_id_ = tddConf.value("ref_sdr_index", num_bs_sdrs_all_ - 1);
 
-        pilot_symbols_.resize(frames_.size());
-        ul_symbols_.resize(frames_.size());
-        dl_symbols_.resize(frames_.size());
-        for (auto fr = frames_.begin(); fr != frames_.end(); ++fr) {
-            size_t f = fr - frames_.begin();
-            for (int g = 0; g < symbols_per_frame_; g++) {
-                switch ((*fr).at(g)) {
-                case 'P':
-                    pilot_symbols_.at(f).push_back(g);
-                    break;
-                case 'U':
-                    ul_symbols_.at(f).push_back(g);
-                    break;
-                case 'D':
-                    dl_symbols_.at(f).push_back(g);
-                    break;
-                default:
-                    break;
+        if (reciprocal_calib_ == true) {
+            calib_frames_.resize(num_cells_);
+            for (size_t c = 0; c < num_cells_; c++) {
+                calib_frames_[c].resize(n_bs_sdrs_[c]);
+                size_t num_channels = bs_channel_.size();
+                calib_frames_[c][cal_ref_sdr_id_]
+                    = std::string(num_channels * n_bs_sdrs_[c], 'G');
+                calib_frames_[c][cal_ref_sdr_id_].replace(
+                    num_channels * cal_ref_sdr_id_, 1, "P");
+                for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
+                    if (i != cal_ref_sdr_id_) {
+                        calib_frames_[c][i] = std::string(
+                            bs_channel_.size() * n_bs_sdrs_[c], 'G');
+                        for (size_t ch = 0; ch < num_channels; ch++) {
+                            calib_frames_[c][i].replace(
+                                i * num_channels + ch, 1, "P");
+                        }
+                        calib_frames_[c][i].replace(
+                            num_channels * cal_ref_sdr_id_, 1, "R");
+                        calib_frames_[c][cal_ref_sdr_id_].replace(
+                            num_channels * i, 1, "R");
+                    }
                 }
             }
-        }
-        pilot_syms_per_frame_ = pilot_symbols_.at(0).size();
-        ul_syms_per_frame_ = ul_symbols_.at(0).size();
-        dl_syms_per_frame_ = dl_symbols_.at(0).size();
-        // read commons from Client json config
-        if (client_present_ == false) {
-            num_cl_sdrs_ = num_cl_antennas_
-                = std::count(frames_.at(0).begin(), frames_.at(0).end(), 'P');
+            symbols_per_frame_ = calib_frames_.at(0).size();
+            pilot_syms_per_frame_ = 2; // up and down reciprocity pilots
+            ul_syms_per_frame_ = 0;
+            dl_syms_per_frame_ = 0;
+        } else {
+            auto jBsFrames = tddConf.value("frame_schedule", json::array());
+            frames_.assign(jBsFrames.begin(), jBsFrames.end());
+            assert(frames_.size() == num_cells_);
+            pilot_symbols_ = Utils::loadSymbols(frames_, 'P');
+            ul_symbols_ = Utils::loadSymbols(frames_, 'U');
+            dl_symbols_ = Utils::loadSymbols(frames_, 'D');
+            symbols_per_frame_ = frames_.at(0).size();
+            pilot_syms_per_frame_ = pilot_symbols_.at(0).size();
+            ul_syms_per_frame_ = ul_symbols_.at(0).size();
+            dl_syms_per_frame_ = dl_symbols_.at(0).size();
+            // read commons from client json config
+            if (client_present_ == false) {
+                num_cl_sdrs_ = num_cl_antennas_ = std::count(
+                    frames_.at(0).begin(), frames_.at(0).end(), 'P');
+            }
         }
     }
 
-    MLPD_TRACE("Starting clients -- %zu", num_bs_bdrs_all_);
+    MLPD_TRACE("Starting clients -- %zu", num_bs_sdrs_all_);
 
     // Clients
+    assert(!(client_present_ == true && reciprocal_calib_ == true));
     if (client_present_ == true) {
         auto jClSdrs = tddConfCl.value("sdr_id", json::array());
         // auto jClSdrs = tddConfCl.value("sdr_ip", json::array());
@@ -223,8 +238,9 @@ Config::Config(const std::string& jsonfile)
         }
     }
 
-    ul_data_sym_present_ = (bs_present_ && (ul_symbols_.at(0).empty() == false))
-        || (client_present_ && !cl_ul_symbols_.at(0).empty());
+    ul_data_sym_present_ = (reciprocal_calib_ == false)
+        && ((bs_present_ && (ul_symbols_.at(0).empty() == false))
+               || (client_present_ && !cl_ul_symbols_.at(0).empty()));
 
     // compose Beacon subframe:
     // STS Sequence (for AGC) + GOLD Sequence (for Sync)
@@ -412,38 +428,55 @@ Config::Config(const std::string& jsonfile)
         time_t now = time(0);
         tm* ltm = localtime(&now);
         int cell_num = num_cells_;
-        int ant_num = getTotNumAntennas();
-        std::string ulPresentStr = (ul_data_sym_present_ ? "uplink-" : "");
-        std::string filename = "logs/trace-" + ulPresentStr
-            + std::to_string(1900 + ltm->tm_year) + "-"
-            + std::to_string(1 + ltm->tm_mon) + "-"
-            + std::to_string(ltm->tm_mday) + "-" + std::to_string(ltm->tm_hour)
-            + "-" + std::to_string(ltm->tm_min) + "-"
-            + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num) + "x"
-            + std::to_string(ant_num) + "x"
-            + std::to_string(pilot_syms_per_frame_) + ".hdf5";
+        std::string filename;
+        if (reciprocal_calib_) {
+            size_t ant_num
+                = getTotNumAntennas() - 1; // FIXME: How about multi-cell?
+            filename = "logs/trace-reciprocal-calib-"
+                + std::to_string(1900 + ltm->tm_year) + "-"
+                + std::to_string(1 + ltm->tm_mon) + "-"
+                + std::to_string(ltm->tm_mday) + "-"
+                + std::to_string(ltm->tm_hour) + "-"
+                + std::to_string(ltm->tm_min) + "-"
+                + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num)
+                + "x" + std::to_string(ant_num) + ".hdf5";
+        } else {
+            size_t ant_num = getTotNumAntennas();
+            std::string ul_present_str
+                = (ul_data_sym_present_ ? "uplink-" : "");
+            filename = "logs/trace-" + ul_present_str
+                + std::to_string(1900 + ltm->tm_year) + "-"
+                + std::to_string(1 + ltm->tm_mon) + "-"
+                + std::to_string(ltm->tm_mday) + "-"
+                + std::to_string(ltm->tm_hour) + "-"
+                + std::to_string(ltm->tm_min) + "-"
+                + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num)
+                + "x" + std::to_string(ant_num) + "x"
+                + std::to_string(pilot_syms_per_frame_) + ".hdf5";
+        }
         trace_file_ = tddConf.value("trace_file", filename);
     }
 
     // Multi-threading settings
-    unsigned nCores = this->getCoreCount();
-    core_alloc_ = nCores > RX_THREAD_NUM;
+    unsigned num_cores = this->getCoreCount();
+    core_alloc_ = num_cores > RX_THREAD_NUM;
     if ((bs_present_ == true)
         && (pilot_syms_per_frame_ + ul_syms_per_frame_ > 0)) {
-        rx_thread_num_ = (nCores >= (2 * RX_THREAD_NUM))
-            ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_bdrs_all_))
+        rx_thread_num_ = (num_cores >= (2 * RX_THREAD_NUM))
+            ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_sdrs_all_))
             : 1;
-
+        if (reciprocal_calib_)
+            rx_thread_num_ = 2;
         task_thread_num_ = TASK_THREAD_NUM;
         if ((client_present_ == true)
-            && (nCores
+            && (num_cores
                    < (1 + task_thread_num_ + rx_thread_num_ + num_cl_sdrs_))) {
             core_alloc_ = false;
         }
     } else {
         rx_thread_num_ = 0;
         task_thread_num_ = 0;
-        if (client_present_ && nCores <= 1 + num_cl_sdrs_)
+        if (client_present_ && num_cores <= 1 + num_cl_sdrs_)
             core_alloc_ = false;
     }
     if ((bs_present_ == true) && (core_alloc_ == true)) {
@@ -484,6 +517,9 @@ size_t Config::getMaxNumAntennas()
             if (maxNumSdr < n_bs_sdrs_.at(i)) {
                 maxNumSdr = n_bs_sdrs_.at(i);
             }
+            if (reciprocal_calib_) {
+                maxNumSdr--; // exclude the ref sdr
+            }
         }
         ret = (maxNumSdr * bs_channel_.length());
     }
@@ -510,6 +546,8 @@ Config::~Config() {}
 
 int Config::getClientId(int frame_id, int symbol_id)
 {
+    if (reciprocal_calib_)
+        return symbol_id;
     std::vector<size_t>::iterator it;
     int fid = frame_id % frames_.size();
     it = find(pilot_symbols_.at(fid).begin(), pilot_symbols_.at(fid).end(),
@@ -565,7 +603,8 @@ unsigned Config::getCoreCount()
 {
     unsigned n_cores = std::thread::hardware_concurrency();
 #if DEBUG_PRINT
-    std::cout << "number of CPU cores " << std::to_string(nCores) << std::endl;
+    std::cout << "number of CPU cores " << std::to_string(num_cores)
+              << std::endl;
 #endif
     return n_cores;
 }

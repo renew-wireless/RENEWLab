@@ -580,14 +580,14 @@ class hdf5_lib:
             samps = samps[::sub]
             usersamps = np.reshape(
                 samps, (samps.shape[0], samps.shape[1], num_users, samps.shape[3], samps_per_user, 2))
-            # What is this? It is eiter 1 or 2: 2 LTSs??
-            pilot_rep = min([(samps_per_user-bound)//(fft_size+cp), 2])
+            pilot_rep = (samps_per_user-bound)//(fft_size+cp)
+            #pilot_rep = min([(samps_per_user-bound)//(fft_size+cp), 2]) # consider min. 2 pilot reps
             iq = np.empty((samps.shape[0], samps.shape[1], num_users,
                            samps.shape[3], pilot_rep, fft_size), dtype='complex64')
             if debug:
                 print("chunkstart = {}, usersamps.shape = {}, samps.shape = {}, samps_per_user = {}, nbat= {}, iq.shape = {}".format(
                     chunkstart, usersamps.shape, samps.shape, samps_per_user, nbat, iq.shape))
-            for i in range(pilot_rep):  # 2 first symbols (assumed LTS) seperate estimates
+            for i in range(pilot_rep):
                 iq[:, :, :, :, i, :] = (usersamps[:, :, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size, 0] +
                                         usersamps[:, :, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size, 1]*1j)*2**-15
 
@@ -612,7 +612,7 @@ class hdf5_lib:
                           (fftstart - chunkstart, endtime - fftstart))
                 # remove zero subcarriers
                 csi = np.delete(csi, [0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63], 5)
-                print("samps2csi took %f seconds" % (samps2csi_start - time.time()))
+                print("samps2csi took %f seconds" % (time.time() - samps2csi_start))
 
         return csi, iq
 
