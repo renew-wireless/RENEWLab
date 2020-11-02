@@ -44,7 +44,7 @@ Recorder::Recorder(Config* in_cfg)
     message_queue_
         = moodycamel::ConcurrentQueue<Event_data>(rx_thread_buff_size_ * 36);
 
-    MLPD_TRACE("Recorder construction - rx thread: %d, task tread %d, chunk "
+    MLPD_TRACE("Recorder construction - rx thread: %zu, task tread %zu, chunk "
                "size: %zu\n",
         rx_thread_num, task_thread_num, rx_thread_buff_size_);
 
@@ -80,7 +80,7 @@ Recorder::Recorder(Config* in_cfg)
             pthread_t task_thread;
             context->obj_ptr = this;
             context->id = i;
-            MLPD_TRACE("Launching task thread with id: %d\n", i);
+            MLPD_TRACE("Launching task thread with id: %zu\n", i);
             if (pthread_create(&task_thread, &detached_attr,
                     Recorder::taskThread_launch, context)
                 != 0) {

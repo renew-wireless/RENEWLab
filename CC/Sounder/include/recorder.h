@@ -26,7 +26,7 @@ public:
 private:
     struct EventHandlerContext {
         Recorder* obj_ptr;
-        int id;
+        size_t id;
     };
     herr_t record(int tid, int offset);
     void taskThread(EventHandlerContext* context);

@@ -175,7 +175,7 @@ Config::Config(const std::string& jsonfile)
     MLPD_TRACE("Starting clients -- %zu", num_bs_sdrs_all_);
 
     // Clients
-    assert(!(client_present_ == true and reciprocal_calib_ == true));
+    assert(!(client_present_ == true && reciprocal_calib_ == true));
     if (client_present_ == true) {
         auto jClSdrs = tddConfCl.value("sdr_id", json::array());
         // auto jClSdrs = tddConfCl.value("sdr_ip", json::array());

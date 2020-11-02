@@ -11,7 +11,7 @@
 		 "txgainB" : 70,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "BGPPUGGGGGGGGGGGGGGG"
+		     "BGPPGGGGGGGGGGGGGGGG"
 		 ],
 		 "max_frame" : 0,
 		 "subframe_size" : 800,
@@ -19,11 +19,7 @@
 		 "cp_size" : 16,
 		 "prefix" : 160,
 		 "postfix" : 160,
-		 "beacon_seq" : "gold_ifft",
-		 "beamsweep" : true,
-                 "sample_calibrate" : true,
-		 "beacon_antenna" : 0,
-		 "modulation" : "QPSK"
+		 "beamsweep" : true
 	}
 
 }

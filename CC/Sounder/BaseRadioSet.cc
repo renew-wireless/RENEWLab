@@ -42,7 +42,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
             hubs.push_back(SoapySDR::Device::make(args));
         }
         bsRadios.at(c).resize(num_radios);
-        std::atomic_int threadCount = ATOMIC_VAR_INIT(num_radios);
+        std::atomic_uint threadCount = ATOMIC_VAR_INIT(num_radios);
 
         MLPD_TRACE("Init base radios: %zu\n", num_radios);
         for (size_t i = 0; i < num_radios; i++) {
@@ -290,7 +290,7 @@ void BaseRadioSet::init(BaseRadioContext* context)
 {
     int i = context->tid;
     int c = context->cell;
-    std::atomic_int* threadCount = context->threadCount;
+    std::atomic_uint* threadCount = context->threadCount;
     delete context;
 
     MLPD_TRACE("Deleting context for tid: %d\n", i);
@@ -339,7 +339,7 @@ void BaseRadioSet::configure(BaseRadioContext* context)
 {
     int i = context->tid;
     int c = context->cell;
-    std::atomic_int* threadCount = context->threadCount;
+    std::atomic_uint* threadCount = context->threadCount;
     delete context;
 
     //load channels
@@ -365,7 +365,7 @@ SoapySDR::Device* BaseRadioSet::baseRadio(size_t cellId)
     return NULL;
 }
 
-void BaseRadioSet::sync_delays(int cellIdx)
+void BaseRadioSet::sync_delays(size_t cellIdx)
 {
     /*
      * Compute Sync Delays

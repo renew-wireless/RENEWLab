@@ -115,7 +115,6 @@ std::vector<std::vector<size_t>> Utils::loadSymbols(
         for (size_t g = 0; g < fr.size(); g++) {
             if (fr[g] == sym) {
                 symId[f].push_back(g);
-                printf("%c: pushing %zu back to vector %zu\n", sym, g, f);
             }
         }
     }

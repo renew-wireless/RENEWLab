@@ -14,13 +14,13 @@
 		 "prefix" : 160,
 		 "postfix" : 160,
 		 "frame_schedule" : [
-		     "GDPPUGGGGGGGGGGGGGGG"
+		     "GGPPGGGGGGGGGGGGGGGG"
 		 ],
 		 "frame_mode" : "continuous_resync",
-		 "beacon_type" : "gold_ifft",
-		 "modulation" : "QPSK",
 		 "sdr_id" : [
 		     "RF3E000080"
-		 ]
+		 ],
+		 "tx_advance" : 135,
+		 "hw_framer" : false
 	}
 }
