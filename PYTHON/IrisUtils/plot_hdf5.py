@@ -32,7 +32,7 @@ import matplotlib
 #matplotlib.use("Agg")
 
 
-def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, n_frm_st=0, thresh=0.001, deep_inspect=False, sub_sample=1):
+def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, offset=0, n_frm_st=0, thresh=0.001, deep_inspect=False, sub_sample=1):
     """
     Plot data in file to verify contents.
 
@@ -52,10 +52,10 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, n_
 
     if pilots_avail:
         data_types_avail.append("PILOTS")
-        print("PILOT Data Available")
+        print("Found Pilots!")
     if ul_data_avail:
         data_types_avail.append("UL_DATA")
-        print("Uplink Data Available")
+        print("Found Uplink Data")
 
     # Empty structure
     if not data_types_avail:
@@ -69,10 +69,11 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, n_
     prefix_len = int(metadata['PREFIX_LEN'])
     postfix_len = int(metadata['POSTFIX_LEN'])
     z_padding = prefix_len + postfix_len
-    offset = int(prefix_len)
+    #offset = int(prefix_len)
     fft_size = int(metadata['FFT_SIZE'])
     pilot_type = metadata['PILOT_SEQ_TYPE'].astype(str)[0]
     ofdm_pilot = np.array(metadata['OFDM_PILOT'])
+    reciprocal_calib = np.array(metadata['RECIPROCAL_CALIB'])
 
     print(" symbol_length = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}".format(symbol_length, cp, prefix_len, postfix_len, z_padding))
 
@@ -146,9 +147,6 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, n_
     userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
     corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[corr_ref_frame, :, :, :]), (1, 0, 2) ) )
 
-    # Compute CSI from IQ samples
-    # Samps: #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Samples
-    # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
     # For looking at the whole picture, use a fft size of whole symbol_length as fft window (for visualization),
     # and no offset
     print("*verify_hdf5():Calling samps2csi *AGAIN*(?) with fft_size = symbol_length, no offset*")
@@ -156,37 +154,34 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, n_
 
     # Verify default_frame does not exceed max number of collected frames
     ref_frame = min(default_frame - n_frm_st, samps.shape[0])
-    ant_plt = ant_i
-    user_plt = user_i
-    sc_plt = subcarrier_i
 
     # Plotter
     # Plot pilots
     fig1, axes1 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
-    fig2, axes2 = plt.subplots(nrows=3, ncols=1, squeeze=False, figsize=(10, 8))
     axes1[0, 0].set_title('Pilots IQ - Cell 0')
     # Samps Dimensions: (Frame, Cell, User, Pilot Rep, Antenna, Sample)
-    axes1[0, 0].set_ylabel('Frame %d ant %d (Re)' %( (ref_frame + n_frm_st), ant_plt) )
-    axes1[0, 0].plot(np.real(samps[ref_frame, 0, user_plt, 0, ant_plt, :]))
+    axes1[0, 0].set_ylabel('Frame %d ant %d (Re)' %( (ref_frame + n_frm_st), ant_i) )
+    axes1[0, 0].plot(np.real(samps[ref_frame, 0, user_i, 0, ant_i, :]))
 
-    axes1[1, 0].set_ylabel('Frame %d ant %d (Im)' %( (ref_frame + n_frm_st), ant_plt) )
-    axes1[1, 0].plot(np.imag(samps[ref_frame, 0, user_plt, 0, ant_plt, :]))
+    axes1[1, 0].set_ylabel('Frame %d ant %d (Im)' %( (ref_frame + n_frm_st), ant_i) )
+    axes1[1, 0].plot(np.imag(samps[ref_frame, 0, user_i, 0, ant_i, :]))
 
-    axes1[2, 0].set_ylabel('All Frames ant %d (Re)' %ant_plt )
-    axes1[2, 0].plot(np.real(samps[:, 0, user_plt, 0, ant_plt, :]).flatten())
+    axes1[2, 0].set_ylabel('All Frames ant %d (Re)' %ant_i )
+    axes1[2, 0].plot(np.real(samps[:, 0, user_i, 0, ant_i, :]).flatten())
 
-    axes1[3, 0].set_ylabel('All Frames ant %d (Im)' %ant_plt)
-    axes1[3, 0].plot(np.imag(samps[:, 0, user_plt, 0, ant_plt, :]).flatten())
+    axes1[3, 0].set_ylabel('All Frames ant %d (Im)' %ant_i)
+    axes1[3, 0].plot(np.imag(samps[:, 0, user_i, 0, ant_i, :]).flatten())
 
-    axes2[0, 0].set_title('Pilots CSI Stats- Cell 0')
-    axes2[0, 0].set_ylabel('Subcarrier %d magnitude' % sc_plt)
+    fig2, axes2 = plt.subplots(nrows=3, ncols=1, squeeze=False, figsize=(10, 8))
+    axes2[0, 0].set_title('Pilots CSI Stats- Cell 0 - User %d' % user_i)
+    axes2[0, 0].set_ylabel('Subcarrier %d magnitude' % subcarrier_i)
     for i in range(samps.shape[4]):
-        axes2[0, 0].plot(np.abs(csi[:, 0, user_plt, 0, i, sc_plt]).flatten())
+        axes2[0, 0].plot(np.abs(csi[:, 0, user_i, 0, i, subcarrier_i]).flatten())
     axes2[0, 0].set_xlabel('Frame')
 
-    axes2[1, 0].set_ylabel('Subcarrier %d phase' % sc_plt)
+    axes2[1, 0].set_ylabel('Subcarrier %d phase' % subcarrier_i)
     for i in range(samps.shape[4]):
-        axes2[1, 0].plot(np.angle(csi[:, 0, user_plt, 0, i, sc_plt]).flatten())
+        axes2[1, 0].plot(np.angle(csi[:, 0, user_i, 0, i, subcarrier_i]).flatten())
     axes2[1, 0].set_xlabel('Frame')
 
     axes2[2, 0].set_ylabel('Correlation with Frame %d' % corr_ref_frame)
@@ -197,9 +192,38 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, n_
     axes2[2, 0].legend(loc='lower right', frameon=False)
     axes2[2, 0].set_xlabel('Frame')
 
+    if reciprocal_calib:
+        # TODO: add option for averaging across repeated pilots
+        # frame, downlink(0)-uplink(1), antennas, subcarrier
+        calibCSI = np.mean(cellCSI, 2)
+        calib_mat = np.divide(calibCSI[:, 0, :, :], calibCSI[:, 1, :, :])
+
+        fig3, axes3 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
+        axes3[0, 0].set_title('Reciprocity Calibration Factor - Cell 0')
+
+        axes3[0, 0].set_ylabel('Magtinute subcarrier %d, ant %d' % (subcarrier_i, ant_i))
+        axes3[0, 0].plot(np.abs(calib_mat[:, ant_i, subcarrier_i]).flatten())
+        axes3[0, 0].set_xlabel('Frame')
+
+        axes3[1, 0].set_ylabel('Phase at subcarrier %d, ant %d' % (subcarrier_i, ant_i))
+        axes3[1, 0].plot(np.angle(calib_mat[:, i, subcarrier_i]).flatten())
+        axes3[1, 0].set_xlabel('Frame')
+
+        axes3[2, 0].set_ylabel('Subcarrier %d magnitude' % subcarrier_i)
+        for i in range(calib_mat.shape[1]):
+            axes3[2, 0].plot(np.abs(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d"%i)
+        axes3[2, 0].set_xlabel('Frame')
+        axes3[2, 0].legend(loc='lower right', frameon=False)
+
+        axes3[3, 0].set_ylabel('Subcarrier %d phase' % subcarrier_i)
+        for i in range(calib_mat.shape[1]):
+            axes3[3, 0].plot(np.angle(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d"%i)
+        axes3[3, 0].set_xlabel('Frame')
+        axes3[3, 0].legend(loc='lower right', frameon=False)
+
     # Plot UL data symbols
     if ul_data_avail:
-        fig3, axes3 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
+        fig4, axes4 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
         samples = uplink_samples
         num_cl_tmp = samples.shape[2]  # number of UEs to plot data for
 
@@ -210,18 +234,18 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, n_
         _, samps = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size=symbol_length, offset=0, bound=0, cp=0, sub=sub_sample)
 
         # Samps Dimensions: (Frame, Cell, User, Pilot Rep, Antenna, Sample)
-        axes3[0, 0].set_title('Uplink Data IQ - Cell 0')
-        axes3[0, 0].set_ylabel('Frame %d ant %d (Re)' %( (ref_frame + n_frm_st), ant_plt) )
-        axes3[0, 0].plot(np.real(samps[ref_frame, 0, user_plt, 0, ant_plt, :]))
+        axes4[0, 0].set_title('Uplink Data IQ - Cell 0')
+        axes4[0, 0].set_ylabel('Frame %d ant %d (Re)' %( (ref_frame + n_frm_st), ant_i) )
+        axes4[0, 0].plot(np.real(samps[ref_frame, 0, user_i, 0, ant_i, :]))
 
-        axes3[1, 0].set_ylabel('Frame %d ant %d (Im)' %( (ref_frame + n_frm_st), ant_plt) )
-        axes3[1, 0].plot(np.imag(samps[ref_frame, 0, user_plt, 0, ant_plt, :]))
+        axes4[1, 0].set_ylabel('Frame %d ant %d (Im)' %( (ref_frame + n_frm_st), ant_i) )
+        axes4[1, 0].plot(np.imag(samps[ref_frame, 0, user_i, 0, ant_i, :]))
 
-        axes3[2, 0].set_ylabel('All Frames ant %d (Re)' %ant_plt )
-        axes3[2, 0].plot(np.real(samps[:, 0, user_plt, 0, ant_plt, :]).flatten())
+        axes4[2, 0].set_ylabel('All Frames ant %d (Re)' %ant_i )
+        axes4[2, 0].plot(np.real(samps[:, 0, user_i, 0, ant_i, :]).flatten())
 
-        axes3[3, 0].set_ylabel('All Frames ant %d (Im)' %ant_plt)
-        axes3[3, 0].plot(np.imag(samps[:, 0, user_plt, 0, ant_plt, :]).flatten())
+        axes4[3, 0].set_ylabel('All Frames ant %d (Im)' %ant_i)
+        axes4[3, 0].plot(np.imag(samps[:, 0, user_i, 0, ant_i, :]).flatten())
 
     if deep_inspect:
 
@@ -643,6 +667,7 @@ def main():
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Reference antenna", default=0)
     parser.add_option("--ref-user", type="int", dest="ref_user", help="Reference User", default=0)
     parser.add_option("--ref-subcarrier", type="int", dest="ref_subcarrier", help="Reference subcarrier", default=0)
+    parser.add_option("--signal-offset", type="int", dest="signal_offset", help="signal offset from the start of the time-domain symbols", default=0)
     parser.add_option("--n-frames", type="int", dest="n_frames_to_inspect", help="Number of frames to inspect", default=2000)
     parser.add_option("--sub-sample", type="int", dest="sub_sample", help="Sub sample rate", default=1)
     parser.add_option("--thresh", type="float", dest="thresh", help="Ampiltude Threshold for valid frames", default=0.001)
@@ -657,6 +682,7 @@ def main():
     ref_frame = options.ref_frame
     ref_user = options.ref_user
     ref_subcarrier = options.ref_subcarrier
+    signal_offset = options.signal_offset
     thresh = options.thresh
     fr_strt = options.fr_strt
     verify = options.verify
@@ -692,7 +718,7 @@ def main():
         compute_legacy(hdf5)
     if verify and not legacy:
         hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
-        verify_hdf5(hdf5, ref_frame, ref_ant, ref_user, ref_subcarrier, fr_strt, thresh, deep_inspect, sub_sample)
+        verify_hdf5(hdf5, ref_frame, ref_ant, ref_user, ref_subcarrier, signal_offset, fr_strt, thresh, deep_inspect, sub_sample)
     if analyze and not legacy:
         hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
         analyze_hdf5(hdf5)
