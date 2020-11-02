@@ -83,50 +83,6 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
 
     print("symbol_length = {}, offset = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}, pilot_rep = {}".format(symbol_length, offset, cp, prefix_len, postfix_len, z_padding, num_pilots_per_sym))
 
-    print("********     verify_hdf5(): Calling filter_pilots and frame_sanity    *********")
-
-    if deep_inspect:
-        filter_pilots_start = time.time()
-        match_filt, k_lts, n_lts, cmpx_pilots, lts_seq_orig = hdf5_lib.filter_pilots(pilot_samples, z_padding, fft_size = fft_size, cp = cp)
-        filter_pilots_end = time.time()
-
-        frame_sanity_start = time.time()
-        match_filt_clr, frame_map, f_st, peak_map = hdf5_lib.frame_sanity(match_filt, k_lts, n_lts, n_frm_st, frm_plt, plt_ant=ant_i, cp = cp)
-        frame_sanity_end = time.time()
-        print(">>>> filter_pilots time: %f \n" % ( filter_pilots_end - filter_pilots_start) )
-        print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
-
-        # Find LTS peaks across frame
-        n_frame = pilot_samples.shape[0]
-        n_cell = pilot_samples.shape[1]
-        n_ue = pilot_samples.shape[2]
-        n_ant = pilot_samples.shape[3]
-        seq_found = np.zeros((n_frame, n_cell, n_ue, n_ant))
-
-        for frameIdx in range(n_frame):    # Frame
-            for cellIdx in range(n_cell):  # Cell
-                for ueIdx in range(n_ue):  # UE
-                    for bsAntIdx in range(n_ant):  # BS ANT
-
-                        I = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 0:symbol_length * 2:2] / 2 ** 15
-                        Q = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 1:symbol_length * 2:2] / 2 ** 15
-                        IQ = I + (Q * 1j)
-                        tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk = pilot_finder(IQ, pilot_type, flip=True,
-                                                                                          pilot_seq=ofdm_pilot)
-                        # Find percentage of LTS peaks within a symbol
-                        # (e.g., in a 4096-sample pilot symbol, we expect 64, 64-long sequences... assuming no CP)
-                        seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / num_pilots_per_sym)
-
-                        dbg2 = False
-                        if dbg2:
-                            fig = plt.figure(1234)
-                            ax1 = fig.add_subplot(2, 1, 1)
-                            ax1.plot(np.abs(IQ))
-                            ax2 = fig.add_subplot(2, 1, 2)
-                            ax2.stem(np.abs(lts_corr))
-                            ax2.scatter(np.linspace(0.0, len(lts_corr), num=1000), pilot_thresh * np.ones(1000), color='r')
-                            plt.show()
-
     samples = pilot_samples 
     num_cl_tmp = num_pilots  # number of UEs to plot data for
 
@@ -256,30 +212,72 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
     # Plot UL data symbols
     if ul_data_avail:
         fig4, axes4 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
-        samples = uplink_samples
+        #samples = uplink_samples
         num_cl_tmp = samples.shape[2]  # number of UEs to plot data for
 
         # UL Samps: #Frames, #Cell, #Users, #Uplink Symbol, #Antennas, #Samples
         # For looking at the whole picture, use a fft size of whole symbol_length as fft window (for visualization),
         # and no offset
         print("*verify_hdf5():Calling samps2csi *AGAIN*(?) with fft_size = symbol_length, no offset*")
-        _, samps = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size=symbol_length, offset=0, bound=0, cp=0, sub=sub_sample)
+        _, uplink_samps = hdf5_lib.samps2csi(uplink_samples, num_cl_tmp, symbol_length, fft_size=symbol_length, offset=0, bound=0, cp=0, sub=sub_sample)
 
         # Samps Dimensions: (Frame, Cell, User, Pilot Rep, Antenna, Sample)
         axes4[0, 0].set_title('Uplink Data IQ - Cell 0')
         axes4[0, 0].set_ylabel('Frame %d ant %d (Re)' %( (ref_frame + n_frm_st), ant_i) )
-        axes4[0, 0].plot(np.real(samps[ref_frame, 0, user_i, 0, ant_i, :]))
+        axes4[0, 0].plot(np.real(uplink_samps[ref_frame, 0, user_i, 0, ant_i, :]))
 
         axes4[1, 0].set_ylabel('Frame %d ant %d (Im)' %( (ref_frame + n_frm_st), ant_i) )
-        axes4[1, 0].plot(np.imag(samps[ref_frame, 0, user_i, 0, ant_i, :]))
+        axes4[1, 0].plot(np.imag(uplink_samps[ref_frame, 0, user_i, 0, ant_i, :]))
 
         axes4[2, 0].set_ylabel('All Frames ant %d (Re)' %ant_i )
-        axes4[2, 0].plot(np.real(samps[:, 0, user_i, 0, ant_i, :]).flatten())
+        axes4[2, 0].plot(np.real(uplink_samps[:, 0, user_i, 0, ant_i, :]).flatten())
 
         axes4[3, 0].set_ylabel('All Frames ant %d (Im)' %ant_i)
-        axes4[3, 0].plot(np.imag(samps[:, 0, user_i, 0, ant_i, :]).flatten())
+        axes4[3, 0].plot(np.imag(uplink_samps[:, 0, user_i, 0, ant_i, :]).flatten())
+
 
     if deep_inspect:
+        filter_pilots_start = time.time()
+        match_filt, k_lts, n_lts, cmpx_pilots, lts_seq_orig = hdf5_lib.filter_pilots(pilot_samples, z_padding, fft_size = fft_size, cp = cp)
+        filter_pilots_end = time.time()
+
+        frame_sanity_start = time.time()
+        match_filt_clr, frame_map, f_st, peak_map = hdf5_lib.frame_sanity(match_filt, k_lts, n_lts, n_frm_st, frm_plt, plt_ant=ant_i, cp = cp)
+        frame_sanity_end = time.time()
+        print(">>>> filter_pilots time: %f \n" % ( filter_pilots_end - filter_pilots_start) )
+        print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
+
+        # Find LTS peaks across frame
+        n_frame = pilot_samples.shape[0]
+        n_cell = pilot_samples.shape[1]
+        n_ue = pilot_samples.shape[2]
+        n_ant = pilot_samples.shape[3]
+        seq_found = np.zeros((n_frame, n_cell, n_ue, n_ant))
+
+        for frameIdx in range(n_frame):    # Frame
+            for cellIdx in range(n_cell):  # Cell
+                for ueIdx in range(n_ue):  # UE
+                    for bsAntIdx in range(n_ant):  # BS ANT
+
+                        I = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 0:symbol_length * 2:2] / 2 ** 15
+                        Q = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 1:symbol_length * 2:2] / 2 ** 15
+                        IQ = I + (Q * 1j)
+                        tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk = pilot_finder(IQ, pilot_type, flip=True,
+                                                                                          pilot_seq=ofdm_pilot)
+                        # Find percentage of LTS peaks within a symbol
+                        # (e.g., in a 4096-sample pilot symbol, we expect 64, 64-long sequences... assuming no CP)
+                        seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / num_pilots_per_sym)
+
+                        dbg2 = False
+                        if dbg2:
+                            fig = plt.figure(1234)
+                            ax1 = fig.add_subplot(2, 1, 1)
+                            ax1.plot(np.abs(IQ))
+                            ax2 = fig.add_subplot(2, 1, 2)
+                            ax2.stem(np.abs(lts_corr))
+                            ax2.scatter(np.linspace(0.0, len(lts_corr), num=1000), pilot_thresh * np.ones(1000), color='r')
+                            plt.show()
+
 
         #plots:
 
@@ -322,26 +320,6 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
                     frame_map[-1,n_c,n_u,0] = -1
                     print("No bad frames! Colored the last frame of antenna 0 Bad for cell {} and UE {} to keep plotter happy!".format(n_c,n_u))
 
-        fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
-        c = []
-        fig.suptitle('Frame Map')
-        for n_c in range(n_cell):
-            for n_u in range(n_ue):
-                c.append( axes[n_u, n_c].imshow(frame_map[:,n_c,n_u,:].T, cmap=plt.cm.get_cmap('Blues', 3), interpolation='none',
-                      extent=[hdf5.n_frm_st,hdf5.n_frm_end, n_ant,0],  aspect="auto") )
-                axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
-                axes[n_u, n_c].set_ylabel('Antenna #')
-                axes[n_u, n_c].set_xlabel('Frame #')
-                # Minor ticks
-                axes[n_u, n_c].set_xticks(np.arange(hdf5.n_frm_st, hdf5.n_frm_end, 1), minor=True)
-                axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
-                # Gridlines based on minor ticks
-                axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
-
-        cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')
-        cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])
-        #plt.show()
-
         #plot F starts for each antenna
         sub_fr_strt = f_st
         n_frame = sub_fr_strt.shape[0]      # no. of captured frames
@@ -353,7 +331,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
         fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
         fig.suptitle('Frames\' starting indices per antenna')
         #plot channel analysis
-        show_plot(cmpx_pilots, lts_seq_orig, match_filt)
+        #show_plot(cmpx_pilots, lts_seq_orig, match_filt)
 
         for n_c in range(n_cell):
             for n_u in range(n_ue):
@@ -384,6 +362,26 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
                 axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
         cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, 100, 11), orientation='horizontal')
         cbar.ax.set_xticklabels(['0%', '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'])
+
+        #fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+        #c = []
+        #fig.suptitle('Frame Map')
+        #for n_c in range(n_cell):
+        #    for n_u in range(n_ue):
+        #        c.append( axes[n_u, n_c].imshow(frame_map[:,n_c,n_u,:].T, cmap=plt.cm.get_cmap('Blues', 3), interpolation='none',
+        #              extent=[hdf5.n_frm_st,hdf5.n_frm_end, n_ant,0],  aspect="auto") )
+        #        axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
+        #        axes[n_u, n_c].set_ylabel('Antenna #')
+        #        axes[n_u, n_c].set_xlabel('Frame #')
+        #        # Minor ticks
+        #        axes[n_u, n_c].set_xticks(np.arange(hdf5.n_frm_st, hdf5.n_frm_end, 1), minor=True)
+        #        axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
+        #        # Gridlines based on minor ticks
+        #        axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
+
+        #cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')
+        #cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])
+        ##plt.show()
 
         # SHOW FIGURES
         plt.show()
