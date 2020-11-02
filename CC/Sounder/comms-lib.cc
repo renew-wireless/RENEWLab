@@ -504,7 +504,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
         // Define freq-domain LTS symbol according to
         // https://standards.ieee.org/standard/802_11a-1999.html
         std::vector<std::complex<float>> lts_symbol_freq
-	    = { { 0, 0}, { 0, 0}, { 0, 0}, { 0, 0}, { 0, 0}, { 0, 0}, { 1, 0}, {1, 0},
+            = { { 0, 0}, { 0, 0}, { 0, 0}, { 0, 0}, { 0, 0}, { 0, 0}, { 1, 0}, {1, 0},
                 {-1, 0}, {-1, 0}, { 1, 0}, { 1, 0}, {-1, 0}, { 1, 0}, {-1, 0}, {1, 0},
                 { 1, 0}, { 1, 0}, { 1, 0}, { 1, 0}, { 1, 0}, {-1, 0}, {-1, 0}, {1, 0},
                 { 1, 0}, {-1, 0}, { 1, 0}, {-1, 0}, { 1, 0}, { 1, 0}, { 1, 0}, {1, 0},
