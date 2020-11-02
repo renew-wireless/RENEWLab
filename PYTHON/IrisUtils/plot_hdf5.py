@@ -74,8 +74,10 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
     pilot_type = metadata['PILOT_SEQ_TYPE'].astype(str)[0]
     ofdm_pilot = np.array(metadata['OFDM_PILOT'])
     reciprocal_calib = np.array(metadata['RECIPROCAL_CALIB'])
+    symbol_length_no_pad = symbol_length - z_padding
+    num_pilots_per_sym = ((symbol_length_no_pad) // len(ofdm_pilot))
 
-    print(" symbol_length = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}".format(symbol_length, cp, prefix_len, postfix_len, z_padding))
+    print(" symbol_length = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}, pilot_rep = {}".format(symbol_length, cp, prefix_len, postfix_len, z_padding, num_pilots_per_sym))
 
     print("********     verify_hdf5(): Calling filter_pilots and frame_sanity    *********")
     n_ue = num_cl
@@ -98,7 +100,6 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
         n_ue = pilot_samples.shape[2]
         n_ant = pilot_samples.shape[3]
         seq_found = np.zeros((n_frame, n_cell, n_ue, n_ant))
-        num_pilots_per_sym = ((symbol_length-z_padding) // len(ofdm_pilot))
 
         for frameIdx in range(n_frame):    # Frame
             for cellIdx in range(n_cell):  # Cell
@@ -132,7 +133,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
     # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
     # For correlation use a fft size of 64
     print("*verify_hdf5(): Calling samps2csi with fft_size = {}, offset = {}, bound = cp = 0 *".format(fft_size, offset))
-    csi, samps = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = 0, cp = cp, sub = sub_sample)
+    csi, samps = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = z_padding, cp = cp, sub = sub_sample)
 
     # Correlation (Debug plot useful for checking sync)
     amps = np.mean(np.abs(samps[:, 0, user_i, 0, ant_i, :]), axis=1)
