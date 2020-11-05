@@ -32,7 +32,6 @@ SC_ZER0                 = [1 28:38];                              % Indices of s
 N_SC_ZERO               = length(SC_ZER0);
 
 % Rx processing params
-FFT_OFFSET                    = 16;         % Number of CP samples to use in FFT (on average)
 LTS_CORR_THRESH               = 0.8;        % Normalized threshold for LTS correlation
 DO_APPLY_CFO_CORRECTION       = 0;          % Enable CFO estimation/correction
 DO_APPLY_SFO_CORRECTION       = 0;          % Enable SFO estimation/correction
@@ -47,12 +46,12 @@ N_END_ZERO_PAD          = 100;
 N_UE                    = 4;
 N_BS_ANT                = 64;               % N_BS_ANT >> N_UE
 N_UPLINK_SYMBOLS        = N_OFDM_SYMS;
-N_0                     = 1e-2;
+N_0                     = 1e-3;
 H_var                   = 1;
 
 DO_SAVE_RX_DATA = 0;
-DO_APPLY_HW_IMPERFECTION = 1;
-DO_RECIPROCAL_CALIBRATION = 1;
+DO_APPLY_HW_IMPERFECTION = 0;
+DO_RECIPROCAL_CALIBRATION = 0;
 
 % LTS for CFO and channel estimation
 lts_f = [0 1 -1 -1 1 1 -1 1 -1 1 -1 -1 -1 -1 -1 1 1 -1 -1 1 -1 1 -1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1];
@@ -66,24 +65,24 @@ modvec_bpsk   =  (1/sqrt(2))  .* [-1 1];
 modvec_16qam  =  (1/sqrt(10)) .* [-3 -1 +3 +1];
 modvec_64qam  =  (1/sqrt(43)) .* [-7 -5 -1 -3 +7 +5 +1 +3];
 
-mod_fcn_bpsk  = @(x) complex(modvec_bpsk(1+x),0);
-mod_fcn_qpsk  = @(x) complex(modvec_bpsk(1+bitshift(x, -1)), modvec_bpsk(1+mod(x, 2)));
-mod_fcn_16qam = @(x) complex(modvec_16qam(1+bitshift(x, -2)), modvec_16qam(1+mod(x,4)));
-mod_fcn_64qam = @(x) complex(modvec_64qam(1+bitshift(x, -3)), modvec_64qam(1+mod(x,8)));
+mod_fcn_bpsk  = @(x) complex(modvec_bpsk(1 + x),0);
+mod_fcn_qpsk  = @(x) complex(modvec_bpsk(1 + bitshift(x, -1)), modvec_bpsk(1 + mod(x, 2)));
+mod_fcn_16qam = @(x) complex(modvec_16qam(1 + bitshift(x, -2)), modvec_16qam(1 + mod(x, 4)));
+mod_fcn_64qam = @(x) complex(modvec_64qam(1 + bitshift(x, -3)), modvec_64qam(1 + mod(x, 8)));
 
-demod_fcn_bpsk = @(x) double(real(x)>0);
-demod_fcn_qpsk = @(x) double(2*(real(x)>0) + 1*(imag(x)>0));
-demod_fcn_16qam = @(x) (8*(real(x)>0)) + (4*(abs(real(x))<0.6325)) + (2*(imag(x)>0)) + (1*(abs(imag(x))<0.6325));
-demod_fcn_64qam = @(x) (32*(real(x)>0)) + (16*(abs(real(x))<0.6172)) + (8*((abs(real(x))<(0.9258))&&((abs(real(x))>(0.3086))))) + (4*(imag(x)>0)) + (2*(abs(imag(x))<0.6172)) + (1*((abs(imag(x))<(0.9258))&&((abs(imag(x))>(0.3086)))));
+demod_fcn_bpsk = @(x) double(real(x) > 0);
+demod_fcn_qpsk = @(x) double(2*(real(x) > 0) + 1*(imag(x) > 0));
+demod_fcn_16qam = @(x) (8*(real(x) > 0)) + (4*(abs(real(x)) < 0.6325)) + (2 * (imag(x) > 0)) + (1 * (abs(imag(x)) < 0.6325));
+demod_fcn_64qam = @(x) (32*(real(x) > 0)) + (16*(abs(real(x)) < 0.6172)) + (8 * ((abs(real(x)) < (0.9258))&&((abs(real(x)) > (0.3086))))) + (4 * (imag(x) > 0)) + (2 * (abs(imag(x)) < 0.6172)) + (1 * ((abs(imag(x)) < (0.9258)) && ((abs(imag(x)) > (0.3086)))));
 
 %% Generate mMIMO tranceivers random phase vector [-pi, pi]
 if DO_APPLY_HW_IMPERFECTION
     rng('shuffle');
-    dl_tx_hw_phase = exp((2 * pi * repmat(rand(N_BS_ANT, 1), 1, N_SC) - pi) * 1j);
-    dl_rx_hw_phase = exp((2 * pi * repmat(rand(N_UE, 1), 1, N_SC) - pi) * 1j);
-    ul_tx_hw_phase = exp((2 * pi * repmat(rand(N_UE, 1), 1, N_SC) - pi) * 1j);
-    ul_rx_hw_phase = exp((2 * pi * repmat(rand(N_BS_ANT, 1), 1, N_SC) - pi) * 1j);
 
+    dl_tx_hw_phase = exp((2 * pi * rand(N_BS_ANT, N_SC) - pi) * 1j);
+    dl_rx_hw_phase = exp((2 * pi * rand(N_UE, N_SC) - pi) * 1j);
+    ul_tx_hw_phase = exp((2 * pi * rand(N_UE, N_SC) - pi) * 1j);
+    ul_rx_hw_phase = exp((2 * pi * rand(N_BS_ANT, N_SC) - pi) * 1j);
 else
     dl_tx_hw_phase = ones(N_BS_ANT, N_SC);
     ul_rx_hw_phase = ones(N_BS_ANT, N_SC);
@@ -94,20 +93,22 @@ end
 %% BS Calibration
 calib_mat = ones(N_BS_ANT, N_SC);
 if DO_RECIPROCAL_CALIBRATION
-    tx_ref_hw_phase = exp((2 * pi * rand - pi) * 1j);
-    rx_ref_hw_phase = exp((2 * pi * rand - pi) * 1j);
 
-    ul_tx_calib = ifft(lts_f * tx_ref_hw_phase);
-    H_ref = sqrt(H_var / 2) .* (randn(N_BS_ANT, 1) + 1i*randn(N_BS_ANT, 1));
-    Z_mat = sqrt(1e-4 / 2) * (randn(N_BS_ANT, length(ul_tx_calib)) + 1i*randn(N_BS_ANT, length(ul_tx_calib)));
+    tx_ref_hw_phase = exp((2 * pi * rand(1, N_SC) - pi) * 1j);
+    rx_ref_hw_phase = exp((2 * pi * rand(1, N_SC) - pi) * 1j);
+
+    H_ref = sqrt(H_var / 2) .* (randn(N_BS_ANT, 1) + 1i * randn(N_BS_ANT, 1));
+
+    ul_tx_calib = ifft(lts_f .* tx_ref_hw_phase);
+    Z_mat = sqrt(1e-4 / 2) * (randn(N_BS_ANT, length(ul_tx_calib)) + 1i * randn(N_BS_ANT, length(ul_tx_calib)));
     ul_rx_calib = H_ref * ul_tx_calib + Z_mat;
     ul_rx_calib_fft = fft(ul_rx_calib, N_SC, 2) .* ul_rx_hw_phase;
     h_ul_calib = ul_rx_calib_fft .* repmat(lts_f, N_BS_ANT, 1);
 
     dl_tx_calib = ifft(repmat(lts_f, N_BS_ANT, 1) .* dl_tx_hw_phase, N_SC, 2);
-    Z_mat = sqrt(1e-4 / 2) * (randn(N_BS_ANT, length(dl_tx_calib)) + 1i*randn(N_BS_ANT, length(dl_tx_calib)));
+    Z_mat = sqrt(1e-4 / 2) * (randn(N_BS_ANT, length(dl_tx_calib)) + 1i * randn(N_BS_ANT, length(dl_tx_calib)));
     dl_rx_calib = repmat(H_ref, 1, N_SC) .* dl_tx_calib + Z_mat;
-    dl_rx_calib_fft = fft(dl_rx_calib, N_SC, 2) * rx_ref_hw_phase;
+    dl_rx_calib_fft = fft(dl_rx_calib, N_SC, 2) .* repmat(rx_ref_hw_phase, N_BS_ANT, 1);
     h_dl_calib = dl_rx_calib_fft .* repmat(lts_f, N_BS_ANT, 1);
 
     calib_mat(:, SC_IND_DATA) = h_dl_calib(:, SC_IND_DATA) ./ h_ul_calib(:, SC_IND_DATA);
@@ -162,35 +163,34 @@ tx_payload_mat = ifft(ifft_in_hw_mat, N_SC, 2);
 
 % Insert the cyclic prefix
 if(CP_LEN > 0)
-    tx_cp = tx_payload_mat(:, (end-CP_LEN+1 : end), :);
+    tx_cp = tx_payload_mat(:, (end - CP_LEN + 1 : end), :);
     tx_payload_mat = cat(2, tx_cp, tx_payload_mat); %[tx_cp; tx_payload_mat];
 end
 
 % Reshape to a vector
 tx_payload_vec = reshape(tx_payload_mat, N_UE, numel(tx_payload_mat(1,:,:)));
-tx_pilot_vec = zeros(N_UE, SYM_LEN * (N_UE+1)); % additional pilot as noise
+tx_pilot_vec = zeros(N_UE, SYM_LEN * (N_UE + 1)); % additional pilot as noise
 for i=1:N_UE
     lts_t = ifft(lts_f .* ul_tx_hw_phase(i, :), 64);
-    tx_pilot_vec(i, (i-1)*SYM_LEN+1:i*SYM_LEN) = [lts_t(64-CP_LEN+1:64) lts_t];
+    tx_pilot_vec(i, (i-1) * SYM_LEN + 1:i * SYM_LEN) = [lts_t(64 - CP_LEN + 1:64) lts_t];
 end
 
 % Construct the full time-domain OFDM waveform
 tx_vec = [tx_pilot_vec tx_payload_vec];
-tx_vec_air = TX_SCALE .* tx_vec ./ repmat(max(abs(tx_vec),[],2), 1, size(tx_vec, 2));
+tx_vec_air = TX_SCALE .* tx_vec ./ repmat(max(abs(tx_vec), [], 2), 1, size(tx_vec, 2));
 
 % Rayleight + AWGN:
 
 rng('shuffle');
 
-Z_mat = sqrt(N_0/2) * ( randn(N_BS_ANT,length(tx_vec_air) ) + 1i*randn(N_BS_ANT,length(tx_vec_air) ) );     % UL noise matrix
-H = sqrt(H_var/2) .* ( randn(N_BS_ANT, N_UE) + 1i*randn(N_BS_ANT, N_UE) );                                  % Spatial Channel Matrix
+Z_mat = sqrt(N_0/2) * (randn(N_BS_ANT,length(tx_vec_air)) + 1i * randn(N_BS_ANT, length(tx_vec_air)));     % UL noise matrix
+H = sqrt(H_var/2) .* (randn(N_BS_ANT, N_UE) + 1i * randn(N_BS_ANT, N_UE));                                  % Spatial Channel Matrix
 
 rx_vec_air = H * tx_vec_air + Z_mat;
-%rx_vec_air = rx_vec_air./repmat(max(abs(rx_vec_air'))', 1, size(rx_vec_air, 2));
 
 rx_pilot_vec = zeros(N_BS_ANT, N_SC, N_UE);
 for i=1:N_UE
-    rx_pilot_vec(:, :, i) = rx_vec_air(:, (i-1)*SYM_LEN+CP_LEN+1:i*SYM_LEN);
+    rx_pilot_vec(:, :, i) = rx_vec_air(:, (i - 1) * SYM_LEN + CP_LEN + 1:i * SYM_LEN);
 end
 
 lts_f_mat = zeros(N_BS_ANT, N_SC, N_UE);
@@ -199,9 +199,9 @@ for i = 1:N_UE
 end
 csi_mat = fft(rx_pilot_vec, N_SC, 2) .* repmat(ul_rx_hw_phase, 1, 1, N_UE) .* lts_f_mat;
 
-rx_payload_vec=rx_vec_air(:, (N_UE+1)*SYM_LEN+1:end);
+rx_payload_vec = rx_vec_air(:, ((N_UE + 1) * SYM_LEN + 1):end);
 rx_payload_mat = reshape(rx_payload_vec, N_BS_ANT, SYM_LEN, N_OFDM_SYMS); % first two are preamble
-rx_payload_mat_noCP = rx_payload_mat(:, CP_LEN+1:end, :);
+rx_payload_mat_noCP = rx_payload_mat(:, CP_LEN + 1:end, :);
 fft_out_mat = fft(rx_payload_mat_noCP, N_SC, 2)  .* repmat(ul_rx_hw_phase, 1, 1, N_OFDM_SYMS);
 
 precoding_mat = zeros(N_BS_ANT, N_SC, N_UE);
@@ -211,8 +211,8 @@ for j=1:N_SC
     sc_csi_mat = squeeze(csi_mat(:, j, :));
     zf_mat = pinv(sc_csi_mat);
     demult_mat(:, j, :) = zf_mat * squeeze(fft_out_mat(:, j, :));
-    dl_zf_mat = pinv(diag(calib_mat(:, i)) * sc_csi_mat);
-    precoding_mat(:, j, :) = dl_zf_mat.'; %zf_mat.';
+    dl_zf_mat = pinv(diag(calib_mat(:, j)) * sc_csi_mat);
+    precoding_mat(:, j, :) = dl_zf_mat.'; % zf_mat.';
 end
 
 pilots_f_mat = demult_mat(:, SC_IND_PILOTS, :);
@@ -221,7 +221,7 @@ pilot_phase_err = squeeze(angle(mean(pilots_f_mat_comp, 2)));
 
 pilot_phase_corr = zeros(N_UE, N_SC, N_OFDM_SYMS);
 for i=1:N_SC
-    pilot_phase_corr(:,i,:) = exp(-1i*pilot_phase_err);
+    pilot_phase_corr(:, i, :) = exp(-1i*pilot_phase_err);
 end
   
 % Apply the pilot phase correction per symbol
@@ -269,9 +269,9 @@ tx_dl_syms_mat = reshape(tx_dl_syms, N_UE, length(SC_IND_DATA), N_OFDM_SYMS);
 
 tx_mult_mat = zeros(N_BS_ANT, N_SC, N_OFDM_SYMS + 2);
 for i=1:N_SC
-    lts_f_vec = lts_f(i)*ones(N_UE, 1);
+    lts_f_vec = lts_f(i) * ones(N_UE, 1);
     tx_mult_f = [lts_f_vec lts_f_vec squeeze(ifft_in_mat(:, i, :))];
-    tx_mult_mat(:, i, :) = squeeze(precoding_mat(:, i, :)) * tx_mult_f; % N_BS_ANT * N_SC * N_OFDM_SYMS
+    tx_mult_mat(:, i, :) = squeeze(precoding_mat(:, i, :)) * tx_mult_f;
 end
 
 tx_mult_hw_mat = tx_mult_mat .* repmat(dl_tx_hw_phase, 1, 1, N_OFDM_SYMS + 2);
@@ -286,22 +286,23 @@ else
 end
 
 tx_dl_vec = reshape(tx_dl_mat, N_BS_ANT, numel(tx_dl_mat(1, :, :)));
-tx_dl_vec = TX_SCALE .* tx_dl_vec ./ repmat(max(abs(tx_dl_vec), [], 2), 1, length(tx_dl_vec));
+%tx_dl_vec = TX_SCALE .* tx_dl_vec ./ repmat(max(abs(tx_dl_vec), [], 2), 1, length(tx_dl_vec));
+tx_dl_vec = TX_SCALE * tx_dl_vec / max(abs(tx_dl_vec), [], 'all'); % use the same scaling factor across antennas
 
-Z_dl_mat = sqrt(N_0/2) * (randn(N_UE,length(tx_dl_vec)) + 1i*randn(N_UE,length(tx_dl_vec))); % DL noise matrix
-rx_dl_vec = (1/(sqrt(N_BS_ANT))) .* H.'*tx_dl_vec + Z_dl_mat;
+Z_dl_mat = sqrt(N_0/2) * (randn(N_UE, length(tx_dl_vec)) + 1i * randn(N_UE, length(tx_dl_vec))); % DL noise matrix
+rx_dl_vec = (1/(sqrt(N_BS_ANT))) * (H.' * tx_dl_vec) + Z_dl_mat;
 
 rx_dl_mat = reshape(rx_dl_vec, N_UE, SYM_LEN, N_OFDM_SYMS + 2);
 if(CP_LEN > 0)
-    rx_dl_mat = rx_dl_mat(:, CP_LEN+1:end, :);
+    rx_dl_mat = rx_dl_mat(:, CP_LEN + 1:end, :);
 end
 
 rx_dl_f_mat = fft(rx_dl_mat, N_SC, 2) .* repmat(dl_rx_hw_phase, 1, 1, N_OFDM_SYMS + 2);
 rx_lts1_f = rx_dl_f_mat(:, :, 1);
 rx_lts2_f = rx_dl_f_mat(:, :, 2);
-dl_syms_f_mat = rx_dl_f_mat(:, :, 3:end);
-rx_H_est = repmat(lts_f, N_UE, 1).*(rx_lts1_f + rx_lts2_f)/2;
+rx_H_est = repmat(lts_f, N_UE, 1) .* ((rx_lts1_f + rx_lts2_f)/2);
 
+dl_syms_f_mat = rx_dl_f_mat(:, :, 3:end);
 dl_syms_eq_mat = zeros(N_UE, N_SC, N_OFDM_SYMS);
 for i=1:N_OFDM_SYMS
     dl_syms_eq_mat(:,:,i) = squeeze(dl_syms_f_mat(:,:,i))./rx_H_est;
@@ -313,11 +314,11 @@ pilot_dl_phase_err = squeeze(angle(mean(pilots_eq_mat_comp,2)));
 
 pilot_dl_phase_corr = zeros(N_UE, N_SC, N_OFDM_SYMS);
 for i=1:N_SC
-    pilot_dl_phase_corr(:,i,:) = exp(-1i*pilot_dl_phase_err);
+    pilot_dl_phase_corr(:,i,:) = exp(-1i * pilot_dl_phase_err);
 end
   
 % Apply the pilot phase correction per symbol
-dl_syms_eq_pc_mat = dl_syms_eq_mat.* pilot_dl_phase_corr;
+dl_syms_eq_pc_mat = dl_syms_eq_mat .* pilot_dl_phase_corr;
 payload_dl_syms_mat = dl_syms_eq_pc_mat(:, SC_IND_DATA, :);
 payload_dl_syms_mat = reshape(payload_dl_syms_mat, N_UE, numel(payload_dl_syms_mat(1,:,:)));
 
@@ -346,9 +347,9 @@ dl_sym_errs = sum(sum(tx_dl_data ~= rx_dl_data)); % errors per user
 dl_bit_errs = length(find(dec2bin(bitxor(tx_dl_data, rx_dl_data), 8) == '1'));
 
 tx_dl_syms_vecs = reshape(tx_dl_syms_mat, N_UE, numel(tx_dl_syms_mat(1, :, :)));
-dl_evm_mat = abs(payload_dl_syms_mat - tx_dl_syms_vecs).^2;
+dl_evm_mat = abs(payload_dl_syms_mat - tx_dl_syms_vecs) .^ 2;
 dl_aevms = mean(dl_evm_mat, 2);
-dl_snrs = 10*log10(1 ./ dl_aevms);
+dl_snrs = 10 * log10(1 ./ dl_aevms);
 
 %% Plots:
 cf = 0;
