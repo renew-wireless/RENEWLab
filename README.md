@@ -1,6 +1,6 @@
 # RENEWLab
 
-[![Build Status](https://8435d1ad526d.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fdevelop)](https://8435d1ad526d.ngrok.io/job/github_public_renewlab/job/develop/)
+[![Build Status](https://8435d1ad526d.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fbuild-url)](https://8435d1ad526d.ngrok.io/job/github_public_renewlab/job/build-url/)
 
 
 # Description
