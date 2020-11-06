@@ -468,7 +468,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
 		{ 1,  1}, {0, 0}, {0, 0}, {0, 0}, { 1,  1}, {0, 0}, {0, 0}, {0, 0},
 		{ 1,  1}, {0, 0}, {0, 0}, {0, 0}, { 0,  0}, {0, 0}, {0, 0}, {0, 0} };
 
-	// Perform ifft-shift on sts_freq
+        // Perform ifft-shift on sts_freq
         std::vector<std::complex<float>> sts_freq_shifted;
         sts_freq_shifted.insert(sts_freq_shifted.end(), sts_freq.begin() + 32, sts_freq.end());
         sts_freq_shifted.insert(sts_freq_shifted.end(), sts_freq.begin(), sts_freq.begin() + 32);
@@ -506,10 +506,10 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
                 { 1, 0}, {-1, 0}, {-1, 0}, { 1, 0}, {-1, 0}, { 1, 0}, {-1, 0}, {1, 0},
                 { 1, 0}, { 1, 0}, { 1, 0}, { 0, 0}, { 0, 0}, { 0, 0}, { 0, 0}, {0, 0} };
 
-	// Perform ifft-shift on lts_freq
-	std::vector<std::complex<float>> lts_freq_shifted;
-	lts_freq_shifted.insert(lts_freq_shifted.end(), lts_freq.begin() + 32, lts_freq.end());
-	lts_freq_shifted.insert(lts_freq_shifted.end(), lts_freq.begin(), lts_freq.begin() + 32);
+        // Perform ifft-shift on lts_freq
+        std::vector<std::complex<float>> lts_freq_shifted;
+        lts_freq_shifted.insert(lts_freq_shifted.end(), lts_freq.begin() + 32, lts_freq.end());
+        lts_freq_shifted.insert(lts_freq_shifted.end(), lts_freq.begin(), lts_freq.begin() + 32);
 
         std::vector<std::complex<float>> lts_iq
             = CommsLib::IFFT(lts_freq_shifted, 64);
