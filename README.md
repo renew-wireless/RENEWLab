@@ -1,6 +1,6 @@
 # RENEWLab
 
-[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fgithub-auth)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/github-auth/)
+[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fbuild-url)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/build-url/)
 
 
 # Description
