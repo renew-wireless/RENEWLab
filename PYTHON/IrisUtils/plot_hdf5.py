@@ -141,6 +141,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
     for i in range(samps.shape[4]):
         axes2[1, 0].plot(np.angle(csi[:, 0, user_i, 0, i, subcarrier_i]).flatten(), label="ant %d"%i)
     axes2[1, 0].legend(loc='lower right', frameon=False)
+    axes2[1, 0].set_ylim(-np.pi, np.pi)
     axes2[1, 0].set_xlabel('Frame')
 
     axes2[2, 0].set_ylabel('Correlation with Frame %d' % ref_frame)
@@ -152,7 +153,6 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
     axes2[2, 0].set_xlabel('Frame')
 
     if reciprocal_calib:
-        # TODO: add option for averaging across repeated pilots
         # frame, downlink(0)-uplink(1), antennas, subcarrier
         csi_u, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = up_calib_offset, bound = z_padding, cp = cp, sub = sub_sample)
         csi_d, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = dn_calib_offset, bound = z_padding, cp = cp, sub = sub_sample)
@@ -160,7 +160,9 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
         calib_corrected_csi[:, :, 0, :, :, :] = csi_d[:, :, 0, :, :, :]
         calib_corrected_csi[:, :, 1, :, :, :] = csi_u[:, :, 1, :, :, :]
         calib_corrected_csi_cell0 = calib_corrected_csi[:, 0, :, :, :, :]
-        calibCSI = np.mean(calib_corrected_csi_cell0, 2)
+        # TODO: add option for averaging across repeated pilots vs individual pilots
+        #calibCSI = np.mean(calib_corrected_csi_cell0, 2) # average several csi copies
+        calibCSI = calib_corrected_csi_cell0[:, :, 0, :, :] # take first csi
         calib_mat = np.divide(calibCSI[:, 0, :, :], calibCSI[:, 1, :, :])
 
         fig3, axes3 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
@@ -172,6 +174,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
 
         axes3[1, 0].set_ylabel('Phase (ant %d)' % (ant_i))
         axes3[1, 0].plot(np.angle(calib_mat[:, ant_i, subcarrier_i]).flatten())
+        axes3[1, 0].set_ylim(-np.pi, np.pi)
         axes3[1, 0].set_xlabel('Frame')
 
         axes3[2, 0].set_ylabel('Magnitude')
@@ -184,6 +187,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
         for i in range(calib_mat.shape[1]):
             axes3[3, 0].plot(np.angle(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d"%i)
         axes3[3, 0].set_xlabel('Frame')
+        axes3[3, 0].set_ylim(-np.pi, np.pi)
         axes3[3, 0].legend(loc='lower right', frameon=False)
 
         fig4, axes4 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
@@ -194,6 +198,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
 
         axes4[1, 0].set_ylabel('Phase ant %d' % (ant_i))
         axes4[1, 0].plot(np.angle(calib_mat[ref_frame, ant_i, :]).flatten())
+        axes4[1, 0].set_ylim(-np.pi, np.pi)
         axes4[1, 0].set_xlabel('Subcarrier')
 
         axes4[2, 0].set_ylabel('Magnitude')
@@ -206,6 +211,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
         for i in range(calib_mat.shape[1]):
             axes4[3, 0].plot(np.angle(calib_mat[ref_frame, i, :]).flatten(), label="ant %d"%i)
         axes4[3, 0].set_xlabel('Subcarrier')
+        axes4[3, 0].set_ylim(-np.pi, np.pi)
         axes4[3, 0].legend(loc='lower right', frameon=False)
 
 
