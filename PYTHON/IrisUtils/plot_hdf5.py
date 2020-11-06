@@ -113,7 +113,8 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
                                                                                           pilot_seq=ofdm_pilot)
                         # Find percentage of LTS peaks within a symbol
                         # (e.g., in a 4096-sample pilot symbol, we expect 64, 64-long sequences... assuming no CP)
-                        seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / num_pilots_per_sym)
+                        # seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / num_pilots_per_sym)
+                        seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (peak_map[frameIdx, cellIdx, ueIdx, bsAntIdx] / num_pilots_per_sym)  # use matched filter analysis output
 
                         dbg2 = False
                         if dbg2:
