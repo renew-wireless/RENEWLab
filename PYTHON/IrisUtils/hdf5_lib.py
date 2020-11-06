@@ -298,98 +298,6 @@ class hdf5_lib:
                 sys.exit(0)
         # return self.h5file
 
-    def filter_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16):
-        """
-        """
-        # dimensions of pilots_dump
-        n_frame = pilots_dump.shape[0]  # no. of captured frames
-        n_cell = pilots_dump.shape[1]  # no. of cells
-        n_ue = pilots_dump.shape[2]  # no. of UEs
-        n_ant = pilots_dump.shape[3]  # no. of BS antennas
-        n_iq = pilots_dump.shape[4]  # no. of IQ samples per frame
-
-        if ((n_iq % 2) != 0):
-            print("Size of iq samples:".format(n_iq))
-            raise Exception(
-                ' **** The length of iq samples per frames HAS to be an even number! **** ')
-
-        n_cmpx = n_iq // 2  # no. of complex samples
-        # no. of complex samples in a P subframe without pre- and post- fixes
-        n_csamp = n_cmpx - z_padding
-
-        idx_e = np.arange(0, n_iq, 2)  # even indices: real part of iq
-        # odd indices: imaginary part of iq
-        idx_o = np.arange(1, n_iq, 2)
-
-        # make a new data structure where the iq samples become complex numbers
-        cmpx_pilots = (pilots_dump[:, :, :, :, idx_e] +
-                       1j * pilots_dump[:, :, :, :, idx_o]) * 2 ** -15
-
-        # take a time-domain lts sequence, concatenate more copies, flip, conjugate
-        lts_t, lts_f = generate_training_seq(preamble_type='lts', seq_length=[
-        ], cp=cp, upsample=1, reps=[])  # TD LTS sequences (x2.5), FD LTS sequences
-        # DON'T assume cp!
-        lts_tmp = lts_t[- cp - fft_size:]
-        n_lts = len(lts_tmp)
-        # no. of LTS sequences in a pilot SF
-        k_lts = n_csamp // n_lts
-        # concatenate k LTS's to filter/correlate below
-        lts_seq_orig = np.tile(lts_tmp, k_lts)
-        lts_seq = lts_seq_orig[::-1]  # flip
-        # conjugate the local LTS sequence
-        lts_seq_conj = np.conjugate(lts_seq)
-
-        pool = mp.Pool(mp.cpu_count())
-        m_filt = np.empty(
-            [n_frame, n_cell, n_ue, n_ant, n_cmpx], dtype='complex64')
-        indexing_start = time.time()
-        for j in range(n_cell):
-            result_objects = [pool.apply_async(epd.extract_pilots_data,
-                                               args=(cmpx_pilots[i, j, :, :, :], lts_seq_conj, k_lts, n_lts, i)) for i
-                              in range(n_frame)]
-            for i in range(n_frame):
-                m_filt[i, j, :, :, :] = result_objects[i].get()[2]
-        indexing_end = time.time()
-        pool.close()
-
-        return m_filt, k_lts, n_lts, cmpx_pilots, lts_seq_orig
-
-    def log2csi_hdf5(self, filename, offset=0):
-        """Convert raw IQ log to CSI.
-
-        Converts input Argos HDF5 trace to frequency domain CSI and writes it to the same filename with -csi appended.
-
-        Args: filename of log
-
-        Returns: None
-
-        """
-        print("inside log2csi")
-        if legacy:
-            h5log = h5py.File(filename,'r')
-            symbol_len = h5log.attrs['samples_per_user']
-            num_cl = h5log.attrs['num_mob_ant'] + 1
-            pilot_samples = h5log['Pilot_Samples']
-        else:
-            symbol_len = int(self.h5file['Data'].attrs['SYMBOL_LEN'])
-            num_cl = int(self.h5file['Data'].attrs['CL_NUM'])
-
-        #compute CSI for each user and get a nice numpy array
-        #Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier
-        #also, iq samples nic(Last 'user' is noise.)ely chunked out, same dims, but subcarrier is sample.
-        csi,iq = samps2csi(pilot_samples, num_cl, symbol_len, offset=offset)
-
-        # create hdf5 file to dump csi to
-        h5f = h5py.File(filename[:-5]+'-csi.hdf5', 'w')
-        h5f.create_dataset('csi', data=csi)
-        #todo: copy gains
-        #todo check if file exists os.path.isfile(fname) if f in glob.glob(f):
-        for k in h5log.attrs:
-                h5f.attrs[k] = h5log.attrs[k]
-        h5f.close()
-        h5log.close()
-        print("finished log2csi")
-
     def get_data(self):
         """
         Parse file to retrieve metadata and data.
@@ -508,6 +416,98 @@ class hdf5_lib:
                 self.metadata[this_str] = ofdm_data
 
         return self.metadata
+
+    def filter_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16):
+        """
+        """
+        # dimensions of pilots_dump
+        n_frame = pilots_dump.shape[0]  # no. of captured frames
+        n_cell = pilots_dump.shape[1]  # no. of cells
+        n_ue = pilots_dump.shape[2]  # no. of UEs
+        n_ant = pilots_dump.shape[3]  # no. of BS antennas
+        n_iq = pilots_dump.shape[4]  # no. of IQ samples per frame
+
+        if ((n_iq % 2) != 0):
+            print("Size of iq samples:".format(n_iq))
+            raise Exception(
+                ' **** The length of iq samples per frames HAS to be an even number! **** ')
+
+        n_cmpx = n_iq // 2  # no. of complex samples
+        # no. of complex samples in a P subframe without pre- and post- fixes
+        n_csamp = n_cmpx - z_padding
+
+        idx_e = np.arange(0, n_iq, 2)  # even indices: real part of iq
+        # odd indices: imaginary part of iq
+        idx_o = np.arange(1, n_iq, 2)
+
+        # make a new data structure where the iq samples become complex numbers
+        cmpx_pilots = (pilots_dump[:, :, :, :, idx_e] +
+                       1j * pilots_dump[:, :, :, :, idx_o]) * 2 ** -15
+
+        # take a time-domain lts sequence, concatenate more copies, flip, conjugate
+        lts_t, lts_f = generate_training_seq(preamble_type='lts', seq_length=[
+        ], cp=cp, upsample=1, reps=[])  # TD LTS sequences (x2.5), FD LTS sequences
+        # DON'T assume cp!
+        lts_tmp = lts_t[- cp - fft_size:]
+        n_lts = len(lts_tmp)
+        # no. of LTS sequences in a pilot SF
+        k_lts = n_csamp // n_lts
+        # concatenate k LTS's to filter/correlate below
+        lts_seq_orig = np.tile(lts_tmp, k_lts)
+        lts_seq = lts_seq_orig[::-1]  # flip
+        # conjugate the local LTS sequence
+        lts_seq_conj = np.conjugate(lts_seq)
+
+        pool = mp.Pool(mp.cpu_count())
+        m_filt = np.empty(
+            [n_frame, n_cell, n_ue, n_ant, n_cmpx], dtype='complex64')
+        indexing_start = time.time()
+        for j in range(n_cell):
+            result_objects = [pool.apply_async(epd.extract_pilots_data,
+                                               args=(cmpx_pilots[i, j, :, :, :], lts_seq_conj, k_lts, n_lts, i)) for i
+                              in range(n_frame)]
+            for i in range(n_frame):
+                m_filt[i, j, :, :, :] = result_objects[i].get()[2]
+        indexing_end = time.time()
+        pool.close()
+
+        return m_filt, k_lts, n_lts, cmpx_pilots, lts_seq_orig
+
+    def log2csi_hdf5(self, filename, offset=0):
+        """Convert raw IQ log to CSI.
+
+        Converts input Argos HDF5 trace to frequency domain CSI and writes it to the same filename with -csi appended.
+
+        Args: filename of log
+
+        Returns: None
+
+        """
+        print("inside log2csi")
+        if legacy:
+            h5log = h5py.File(filename,'r')
+            symbol_len = h5log.attrs['samples_per_user']
+            num_cl = h5log.attrs['num_mob_ant'] + 1
+            pilot_samples = h5log['Pilot_Samples']
+        else:
+            symbol_len = int(self.h5file['Data'].attrs['SYMBOL_LEN'])
+            num_cl = int(self.h5file['Data'].attrs['CL_NUM'])
+
+        #compute CSI for each user and get a nice numpy array
+        #Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier
+        #also, iq samples nic(Last 'user' is noise.)ely chunked out, same dims, but subcarrier is sample.
+        csi,iq = samps2csi(pilot_samples, num_cl, symbol_len, offset=offset)
+
+        # create hdf5 file to dump csi to
+        h5f = h5py.File(filename[:-5]+'-csi.hdf5', 'w')
+        h5f.create_dataset('csi', data=csi)
+        #todo: copy gains
+        #todo check if file exists os.path.isfile(fname) if f in glob.glob(f):
+        for k in h5log.attrs:
+                h5f.attrs[k] = h5log.attrs[k]
+        h5f.close()
+        h5log.close()
+        print("finished log2csi")
 
     @staticmethod
     def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False):

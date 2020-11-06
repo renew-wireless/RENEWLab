@@ -697,6 +697,7 @@ def main():
     # Tested with inputs: ./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5 300  (for two users)
     #                     ./data_in/Argos-2019-3-30-12-20-50_1x8x1.hdf5 300  (for one user) 
     parser = OptionParser()
+    parser.add_option("--show-metadata", action="store_true", dest="show_metadata", help="Displays hdf5 metadata", default= False)
     parser.add_option("--deep-inspect", action="store_true", dest="deep_inspect", help="Run script without analysis", default= False)
     parser.add_option("--ref-frame", type="int", dest="ref_frame", help="Frame number to plot", default=1000)
     parser.add_option("--legacy", action="store_true", dest="legacy", help="Parse and plot legacy hdf5 file", default=False)
@@ -714,6 +715,7 @@ def main():
     parser.add_option("--analyze-trace", action="store_true", dest="analyze", help="Run script without analysis", default= False)
     (options, args) = parser.parse_args()
 
+    show_metadata = options.show_metadata
     deep_inspect = options.deep_inspect
     n_frames_to_inspect = options.n_frames_to_inspect
     ref_ant = options.ref_ant
@@ -756,12 +758,29 @@ def main():
         # filename = 'ArgosCSI-96x8-2016-11-03-03-03-45_5GHz_static.hdf5'
         hdf5 = h5py.File(str(filename), 'r')
         compute_legacy(hdf5)
-    if verify and not legacy:
-        hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
-        verify_hdf5(hdf5, ref_frame, ref_ant, ref_user, ref_subcarrier, signal_offset, downlink_calib_offset, uplink_calib_offset, fr_strt, thresh, deep_inspect, sub_sample)
-    if analyze and not legacy:
-        hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
-        analyze_hdf5(hdf5)
+    else:
+        if show_metadata:
+            hdf5 = hdf5_lib(filename)
+            print(hdf5.metadata)
+            pilot_samples = hdf5.pilot_samples
+            uplink_samples = hdf5.uplink_samples
+
+            # Check which data we have available
+            pilots_avail = len(pilot_samples) > 0
+            ul_data_avail = len(uplink_samples) > 0
+            if pilots_avail:
+                print("HDF5 pilot data size:")
+                print(pilot_samples.shape)
+            if ul_data_avail:
+                print("HDF5 uplink data size:")
+                print(uplink_samples.shape)
+
+        else:
+            hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
+            if verify:
+                verify_hdf5(hdf5, ref_frame, ref_ant, ref_user, ref_subcarrier, signal_offset, downlink_calib_offset, uplink_calib_offset, fr_strt, thresh, deep_inspect, sub_sample)
+            if analyze:
+                analyze_hdf5(hdf5)
     scrpt_end = time.time()
     print(">>>> Script Duration: time: %f \n" % ( scrpt_end - scrpt_strt) )
 
