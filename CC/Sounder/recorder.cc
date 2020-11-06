@@ -32,38 +32,36 @@ Recorder::Recorder(Config* in_cfg)
     file_ = nullptr;
     pilot_dataset_ = nullptr;
     data_dataset_ = nullptr;
-
-    size_t buffer_chunk_size;
-    if (cfg_->bs_present() == true)
-        buffer_chunk_size = kSampleBufferFrameNum * cfg_->symbols_per_frame()
-            * (cfg_->getTotNumAntennas() / cfg_->rx_thread_num());
-    else
-        buffer_chunk_size = kSampleBufferFrameNum * cfg_->symbols_per_frame()
-            * cfg_->getTotNumAntennas();
+    size_t rx_thread_num = cfg_->rx_thread_num();
+    size_t task_thread_num = cfg_->task_thread_num();
+    size_t ant_per_rx_thread
+        = cfg_->bs_present() ? cfg_->getTotNumAntennas() / rx_thread_num : 1;
+    rx_thread_buff_size_
+        = kSampleBufferFrameNum * cfg_->symbols_per_frame() * ant_per_rx_thread;
 
     task_queue_
-        = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
+        = moodycamel::ConcurrentQueue<Event_data>(rx_thread_buff_size_ * 36);
     message_queue_
-        = moodycamel::ConcurrentQueue<Event_data>(buffer_chunk_size * 36);
-    int rx_thread_num = cfg_->rx_thread_num();
-    int task_thread_num = cfg_->task_thread_num();
+        = moodycamel::ConcurrentQueue<Event_data>(rx_thread_buff_size_ * 36);
 
-    MLPD_TRACE("Recorder construction - rx thread: %d, task tread %d, chunk "
+    MLPD_TRACE("Recorder construction - rx thread: %zu, task tread %zu, chunk "
                "size: %zu\n",
-        rx_thread_num, task_thread_num, buffer_chunk_size);
+        rx_thread_num, task_thread_num, rx_thread_buff_size_);
 
     if (rx_thread_num > 0) {
         // initialize rx buffers
         rx_buffer_ = new SampleBuffer[rx_thread_num];
-        int intsize = sizeof(std::atomic_int);
-        int arraysize = (buffer_chunk_size + intsize - 1) / intsize;
+        size_t intsize = sizeof(std::atomic_int);
+        size_t arraysize = (rx_thread_buff_size_ + intsize - 1) / intsize;
         size_t packageLength = sizeof(Package) + cfg_->getPackageDataLength();
-        for (int i = 0; i < rx_thread_num; i++) {
-            rx_buffer_[i].buffer.resize(buffer_chunk_size * packageLength);
+        for (size_t i = 0; i < rx_thread_num; i++) {
+            rx_buffer_[i].buffer.resize(rx_thread_buff_size_ * packageLength);
             rx_buffer_[i].pkg_buf_inuse = new std::atomic_int[arraysize];
             std::fill_n(rx_buffer_[i].pkg_buf_inuse, arraysize, 0);
         }
     }
+
+    // Receiver object will be used for both BS and clients
     try {
         receiver_.reset(new Receiver(rx_thread_num, cfg_, &message_queue_));
     } catch (std::exception& e) {
@@ -77,12 +75,12 @@ Recorder::Recorder(Config* in_cfg)
         pthread_attr_init(&detached_attr);
         pthread_attr_setdetachstate(&detached_attr, PTHREAD_CREATE_DETACHED);
 
-        for (int i = 0; i < task_thread_num; i++) {
+        for (size_t i = 0; i < task_thread_num; i++) {
             EventHandlerContext* context = new EventHandlerContext;
             pthread_t task_thread;
             context->obj_ptr = this;
             context->id = i;
-            MLPD_TRACE("Launching task thread with id: %d\n", i);
+            MLPD_TRACE("Launching task thread with id: %zu\n", i);
             if (pthread_create(&task_thread, &detached_attr,
                     Recorder::taskThread_launch, context)
                 != 0) {
@@ -168,6 +166,15 @@ static void write_attribute(H5::Group& g, const char name[],
         val_pair[2 * j + 1] = std::imag(val[j]);
     }
     att.write(H5::PredType::NATIVE_DOUBLE, &val_pair[0]);
+}
+
+static void write_attribute(H5::Group& g, const char name[], size_t val)
+{
+    hsize_t dims[] = { 1 };
+    H5::DataSpace attr_ds = H5::DataSpace(1, dims);
+    H5::Attribute att
+        = g.createAttribute(name, H5::PredType::STD_U32BE, attr_ds);
+    att.write(H5::PredType::NATIVE_UINT, &val);
 }
 
 static void write_attribute(H5::Group& g, const char name[], int val)
@@ -351,11 +358,6 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         write_attribute(
             mainGroup, "BS_BEACON_ANT", (int)this->cfg_->beacon_ant());
 
-        // Number of antennas on Base Station
-        write_attribute(mainGroup, "BS_NUM_ANT",
-            (int)this->cfg_
-                ->getNumAntennas()); // TODO: REMOVE SOON, REPLACE BY PER CELL
-
         // Number of antennas on Base Station (per cell)
         std::vector<std::string> bs_ant_num_per_cell(
             this->cfg_->bs_sdr_ids().size());
@@ -373,6 +375,10 @@ herr_t Recorder::initHDF5(const std::string& hdf5)
         // Number of uplink symbols per frame
         write_attribute(
             mainGroup, "UL_SYMS", (int)this->cfg_->ul_syms_per_frame());
+
+        // Reciprocal Calibration Mode
+        write_attribute(mainGroup, "RECIPROCAL_CALIB",
+            this->cfg_->reciprocal_calib() ? 1 : 0);
 
         // ******* Clients ******** //
         // Freq. Domain Pilot symbols
@@ -688,15 +694,11 @@ void Recorder::taskThread(EventHandlerContext* context)
     }
 }
 
-// do Crop
 herr_t Recorder::record(int, int offset)
 {
     herr_t ret = 0;
-    size_t buffer_chunk_size = kSampleBufferFrameNum
-        * this->cfg_->symbols_per_frame()
-        * (this->cfg_->getTotNumAntennas() / this->cfg_->rx_thread_num());
-    int buffer_id = offset / buffer_chunk_size;
-    int buffer_offset = offset - (buffer_id * buffer_chunk_size);
+    size_t buffer_id = offset / rx_thread_buff_size_;
+    size_t buffer_offset = offset - (buffer_id * rx_thread_buff_size_);
 
     // read info
     size_t package_length
@@ -707,7 +709,7 @@ herr_t Recorder::record(int, int offset)
 
     //Generates a ton of messages
     //MLPD_TRACE( "Tid: %d -- Record chunk size: %zu, buffer id: %d, buffer offset: %d, length %zu, offset %d\n",
-    //            tid, buffer_chunk_size, buffer_id, buffer_offset, package_length, offset );
+    //            tid, rx_thread_buff_size_, buffer_id, buffer_offset, package_length, offset );
 
 #if DEBUG_PRINT
     printf("record            frame %d, symbol %d, cell %d, ant %d samples: %d "
@@ -736,7 +738,8 @@ herr_t Recorder::record(int, int offset)
             }
             DataspaceIndex hdfoffset
                 = { pkg->frame_id, pkg->cell_id, 0, pkg->ant_id, 0 };
-            if (this->cfg_->isPilot(pkg->frame_id, pkg->symbol_id)) {
+            if (this->cfg_->reciprocal_calib()
+                || this->cfg_->isPilot(pkg->frame_id, pkg->symbol_id)) {
                 //assert(this->pilot_dataset_ >= 0);
                 // Are we going to extend the dataset?
                 if (pkg->frame_id >= this->frame_number_pilot_) {

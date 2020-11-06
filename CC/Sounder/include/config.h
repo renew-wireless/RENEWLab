@@ -27,12 +27,12 @@ public:
     //Accessors
     inline bool bs_present(void) const { return this->bs_present_; }
     inline bool client_present(void) const { return this->client_present_; }
-    inline size_t num_bs_bdrs_all(void) const { return this->num_bs_bdrs_all_; }
+    inline size_t num_bs_sdrs_all(void) const { return this->num_bs_sdrs_all_; }
     inline size_t num_cl_sdrs(void) const { return this->num_cl_sdrs_; }
     inline size_t core_alloc(void) const { return this->core_alloc_; }
     inline int subframe_size(void) const { return this->subframe_size_; }
     inline int samps_per_symbol(void) const { return this->samps_per_symbol_; }
-    inline int symbols_per_frame(void) const
+    inline size_t symbols_per_frame(void) const
     {
         return this->symbols_per_frame_;
     }
@@ -101,6 +101,12 @@ public:
     inline const std::vector<size_t>& n_bs_sdrs_agg(void) const
     {
         return this->n_bs_sdrs_agg_;
+    }
+    inline bool reciprocal_calib(void) const { return this->reciprocal_calib_; }
+    inline size_t cal_ref_sdr_id(void) const { return this->cal_ref_sdr_id_; }
+    inline const std::vector<std::vector<std::string>>& calib_frames(void) const
+    {
+        return this->calib_frames_;
     }
 
     //TODO split the following (4) in accessor and setter
@@ -250,11 +256,11 @@ private:
     double
         radio_rf_freq_; // RF frequency set frame_modeon the radio after NCO adjustments
     double bw_filter_;
-    int subframe_size_;
-    int samps_per_symbol_;
-    int prefix_;
-    int postfix_;
-    int symbols_per_frame_;
+    size_t subframe_size_;
+    size_t samps_per_symbol_;
+    size_t prefix_;
+    size_t postfix_;
+    size_t symbols_per_frame_;
     size_t pilot_syms_per_frame_;
     size_t ul_syms_per_frame_;
     size_t dl_syms_per_frame_; // No accessor
@@ -282,7 +288,7 @@ private:
     std::vector<size_t> n_bs_sdrs_;
     std::vector<size_t> n_bs_antennas_; //No accessor
     std::vector<size_t> n_bs_sdrs_agg_;
-    size_t num_bs_bdrs_all_;
+    size_t num_bs_sdrs_all_;
     std::string bs_channel_;
     std::vector<std::string> frames_;
     std::string frame_mode_;
@@ -296,10 +302,13 @@ private:
     bool single_gain_;
     std::vector<double> tx_gain_;
     std::vector<double> rx_gain_;
-    std::vector<double> cal_tx_gain_; //2
+    std::vector<double> cal_tx_gain_;
     bool sample_cal_en_;
     bool imbalance_cal_en_;
     std::string trace_file_;
+    std::vector<std::vector<std::string>> calib_frames_;
+    bool reciprocal_calib_;
+    size_t cal_ref_sdr_id_;
 
     // Clients features
     std::vector<std::string> cl_sdr_ids_;

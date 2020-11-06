@@ -108,9 +108,9 @@ std::vector<std::vector<size_t>> Utils::loadSymbols(
     std::vector<std::string> frames, char sym)
 {
     std::vector<std::vector<size_t>> symId;
-    int frameSize = frames.size();
+    size_t frameSize = frames.size();
     symId.resize(frameSize);
-    for (int f = 0; f < frameSize; f++) {
+    for (size_t f = 0; f < frameSize; f++) {
         std::string fr = frames[f];
         for (size_t g = 0; g < fr.size(); g++) {
             if (fr[g] == sym) {
