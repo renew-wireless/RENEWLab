@@ -1,6 +1,6 @@
 # RENEWLab
 
-[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fdevelop-uhd)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/develop-uhd/)
+[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Ftest-uhd)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/test-uhd/)
 
 
 # Description
