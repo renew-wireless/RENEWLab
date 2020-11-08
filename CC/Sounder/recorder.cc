@@ -238,7 +238,7 @@ typedef hsize_t DataspaceIndex[DS_DIM];
 
 herr_t Recorder::initHDF5(const std::string& hdf5)
 {
-    MLPD_TRACE("Init HD5F file: %s\n", hdf5.c_str());
+    MLPD_INFO("Init HD5F file: %s\n", hdf5.c_str());
     this->hdf5_name_ = hdf5;
 
     // dataset dimension
