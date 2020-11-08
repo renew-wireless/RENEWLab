@@ -503,16 +503,16 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
         // https://standards.ieee.org/standard/802_11a-1999.html
         std::vector<std::complex<float>> lts_freq
             = { { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },
-                  { 1, 0 }, { 1, 0 }, { -1, 0 }, { -1, 0 }, { 1, 0 }, { 1, 0 },
-                  { -1, 0 }, { 1, 0 }, { -1, 0 }, { 1, 0 }, { 1, 0 }, { 1, 0 },
-                  { 1, 0 }, { 1, 0 }, { 1, 0 }, { -1, 0 }, { -1, 0 }, { 1, 0 },
-                  { 1, 0 }, { -1, 0 }, { 1, 0 }, { -1, 0 }, { 1, 0 }, { 1, 0 },
-                  { 1, 0 }, { 1, 0 }, { 0, 0 }, { 1, 0 }, { -1, 0 }, { -1, 0 },
-                  { 1, 0 }, { 1, 0 }, { -1, 0 }, { 1, 0 }, { -1, 0 }, { 1, 0 },
-                  { -1, 0 }, { -1, 0 }, { -1, 0 }, { -1, 0 }, { -1, 0 },
-                  { 1, 0 }, { 1, 0 }, { -1, 0 }, { -1, 0 }, { 1, 0 }, { -1, 0 },
-                  { 1, 0 }, { -1, 0 }, { 1, 0 }, { 1, 0 }, { 1, 0 }, { 1, 0 },
-                  { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } };
+                { 1, 0 }, { 1, 0 }, { -1, 0 }, { -1, 0 }, { 1, 0 }, { 1, 0 },
+                { -1, 0 }, { 1, 0 }, { -1, 0 }, { 1, 0 }, { 1, 0 }, { 1, 0 },
+                { 1, 0 }, { 1, 0 }, { 1, 0 }, { -1, 0 }, { -1, 0 }, { 1, 0 },
+                { 1, 0 }, { -1, 0 }, { 1, 0 }, { -1, 0 }, { 1, 0 }, { 1, 0 },
+                { 1, 0 }, { 1, 0 }, { 0, 0 }, { 1, 0 }, { -1, 0 }, { -1, 0 },
+                { 1, 0 }, { 1, 0 }, { -1, 0 }, { 1, 0 }, { -1, 0 }, { 1, 0 },
+                { -1, 0 }, { -1, 0 }, { -1, 0 }, { -1, 0 }, { -1, 0 },
+                { 1, 0 }, { 1, 0 }, { -1, 0 }, { -1, 0 }, { 1, 0 }, { -1, 0 },
+                { 1, 0 }, { -1, 0 }, { 1, 0 }, { 1, 0 }, { 1, 0 }, { 1, 0 },
+                { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } };
 
         // Perform ifft-shift on lts_freq
         std::vector<std::complex<float>> lts_freq_shifted;
@@ -606,8 +606,9 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
         matrix.resize(2);
 
         size_t gold_seq_len = N;
-        // Fixme: sort based on PAPR
-        size_t gold_index = 51;
+        size_t gold_index = 51; // FIXME: sort based on PAPR
+
+	// Load gold-127 codebook
         std::string line;
         std::vector<std::vector<int>> gold_codebook_127;
         std::ifstream myfile("../../PYTHON/IrisUtils/codebooks/gold-127");
@@ -616,7 +617,9 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             gold_codebook_127.push_back(std::vector<int>(
                 std::istream_iterator<int>(is), std::istream_iterator<int>()));
         }
+	myfile.close();
 
+	// Use the code with highest PAPR
         std::vector<std::complex<float>> gold_code(N);
         for (size_t i = 0; i < gold_seq_len - 1; i++) {
             gold_code[i] = std::complex((float)gold_codebook_127[gold_index][i],
@@ -629,12 +632,6 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
         for (size_t i = 0; i < gold_seq_len; i++) {
             gold_freq[2 * i] = gold_code[i];
         }
-
-        for (size_t i = 0; i < 2 * gold_seq_len; i++) {
-            std::cout << i << ": (" << gold_freq[i].real() << ", "
-                      << gold_freq[i].imag() << ")" << std::endl;
-        }
-        std::cout << std::endl;
 
         // Perform ifft-shift on gold_freq
         std::vector<std::complex<float>> gold_freq_shifted;
@@ -650,12 +647,6 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
         for (size_t i = 0; i < gold_seq_len; i++) {
             gold_ifft_re[i] = gold_ifft_iq[i].real();
             gold_ifft_im[i] = gold_ifft_iq[i].imag();
-        }
-
-        std::cout << "gold_ifft size: " << gold_seq_len << std::endl;
-        for (size_t i = 0; i < gold_seq_len; i++) {
-            std::cout << "gold_ifft[" << i << "]: " << gold_ifft_re[i] << ", "
-                      << gold_ifft_im[i] << "..." << std::endl;
         }
 
         /*
