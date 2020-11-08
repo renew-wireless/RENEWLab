@@ -10,11 +10,12 @@
 		 "txgainB" : 40,
 		 "rate" : 5e6,
 		 "max_frame" : 4000,
-		 "subframe_size" : 800,
-		 "fft_size" : 64,
-		 "cp_size" : 16,
+		 "ofdm_symbol_per_subframe" : 1,
+		 "fft_size" : 512,
+		 "cp_size" : 32,
 		 "prefix" : 160,
 		 "postfix" : 160,
+		 "pilot_seq" : "zadoff-chu",
 		 "reciprocal_calibration" : true,
 		 "single_gain" : false
 	}
