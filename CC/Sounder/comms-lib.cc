@@ -456,9 +456,9 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
         // STS - 802.11 Short training sequence (one symbol)
         matrix.resize(2);
 
-        // Define freq-domain STS symbol according to
+        // Define freq-domain STS according to
         // https://standards.ieee.org/standard/802_11a-1999.html
-        std::vector<std::complex<float>> sts_symbol_freq
+        std::vector<std::complex<float>> sts_freq
             = { { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },
                   { 0, 0 }, { 0, 0 }, { 1, 1 }, { 0, 0 }, { 0, 0 }, { 0, 0 },
                   { -1, -1 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 1, 1 }, { 0, 0 },
@@ -471,14 +471,21 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
                   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 1, 1 }, { 0, 0 }, { 0, 0 },
                   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } };
 
-        std::vector<std::complex<float>> sts_symbol_iq
-            = CommsLib::IFFT(sts_symbol_freq, 64);
+        // Perform ifft-shift on sts_freq
+        std::vector<std::complex<float>> sts_freq_shifted;
+        sts_freq_shifted.insert(
+            sts_freq_shifted.end(), sts_freq.begin() + 32, sts_freq.end());
+        sts_freq_shifted.insert(
+            sts_freq_shifted.end(), sts_freq.begin(), sts_freq.begin() + 32);
+
+        std::vector<std::complex<float>> sts_iq
+            = CommsLib::IFFT(sts_freq_shifted, 64);
         double sts_re[16], sts_im[16];
 
         // Construct STS
         for (size_t i = 0; i < 16; i++) {
-            sts_re[i] = sts_symbol_iq[i].real();
-            sts_im[i] = sts_symbol_iq[i].imag();
+            sts_re[i] = sts_iq[i].real();
+            sts_im[i] = sts_iq[i].imag();
         }
 
         int size = sizeof(sts_re) / sizeof(sts_re[0]);
@@ -492,9 +499,9 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
         // LTS - 802.11 Long training sequence (160 samples == 2.5 symbols, cp length of 32 samples)
         matrix.resize(2);
 
-        // Define freq-domain LTS symbol according to
+        // Define freq-domain LTS according to
         // https://standards.ieee.org/standard/802_11a-1999.html
-        std::vector<std::complex<float>> lts_symbol_freq
+        std::vector<std::complex<float>> lts_freq
             = { { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },
                   { 1, 0 }, { 1, 0 }, { -1, 0 }, { -1, 0 }, { 1, 0 }, { 1, 0 },
                   { -1, 0 }, { 1, 0 }, { -1, 0 }, { 1, 0 }, { 1, 0 }, { 1, 0 },
@@ -507,20 +514,21 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
                   { 1, 0 }, { -1, 0 }, { 1, 0 }, { 1, 0 }, { 1, 0 }, { 1, 0 },
                   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } };
 
-        auto lts_symbol_iq = CommsLib::IFFT(lts_symbol_freq, 64);
-        double lts_re[64], lts_im[64];
+        // Perform ifft-shift on lts_freq
+        std::vector<std::complex<float>> lts_freq_shifted;
+        lts_freq_shifted.insert(
+            lts_freq_shifted.end(), lts_freq.begin() + 32, lts_freq.end());
+        lts_freq_shifted.insert(
+            lts_freq_shifted.end(), lts_freq.begin(), lts_freq.begin() + 32);
 
-        for (size_t i = 0; i < 64; i++) {
-            lts_re[i] = lts_symbol_iq[i].real();
-            lts_im[i] = lts_symbol_iq[i].imag();
-        }
+        std::vector<std::complex<float>> lts_iq
+            = CommsLib::IFFT(lts_freq_shifted, 64);
 
-        int size = sizeof(lts_re) / sizeof(lts_re[0]);
-        matrix[0].resize(size);
-        matrix[1].resize(size);
-        for (int i = 0; i < size; i++) {
-            matrix[0][i] = lts_re[i];
-            matrix[1][i] = lts_im[i];
+        matrix[0].resize(64);
+        matrix[1].resize(64);
+        for (int i = 0; i < 64; i++) {
+            matrix[0][i] = lts_iq[i].real();
+            matrix[1][i] = lts_iq[i].imag();
         }
     } else if (type == LTE_ZADOFF_CHU) {
         // https://www.etsi.org/deliver/etsi_ts/136200_136299/136211/10.01.00_60/ts_136211v100100p.pdf
