@@ -615,17 +615,13 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             -1, -1, 1, -1, -1, 1, 1, -1, -1, -1, -1, 1, -1, 1, 1, 1, 1, -1, 1,
             1, -1, -1, 1, 1, -1, 1, -1, -1, 1, -1, -1, 1, -1, -1, 1, 1, -1, -1,
             -1 };
-        // Insert 0 at the center frequency and inter-leave the code
-        gold_code.insert(gold_code.begin() + 63, 0);
 
+        // Insert 0 at center freq, construct inter-leaved quad code
+        gold_code.insert(gold_code.begin() + 63, 0);
         std::vector<std::complex<float>> gold_freq(2 * gold_seq_len);
         for (size_t i = 0; i < gold_seq_len; i++) {
             gold_freq[2 * i]
                 = std::complex((float)gold_code[i], (float)gold_code[i]);
-        }
-        for (size_t i = 0; i < 2 * gold_seq_len; i++) {
-            std::cout << "[" << i << "]: (" << gold_freq[i].real() << ", "
-                      << gold_freq[i].imag() << ")" << std::endl;
         }
 
         // Perform ifft-shift on gold_freq
