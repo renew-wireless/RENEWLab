@@ -539,8 +539,8 @@ class hdf5_lib:
             usersamps = np.reshape(samps, (samps.shape[0], samps.shape[1], num_users, samps_per_user, 2))
             if debug:
                 print(
-                    "chunkstart = {}, usersamps.shape = {}, samps.shape = {}, samps_per_user = {}, nbat= {}, iq.shape = {}".format(
-                        chunkstart, usersamps.shape, samps.shape, samps_per_user, nbat, iq.shape))
+                    "chunkstart = {}, usersamps.shape = {}, samps.shape = {}, samps_per_user = {}, iq.shape = {}".format(
+                        chunkstart, usersamps.shape, samps.shape, samps_per_user, iq.shape))
             print("samps2csi checkpoint1 took %f seconds" % (time.time() - samps2csi_start))
             iq = np.empty((samps.shape[0], samps.shape[1], num_users, 2, fft_size), dtype='complex64')
             print("checkpoint2 took %f seconds" % (time.time() - samps2csi_start))
@@ -585,8 +585,8 @@ class hdf5_lib:
             iq = np.empty((samps.shape[0], samps.shape[1], num_users,
                            samps.shape[3], pilot_rep, fft_size), dtype='complex64')
             if debug:
-                print("chunkstart = {}, usersamps.shape = {}, samps.shape = {}, samps_per_user = {}, nbat= {}, iq.shape = {}".format(
-                    chunkstart, usersamps.shape, samps.shape, samps_per_user, nbat, iq.shape))
+                print("chunkstart = {}, usersamps.shape = {}, samps.shape = {}, samps_per_user = {}, iq.shape = {}".format(
+                    chunkstart, usersamps.shape, samps.shape, samps_per_user, iq.shape))
             for i in range(pilot_rep):
                 iq[:, :, :, :, i, :] = (usersamps[:, :, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size, 0] +
                                         usersamps[:, :, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size, 1]*1j)*2**-15
