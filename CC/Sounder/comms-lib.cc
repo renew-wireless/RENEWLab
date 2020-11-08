@@ -583,6 +583,42 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
         // Gold IFFT Sequence - seq_length=128, cp=0, upsample=1
         matrix.resize(2);
 
+        // Use row 52 in gold-127
+        size_t gold_seq_len = N;
+        std::vector<int> gold_code = { 1, -1, 1, -1, 1, -1, 1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, 1, 1, -1, 1, 1, 1, -1, 1, -1, -1, -1, 1, -1, -1,
+            -1, -1, -1, 1, -1, 1, -1, -1, 1, -1, -1, 1, 1, 1, -1, -1, 1, 1, -1,
+            1, 1, 1, 1, 1, -1, 1, -1, 1, 1, -1, -1, -1, 1, 1, 1, 1, -1, 1, -1,
+            -1, 1, 1, 1, -1, 1, 1, -1, -1, -1, 1, -1, -1, 1, -1, -1, -1, -1, -1,
+            -1, -1, 1, -1, -1, 1, 1, -1, -1, -1, -1, 1, -1, 1, 1, 1, 1, -1, 1,
+            1, -1, -1, 1, 1, -1, 1, -1, -1, 1, -1, -1, 1, -1, -1, 1, 1, -1, -1,
+            -1 };
+
+        // Insert 0 at center freq, construct inter-leaved quad code
+        gold_code.insert(gold_code.begin() + 63, 0);
+        std::vector<std::complex<float>> gold_freq(2 * gold_seq_len);
+        for (size_t i = 0; i < gold_seq_len; i++) {
+            gold_freq[2 * i]
+                = std::complex((float)gold_code[i], (float)gold_code[i]);
+        }
+
+        // Perform ifft-shift on gold_freq
+        std::vector<std::complex<float>> gold_freq_shifted;
+        gold_freq_shifted.insert(gold_freq_shifted.end(),
+            gold_freq.begin() + gold_seq_len, gold_freq.end());
+        gold_freq_shifted.insert(gold_freq_shifted.end(), gold_freq.begin(),
+            gold_freq.begin() + gold_seq_len);
+
+        std::vector<std::complex<float>> gold_ifft_iq
+            = CommsLib::IFFT(gold_freq_shifted, 2 * gold_seq_len);
+
+        double gold_ifft_re[128], gold_ifft_im[128];
+        for (size_t i = 0; i < gold_seq_len; i++) {
+            gold_ifft_re[i] = gold_ifft_iq[i].real();
+            gold_ifft_im[i] = gold_ifft_iq[i].imag();
+        }
+
+        /*
         double gold_ifft_re[128] = { -0.5646359, 0.4669951, 0.8769358,
             0.5407985, -0.48144832, -0.88476783, 0.33639774, -0.43609348,
             -0.26278743, 0.6910331, -0.25535262, 0.11774132, 0.46892625,
@@ -636,6 +672,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             -0.13464923, -0.14834122, 0.77644444, 0.46892625, 0.11774132,
             -0.25535262, 0.6910331, -0.26278743, -0.43609348, 0.33639774,
             -0.88476783, -0.48144832, 0.5407985, 0.8769358, 0.4669951 };
+	*/
 
         int size = sizeof(gold_ifft_re) / sizeof(gold_ifft_re[0]);
         matrix[0].resize(size);
