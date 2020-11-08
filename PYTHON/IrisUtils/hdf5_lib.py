@@ -417,7 +417,7 @@ class hdf5_lib:
 
         return self.metadata
 
-    def filter_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16):
+    def filter_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, pilot_type='lts'):
         """
         """
         # dimensions of pilots_dump
@@ -445,7 +445,7 @@ class hdf5_lib:
                        1j * pilots_dump[:, :, :, :, idx_o]) * 2 ** -15
 
         # take a time-domain lts sequence, concatenate more copies, flip, conjugate
-        lts_t, lts_f = generate_training_seq(preamble_type='lts', seq_length=[
+        lts_t, lts_f = generate_training_seq(preamble_type=pilot_type, seq_length=[
         ], cp=cp, upsample=1, reps=[])  # TD LTS sequences (x2.5), FD LTS sequences
         # DON'T assume cp!
         lts_tmp = lts_t[- cp - fft_size:]
@@ -510,7 +510,7 @@ class hdf5_lib:
         print("finished log2csi")
 
     @staticmethod
-    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False):
+    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False, pilot_type='lts'):
         """Convert an Argos HDF5 log file with raw IQ in to CSI.
         Asumes 802.11 style LTS used for trace collection.
     
@@ -597,12 +597,12 @@ class hdf5_lib:
 
             fftstart = time.time()
             csi = np.empty(iq.shape, dtype='complex64')
-            if fft_size == 64:
+            if pilot_type == 'lts':
                 # Retrieve frequency-domain LTS sequence
-                _, lts_freq = generate_training_seq(
-                    preamble_type='lts', seq_length=[], cp=32, upsample=1, reps=[])
+                _, lts_freq = generate_training_seq(preamble_type='lts')
                 pre_csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 5), 5)
-                csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 5), 5) * lts_freq
+                #csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 5), 5) * lts_freq
+                csi = pre_csi * lts_freq
                 if debug:
                     print("csi.shape:{} lts_freq.shape: {}, pre_csi.shape = {}".format(
                         csi.shape, lts_freq.shape, pre_csi.shape))
@@ -613,6 +613,12 @@ class hdf5_lib:
                 # remove zero subcarriers
                 csi = np.delete(csi, [0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63], 5)
                 print("samps2csi took %f seconds" % (time.time() - samps2csi_start))
+            else:
+                seq_freq = generate_training_seq(
+                    preamble_type=pilot_type, seq_length=fft_size, upsample=1)
+
+                csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 5), 5) / seq_freq
+                print("csi.shape:{}".format(csi.shape))
 
         return csi, iq
 

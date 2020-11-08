@@ -81,36 +81,37 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
     n_ue = num_cl
     frm_plt = min(default_frame, pilot_samples.shape[0] + n_frm_st)
 
+    # Verify default_frame does not exceed max number of collected frames
+    ref_frame = min(default_frame - n_frm_st, pilot_samples.shape[0])
+
     print("symbol_length = {}, offset = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}, pilot_rep = {}".format(symbol_length, offset, cp, prefix_len, postfix_len, z_padding, num_pilots_per_sym))
 
     samples = pilot_samples 
     num_cl_tmp = num_pilots  # number of UEs to plot data for
+
+    samps_mat = np.reshape(
+            samples[::sub_sample], (samples.shape[0], samples.shape[1], num_cl_tmp, samples.shape[3], symbol_length, 2))
+    samps = (samps_mat[:, :, :, :, :, 0] +
+            samps_mat[:, :, :, :, :, 1]*1j)*2**-15
+
+    # Correlation (Debug plot useful for checking sync)
+    amps = np.mean(np.abs(samps[:, 0, user_i, ant_i, :]), axis=1)
+    pilot_frames = [i for i in range(len(amps)) if amps[i] > thresh]
+    if len(pilot_frames) == 0: 
+        print("no valid frames where found. Decision threshold (average pilot amplitude) was %f" % thresh)
+        return 
 
     # Compute CSI from IQ samples
     # Samps: #Frames, #Cell, #Users, #Antennas, #Samples
     # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
     # For correlation use a fft size of 64
     print("*verify_hdf5(): Calling samps2csi with fft_size = {}, offset = {}, bound = cp = 0 *".format(fft_size, offset))
-    csi, samps = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = z_padding, cp = cp, sub = sub_sample)
+    csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type)
 
-    # Verify default_frame does not exceed max number of collected frames
-    ref_frame = min(default_frame - n_frm_st, samps.shape[0])
-
-    # Correlation (Debug plot useful for checking sync)
-    amps = np.mean(np.abs(samps[:, 0, user_i, 0, ant_i, :]), axis=1)
-    pilot_frames = [i for i in range(len(amps)) if amps[i] > thresh]
-    if len(pilot_frames) == 0: 
-        print("no valid frames where found. Decision threshold (average pilot amplitude) was %f" % thresh)
-        return 
     # TODO: consider other cells
     cellCSI = csi[:, 0, :, :, :, :]     # First cell
     userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
     corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2) ) )
-
-    # For looking at the whole picture, use a fft size of whole symbol_length as fft window (for visualization),
-    # and no offset
-    print("*verify_hdf5():Calling samps2csi *AGAIN*(?) with fft_size = symbol_length, no offset*")
-    _, samps = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size=symbol_length, offset=0, bound=0, cp=0, sub=sub_sample)
 
     # Plotter
     # Plot pilots
@@ -118,27 +119,27 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
     axes1[0, 0].set_title('Pilots IQ - Cell 0 - Antenna %d - User %d'%(ant_i, user_i))
     # Samps Dimensions: (Frame, Cell, User, Pilot Rep, Antenna, Sample)
     axes1[0, 0].set_ylabel('Frame %d (Re)' %( (ref_frame + n_frm_st)) )
-    axes1[0, 0].plot(np.real(samps[ref_frame, 0, user_i, 0, ant_i, :]))
+    axes1[0, 0].plot(np.real(samps[ref_frame, 0, user_i, ant_i, :]))
 
     axes1[1, 0].set_ylabel('Frame %d (Im)' %( (ref_frame + n_frm_st)) )
-    axes1[1, 0].plot(np.imag(samps[ref_frame, 0, user_i, 0, ant_i, :]))
+    axes1[1, 0].plot(np.imag(samps[ref_frame, 0, user_i, ant_i, :]))
 
     axes1[2, 0].set_ylabel('All Frames (Re)')
-    axes1[2, 0].plot(np.real(samps[:, 0, user_i, 0, ant_i, :]).flatten())
+    axes1[2, 0].plot(np.real(samps[:, 0, user_i, ant_i, :]).flatten())
 
     axes1[3, 0].set_ylabel('All Frames (Im)')
-    axes1[3, 0].plot(np.imag(samps[:, 0, user_i, 0, ant_i, :]).flatten())
+    axes1[3, 0].plot(np.imag(samps[:, 0, user_i, ant_i, :]).flatten())
 
     fig2, axes2 = plt.subplots(nrows=3, ncols=1, squeeze=False, figsize=(10, 8))
     axes2[0, 0].set_title('Pilots CSI Stats- Cell 0 - User %d - Subcarrier %d' % (user_i, subcarrier_i))
     axes2[0, 0].set_ylabel('Magnitude')
-    for i in range(samps.shape[4]):
+    for i in range(csi.shape[4]):
         axes2[0, 0].plot(np.abs(csi[:, 0, user_i, 0, i, subcarrier_i]).flatten(), label="ant %d"%i)
     axes2[0, 0].legend(loc='lower right', frameon=False)
     axes2[0, 0].set_xlabel('Frame')
 
     axes2[1, 0].set_ylabel('Phase')
-    for i in range(samps.shape[4]):
+    for i in range(csi.shape[4]):
         axes2[1, 0].plot(np.angle(csi[:, 0, user_i, 0, i, subcarrier_i]).flatten(), label="ant %d"%i)
     axes2[1, 0].legend(loc='lower right', frameon=False)
     axes2[1, 0].set_ylim(-np.pi, np.pi)
@@ -154,8 +155,8 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
 
     if reciprocal_calib:
         # frame, downlink(0)-uplink(1), antennas, subcarrier
-        csi_u, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = up_calib_offset, bound = z_padding, cp = cp, sub = sub_sample)
-        csi_d, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = dn_calib_offset, bound = z_padding, cp = cp, sub = sub_sample)
+        csi_u, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = up_calib_offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type)
+        csi_d, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = dn_calib_offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type)
         calib_corrected_csi = np.zeros(csi_d.shape, dtype='complex64')
         calib_corrected_csi[:, :, 0, :, :, :] = csi_d[:, :, 0, :, :, :]
         calib_corrected_csi[:, :, 1, :, :, :] = csi_u[:, :, 1, :, :, :]

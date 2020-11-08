@@ -133,7 +133,7 @@ def generate_training_seq(preamble_type='lts', seq_length=0, root=0, cp=32, upsa
 		sequence = np.concatenate((signal[len(signal) - cp:], signal, signal))  # could use tile...
 		return sequence, lts_freq
 
-	elif preamble_type == "lte_zadoffchu_seq":
+	elif preamble_type == "zadoff-chu":
                 u = 1
                 v = 0
 
