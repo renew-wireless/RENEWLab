@@ -24,7 +24,6 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
-#include <iterator>
 
 static inline double computeAbs(std::complex<double> x) { return std::abs(x); }
 
