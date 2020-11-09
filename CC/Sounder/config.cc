@@ -609,8 +609,7 @@ unsigned Config::getCoreCount()
 {
     unsigned n_cores = std::thread::hardware_concurrency();
 #if DEBUG_PRINT
-    std::cout << "number of CPU cores " << std::to_string(num_cores)
-              << std::endl;
+    std::cout << "number of CPU cores " << std::to_string(n_cores) << std::endl;
 #endif
     return n_cores;
 }
