@@ -383,9 +383,10 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             }
 
 #if DEBUG_PRINT
-            for (auto ch = 0; ch < num_channels; ++ch) {
-                printf("receive thread %d, frame %d, symbol %d, cell %d, ant "
-                       "%d samples: %d %d %d %d %d %d %d %d ...\n",
+            for (size_t ch = 0; ch < num_channels; ++ch) {
+                printf(
+                    "receive thread %d, frame %zu, symbol %zu, cell %zu, ant "
+                    "%zu samples: %d %d %d %d %d %d %d %d ...\n",
                     tid, frame_id, symbol_id, cell, ant_id + ch,
                     pkg[ch]->data[1], pkg[ch]->data[2], pkg[ch]->data[3],
                     pkg[ch]->data[4], pkg[ch]->data[5], pkg[ch]->data[6],
@@ -439,11 +440,11 @@ void* Receiver::clientTxRx_launch(void* in_context)
 
 void Receiver::clientTxRx(int tid)
 {
-    int txSyms = config_->cl_dl_symbols().at(tid).size();
+    int txSyms = config_->cl_ul_symbols().at(tid).size();
     int rxSyms = config_->cl_dl_symbols().at(tid).size();
     int txStartSym = config_->cl_ul_symbols().at(tid).empty()
         ? 0
-        : config_->cl_dl_symbols().at(tid).at(0);
+        : config_->cl_ul_symbols().at(tid).at(0);
 
     double frameTime = config_->samps_per_symbol()
         * config_->cl_frames().at(0).size() * 1e3
@@ -584,7 +585,7 @@ void Receiver::clientSyncTxRx(int tid)
     }
 
     std::vector<void*> txbuff(2);
-    size_t txSyms = config_->cl_dl_symbols().at(tid).size();
+    size_t txSyms = config_->cl_ul_symbols().at(tid).size();
     if (txSyms > 0) {
         size_t txIndex = tid * config_->cl_sdr_ch();
         txbuff.at(0) = config_->tx_data().at(txIndex).data();
@@ -740,7 +741,7 @@ void Receiver::clientSyncTxRx(int tid)
                 if (config_->ul_data_sym_present() == true) {
                     for (size_t s = 0; s < txSyms; s++) {
                         txTime = rxTime + txTimeDelta
-                            + config_->cl_dl_symbols().at(tid).at(s) * NUM_SAMPS
+                            + config_->cl_ul_symbols().at(tid).at(s) * NUM_SAMPS
                             - config_->tx_advance();
                         if (kUseUHD && s < (txSyms - 1))
                             flagsTxUlData = 1; // HAS_TIME

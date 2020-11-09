@@ -14,7 +14,7 @@
 		     "BGGGGGPPGGGGGGGGGGGG"
                  ],
                  "max_frame" : 4000,
-                 "subframe_size" : 800,
+		 "ofdm_symbol_per_subframe" : 10,
                  "fft_size" : 64,
                  "cp_size" : 16,
                  "prefix" : 160,
@@ -38,7 +38,7 @@
 		     "GGGGGGPPGGGGGGGGGGGG"
                  ],
                  "frame_mode" : "continuous_resync",
-                 "subframe_size" : 800,
+		 "ofdm_symbol_per_subframe" : 10,
                  "fft_size" : 64,
                  "cp_size" : 16,
                  "prefix" : 160,

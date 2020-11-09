@@ -58,8 +58,8 @@ public:
     inline bool beam_sweep(void) const { return this->beam_sweep_; }
     inline size_t beacon_ant(void) const { return this->beacon_ant_; }
     inline size_t num_cl_antennas(void) const { return this->num_cl_antennas_; }
-    inline int fft_size(void) const { return this->fft_size_; }
-    inline int cp_size(void) const { return this->cp_size_; }
+    inline size_t fft_size(void) const { return this->fft_size_; }
+    inline size_t cp_size(void) const { return this->cp_size_; }
     inline size_t pilot_syms_per_frame(void) const
     {
         return this->pilot_syms_per_frame_;
@@ -256,6 +256,10 @@ private:
     double
         radio_rf_freq_; // RF frequency set frame_modeon the radio after NCO adjustments
     double bw_filter_;
+    size_t fft_size_;
+    size_t cp_size_;
+    size_t ofdm_symbol_size_;
+    size_t symbol_per_subframe_;
     size_t subframe_size_;
     size_t samps_per_symbol_;
     size_t prefix_;
@@ -264,8 +268,6 @@ private:
     size_t pilot_syms_per_frame_;
     size_t ul_syms_per_frame_;
     size_t dl_syms_per_frame_; // No accessor
-    int fft_size_;
-    int cp_size_;
     float tx_scale_; // No accessor
     std::string pilot_seq_;
     std::string beacon_seq_;

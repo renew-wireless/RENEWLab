@@ -330,7 +330,8 @@ std::vector<std::vector<int>> CommsLib::getPilotSc(int fftSize)
 }
 
 std::vector<std::complex<float>> CommsLib::IFFT(
-    std::vector<std::complex<float>> in, int fftSize)
+    std::vector<std::complex<float>> in, int fftSize, float scale,
+    bool normalize)
 {
     std::vector<std::complex<float>> out(in.size());
 
@@ -342,21 +343,19 @@ std::vector<std::complex<float>> CommsLib::IFFT(
     memcpy(fft_in, in.data(), fftSize * sizeof(std::complex<float>));
     mufft_execute_plan_1d(mufftplan, fft_out, fft_in);
     memcpy(out.data(), fft_out, fftSize * sizeof(std::complex<float>));
-    //for (int i = 0; i < fftsize; i++) out[i] /= fftsize;
     float max_val = 0;
-    //int max_ind = 0;
-    float scale = 0.5;
-    for (int i = 0; i < fftSize; i++) {
-        if (std::abs(out[i]) > max_val) {
-            max_val = std::abs(out[i]);
-            //max_ind = i;
+    if (normalize) {
+        for (int i = 0; i < fftSize; i++) {
+            if (std::abs(out[i]) > max_val)
+                max_val = std::abs(out[i]);
         }
+    } else {
+        max_val = 1;
     }
     std::cout << "IFFT output is normalized with " << std::to_string(max_val)
               << std::endl;
-    //std::cout << "max sample is " << std::to_string(out[max_ind].real()) << "+1j*" << std::to_string(out[max_ind].imag()) << std::endl;
     for (int i = 0; i < fftSize; i++)
-        out[i] /= (max_val / scale);
+        out[i] = (out[i] / max_val) * scale;
 
     mufft_free_plan_1d(mufftplan);
     mufft_free(fft_in);
@@ -455,6 +454,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
     if (type == STS_SEQ) {
         // STS - 802.11 Short training sequence (one symbol)
         matrix.resize(2);
+        const size_t sts_seq_len = 16;
 
         // Define freq-domain STS according to
         // https://standards.ieee.org/standard/802_11a-1999.html
@@ -479,25 +479,18 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             sts_freq_shifted.end(), sts_freq.begin(), sts_freq.begin() + 32);
 
         std::vector<std::complex<float>> sts_iq
-            = CommsLib::IFFT(sts_freq_shifted, 64);
-        double sts_re[16], sts_im[16];
+            = CommsLib::IFFT(sts_freq_shifted, 64, 1);
 
-        // Construct STS
-        for (size_t i = 0; i < 16; i++) {
-            sts_re[i] = sts_iq[i].real();
-            sts_im[i] = sts_iq[i].imag();
-        }
-
-        int size = sizeof(sts_re) / sizeof(sts_re[0]);
-        matrix[0].resize(size);
-        matrix[1].resize(size);
-        for (int i = 0; i < size; i++) {
-            matrix[0][i] = sts_re[i];
-            matrix[1][i] = sts_im[i];
+        matrix[0].resize(sts_seq_len);
+        matrix[1].resize(sts_seq_len);
+        for (size_t i = 0; i < sts_seq_len; i++) {
+            matrix[0][i] = sts_iq[i].real();
+            matrix[1][i] = sts_iq[i].imag();
         }
     } else if (type == LTS_SEQ) {
         // LTS - 802.11 Long training sequence (160 samples == 2.5 symbols, cp length of 32 samples)
         matrix.resize(2);
+        const size_t lts_seq_len = 64;
 
         // Define freq-domain LTS according to
         // https://standards.ieee.org/standard/802_11a-1999.html
@@ -522,91 +515,69 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             lts_freq_shifted.end(), lts_freq.begin(), lts_freq.begin() + 32);
 
         std::vector<std::complex<float>> lts_iq
-            = CommsLib::IFFT(lts_freq_shifted, 64);
-        double lts_re[160], lts_im[160];
+            = CommsLib::IFFT(lts_freq_shifted, 64, 1);
 
-        // Construct LTS: 1/2 lts_symbol_iq + 2 * lts_symbol_iq
-        for (size_t i = 0; i < 32; i++) {
-            lts_re[i] = lts_iq[i + 32].real();
-            lts_im[i] = lts_iq[i + 32].imag();
-        }
-
-        for (size_t i = 0; i < 64; i++) {
-            lts_re[i + 32] = lts_iq[i].real();
-            lts_im[i + 32] = lts_iq[i].imag();
-            lts_re[i + 96] = lts_iq[i].real();
-            lts_im[i + 96] = lts_iq[i].imag();
-        }
-
-        // Grab the last N samples (sequence length specified, provide more flexibility)
-        int size = sizeof(lts_re) / sizeof(lts_re[0]);
-        int startIdx = size - N;
-        matrix[0].resize(N);
-        matrix[1].resize(N);
-        for (int i = 0; i < N; i++) {
-            matrix[0][i] = lts_re[i + startIdx];
-            matrix[1][i] = lts_im[i + startIdx];
+        matrix[0].resize(lts_seq_len);
+        matrix[1].resize(lts_seq_len);
+        for (size_t i = 0; i < lts_seq_len; i++) {
+            matrix[0][i] = lts_iq[i].real();
+            matrix[1][i] = lts_iq[i].imag();
         }
     } else if (type == LTE_ZADOFF_CHU) {
-        // LTE Zadoff Chu Sequence: Generate the 25th root length-63 Zadoff-Chu sequence
+        // https://www.etsi.org/deliver/etsi_ts/136200_136299/136211/10.01.00_60/ts_136211v100100p.pdf
+        // ETSI TS 136 211 V10.1.0 (sec. 5.5)
         matrix.resize(2);
-
-        double lte_zc_re[63] = { 1.0, -0.7971325072229225, 0.3653410243663958,
-            -0.7330518718298251, 0.9801724878485435, 0.955572805786141,
-            -0.49999999999999617, 0.7660444431189757, -0.222520933956311,
-            0.6234898018587135, 0.4562106573531701, 0.3653410243663966,
-            0.9555728057861371, 0.7660444431189751, -0.49999999999995753,
-            -0.7330518718298601, 0.9801724878485425, -0.22252093395630812,
-            0.6234898018586816, -0.7971325072229237, -0.5000000000000849,
-            -0.5000000000000051, -0.7971325072228729, -0.9888308262251311,
-            0.9555728057861521, 0.9801724878485374, -0.22252093395631578, 1.0,
-            0.7660444431189537, -0.7330518718300307, -0.9888308262251518,
-            0.4562106573531763, -0.9888308262251305, -0.733051871829836,
-            0.76604444311897, 1.0, -0.22252093395601577, 0.9801724878485049,
-            0.9555728057861584, -0.988830826225147, -0.797132507222964,
-            -0.4999999999997504, -0.4999999999996758, -0.7971325072227249,
-            0.6234898018583583, -0.2225209339562393, 0.9801724878485397,
-            -0.7330518718300426, -0.5000000000003123, 0.7660444431190734,
-            0.9555728057861007, 0.3653410243666958, 0.4562106573529356,
-            0.6234898018587859, -0.22252093395649927, 0.7660444431189057,
-            -0.5000000000002512, 0.9555728057860857, 0.9801724878483727,
-            -0.7330518718292615, 0.3653410243664768, -0.797132507222648, 1.0 };
-
-        double lte_zc_im[63] = { 0.0, -0.6038044103254774, -0.9308737486442039,
-            -0.6801727377709207, 0.1981461431993993, 0.2947551744109033,
-            -0.8660254037844408, -0.642787609686542, -0.9749279121818244,
-            0.7818314824680458, 0.8898718088114649, -0.9308737486442037,
-            0.294755174410916, -0.6427876096865428, 0.8660254037844631,
-            0.680172737770883, 0.19814614319940435, 0.9749279121818251,
-            0.7818314824680712, -0.6038044103254757, -0.8660254037843896,
-            0.8660254037844357, -0.6038044103255429, 0.1490422661761573,
-            -0.2947551744108673, 0.19814614319942933, -0.9749279121818233,
-            -6.273657903199343e-14, -0.6427876096865683, 0.6801727377706992,
-            0.14904226617601968, 0.8898718088114618, 0.14904226617616118,
-            0.6801727377709089, -0.6427876096865488, -6.666535247945037e-14,
-            -0.9749279121818918, 0.1981461431995907, -0.2947551744108467,
-            0.14904226617605265, -0.6038044103254225, 0.8660254037845827,
-            -0.8660254037846258, -0.6038044103257382, 0.781831482468329,
-            0.9749279121818407, 0.19814614319941776, 0.6801727377706862,
-            0.8660254037842583, -0.6427876096864258, 0.29475517441103394,
-            -0.9308737486440862, 0.8898718088115852, 0.7818314824679881,
-            -0.9749279121817814, -0.6427876096866254, -0.8660254037842936,
-            0.2947551744110826, 0.19814614320024387, -0.6801727377715282,
-            -0.9308737486441722, -0.6038044103258398, 1.021155254707157e-12 };
-
-        int size = sizeof(lte_zc_re) / sizeof(lte_zc_re[0]);
-        matrix[0].resize(size);
-        matrix[1].resize(size);
-        for (int i = 0; i < size; i++) {
-            matrix[0][i] = lte_zc_re[i];
-            matrix[1][i] = lte_zc_im[i];
+        double u = 1; // Cell ID 1
+        double v = 0;
+        int prime[309] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43,
+            47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113,
+            127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191,
+            193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263,
+            269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347,
+            349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421,
+            431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 499,
+            503, 509, 521, 523, 541, 547, 557, 563, 569, 571, 577, 587, 593,
+            599, 601, 607, 613, 617, 619, 631, 641, 643, 647, 653, 659, 661,
+            673, 677, 683, 691, 701, 709, 719, 727, 733, 739, 743, 751, 757,
+            761, 769, 773, 787, 797, 809, 811, 821, 823, 827, 829, 839, 853,
+            857, 859, 863, 877, 881, 883, 887, 907, 911, 919, 929, 937, 941,
+            947, 953, 967, 971, 977, 983, 991, 997, 1009, 1013, 1019, 1021,
+            1031, 1033, 1039, 1049, 1051, 1061, 1063, 1069, 1087, 1091, 1093,
+            1097, 1103, 1109, 1117, 1123, 1129, 1151, 1153, 1163, 1171, 1181,
+            1187, 1193, 1201, 1213, 1217, 1223, 1229, 1231, 1237, 1249, 1259,
+            1277, 1279, 1283, 1289, 1291, 1297, 1301, 1303, 1307, 1319, 1321,
+            1327, 1361, 1367, 1373, 1381, 1399, 1409, 1423, 1427, 1429, 1433,
+            1439, 1447, 1451, 1453, 1459, 1471, 1481, 1483, 1487, 1489, 1493,
+            1499, 1511, 1523, 1531, 1543, 1549, 1553, 1559, 1567, 1571, 1579,
+            1583, 1597, 1601, 1607, 1609, 1613, 1619, 1621, 1627, 1637, 1657,
+            1663, 1667, 1669, 1693, 1697, 1699, 1709, 1721, 1723, 1733, 1741,
+            1747, 1753, 1759, 1777, 1783, 1787, 1789, 1801, 1811, 1823, 1831,
+            1847, 1861, 1867, 1871, 1873, 1877, 1879, 1889, 1901, 1907, 1913,
+            1931, 1933, 1949, 1951, 1973, 1979, 1987, 1993, 1997, 1999, 2003,
+            2011, 2017, 2027, 2029, 2039 };
+        int M = prime[308];
+        for (int j = 0; j < 308; j++) {
+            if (prime[j] < N && prime[j + 1] > N) {
+                M = prime[j];
+                break;
+            }
+        }
+        double qh = M * (u + 1) / 31;
+        double q = std::floor(qh + 0.5) + v * std::pow(-1, std::floor(2 * qh));
+        std::vector<double> a;
+        for (int i = 0; i < N; i++) {
+            int m = i % M;
+            double a_re = std::cos(-M_PI * q * m * (m + 1) / M);
+            double a_im = std::sin(-M_PI * q * m * (m + 1) / M);
+            matrix[0].push_back(a_re);
+            matrix[1].push_back(a_im);
         }
     } else if (type == GOLD_IFFT) {
         // Gold IFFT Sequence - seq_length=128, cp=0, upsample=1
         matrix.resize(2);
+        const size_t gold_seq_len = 128;
 
         // Use row 52 in gold-127
-        size_t gold_seq_len = N;
         std::vector<int> gold_code = { 1, -1, 1, -1, 1, -1, 1, -1, -1, -1, -1,
             -1, -1, -1, -1, -1, 1, 1, -1, 1, 1, 1, -1, 1, -1, -1, -1, 1, -1, -1,
             -1, -1, -1, 1, -1, 1, -1, -1, 1, -1, -1, 1, 1, 1, -1, -1, 1, 1, -1,
@@ -618,6 +589,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
 
         // Insert 0 at center freq, construct inter-leaved quad code
         gold_code.insert(gold_code.begin() + 63, 0);
+
         std::vector<std::complex<float>> gold_freq(2 * gold_seq_len);
         for (size_t i = 0; i < gold_seq_len; i++) {
             gold_freq[2 * i]
@@ -632,12 +604,13 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             gold_freq.begin() + gold_seq_len);
 
         std::vector<std::complex<float>> gold_ifft_iq
-            = CommsLib::IFFT(gold_freq_shifted, 2 * gold_seq_len);
+            = CommsLib::IFFT(gold_freq_shifted, 2 * gold_seq_len, 1);
 
-        double gold_ifft_re[128], gold_ifft_im[128];
+        matrix[0].resize(gold_seq_len);
+        matrix[1].resize(gold_seq_len);
         for (size_t i = 0; i < gold_seq_len; i++) {
-            gold_ifft_re[i] = gold_ifft_iq[i].real();
-            gold_ifft_im[i] = gold_ifft_iq[i].imag();
+            matrix[0][i] = gold_ifft_iq[i].real();
+            matrix[1][i] = gold_ifft_iq[i].imag();
         }
 
         /*
@@ -696,13 +669,6 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             -0.88476783, -0.48144832, 0.5407985, 0.8769358, 0.4669951 };
 	*/
 
-        int size = sizeof(gold_ifft_re) / sizeof(gold_ifft_re[0]);
-        matrix[0].resize(size);
-        matrix[1].resize(size);
-        for (int i = 0; i < size; i++) {
-            matrix[0][i] = gold_ifft_re[i];
-            matrix[1][i] = gold_ifft_im[i];
-        }
     } else if (type == HADAMARD) {
         // Hadamard - using Sylvester's construction for powers of 2.
         matrix.resize(N);

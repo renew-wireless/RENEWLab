@@ -9,7 +9,7 @@
 		 "txgainB" : [95],
 		 "rate" : 5e6,
 		 "fft_size" : 64,
-		 "subframe_size" : 4096,
+		 "ofdm_symbol_per_subframe" : 64,
 		 "cp_size" : 0,
 		 "prefix" : 0,
 		 "postfix" : 0,
@@ -17,8 +17,6 @@
 		     "P"
 		 ],
 		 "frame_mode" : "free_running",
-		 "beacon_type" : "gold_ifft",
-		 "modulation" : "QPSK",
 		 "sdr_id" : [
 		     "RF3E000157"
 		 ],
