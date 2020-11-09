@@ -52,7 +52,8 @@ public:
     static std::vector<std::complex<float>> FFT(
         std::vector<std::complex<float>>, int);
     static std::vector<std::complex<float>> IFFT(
-        std::vector<std::complex<float>>, int);
+        std::vector<std::complex<float>>, int, float scale = 0.5,
+        bool normalize = true);
 
     static int findLTS(const std::vector<std::complex<double>>& iq, int seqLen);
     template <typename T>

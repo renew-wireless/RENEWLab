@@ -395,10 +395,8 @@ Config::Config(const std::string& jsonfile)
                 std::cout << "Pilot symbol: " << ofdmSym[pilot_sc_.at(0).at(0)]
                           << " " << ofdmSym[pilot_sc_.at(0).at(1)] << std::endl;
 #endif
-                std::vector<std::complex<float>> txSym
-                    = CommsLib::IFFT(ofdmSym, fft_size_);
-                for (auto p = txSym.begin(); p != txSym.end(); ++p)
-                    *p *= tx_scale_;
+                std::vector<std::complex<float>> txSym = CommsLib::IFFT(
+                    ofdmSym, fft_size_, 0.25); // normalize and scale with 0.25;
                 txSym.insert(txSym.begin(), txSym.end() - cp_size_,
                     txSym.end()); // add CP
 #if DEBUG_PRINT

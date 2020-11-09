@@ -330,7 +330,8 @@ std::vector<std::vector<int>> CommsLib::getPilotSc(int fftSize)
 }
 
 std::vector<std::complex<float>> CommsLib::IFFT(
-    std::vector<std::complex<float>> in, int fftSize)
+    std::vector<std::complex<float>> in, int fftSize, float scale,
+    bool normalize)
 {
     std::vector<std::complex<float>> out(in.size());
 
@@ -342,21 +343,19 @@ std::vector<std::complex<float>> CommsLib::IFFT(
     memcpy(fft_in, in.data(), fftSize * sizeof(std::complex<float>));
     mufft_execute_plan_1d(mufftplan, fft_out, fft_in);
     memcpy(out.data(), fft_out, fftSize * sizeof(std::complex<float>));
-    //for (int i = 0; i < fftsize; i++) out[i] /= fftsize;
     float max_val = 0;
-    //int max_ind = 0;
-    float scale = 0.5;
-    for (int i = 0; i < fftSize; i++) {
-        if (std::abs(out[i]) > max_val) {
-            max_val = std::abs(out[i]);
-            //max_ind = i;
+    if (normalize) {
+        for (int i = 0; i < fftSize; i++) {
+            if (std::abs(out[i]) > max_val)
+                max_val = std::abs(out[i]);
         }
+    } else {
+        max_val = 1;
     }
     std::cout << "IFFT output is normalized with " << std::to_string(max_val)
               << std::endl;
-    //std::cout << "max sample is " << std::to_string(out[max_ind].real()) << "+1j*" << std::to_string(out[max_ind].imag()) << std::endl;
     for (int i = 0; i < fftSize; i++)
-        out[i] /= (max_val / scale);
+        out[i] = (out[i] / max_val) * scale;
 
     mufft_free_plan_1d(mufftplan);
     mufft_free(fft_in);
@@ -455,6 +454,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
     if (type == STS_SEQ) {
         // STS - 802.11 Short training sequence (one symbol)
         matrix.resize(2);
+        const size_t sts_seq_len = 16;
 
         // Define freq-domain STS according to
         // https://standards.ieee.org/standard/802_11a-1999.html
@@ -479,25 +479,18 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             sts_freq_shifted.end(), sts_freq.begin(), sts_freq.begin() + 32);
 
         std::vector<std::complex<float>> sts_iq
-            = CommsLib::IFFT(sts_freq_shifted, 64);
-        double sts_re[16], sts_im[16];
+            = CommsLib::IFFT(sts_freq_shifted, 64, 1);
 
-        // Construct STS
-        for (size_t i = 0; i < 16; i++) {
-            sts_re[i] = sts_iq[i].real();
-            sts_im[i] = sts_iq[i].imag();
-        }
-
-        int size = sizeof(sts_re) / sizeof(sts_re[0]);
-        matrix[0].resize(size);
-        matrix[1].resize(size);
-        for (int i = 0; i < size; i++) {
-            matrix[0][i] = sts_re[i];
-            matrix[1][i] = sts_im[i];
+        matrix[0].resize(sts_seq_len);
+        matrix[1].resize(sts_seq_len);
+        for (size_t i = 0; i < sts_seq_len; i++) {
+            matrix[0][i] = sts_iq[i].real();
+            matrix[1][i] = sts_iq[i].imag();
         }
     } else if (type == LTS_SEQ) {
         // LTS - 802.11 Long training sequence (160 samples == 2.5 symbols, cp length of 32 samples)
         matrix.resize(2);
+        const size_t lts_seq_len = 64;
 
         // Define freq-domain LTS according to
         // https://standards.ieee.org/standard/802_11a-1999.html
@@ -522,11 +515,11 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             lts_freq_shifted.end(), lts_freq.begin(), lts_freq.begin() + 32);
 
         std::vector<std::complex<float>> lts_iq
-            = CommsLib::IFFT(lts_freq_shifted, 64);
+            = CommsLib::IFFT(lts_freq_shifted, 64, 1);
 
-        matrix[0].resize(64);
-        matrix[1].resize(64);
-        for (int i = 0; i < 64; i++) {
+        matrix[0].resize(lts_seq_len);
+        matrix[1].resize(lts_seq_len);
+        for (size_t i = 0; i < lts_seq_len; i++) {
             matrix[0][i] = lts_iq[i].real();
             matrix[1][i] = lts_iq[i].imag();
         }
@@ -582,9 +575,9 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
     } else if (type == GOLD_IFFT) {
         // Gold IFFT Sequence - seq_length=128, cp=0, upsample=1
         matrix.resize(2);
+        const size_t gold_seq_len = 128;
 
         // Use row 52 in gold-127
-        size_t gold_seq_len = N;
         std::vector<int> gold_code = { 1, -1, 1, -1, 1, -1, 1, -1, -1, -1, -1,
             -1, -1, -1, -1, -1, 1, 1, -1, 1, 1, 1, -1, 1, -1, -1, -1, 1, -1, -1,
             -1, -1, -1, 1, -1, 1, -1, -1, 1, -1, -1, 1, 1, 1, -1, -1, 1, 1, -1,
@@ -596,6 +589,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
 
         // Insert 0 at center freq, construct inter-leaved quad code
         gold_code.insert(gold_code.begin() + 63, 0);
+
         std::vector<std::complex<float>> gold_freq(2 * gold_seq_len);
         for (size_t i = 0; i < gold_seq_len; i++) {
             gold_freq[2 * i]
@@ -610,12 +604,13 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             gold_freq.begin() + gold_seq_len);
 
         std::vector<std::complex<float>> gold_ifft_iq
-            = CommsLib::IFFT(gold_freq_shifted, 2 * gold_seq_len);
+            = CommsLib::IFFT(gold_freq_shifted, 2 * gold_seq_len, 1);
 
-        double gold_ifft_re[128], gold_ifft_im[128];
+        matrix[0].resize(gold_seq_len);
+        matrix[1].resize(gold_seq_len);
         for (size_t i = 0; i < gold_seq_len; i++) {
-            gold_ifft_re[i] = gold_ifft_iq[i].real();
-            gold_ifft_im[i] = gold_ifft_iq[i].imag();
+            matrix[0][i] = gold_ifft_iq[i].real();
+            matrix[1][i] = gold_ifft_iq[i].imag();
         }
 
         /*
@@ -674,13 +669,6 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             -0.88476783, -0.48144832, 0.5407985, 0.8769358, 0.4669951 };
 	*/
 
-        int size = sizeof(gold_ifft_re) / sizeof(gold_ifft_re[0]);
-        matrix[0].resize(size);
-        matrix[1].resize(size);
-        for (int i = 0; i < size; i++) {
-            matrix[0][i] = gold_ifft_re[i];
-            matrix[1][i] = gold_ifft_im[i];
-        }
     } else if (type == HADAMARD) {
         // Hadamard - using Sylvester's construction for powers of 2.
         matrix.resize(N);
