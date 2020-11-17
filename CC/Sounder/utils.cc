@@ -12,6 +12,12 @@
 
 int pin_to_core(int core_id)
 {
+    pthread_t current_thread = pthread_self();
+    return pin_thread_to_core(core_id, current_thread);
+}
+
+int pin_thread_to_core(int core_id, pthread_t& thread_to_pin)
+{
     int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     if (core_id < 0 || core_id >= num_cores)
         return -1;
@@ -20,8 +26,7 @@ int pin_to_core(int core_id)
     CPU_ZERO(&cpuset);
     CPU_SET(core_id, &cpuset);
 
-    pthread_t current_thread = pthread_self();
-    return pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
+    return pthread_setaffinity_np(thread_to_pin, sizeof(cpu_set_t), &cpuset);
 }
 
 std::vector<size_t> Utils::strToChannels(const std::string& channel)

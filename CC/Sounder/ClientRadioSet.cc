@@ -38,7 +38,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
     radioNotFound = false;
     std::vector<std::string> radioSerialNotFound;
     for (size_t i = 0; i < _cfg->num_cl_sdrs(); i++) {
-        MLPD_TRACE("ClientRadioSet setting up radio: %zu : %zu\n", i,
+        MLPD_TRACE("ClientRadioSet setting up radio: %zu : %zu\n", (i + 1),
             _cfg->num_cl_sdrs());
         has_runtime_error = false;
         new_radio = nullptr;

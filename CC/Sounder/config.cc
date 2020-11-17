@@ -465,15 +465,18 @@ Config::Config(const std::string& jsonfile)
 
     // Multi-threading settings
     unsigned num_cores = this->getCoreCount();
+    MLPD_INFO("Cores found %u ... \n", num_cores);
     core_alloc_ = num_cores > RX_THREAD_NUM;
     if ((bs_present_ == true)
         && (pilot_syms_per_frame_ + ul_syms_per_frame_ > 0)) {
+        task_thread_num_ = tddConf.value("task_thread", TASK_THREAD_NUM);
         rx_thread_num_ = (num_cores >= (2 * RX_THREAD_NUM))
             ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_sdrs_all_))
             : 1;
-        if (reciprocal_calib_)
+        if (reciprocal_calib_ == true)
+        {
             rx_thread_num_ = 2;
-        task_thread_num_ = TASK_THREAD_NUM;
+        }
         if ((client_present_ == true)
             && (num_cores
                    < (1 + task_thread_num_ + rx_thread_num_ + num_cl_sdrs_))) {
@@ -496,7 +499,7 @@ Config::Config(const std::string& jsonfile)
         MLPD_INFO(
             "Allocating %zu cores to client threads ... \n", num_cl_sdrs_);
     }
-    running_ = true;
+    running_.store(true);
     MLPD_INFO("Configuration file was successfully parsed!\n");
 }
 
@@ -518,16 +521,16 @@ size_t Config::getMaxNumAntennas()
     if (this->bs_present_ == false) {
         ret = 1;
     } else {
-        size_t maxNumSdr = 0;
-        for (size_t i = 0; i < num_cells_; i++) {
-            if (maxNumSdr < n_bs_sdrs_.at(i)) {
-                maxNumSdr = n_bs_sdrs_.at(i);
+        size_t max_num_sdr = 0;
+        for (size_t i = 0; i < this->num_cells_; i++) {
+            if (max_num_sdr < this->n_bs_sdrs_.at(i)) {
+                max_num_sdr = this->n_bs_sdrs_.at(i);
             }
-            if (reciprocal_calib_) {
-                maxNumSdr--; // exclude the ref sdr
+            if (reciprocal_calib_ == true) {
+                max_num_sdr--; // exclude the ref sdr
             }
         }
-        ret = (maxNumSdr * bs_channel_.length());
+        ret = (max_num_sdr * bs_channel_.length());
     }
     return ret;
 }
