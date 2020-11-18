@@ -32,7 +32,7 @@ private:
     // use for create pthread
     struct BaseRadioContext {
         BaseRadioSet* brs;
-        std::atomic_uint* threadCount;
+        std::atomic_ulong* thread_count;
         size_t tid;
         size_t cell;
     };
