@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2019, Rice University 
+ Copyright (c) 2018-2020, Rice University 
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
  Author(s): Rahman Doost-Mohamamdy: doost@rice.edu
  
@@ -32,11 +32,15 @@ int main(int argc, char const* argv[])
 
         // Register signal handler to handle kill signal
         signalHandler.setupSignalHandlers();
-        Recorder dr(&config);
+        Sounder::Recorder dr(&config);
         dr.do_it();
         ret = EXIT_SUCCESS;
     } catch (SignalException& e) {
         std::cerr << "SignalException: " << e.what() << std::endl;
+        ret = EXIT_FAILURE;
+    } catch (const std::exception& exc) {
+        std::cerr << "Program terminated Exception: " << exc.what()
+                  << std::endl;
         ret = EXIT_FAILURE;
     }
     return ret;

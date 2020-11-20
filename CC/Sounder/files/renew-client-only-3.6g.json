@@ -9,18 +9,18 @@
 		 "txgainB" : [70],
 		 "rate" : 5e6,
 		 "fft_size" : 64,
-		 "subframe_size" : 800,
+		 "ofdm_symbol_per_subframe" : 10,
 		 "cp_size" : 16,
 		 "prefix" : 160,
 		 "postfix" : 160,
 		 "frame_schedule" : [
-		     "GDPPUGGGGGGGGGGGGGGG"
+		     "GGPPGGGGGGGGGGGGGGGG"
 		 ],
 		 "frame_mode" : "continuous_resync",
-		 "beacon_type" : "gold_ifft",
-		 "modulation" : "QPSK",
 		 "sdr_id" : [
 		     "RF3E000080"
-		 ]
+		 ],
+		 "tx_advance" : 135,
+		 "hw_framer" : false
 	}
 }

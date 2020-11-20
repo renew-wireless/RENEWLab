@@ -1,6 +1,7 @@
 # RENEWLab
 
-[![Build Status](https://8435d1ad526d.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fpr-master-develop)](https://8435d1ad526d.ngrok.io/job/github_public_renewlab/job/pr-master-develop/)
+
+[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fuhd-dev)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/uhd-dev/)
 
 
 # Description
@@ -56,7 +57,9 @@ Note for developers: Do not use _ in your branch name. Use - instead.
      $ git submodule update --init
      $ cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON ./ && make -j
      $ cd ../
-     $ cmake ./ && make -j
+     $ mkdir build
+     $ cd build
+     $ cmake .. -DCMAKE_BUILD_TYPE=Release -DLOG_LEVEL=info && make -j
      ```
        
   3. If you are going to use the RENEW MATLAB Development Suite, there is no dependency needed for it. 
