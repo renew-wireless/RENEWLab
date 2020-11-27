@@ -1,6 +1,3 @@
-[![N|Solid](https://renew-wireless.org/figs/cropped-v4-qgkw8d-1024x320.png)](https://renew-wireless.org/)
-
-
 # RENEW Dashboard
 
 

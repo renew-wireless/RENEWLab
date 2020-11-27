@@ -10,22 +10,18 @@ static constexpr bool kUseUHD = false;
 static constexpr size_t kStreamContinuous = 1;
 static constexpr size_t kStreamEndBurst = 2;
 
-#define DEBUG_PRINT 0
-#define DEBUG_RADIO 0
-#define DEBUG_PLOT 0
-
-#define EVENT_RX_SYMBOL 0
-
-#define TASK_RECORD 0
+#define DEBUG_PRINT (0)
+#define DEBUG_RADIO (0)
+#define DEBUG_PLOT (0)
 
 // TASK & SOCKET thread number
-#define TASK_THREAD_NUM 1
-#define RX_THREAD_NUM 4
+#define TASK_THREAD_NUM (1)
+#define RX_THREAD_NUM (4)
 
-#define MAX_FRAME_INC 2000
-#define TIME_DELTA 40 //ms
-#define SETTLE_TIME_MS 1
-#define UHD_INIT_TIME_SEC 1 // radio init time for UHD devices
-#define BEACON_INTERVAL 20 // frames
+#define MAX_FRAME_INC (2000)
+#define TIME_DELTA (40) //ms
+#define SETTLE_TIME_MS (1)
+#define UHD_INIT_TIME_SEC (3) // radio init time for UHD devices
+#define BEACON_INTERVAL (20) // frames
 
 #endif

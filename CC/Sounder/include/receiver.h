@@ -11,6 +11,7 @@
 #define DATARECEIVER_HEADER
 
 #include "BaseRadioSet.h"
+#include "ClientRadioSet.h"
 #include "concurrentqueue.h"
 #include <algorithm>
 #include <arpa/inet.h>
@@ -32,9 +33,12 @@ class ReceiverException : public std::exception {
     }
 };
 
+enum ReceiverEventType { kEventRxSymbol = 0 };
+
 struct Event_data {
-    int event_type;
+    ReceiverEventType event_type;
     int data;
+    int ant_id;
 };
 
 struct Package {
@@ -58,12 +62,6 @@ struct SampleBuffer {
     std::atomic_int* pkg_buf_inuse;
 };
 
-//std::atomic_int thread_count(0);
-//std::mutex d_mutex;
-//std::condition_variable cond;
-
-class ClientRadioSet;
-
 class Receiver {
 public:
     // use for create pthread
@@ -80,10 +78,12 @@ public:
     };
 
 public:
-    Receiver(int n_rx_threads, Config* config, moodycamel::ConcurrentQueue<Event_data>* in_queue);
+    Receiver(int n_rx_threads, Config* config,
+        moodycamel::ConcurrentQueue<Event_data>* in_queue);
     ~Receiver();
 
-    std::vector<pthread_t> startRecvThreads(SampleBuffer* rx_buffer, unsigned in_core_id = 0);
+    std::vector<pthread_t> startRecvThreads(
+        SampleBuffer* rx_buffer, unsigned in_core_id = 0);
     void completeRecvThreads(const std::vector<pthread_t>& recv_thread);
     std::vector<pthread_t> startClientThreads();
     void go();
@@ -96,7 +96,7 @@ public:
 private:
     Config* config_;
     ClientRadioSet* clientRadioSet_;
-    BaseRadioSet* baseRadioSet_;
+    BaseRadioSet* base_radio_set_;
 
     int thread_num_;
     // pointer of message_queue_
