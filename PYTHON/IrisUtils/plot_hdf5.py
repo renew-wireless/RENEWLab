@@ -117,7 +117,8 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
                                                                                           pilot_seq=ofdm_pilot)
                         # Find percentage of LTS peaks within a symbol
                         # (e.g., in a 4096-sample pilot symbol, we expect 64, 64-long sequences... assuming no CP)
-                        seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / num_pilots_per_sym)
+                        # seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / num_pilots_per_sym)
+                        seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (peak_map[frameIdx, cellIdx, ueIdx, bsAntIdx] / num_pilots_per_sym)  # use matched filter analysis output
 
                         dbg2 = False
                         if dbg2:
@@ -292,10 +293,10 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
         # PILOT MAP
         fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
         c = []
-        fig.suptitle('Pilot Map (Percentage of Detected Pilots Per Symbol) - NOTE: Might exceed 100% due to threshold')
+        fig.suptitle('Pilot Map (Percentage of Detected Pilots Per Symbol)')
         for n_c in range(n_cell):
             for n_u in range(n_ue):
-                c.append(axes[n_u, n_c].imshow(seq_found[:, n_c, n_u, :].T, vmin=0, vmax=100, cmap='Blues',
+                c.append(axes[n_u, n_c].imshow(seq_found[:, n_c, n_u, :].T, vmin=0, vmax=100, cmap='jet',
                                                interpolation='nearest',
                                                extent=[hdf5.n_frm_st, hdf5.n_frm_end, n_ant, 0],
                                                aspect="auto"))
@@ -307,6 +308,33 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, n_frm_st=0, thresh=
                 axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
         cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, 100, 11), orientation='horizontal')
         cbar.ax.set_xticklabels(['0%', '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'])
+
+        ########################################### OBCH ################################################
+        fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+        fig.suptitle('Hist Pilots')
+        for n_c in range(n_cell):
+            for n_u in range(n_ue):
+                tmp = np.reshape(seq_found[:, n_c, n_u, :], (1, seq_found[:, n_c, n_u, :].size))
+                plt.hist(tmp[0], bins=100, range=[0, 100])
+                axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
+                axes[n_u, n_c].set_ylabel('Antenna #')
+                axes[n_u, n_c].set_xlabel('Frame #')
+                axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
+
+        '''
+        fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+        fig.suptitle('Scatter Pilots')
+        for n_c in range(n_cell):
+            for n_u in range(n_ue):
+                tmp = np.reshape(seq_found[:, n_c, n_u, :], (1, seq_found[:, n_c, n_u, :].size))
+                plt.scatter(range(0, len(tmp)), tmp)
+                axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
+                axes[n_u, n_c].set_ylabel('Antenna #')
+                axes[n_u, n_c].set_xlabel('Frame #')
+                axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)'''
+        ########################################### OBCH ################################################
+
+        plt.show()
 
         # SHOW FIGURES
         plt.show()
@@ -616,12 +644,12 @@ def main():
     # Tested with inputs: ./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5 300  (for two users)
     #                     ./data_in/Argos-2019-3-30-12-20-50_1x8x1.hdf5 300  (for one user) 
     parser = OptionParser()
-    parser.add_option("--deep-inspect", action="store_true", dest="deep_inspect", help="Run script without analysis", default= False)
+    parser.add_option("--deep-inspect", action="store_true", dest="deep_inspect", help="Run script without analysis", default= True)
     parser.add_option("--ref-frame", type="int", dest="ref_frame", help="Frame number to plot", default=0)
     parser.add_option("--legacy", action="store_true", dest="legacy", help="Parse and plot legacy hdf5 file", default=False)
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Reference antenna", default=0)
     parser.add_option("--ref-user", type="int", dest="ref_user", help="Reference User", default=0)
-    parser.add_option("--n-frames", type="int", dest="n_frames_to_inspect", help="Number of frames to inspect", default=2000)
+    parser.add_option("--n-frames", type="int", dest="n_frames_to_inspect", help="Number of frames to inspect", default=100)
     parser.add_option("--sub-sample", type="int", dest="sub_sample", help="Sub sample rate", default=1)
     parser.add_option("--thresh", type="float", dest="thresh", help="Ampiltude Threshold for valid frames", default=0.001)
     parser.add_option("--frame-start", type="int", dest="fr_strt", help="Starting frame. Must have set n_frames_to_inspect first and make sure fr_strt is within boundaries ", default=0)

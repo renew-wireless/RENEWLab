@@ -50,36 +50,25 @@ def datasets(n_frames_to_inspect, fr_strt):
     IMPORTANT: The node at EBC couldn't be connected to the network so we collected data separately
     """
 
-    path1 = '/media/Storage/argos/Documents/POWDER_datasets/ACC_HONORS_MEB_USTAR/'
-    path2 = '/media/Storage/argos/Documents/POWDER_datasets/EBC/'
+    path1 = '../data/ACC_HONORS_MEB_USTAR/'
+    path2 = '../data/EBC/'
 
     # Data from ACC, HONORS, MEB, USTAR nodes
     files1 = ['trace-2020-9-23-11-37-58_4x2x1_NOISE.hdf5',
-    # 'trace-2020-9-23-11-40-25_4x2x1_NOISE2.hdf5',
-    # 'trace-2020-9-23-11-54-13_4x2x1_LOC1_v0.hdf5',
-    # 'trace-2020-9-23-11-55-14_4x2x1_LOC1_v1.hdf5',
-    'trace-2020-9-23-11-56-23_4x2x1_LOC1_v2.hdf5',
-    # 'trace-2020-9-23-12-14-8_4x2x1_LOC2_v0.hdf5',
-    'trace-2020-9-23-12-15-13_4x2x1_LOC2_v1.hdf5',
+    'trace-2020-9-23-11-56-23_4x2x1_LOC1.hdf5',
+    'trace-2020-9-23-12-15-13_4x2x1_LOC2.hdf5',
     'trace-2020-9-23-12-26-56_4x2x1_LOC3.hdf5',
     'trace-2020-9-23-12-43-34_4x2x1_LOC4.hdf5',
     'trace-2020-9-23-12-54-58_4x2x1_LOC5.hdf5',
     'trace-2020-9-23-13-25-6_4x2x1_LOC6.hdf5',
-    # 'trace-2020-9-23-13-14-14_4x2x1_LOC7_v0.hdf5',
-    'trace-2020-9-23-13-15-18_4x2x1_LOC7_v1.hdf5',
-    # 'trace-2020-9-23-13-34-49_4x2x1_LOC8_v0.hdf5',
-    'trace-2020-9-23-13-36-34_4x2x1_LOC8_v1.hdf5',
+    'trace-2020-9-23-13-15-18_4x2x1_LOC7.hdf5',
+    'trace-2020-9-23-13-36-34_4x2x1_LOC8.hdf5',
     'trace-2020-9-23-13-4-6_4x2x1_LOC9.hdf5',
-    # 'trace-2020-9-23-13-47-33_4x2x1_LOC10_v0.hdf5',
-    'trace-2020-9-23-13-48-35_4x2x1_LOC10_v1.hdf5',
+    'trace-2020-9-23-13-48-35_4x2x1_LOC10.hdf5',
     'trace-2020-9-23-13-57-8_4x2x1_LOC11.hdf5',
     'trace-2020-9-23-14-29-43_4x2x1_LOC13.hdf5',
-    # 'trace-2020-9-23-14-46-44_4x2x1_LOC14_v0.hdf5',
     'trace-2020-9-23-14-47-53_4x2x1_LOC14_v1.hdf5',
-    'trace-2020-9-23-14-57-51_4x2x1_LOC15.hdf5',
-    # 'trace-2020-9-23-15-21-24_4x2x1_LOC3_3.6.hdf5',
-    # 'trace-2020-9-23-15-6-49_4x2x1_LOC15_3.6_NOISE.hdf5',
-    # 'trace-2020-9-23-15-8-40_4x2x1_LOC15_3.6.hdf5',
+    'trace-2020-9-23-14-57-51_4x2x1_LOC15.hdf5'
     ]
 
     # Data from EBC node
@@ -97,10 +86,7 @@ def datasets(n_frames_to_inspect, fr_strt):
     'trace-2020-9-23-13-57-13_1x2x1_LOC11.hdf5',
     'trace-2020-9-23-14-29-39_1x2x1_LOC13.hdf5',
     'trace-2020-9-23-14-46-31_1x2x1_LOC14.hdf5',
-    'trace-2020-9-23-14-57-52_1x2x1_LOC15.hdf5',
-    # 'trace-2020-9-23-15-21-26_1x2x1_LOC3_3.6.hdf5',
-    # 'trace-2020-9-23-15-7-2_1x2x1-NOISE-3.6.hdf5',
-    # 'trace-2020-9-23-15-8-21_1x2x1_LOC15_3.6.hdf5',
+    'trace-2020-9-23-14-57-52_1x2x1_LOC15.hdf5'
     ]
 
     signal_file1 = files1[1::]
@@ -259,7 +245,7 @@ def parse_signal_hdf5(hdf5_signal, hdf5_noise, default_frame=100, ant_i=0, user_
                     IQ = I + (Q * 1j)
 
                     # Compute Power of Time Domain Signal
-                    rms = np.sqrt(np.mean(IQ * np.conj(IQ)))
+                    rms = np.sqrt(np.mean(IQ * np.conj(IQ)))      # FIXME !! OBCH - check if P = sum(abs(x).^2)/length(x) (normalized ??)
                     td_pwr_lin = np.real(rms) ** 2
                     td_pwr_dbm_s = 10 * np.log10(td_pwr_lin / 1e-3)
                     td_pwr_dbm_signal[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_s
