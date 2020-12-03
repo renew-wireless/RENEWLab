@@ -1,7 +1,7 @@
 # RENEWLab
 
 
-[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fuhd-dev)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/uhd-dev/)
+[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fsingle-gain)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/single-gain/)
 
 
 # Description
