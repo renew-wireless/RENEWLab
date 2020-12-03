@@ -322,7 +322,7 @@ def verify_hdf5(hdf5, default_frame=100, ant_i =0, user_i=0, subcarrier_i=10, of
         fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
         fig.suptitle('Frames\' starting indices per antenna')
         #plot channel analysis
-        show_plot(cmpx_pilots, lts_seq_orig, match_filt)
+        show_plot(cmpx_pilots, lts_seq_orig, match_filt, user_i, ant_i, ref_frame, hdf5.n_frm_st)
 
         for n_c in range(n_cell):
             for n_u in range(n_ue):
@@ -553,14 +553,15 @@ def compute_legacy(hdf5):
     print("Total time: %f" % (endtime - starttime))
 
 
-def show_plot(cmpx_pilots, lts_seq_orig, match_filt):
+def show_plot(cmpx_pilots, lts_seq_orig, match_filt, ref_user, ref_ant, ref_frame, frm_st_idx):
     '''
     Plot channel analysis
     '''
 
-    frame_to_plot = 0
-    frm_st_idx = 0
-    ref_ant = 0
+    frame_to_plot = ref_frame
+    frm_st_idx = frm_st_idx
+    ref_ant = ref_ant
+    ref_user = ref_user
     test_mf = False
     debug = False
 
@@ -568,14 +569,14 @@ def show_plot(cmpx_pilots, lts_seq_orig, match_filt):
     ax1 = fig.add_subplot(3, 1, 1)
     ax1.grid(True)
     ax1.set_title(
-        'channel_analysis:csi_from_pilots(): Re of Rx pilot - ref frame {} and ref ant. {} (UE 0)'.format(
-            frame_to_plot, ref_ant))
+        'channel_analysis:csi_from_pilots(): Re of Rx pilot - ref frame {} and ref ant. {} (UE {})'.format(
+            frame_to_plot, ref_ant, ref_user))
 
     if debug:
         print("cmpx_pilots.shape = {}".format(cmpx_pilots.shape))
 
     ax1.plot(
-        np.real(cmpx_pilots[frame_to_plot - frm_st_idx, 0, 0, ref_ant, :]))
+        np.real(cmpx_pilots[frame_to_plot - frm_st_idx, 0, ref_user, ref_ant, :]))
 
     z_pre = np.zeros(82, dtype='complex64')
     z_post = np.zeros(68, dtype='complex64')
@@ -608,9 +609,9 @@ def show_plot(cmpx_pilots, lts_seq_orig, match_filt):
     ax3 = fig.add_subplot(3, 1, 3)
     ax3.grid(True)
     ax3.set_title(
-        'channel_analysis:csi_from_pilots(): MF (uncleared peaks) - ref frame {} and ref ant. {} (UE 0)'.format(
-            frame_to_plot, ref_ant))
-    ax3.stem(match_filt[frame_to_plot - frm_st_idx, 0, 0, ref_ant, :])
+        'channel_analysis:csi_from_pilots(): MF (uncleared peaks) - ref frame {} and ref ant. {} (UE {})'.format(
+            frame_to_plot, ref_ant, ref_user))
+    ax3.stem(match_filt[frame_to_plot - frm_st_idx, 0, ref_user, ref_ant, :])
     ax3.set_xlabel('Samples')
 
 
