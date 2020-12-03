@@ -9,7 +9,7 @@
 		 "txgainB" : [70],
 		 "rate" : 5e6,
 		 "fft_size" : 64,
-		 "subframe_size" : 800,
+		 "ofdm_symbol_per_subframe" : 10,
 		 "cp_size" : 16,
 		 "prefix" : 160,
 		 "postfix" : 160,

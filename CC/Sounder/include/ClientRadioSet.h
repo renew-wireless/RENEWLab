@@ -1,6 +1,11 @@
 #include "config.h"
 #include <SoapySDR/Device.hpp>
 
+#ifndef CLIENT_RADIO_SET_H
+#define CLIENT_RADIO_SET_H
+
+#pragma once
+
 class Radio;
 
 class ClientRadioSet {
@@ -20,3 +25,5 @@ private:
     std::vector<Radio*> radios;
     bool radioNotFound;
 };
+
+#endif /* CLIENT_RADIO_SET_H */

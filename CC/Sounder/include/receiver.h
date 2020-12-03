@@ -11,6 +11,7 @@
 #define DATARECEIVER_HEADER
 
 #include "BaseRadioSet.h"
+#include "ClientRadioSet.h"
 #include "concurrentqueue.h"
 #include <algorithm>
 #include <arpa/inet.h>
@@ -32,9 +33,12 @@ class ReceiverException : public std::exception {
     }
 };
 
+enum ReceiverEventType { kEventRxSymbol = 0 };
+
 struct Event_data {
-    int event_type;
+    ReceiverEventType event_type;
     int data;
+    int ant_id;
 };
 
 struct Package {
@@ -57,12 +61,6 @@ struct SampleBuffer {
     std::vector<char> buffer;
     std::atomic_int* pkg_buf_inuse;
 };
-
-//std::atomic_int thread_count(0);
-//std::mutex d_mutex;
-//std::condition_variable cond;
-
-class ClientRadioSet;
 
 class Receiver {
 public:
@@ -98,7 +96,7 @@ public:
 private:
     Config* config_;
     ClientRadioSet* clientRadioSet_;
-    BaseRadioSet* baseRadioSet_;
+    BaseRadioSet* base_radio_set_;
 
     int thread_num_;
     // pointer of message_queue_

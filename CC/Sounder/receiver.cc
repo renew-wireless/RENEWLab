@@ -35,20 +35,20 @@ Receiver::Receiver(int n_rx_threads, Config* config,
         config_->client_present(), config_->bs_present());
     this->clientRadioSet_
         = config_->client_present() ? new ClientRadioSet(config_) : nullptr;
-    this->baseRadioSet_
+    this->base_radio_set_
         = config_->bs_present() ? new BaseRadioSet(config_) : nullptr;
     MLPD_TRACE("Receiver Construction -- number radios %zu\n",
         config_->num_bs_sdrs_all());
 
-    if (((this->baseRadioSet_ != nullptr)
-            && (this->baseRadioSet_->getRadioNotFound()))
+    if (((this->base_radio_set_ != nullptr)
+            && (this->base_radio_set_->getRadioNotFound()))
         || ((this->clientRadioSet_ != nullptr)
                && (this->clientRadioSet_->getRadioNotFound()))) {
-        if (this->baseRadioSet_ != nullptr) {
+        if (this->base_radio_set_ != nullptr) {
             MLPD_WARN("Invalid Base Radio Setup: %d\n",
-                this->baseRadioSet_ == nullptr);
-            this->baseRadioSet_->radioStop();
-            delete this->baseRadioSet_;
+                this->base_radio_set_ == nullptr);
+            this->base_radio_set_->radioStop();
+            delete this->base_radio_set_;
         }
         if (this->clientRadioSet_ != nullptr) {
             MLPD_WARN("Invalid Client Radio Setup: %d\n",
@@ -64,10 +64,10 @@ Receiver::Receiver(int n_rx_threads, Config* config,
 Receiver::~Receiver()
 {
     MLPD_TRACE("Radio Set cleanup, Base: %d, Client: %d\n",
-        this->baseRadioSet_ == nullptr, this->clientRadioSet_ == nullptr);
-    if (this->baseRadioSet_ != nullptr) {
-        this->baseRadioSet_->radioStop();
-        delete this->baseRadioSet_;
+        this->base_radio_set_ == nullptr, this->clientRadioSet_ == nullptr);
+    if (this->base_radio_set_ != nullptr) {
+        this->base_radio_set_->radioStop();
+        delete this->base_radio_set_;
     }
     if (this->clientRadioSet_ != nullptr) {
         this->clientRadioSet_->radioStop();
@@ -107,8 +107,8 @@ std::vector<pthread_t> Receiver::startRecvThreads(
     assert(rx_buffer[0].buffer.size() != 0);
 
     std::vector<pthread_t> created_threads;
-    created_threads.resize(thread_num_);
-    for (int i = 0; i < thread_num_; i++) {
+    created_threads.resize(this->thread_num_);
+    for (int i = 0; i < this->thread_num_; i++) {
         // record the thread id
         ReceiverContext* context = new ReceiverContext;
         context->ptr = this;
@@ -123,7 +123,6 @@ std::vector<pthread_t> Receiver::startRecvThreads(
             throw std::runtime_error("Socket recv thread create failed");
         }
     }
-
     sleep(1);
     pthread_cond_broadcast(&cond);
     go();
@@ -140,8 +139,8 @@ void Receiver::completeRecvThreads(const std::vector<pthread_t>& recv_thread)
 
 void Receiver::go()
 {
-    if (baseRadioSet_ != NULL) {
-        baseRadioSet_->radioStart(); // hardware trigger
+    if (this->base_radio_set_ != NULL) {
+        this->base_radio_set_->radioStart(); // hardware trigger
     }
 }
 
@@ -160,10 +159,11 @@ void* Receiver::loopRecv_launch(void* in_context)
 void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 {
     if (config_->core_alloc() == true) {
-        MLPD_INFO("Pinning thread %d to core %d\n", tid, core_id + tid);
+        MLPD_INFO("Pinning rx thread %d to core %d\n", tid, core_id + tid);
         if (pin_to_core(core_id + tid) != 0) {
-            MLPD_ERROR("Pin thread %d to core %d failed\n", tid, core_id + tid);
-            throw std::runtime_error("Pin thread to core failed");
+            MLPD_ERROR(
+                "Pin rx thread %d to core %d failed\n", tid, core_id + tid);
+            throw std::runtime_error("Pin rx thread to core failed");
         }
     }
 
@@ -257,7 +257,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             size_t radio_idx = it - config_->n_bs_sdrs_agg().at(cell);
             bs_sync_ret = -1;
             while (bs_sync_ret < 0) {
-                bs_sync_ret = baseRadioSet_->radioRx(radio_idx, cell,
+                bs_sync_ret = this->base_radio_set_->radioRx(radio_idx, cell,
                     samp_buffer.data(), config_->samps_per_symbol(), rxTimeBs);
             }
         }
@@ -302,8 +302,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                     &pkg_buf_inuse[offs], bit); // now full
                 // if buffer was full, exit
                 if ((old & bit) != 0) {
-                    printf("thread %d buffer full\n", tid);
-                    exit(0);
+                    MLPD_ERROR("thread %d buffer full\n", tid);
+                    throw std::runtime_error("Thread %d buffer full\n");
                 }
                 // Reserved until marked empty by consumer
             }
@@ -316,14 +316,14 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 samp[ch] = pkg[ch]->data;
             }
 
-            assert(baseRadioSet_ != NULL);
-            // ant_id = it * num_channels;
+            assert(this->base_radio_set_ != NULL);
             ant_id = radio_idx * num_channels;
 
             // Schedule BS beacons to be sent from host for USRPs
-            if (!kUseUHD) {
+            if (kUseUHD == false) {
                 long long frameTime;
-                if (baseRadioSet_->radioRx(radio_idx, cell, samp, frameTime)
+                if (this->base_radio_set_->radioRx(
+                        radio_idx, cell, samp, frameTime)
                     < 0) {
                     config_->running(false);
                     break;
@@ -351,9 +351,10 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 // otherwise use samp_buffer as a dummy buffer
                 if (config_->isPilot(frame_id, symbol_id)
                     || config_->isData(frame_id, symbol_id))
-                    r = baseRadioSet_->radioRx(radio_idx, cell, samp, rxTimeBs);
+                    r = this->base_radio_set_->radioRx(
+                        radio_idx, cell, samp, rxTimeBs);
                 else
-                    r = baseRadioSet_->radioRx(
+                    r = this->base_radio_set_->radioRx(
                         radio_idx, cell, samp_buffer.data(), rxTimeBs);
 
                 if (r < 0) {
@@ -372,7 +373,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                     txTimeBs = rxTimeBs
                         + config_->samps_per_symbol()
                             * config_->symbols_per_frame() * BEACON_INTERVAL;
-                    int r_tx = baseRadioSet_->radioTx(radio_idx, cell,
+                    int r_tx = this->base_radio_set_->radioTx(radio_idx, cell,
                         beaconbuff.data(), kStreamEndBurst, txTimeBs);
                     if (r_tx != config_->samps_per_symbol())
                         std::cerr << "BAD Transmit(" << r_tx << "/"
@@ -383,9 +384,10 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             }
 
 #if DEBUG_PRINT
-            for (auto ch = 0; ch < num_channels; ++ch) {
-                printf("receive thread %d, frame %d, symbol %d, cell %d, ant "
-                       "%d samples: %d %d %d %d %d %d %d %d ...\n",
+            for (size_t ch = 0; ch < num_channels; ++ch) {
+                printf(
+                    "receive thread %d, frame %zu, symbol %zu, cell %zu, ant "
+                    "%zu samples: %d %d %d %d %d %d %d %d ...\n",
                     tid, frame_id, symbol_id, cell, ant_id + ch,
                     pkg[ch]->data[1], pkg[ch]->data[2], pkg[ch]->data[3],
                     pkg[ch]->data[4], pkg[ch]->data[5], pkg[ch]->data[6],
@@ -400,15 +402,17 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             for (size_t ch = 0; ch < num_packets; ++ch) {
                 // new (pkg[ch]) Package(frame_id, symbol_id, 0, ant_id + ch);
                 new (pkg[ch]) Package(frame_id, symbol_id, cell, ant_id + ch);
-                // push EVENT_RX_SYMBOL event into the queue
+                // push kEventRxSymbol event into the queue
                 Event_data package_message;
-                package_message.event_type = EVENT_RX_SYMBOL;
+                package_message.event_type = kEventRxSymbol;
+                package_message.ant_id = ant_id + ch;
                 // data records the position of this packet in the buffer & tid of this socket
                 // (so that task thread could know which buffer it should visit)
                 package_message.data = cursor + tid * buffer_chunk_size;
-                if (!message_queue_->enqueue(local_ptok, package_message)) {
-                    printf("socket message enqueue failed\n");
-                    exit(0);
+                if (message_queue_->enqueue(local_ptok, package_message)
+                    == false) {
+                    MLPD_ERROR("socket message enqueue failed\n");
+                    throw std::runtime_error("socket message enqueue failed");
                 }
                 cursor++;
                 cursor %= buffer_chunk_size;
@@ -416,8 +420,9 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
         }
 
         // for UHD device update symbol_id on host
-        if (kUseUHD == true)
+        if (kUseUHD == true) {
             symbol_id++;
+        }
     }
     MLPD_SYMBOL(
         "Process %d -- Loop Rx Freed memory at: %p\n", tid, zeroes_memory);
@@ -439,11 +444,11 @@ void* Receiver::clientTxRx_launch(void* in_context)
 
 void Receiver::clientTxRx(int tid)
 {
-    int txSyms = config_->cl_dl_symbols().at(tid).size();
+    int txSyms = config_->cl_ul_symbols().at(tid).size();
     int rxSyms = config_->cl_dl_symbols().at(tid).size();
     int txStartSym = config_->cl_ul_symbols().at(tid).empty()
         ? 0
-        : config_->cl_dl_symbols().at(tid).at(0);
+        : config_->cl_ul_symbols().at(tid).at(0);
 
     double frameTime = config_->samps_per_symbol()
         * config_->cl_frames().at(0).size() * 1e3
@@ -454,13 +459,13 @@ void Receiver::clientTxRx(int tid)
     if (config_->core_alloc() == true) {
         int core
             = tid + 1 + config_->rx_thread_num() + config_->task_thread_num();
-        MLPD_INFO("Pinning client thread %d to core %d\n", tid, core);
+        MLPD_INFO("Pinning client TxRx thread %d to core %d\n", tid, core);
         if (pin_to_core(core) != 0) {
             MLPD_ERROR(
-                "Pin client thread %d to core %d failed in client txrx\n", tid,
-                core);
+                "Pin client TxRx thread %d to core %d failed in client txrx\n",
+                tid, core);
             throw std::runtime_error(
-                "Pin client thread to core failed in client txr");
+                "Pin client TxRx thread to core failed in client txr");
         }
     }
 
@@ -536,10 +541,12 @@ void Receiver::clientSyncTxRx(int tid)
         int core
             = tid + 1 + config_->rx_thread_num() + config_->task_thread_num();
 
-        MLPD_INFO("Pinning client thread %d to core %d\n", tid, core);
+        MLPD_INFO("Pinning client synctxrx thread %d to core %d\n", tid, core);
         if (pin_to_core(core) != 0) {
-            MLPD_ERROR("Pin client thread %d to core %d failed\n", tid, core);
-            throw std::runtime_error("Failed to Pin client thread to core");
+            MLPD_ERROR(
+                "Pin client synctxrx thread %d to core %d failed\n", tid, core);
+            throw std::runtime_error(
+                "Failed to Pin client synctxrx thread to core");
         }
     }
 
@@ -584,7 +591,7 @@ void Receiver::clientSyncTxRx(int tid)
     }
 
     std::vector<void*> txbuff(2);
-    size_t txSyms = config_->cl_dl_symbols().at(tid).size();
+    size_t txSyms = config_->cl_ul_symbols().at(tid).size();
     if (txSyms > 0) {
         size_t txIndex = tid * config_->cl_sdr_ch();
         txbuff.at(0) = config_->tx_data().at(txIndex).data();
@@ -740,7 +747,7 @@ void Receiver::clientSyncTxRx(int tid)
                 if (config_->ul_data_sym_present() == true) {
                     for (size_t s = 0; s < txSyms; s++) {
                         txTime = rxTime + txTimeDelta
-                            + config_->cl_dl_symbols().at(tid).at(s) * NUM_SAMPS
+                            + config_->cl_ul_symbols().at(tid).at(s) * NUM_SAMPS
                             - config_->tx_advance();
                         if (kUseUHD && s < (txSyms - 1))
                             flagsTxUlData = 1; // HAS_TIME

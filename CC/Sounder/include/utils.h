@@ -31,6 +31,7 @@
 #include <unistd.h>
 #include <vector>
 
+int pin_thread_to_core(int core_id, pthread_t& thread_to_pin);
 int pin_to_core(int core_id);
 
 class Utils {
@@ -61,4 +62,4 @@ public:
     static std::vector<std::string> split(const std::string& s, char delimiter);
     static void printVector(std::vector<std::complex<int16_t>>& data);
 };
-#endif
+#endif /* UTILS_HEADER */
