@@ -603,6 +603,7 @@ def show_plot(cmpx_pilots, lts_seq_orig, match_filt, ref_user, ref_ant, ref_fram
     Plot channel analysis
     '''
 
+    # WZC: fix the hardcode issue
     frame_to_plot = ref_frame
     frm_st_idx = frm_st_idx
     ref_ant = ref_ant
