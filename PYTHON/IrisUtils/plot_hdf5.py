@@ -798,6 +798,8 @@ def main():
     scrpt_end = time.time()
     print(">>>> Script Duration: time: %f \n" % ( scrpt_end - scrpt_strt) )
 
+    # TEST MODIFICATION FROM WEST
+
 
 if __name__ == '__main__':
     main()
