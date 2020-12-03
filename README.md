@@ -1,7 +1,11 @@
 # RENEWLab
 
 
-[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fdevelop)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/develop/)
+<<<<<<< HEAD
+[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Ftest)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/test/)
+=======
+[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Ftest)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/test/)
+>>>>>>> 89798bf1263dbbc68b5125615d1edc67c026c0e8
 
 
 # Description
