@@ -1,6 +1,6 @@
 # RENEWLab
 
-[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fplot-hardcode-fix)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/plot-hardcode-fix/)
+[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fbad-nodes)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/bad-nodes/)
 
 
 
