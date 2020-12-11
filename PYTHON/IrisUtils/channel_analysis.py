@@ -233,21 +233,128 @@ def calExpectedCapacity(csi, user=0, max_delay=100, conj=True, downlink=False):
     return cap
 
 
+def find_bad_nodes(csi, corr_thresh=0.32, user=0):
+    """Find bad Iris nodes.
+	
+    Find bad nodes based on the correlation between a reference node 
+    and every other node. If all nodes are 'bad' then the reference 
+    node is assumed to be bad, and a new reference node is chosen. The 
+    reference node is picked sequentially from the list of BS antennas.
+    
+    Note: 
+        csi should be a channel trace taken in a stable environment. 
+        If AGC is used, csi should be taken after AGC has settled.
+	
+	Note:
+        By only correlating one node with another, the decorrelation 
+        is maximized when there is a sync issue. (If you use more 
+        antennas for reference, the impact of the time sync is less. 
+        If you use fewer, the bad antennas, which have all of the same 
+        phase shift, dominate correlation.)
+        
+        An important trick is to normalize amplitudes of the CSI so 
+        that the phase shift always has the same impact, regardless of 
+        channel gains (i.e. if the reference node has low or high 
+        signal strength relative to the bad node it would decrease the 
+        impact of a time sync issue). 
+        
+        This also allows a fixed threshold to work well as a single 
+        sample shift of 4 antennas out of 8 relatively consistently 
+        causes a decorrelation of .25. If half the samples (worst 
+        case), this is a .125 deviation from the mean.
+	
+	Args:
+        csi: Complex array [Frame, User, Pilot Rep, BS Ant, Subcarrier]
+		thresh: Lower threshold means more sensitivity to deviation in 
+            correlation. Higher shall give more false negatives, lower 
+            shall give more false positives.
+		user: The index of the user to use for correlation.
+		
+	Returns:
+		bad_nodes: A list of indices of nodes determined to be bad.
+
+	"""
+    userCSI = np.mean(csi[1:csi.shape[0]:,:,:,:,:], 2)
+    print(np.shape(userCSI))
+    num_nodes = userCSI.shape[2]
+    print(">>> Total {num_nodes} reference Iris nodes: ".format(
+        num_nodes=num_nodes))
+    if num_nodes == 1:
+        node_good = [True]
+    else:
+        corr = [None] * num_nodes
+        ref_good = False
+        ref = 0
+        node_good = [True] * num_nodes
+        # Must normalize amplitude so that the phase shift always has 
+        # the same effect on correlation.
+        userCSI_abs = np.abs(userCSI)
+        userCSI_abs[userCSI_abs == 0] = 1
+        userCSI /= userCSI_abs  # Handles the division by zero case.
+        print("1-corr   corr_thresh")
+
+        while not ref_good:
+            for n in range(num_nodes):
+                if n != ref:
+                    sl = list(range(ref,ref+1)) + list(range(n,n+1))
+                    corr_vec = np.conj(userCSI[0,:,sl,:])
+                    c = userCSI[:,:,sl,:]
+                    corr[n] = calCorr(c, corr_vec)[0][:,user]
+                    v = np.max(np.abs(corr[n] - np.mean(corr[n])))
+                    print(v, corr_thresh)
+                    if  v > corr_thresh:
+                        node_good[n] = False
+            if np.sum(node_good) > 1:  # It is good reference antenna.
+                ref_good = True
+                print(">>> Node {ref} is a good reference.".format(ref=ref+1))
+            else:  # It may have the same timing error as other nodes.
+                print(">>> Warning! Node {ref} chosen for reference appears "
+                    "to be bad! Trying the next node ...".format(ref=ref))
+                ref +=1
+                node_good = [True] * num_nodes
+                if ref == num_nodes:
+                        print(">>> No good nodes found! If there are only 2 "
+                            "nodes, perhaps just 1 is bad.")
+                        ref_good = True  # Used to exit the while loop.
+                        node_good = [False] * num_nodes
+                
+    bad_nodes = [i+1 for i, x in enumerate(node_good) if not x]
+    return bad_nodes
+
+
 def calCorr(userCSI, corr_vec):
+    """Calculate instantaneous correlation with a correlation vector.
+
+    Sub-samples userCSI in the time/user/subcarrier slice before 
+    passing it. If slicing just one user, dimensionality has to be 
+    maintained, i.e. slice like userCSI[:,[2],:,:].
+
+    Args:
+        userCSI: Complex numpy array [Frame, User, BS Ant, Subcarrier].
+        corr_vec: Vector to correlate with [BS Ant, User, Subcarrier].
+
+    Returns:
+        corr_total: Average correlation across subcarriers [Frame,User].
+        sig_sc: Correlation on every [Frame, User, Subcarrier].
+
+    Typical usage example:
+        corr_total,sig_sc = calCorr(userCSI, 
+            np.transpose(np.conj(userCSI[frame,:,:,:]),(1,0,2)))
+
     """
-    Calculate the instantaneous correlation with a given correlation vector
-    """
-    sig_intf = np.empty(
-        (userCSI.shape[0], userCSI.shape[1], userCSI.shape[1], userCSI.shape[3]), dtype='float32')
+    sig_intf = np.empty((userCSI.shape[0], userCSI.shape[1], 
+                         userCSI.shape[1], userCSI.shape[3]), dtype='float32')
 
     for sc in range(userCSI.shape[3]):
-        sig_intf[:, :, :, sc] = np.abs(np.dot(userCSI[:, :, :, sc], corr_vec[:, :, sc])) / np.dot(
-            np.abs(userCSI[:, :, :, sc]), np.abs(corr_vec[:, :, sc]))
+        sig_intf[:, :, :, sc] = np.abs(np.dot(userCSI[:,:,:,sc],
+                                       corr_vec[:,:,sc])) / \
+                                np.dot(np.abs(userCSI[:,:,:,sc]),
+                                       np.abs(corr_vec[:,:,sc]))
 
-    # gets correlation of subcarriers for each user across bs antennas
+    # Get correlation of subcarriers for each user across BS antennas
     sig_sc = np.diagonal(sig_intf, axis1=1, axis2=2)
     sig_sc = np.swapaxes(sig_sc, 1, 2)
-    corr_total = np.mean(sig_sc, axis=2)  # averaging corr across users
+    corr_total = np.mean(sig_sc, axis=2)  # Averaging corr across users
 
     return corr_total, sig_sc
 

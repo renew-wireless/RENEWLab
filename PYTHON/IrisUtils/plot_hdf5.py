@@ -32,12 +32,20 @@ import matplotlib
 #matplotlib.use("Agg")
 
 
-def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_i=0, ul_sf_i=0, subcarrier_i=10, offset=-1, dn_calib_offset=0, up_calib_offset=0, n_frm_st=0, thresh=0.001, deep_inspect=False, sub_sample=1):
-    """
-    Plot data in file to verify contents.
+def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
+                user_i=0, ul_sf_i=0, subcarrier_i=10, offset=-1,
+                dn_calib_offset=0, up_calib_offset=0, n_frm_st=0,
+                thresh=0.001, deep_inspect=False, sub_sample=1,
+                corr_thresh=0.32):
+    """Plot data in the hdf5 file to verify contents.
 
-    Input:
-        default_frame: Index of frame to be plotted. Default to frame #100
+    Args:
+        hdf5: An hdf5_lib object.
+        default_frame: The index of the frame to be plotted.
+        cell_i: The index of the hub where base station is connected.
+        ofdm_sym_i: The index of the reference ofdm symbol in a pilot.
+        ant_i: The index of the reference base station antenna.
+        user_i: The index of the reference user.
     """
     plt.close("all")
     data = hdf5.data
@@ -109,6 +117,9 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_
     csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type)
 
     cellCSI = csi[:, cell_i, :, :, :, :]
+    bad_nodes = find_bad_nodes(cellCSI, corr_thresh=corr_thresh, user=user_i)
+    print(">>> Warning! A list of bad Iris node indices: {bad_nodes}".format(
+        bad_nodes=bad_nodes))
     if ofdm_sym_i >= num_pilots_per_sym:  # if out of range index, do average
         userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
     else:
@@ -379,24 +390,24 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_
         cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, 100, 11), orientation='horizontal')
         cbar.ax.set_xticklabels(['0%', '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'])
 
-        #fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
-        #c = []
-        #fig.suptitle('Frame Map')
-        #for n_c in range(n_cell):
-        #    for n_u in range(n_ue):
-        #        c.append( axes[n_u, n_c].imshow(frame_map[:,n_c,n_u,:].T, cmap=plt.cm.get_cmap('Blues', 3), interpolation='none',
-        #              extent=[hdf5.n_frm_st,hdf5.n_frm_end, n_ant,0],  aspect="auto") )
-        #        axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
-        #        axes[n_u, n_c].set_ylabel('Antenna #')
-        #        axes[n_u, n_c].set_xlabel('Frame #')
-        #        # Minor ticks
-        #        axes[n_u, n_c].set_xticks(np.arange(hdf5.n_frm_st, hdf5.n_frm_end, 1), minor=True)
-        #        axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
-        #        # Gridlines based on minor ticks
-        #        axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
+        fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+        c = []
+        fig.suptitle('Frame Map')
+        for n_c in range(n_cell):
+            for n_u in range(n_ue):
+                c.append( axes[n_u, n_c].imshow(frame_map[:,n_c,n_u,:].T, cmap=plt.cm.get_cmap('Blues', 3), interpolation='none',
+                      extent=[hdf5.n_frm_st,hdf5.n_frm_end, n_ant,0],  aspect="auto") )
+                axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
+                axes[n_u, n_c].set_ylabel('Antenna #')
+                axes[n_u, n_c].set_xlabel('Frame #')
+                # Minor ticks
+                axes[n_u, n_c].set_xticks(np.arange(hdf5.n_frm_st, hdf5.n_frm_end, 1), minor=True)
+                axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
+                # Gridlines based on minor ticks
+                axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
 
-        #cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')
-        #cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])
+        cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')
+        cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])
         ##plt.show()
 
         # SHOW FIGURES
@@ -728,6 +739,9 @@ def main():
     parser.add_option("--frame-start", type="int", dest="fr_strt", help="Starting frame. Must have set n_frames_to_inspect first and make sure fr_strt is within boundaries ", default=0)
     parser.add_option("--verify-trace", action="store_true", dest="verify", help="Run script without analysis", default= True)
     parser.add_option("--analyze-trace", action="store_true", dest="analyze", help="Run script without analysis", default= False)
+    parser.add_option("--corr-thresh", type="float", dest="corr_thresh",
+                      help="Correlation threshold to find bad Iris nodes",
+                      default=0.32)
     (options, args) = parser.parse_args()
 
     show_metadata = options.show_metadata
@@ -749,6 +763,7 @@ def main():
     analyze = options.analyze
     sub_sample = options.sub_sample
     legacy = options.legacy
+    corr_thresh = options.corr_thresh
 
     filename = sys.argv[1]
     scrpt_strt = time.time()
@@ -796,7 +811,11 @@ def main():
         else:
             hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
             if verify:
-                verify_hdf5(hdf5, ref_frame, ref_cell, ref_ofdm_sym, ref_ant, ref_user, ref_ul_subframe, ref_subcarrier, signal_offset, downlink_calib_offset, uplink_calib_offset, fr_strt, thresh, deep_inspect, sub_sample)
+                verify_hdf5(hdf5, ref_frame, ref_cell, ref_ofdm_sym, ref_ant,
+                            ref_user, ref_ul_subframe, ref_subcarrier,
+                            signal_offset, downlink_calib_offset,
+                            uplink_calib_offset, fr_strt, thresh, deep_inspect,
+                            sub_sample, corr_thresh)
             if analyze:
                 analyze_hdf5(hdf5)
     scrpt_end = time.time()
