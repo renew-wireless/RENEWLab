@@ -275,7 +275,6 @@ def find_bad_nodes(csi, corr_thresh=0.32, user=0):
 
 	"""
     userCSI = np.mean(csi[1:csi.shape[0]:,:,:,:,:], 2)
-    print(np.shape(userCSI))
     num_nodes = userCSI.shape[2]
     print(">>> Total {num_nodes} reference Iris nodes: ".format(
         num_nodes=num_nodes))
