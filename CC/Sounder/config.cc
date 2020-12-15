@@ -15,6 +15,7 @@
 
 static size_t kFpgaTxRamSize = 4096;
 static size_t kMaxSupportedFFTSize = 2048;
+static size_t kMinSupportedFFTSize = 64;
 static size_t kMaxSupportedCPSize = 128;
 
 Config::Config(const std::string& jsonfile)
@@ -256,7 +257,7 @@ Config::Config(const std::string& jsonfile)
     srand(time(NULL));
     const int seqLen = 128;
     std::vector<std::vector<double>> gold_ifft
-        = CommsLib::getSequence(seqLen, CommsLib::GOLD_IFFT);
+        = CommsLib::getSequence(CommsLib::GOLD_IFFT);
     std::vector<std::complex<int16_t>> gold_ifft_ci16
         = Utils::double_to_cint16(gold_ifft);
     gold_cf32_.clear();
@@ -266,7 +267,7 @@ Config::Config(const std::string& jsonfile)
     }
 
     std::vector<std::vector<double>> sts_seq
-        = CommsLib::getSequence(0, CommsLib::STS_SEQ);
+        = CommsLib::getSequence(CommsLib::STS_SEQ);
     std::vector<std::complex<int16_t>> sts_seq_ci16
         = Utils::double_to_cint16(sts_seq);
 
@@ -307,8 +308,14 @@ Config::Config(const std::string& jsonfile)
     // compose pilot subframe
     if (fft_size_ > kMaxSupportedFFTSize) {
         fft_size_ = kMaxSupportedFFTSize;
-        std::cout << "Unsupported fft size! Setting fftSize to "
+        std::cout << "Unsupported fft size! Setting fft size to "
                   << kMaxSupportedFFTSize << "..." << std::endl;
+    }
+
+    if (fft_size_ < kMinSupportedFFTSize) {
+        fft_size_ = kMinSupportedFFTSize;
+        std::cout << "Unsupported fft size! Setting fft size to "
+                  << kMinSupportedFFTSize << "..." << std::endl;
     }
 
     if (cp_size_ > kMaxSupportedCPSize) {
@@ -318,9 +325,15 @@ Config::Config(const std::string& jsonfile)
     }
 
     if (pilot_seq_ == "lts" || fft_size_ == 64) {
-        pilot_sym_ = CommsLib::getSequence(fft_size_, CommsLib::LTS_SEQ);
+        pilot_sym_ = CommsLib::getSequence(CommsLib::LTS_SEQ);
+        if (fft_size_ != 64) {
+            fft_size_ = 64;
+            std::cout << "LTS pilot sequence default fft size is 64! Setting "
+                         "fft size to 64"
+                      << std::endl;
+        }
     } else if (pilot_seq_ == "zadoff-chu") {
-        pilot_sym_ = CommsLib::getSequence(fft_size_, CommsLib::LTE_ZADOFF_CHU);
+        pilot_sym_ = CommsLib::getSequence(CommsLib::LTE_ZADOFF_CHU, fft_size_);
     }
     auto lts_ci16 = Utils::double_to_cint16(pilot_sym_);
     lts_ci16.insert(
@@ -473,8 +486,7 @@ Config::Config(const std::string& jsonfile)
         rx_thread_num_ = (num_cores >= (2 * RX_THREAD_NUM))
             ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_sdrs_all_))
             : 1;
-        if (reciprocal_calib_ == true)
-        {
+        if (reciprocal_calib_ == true) {
             rx_thread_num_ = 2;
         }
         if ((client_present_ == true)

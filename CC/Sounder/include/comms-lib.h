@@ -44,7 +44,8 @@ public:
     CommsLib(std::string);
     ~CommsLib();
 
-    static std::vector<std::vector<double>> getSequence(int N, int type);
+    static std::vector<std::vector<double>> getSequence(
+        size_t type, size_t seq_len = 0);
     static std::vector<std::complex<float>> modulate(std::vector<int>, int);
     static std::vector<int> getDataSc(int fftSize);
     static std::vector<int> getNullSc(int fftSize);
