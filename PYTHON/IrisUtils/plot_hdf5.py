@@ -32,7 +32,7 @@ import matplotlib
 #matplotlib.use("Agg")
 
 
-def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_i=0, ul_sf_i=0, subcarrier_i=10, offset=-1, dn_calib_offset=0, up_calib_offset=0, n_frm_st=0, thresh=0.001, deep_inspect=False, sub_sample=1):
+def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_i=0, ul_sf_i=0, subcarrier_i=10, offset=-1, dn_calib_offset=0, up_calib_offset=0, n_frm_st=0, thresh=0.001, deep_inspect=False, sub_sample=1, exclude_bs_nodes=[]):
     """
     Plot data in file to verify contents.
 
@@ -86,7 +86,10 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_
 
     print("symbol_length = {}, offset = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}, pilot_rep = {}".format(symbol_length, offset, cp, prefix_len, postfix_len, z_padding, num_pilots_per_sym))
 
-    samples = pilot_samples 
+    samples = pilot_samples
+    all_bs_nodes = set(range(samples.shape[3]))
+    plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
+    samples = samples[:, :, :, plot_bs_nodes, :]
     num_cl_tmp = num_pilots  # number of UEs to plot data for
 
     samps_mat = np.reshape(
@@ -136,13 +139,13 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_
     axes2[0, 0].set_title('Pilot CSI Stats Across Frames- Cell %d - User %d - Subcarrier %d' % (cell_i, user_i, subcarrier_i))
     axes2[0, 0].set_ylabel('Magnitude')
     for i in range(csi.shape[4]):
-        axes2[0, 0].plot(np.abs(userCSI[:, user_i, i, subcarrier_i]).flatten(), label="ant %d"%i)
+        axes2[0, 0].plot(np.abs(userCSI[:, user_i, i, subcarrier_i]).flatten(), label="ant %d"%plot_bs_nodes[i])
     axes2[0, 0].legend(loc='lower right', frameon=False)
     axes2[0, 0].set_xlabel('Frame')
 
     axes2[1, 0].set_ylabel('Phase')
     for i in range(csi.shape[4]):
-        axes2[1, 0].plot(np.angle(userCSI[:, user_i, i, subcarrier_i]).flatten(), label="ant %d"%i)
+        axes2[1, 0].plot(np.angle(userCSI[:, user_i, i, subcarrier_i]).flatten(), label="ant %d"%plot_bs_nodes[i])
     axes2[1, 0].legend(loc='lower right', frameon=False)
     axes2[1, 0].set_ylim(-np.pi, np.pi)
     axes2[1, 0].set_xlabel('Frame')
@@ -182,13 +185,13 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_
 
         axes3[2, 0].set_ylabel('Magnitude')
         for i in range(calib_mat.shape[1]):
-            axes3[2, 0].plot(np.abs(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d"%i)
+            axes3[2, 0].plot(np.abs(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d"%plot_bs_nodes[i])
         axes3[2, 0].set_xlabel('Frame')
         axes3[2, 0].legend(loc='lower right', frameon=False)
 
         axes3[3, 0].set_ylabel('Phase')
         for i in range(calib_mat.shape[1]):
-            axes3[3, 0].plot(np.angle(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d"%i)
+            axes3[3, 0].plot(np.angle(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d"%plot_bs_nodes[i])
         axes3[3, 0].set_xlabel('Frame')
         axes3[3, 0].set_ylim(-np.pi, np.pi)
         axes3[3, 0].legend(loc='lower right', frameon=False)
@@ -206,13 +209,13 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_
 
         axes4[2, 0].set_ylabel('Magnitude')
         for i in range(calib_mat.shape[1]):
-            axes4[2, 0].plot(np.abs(calib_mat[ref_frame, i, :]).flatten(), label="ant %d"%i)
+            axes4[2, 0].plot(np.abs(calib_mat[ref_frame, i, :]).flatten(), label="ant %d"%plot_bs_nodes[i])
         axes4[2, 0].set_xlabel('Subcarrier')
         axes4[2, 0].legend(loc='lower right', frameon=False)
 
         axes4[3, 0].set_ylabel('Phase')
         for i in range(calib_mat.shape[1]):
-            axes4[3, 0].plot(np.angle(calib_mat[ref_frame, i, :]).flatten(), label="ant %d"%i)
+            axes4[3, 0].plot(np.angle(calib_mat[ref_frame, i, :]).flatten(), label="ant %d"%plot_bs_nodes[i])
         axes4[3, 0].set_xlabel('Subcarrier')
         axes4[3, 0].set_ylim(-np.pi, np.pi)
         axes4[3, 0].legend(loc='lower right', frameon=False)
@@ -716,6 +719,7 @@ def main():
     parser.add_option("--ref-cell", type="int", dest="ref_cell", help="Cell number to plot", default=0)
     parser.add_option("--legacy", action="store_true", dest="legacy", help="Parse and plot legacy hdf5 file", default=False)
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Reference antenna", default=0)
+    parser.add_option("--exclude-bs-ants", type="string", dest="exclude_bs_ants", help="Bs antennas to be excluded in plotting", default="")
     parser.add_option("--ref-ofdm-sym", type="int", dest="ref_ofdm_sym", help="Reference ofdm symbol within a pilot", default=0)
     parser.add_option("--ref-user", type="int", dest="ref_user", help="Reference User", default=0)
     parser.add_option("--ref-subcarrier", type="int", dest="ref_subcarrier", help="Reference subcarrier", default=0)
@@ -749,8 +753,14 @@ def main():
     analyze = options.analyze
     sub_sample = options.sub_sample
     legacy = options.legacy
+    exclude_bs_ants_str = options.exclude_bs_ants
+    exclude_bs_ants = []
+    if len(exclude_bs_ants_str) > 0:
+        exclude_ant_ids = exclude_bs_ants_str.split(',')
+        exclude_bs_ants = [int(i) for i in exclude_ant_ids]
 
     filename = sys.argv[1]
+
     scrpt_strt = time.time()
 
     if n_frames_to_inspect == 0:
@@ -796,7 +806,7 @@ def main():
         else:
             hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
             if verify:
-                verify_hdf5(hdf5, ref_frame, ref_cell, ref_ofdm_sym, ref_ant, ref_user, ref_ul_subframe, ref_subcarrier, signal_offset, downlink_calib_offset, uplink_calib_offset, fr_strt, thresh, deep_inspect, sub_sample)
+                verify_hdf5(hdf5, ref_frame, ref_cell, ref_ofdm_sym, ref_ant, ref_user, ref_ul_subframe, ref_subcarrier, signal_offset, downlink_calib_offset, uplink_calib_offset, fr_strt, thresh, deep_inspect, sub_sample, exclude_bs_ants)
             if analyze:
                 analyze_hdf5(hdf5)
     scrpt_end = time.time()
