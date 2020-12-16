@@ -605,7 +605,7 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
             H5::Exception::dontPrint();
             // Update the max frame number.
             // Note that the 'frame_id' might be out of order.
-            if (pkg->frame_id > this->max_frame_number_) {
+            if (pkg->frame_id >= this->max_frame_number_) {
                 // Open the hdf5 file if we haven't.
                 closeHDF5();
                 openHDF5();
