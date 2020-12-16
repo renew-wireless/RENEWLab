@@ -66,6 +66,8 @@ Config::Config(const std::string& jsonfile)
         ofdm_symbol_size_ = fft_size_ + cp_size_;
         subframe_size_ = symbol_per_subframe_ * ofdm_symbol_size_;
         samps_per_symbol_ = subframe_size_ + prefix_ + postfix_;
+        symbol_data_subcarrier_num_
+            = tddConf.value("ofdm_data_subcarrier_num", fft_size_);
         tx_scale_ = tddConf.value("tx_scale", 0.5);
         beacon_seq_ = tddConf.value("beacon_seq", "gold_ifft");
         pilot_seq_ = tddConf.value("pilot_seq", "lts");
@@ -333,17 +335,24 @@ Config::Config(const std::string& jsonfile)
                       << std::endl;
         }
     } else if (pilot_seq_ == "zadoff-chu") {
-        pilot_sym_ = CommsLib::getSequence(CommsLib::LTE_ZADOFF_CHU, fft_size_);
-    }
-    auto lts_ci16 = Utils::double_to_cint16(pilot_sym_);
-    lts_ci16.insert(
-        lts_ci16.begin(), lts_ci16.end() - cp_size_, lts_ci16.end());
+        pilot_sym_ = CommsLib::getSequence(
+            CommsLib::LTE_ZADOFF_CHU, symbol_data_subcarrier_num_);
+    } else
+        std::cout << pilot_seq_
+                  << " is not supported! Choose either lts or zaddof-chu."
+                  << std::endl;
+
+    auto iq_ci16 = Utils::double_to_cint16(pilot_sym_);
+    for (size_t i = 0; i < iq_ci16.size(); i++)
+        std::cout << iq_ci16[i].real() << "+1j*" << iq_ci16[i].imag() << " ";
+    std::cout << std::endl;
+    iq_ci16.insert(iq_ci16.begin(), iq_ci16.end() - cp_size_, iq_ci16.end());
 
     pilot_ci16_.clear();
     pilot_ci16_.insert(
         pilot_ci16_.begin(), prefix_zpad.begin(), prefix_zpad.end());
     for (size_t i = 0; i < symbol_per_subframe_; i++)
-        pilot_ci16_.insert(pilot_ci16_.end(), lts_ci16.begin(), lts_ci16.end());
+        pilot_ci16_.insert(pilot_ci16_.end(), iq_ci16.begin(), iq_ci16.end());
     pilot_ci16_.insert(
         pilot_ci16_.end(), postfix_zpad.begin(), postfix_zpad.end());
 

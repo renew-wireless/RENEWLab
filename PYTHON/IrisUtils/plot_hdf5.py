@@ -65,14 +65,15 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_
     symbol_length = int(metadata['SYMBOL_LEN'])
     num_pilots = int(metadata['PILOT_NUM'])
     num_cl = int(metadata['CL_NUM'])
-    cp = int(metadata['CP_LEN'])
     prefix_len = int(metadata['PREFIX_LEN'])
     postfix_len = int(metadata['POSTFIX_LEN'])
     z_padding = prefix_len + postfix_len
     if offset < 0: # if no offset is given use prefix from HDF5
         offset = int(prefix_len)
     fft_size = int(metadata['FFT_SIZE'])
+    cp = int(metadata['CP_LEN'])
     pilot_type = metadata['PILOT_SEQ_TYPE'].astype(str)[0]
+    nonzero_sc_size = metadata['DATA_SUBCARRIER_NUM']
     ofdm_pilot = np.array(metadata['OFDM_PILOT'])
     reciprocal_calib = np.array(metadata['RECIPROCAL_CALIB'])
     symbol_length_no_pad = symbol_length - z_padding
@@ -109,7 +110,7 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_
     # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
     # For correlation use a fft size of 64
     print("*verify_hdf5(): Calling samps2csi with fft_size = {}, offset = {}, bound = {}, cp = {} *".format(fft_size, offset, z_padding, cp))
-    csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type)
+    csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
 
     cellCSI = csi[:, cell_i, :, :, :, :]
     if ofdm_sym_i >= num_pilots_per_sym:  # if out of range index, do average
@@ -160,8 +161,8 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_
 
     if reciprocal_calib:
         # frame, downlink(0)-uplink(1), antennas, subcarrier
-        csi_u, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = up_calib_offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type)
-        csi_d, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = dn_calib_offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type)
+        csi_u, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = up_calib_offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
+        csi_d, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = dn_calib_offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
         calib_corrected_csi = np.zeros(csi_d.shape, dtype='complex64')
         calib_corrected_csi[:, :, 0, :, :, :] = csi_d[:, :, 0, :, :, :]
         calib_corrected_csi[:, :, 1, :, :, :] = csi_u[:, :, 1, :, :, :]
@@ -410,7 +411,7 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_
         plt.show()
 
 
-def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0):
+def analyze_hdf5(hdf5, frame=10, cell=0, offset=-1, zoom=0, pl=0):
     '''
     Calculates and plots achievable rates from hdf5 traces
 
@@ -424,15 +425,21 @@ def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0):
     timestep = symbol_length*symbol_num/rate
     num_cl = int(metadata['CL_NUM'])
     num_pilots = int(metadata['PILOT_NUM'])
-    cp = int(metadata['CP_LEN'])
     prefix_len = int(metadata['PREFIX_LEN'])
     postfix_len = int(metadata['POSTFIX_LEN'])
-    offset = prefix_len
+    z_padding = prefix_len + postfix_len
+    if offset < 0: # if no offset is given use prefix from HDF5
+        offset = int(prefix_len)
+    fft_size = int(metadata['FFT_SIZE'])
+    cp = int(metadata['CP_LEN'])
+    pilot_type = metadata['PILOT_SEQ_TYPE'].astype(str)[0]
+    nonzero_sc_size = metadata['DATA_SUBCARRIER_NUM']
 
     # compute CSI for each user and get a nice numpy array
     # Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier
-    #also, iq samples nicely chunked out, same dims, but subcarrier is sample.
-    csi, _ = hdf5_lib.samps2csi(pilot_samples, num_pilots, symbol_length, offset=offset)
+    # also, iq samples nicely chunked out, same dims, but subcarrier is sample.
+    # csi, _ = hdf5_lib.samps2csi(pilot_samples, num_pilots, symbol_length, offset=offset)
+    csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = z_padding, cp = cp, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
     csi = csi[:, cell, :, :, :, :]
     # zoom in too look at behavior around peak (and reduce processing time)
     if zoom > 0:

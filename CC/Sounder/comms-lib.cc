@@ -343,15 +343,14 @@ std::vector<std::complex<float>> CommsLib::IFFT(
     memcpy(fft_in, in.data(), fftSize * sizeof(std::complex<float>));
     mufft_execute_plan_1d(mufftplan, fft_out, fft_in);
     memcpy(out.data(), fft_out, fftSize * sizeof(std::complex<float>));
-    float max_val = 0;
+    float max_val = 1;
     if (normalize) {
         for (int i = 0; i < fftSize; i++) {
             if (std::abs(out[i]) > max_val)
                 max_val = std::abs(out[i]);
         }
-    } else {
-        max_val = 1;
     }
+
     std::cout << "IFFT output is normalized with " << std::to_string(max_val)
               << std::endl;
     for (int i = 0; i < fftSize; i++)
@@ -563,15 +562,33 @@ std::vector<std::vector<double>> CommsLib::getSequence(
                 break;
             }
         }
-        double qh = M * (u + 1) / 31;
-        double q = std::floor(qh + 0.5) + v * std::pow(-1, std::floor(2 * qh));
-        std::vector<double> a;
+        float qh = M * (u + 1) / 31;
+        float q = std::floor(qh + 0.5) + v * std::pow(-1, std::floor(2 * qh));
+        std::vector<std::complex<float>> zc_freq;
         for (size_t i = 0; i < seq_len; i++) {
             size_t m = i % M;
-            double a_re = std::cos(-M_PI * q * m * (m + 1) / M);
-            double a_im = std::sin(-M_PI * q * m * (m + 1) / M);
-            matrix[0].push_back(a_re);
-            matrix[1].push_back(a_im);
+            float re = std::cos(-M_PI * q * m * (m + 1) / M);
+            float im = std::sin(-M_PI * q * m * (m + 1) / M);
+            zc_freq.push_back(std::complex<float>(re, im));
+        }
+
+        auto zc_iq_len = (size_t)std::pow(2, std::ceil(std::log2(seq_len)));
+        auto zero_sc_len = zc_iq_len - seq_len;
+        if (zero_sc_len > 0) {
+            std::vector<std::complex<float>> zeros(
+                zero_sc_len / 2, std::complex<float>(0, 0));
+            zc_freq.insert(zc_freq.begin(), zeros.begin(), zeros.end());
+            zc_freq.insert(zc_freq.end(), zeros.begin(), zeros.end());
+        }
+
+        std::vector<std::complex<float>> zc_iq
+            = CommsLib::IFFT(zc_freq, zc_iq_len, 0.5);
+
+        matrix[0].resize(zc_iq_len);
+        matrix[1].resize(zc_iq_len);
+        for (size_t i = 0; i < zc_iq_len; i++) {
+            matrix[0][i] = zc_iq[i].real();
+            matrix[1][i] = zc_iq[i].imag();
         }
     } else if (type == GOLD_IFFT) {
         // Gold IFFT Sequence - seq_length=128, cp=0, upsample=1
@@ -593,8 +610,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(
 
         std::vector<std::complex<float>> gold_freq(2 * gold_seq_len);
         for (size_t i = 0; i < gold_seq_len; i++) {
-            gold_freq[2 * i]
-                = std::complex((float)gold_code[i], (float)gold_code[i]);
+            gold_freq[2 * i] = std::complex<float>(gold_code[i], gold_code[i]);
         }
 
         // Perform ifft-shift on gold_freq
@@ -696,19 +712,21 @@ std::vector<std::vector<double>> CommsLib::getSequence(
 }
 
 /*
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
-    std::vector<std::vector<double> > sequence;
-    int type = CommsLib::LTS_SEQ; //atoi(argv[1]);
-    int N = 160; 			  //atoi(argv[2]); 	// If Hadamard, possible N: {2, 4, 8, 16, 32, 64}
-    sequence = CommsLib::getSequence(N, type);
+    std::vector<std::vector<double>> sequence;
+    int type = CommsLib::LTE_ZADOFF_CHU; //atoi(argv[1]);
+    int N
+        = 304; //atoi(argv[2]); 	// If Hadamard, possible N: {2, 4, 8, 16, 32, 64}
+    sequence = CommsLib::getSequence(type, N);
 
     std::vector<std::complex<double>> sequence_c;
-    for(int i=0; i<sequence[0].size(); i++){
-        sequence_c.push_back(std::complex<double>(sequence[0][i], sequence[1][i]));
+    for (int i = 0; i < sequence[0].size(); i++) {
+        sequence_c.push_back(
+            std::complex<double>(sequence[0][i], sequence[1][i]));
     }
-    double peak = CommsLib::findLTS(sequence_c, N);
-    std::cout << "LTS PEAK: " << peak << std::endl;
+    // double peak = CommsLib::findLTS(sequence_c, N);
+    // std::cout << "LTS PEAK: " << peak << std::endl;
 
     return 0;
 }
