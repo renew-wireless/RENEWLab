@@ -57,6 +57,8 @@ public:
         bool normalize = true);
 
     static int findLTS(const std::vector<std::complex<double>>& iq, int seqLen);
+    static size_t find_pilot_seq(std::vector<std::complex<double>> iq,
+        std::vector<std::complex<double>> pilot, size_t seqLen);
     template <typename T>
     //static std::vector<T> convolve(std::vector<T> const& f, std::vector<T> const& g);
     static std::vector<T> convolve(

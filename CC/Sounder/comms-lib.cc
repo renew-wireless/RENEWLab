@@ -83,6 +83,34 @@ int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
     return best_peak;
 }
 
+size_t CommsLib::find_pilot_seq(std::vector<std::complex<double>> iq,
+    std::vector<std::complex<double>> pilot, size_t seq_len)
+{
+
+    // Re-arrange into complex vector, flip, and compute conjugate
+    std::vector<std::complex<double>> pilot_conj;
+    for (size_t i = 0; i < seq_len; i++) {
+        // conjugate
+        pilot_conj.push_back(std::conj(pilot[seq_len - i - 1]));
+    }
+
+    // Equivalent to numpy's sign function
+    auto iq_sign = CommsLib::csign(iq);
+
+    // Convolution
+    auto pilot_corr = CommsLib::convolve(iq_sign, pilot_conj);
+
+    std::vector<double> pilot_corr_abs(pilot_corr.size());
+    for (size_t i = 0; i < pilot_corr_abs.size(); i++)
+        pilot_corr_abs[i] = computePower(pilot_corr[i]);
+
+    // Find all peaks
+    auto best_peak
+        = std::max_element(pilot_corr_abs.begin(), pilot_corr_abs.end())
+        - pilot_corr_abs.begin();
+    return best_peak;
+}
+
 int CommsLib::find_beacon(const std::vector<std::complex<double>>& iq)
 {
     //std::vector<std::vector<double>> gold_seq;

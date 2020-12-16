@@ -343,9 +343,6 @@ Config::Config(const std::string& jsonfile)
                   << std::endl;
 
     auto iq_ci16 = Utils::double_to_cint16(pilot_sym_);
-    for (size_t i = 0; i < iq_ci16.size(); i++)
-        std::cout << iq_ci16[i].real() << "+1j*" << iq_ci16[i].imag() << " ";
-    std::cout << std::endl;
     iq_ci16.insert(iq_ci16.begin(), iq_ci16.end() - cp_size_, iq_ci16.end());
 
     pilot_ci16_.clear();
