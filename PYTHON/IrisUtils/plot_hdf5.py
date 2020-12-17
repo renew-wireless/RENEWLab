@@ -407,7 +407,7 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_
         plt.show()
 
 
-def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0):
+def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0, sub_sample = 1):
     '''
     Calculates and plots achievable rates from hdf5 traces
 
@@ -424,12 +424,21 @@ def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0):
     cp = int(metadata['CP_LEN'])
     prefix_len = int(metadata['PREFIX_LEN'])
     postfix_len = int(metadata['POSTFIX_LEN'])
+    z_padding = prefix_len + postfix_len
+    fft_size = int(metadata['FFT_SIZE'])
+    pilot_type = metadata['PILOT_SEQ_TYPE'].astype(str)[0]
     offset = prefix_len
 
     # compute CSI for each user and get a nice numpy array
     # Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier
     #also, iq samples nicely chunked out, same dims, but subcarrier is sample.
-    csi, _ = hdf5_lib.samps2csi(pilot_samples, num_pilots, symbol_length, offset=offset)
+    # csi, _ = hdf5_lib.samps2csi(pilot_samples, num_pilots, symbol_length, offset=offset)
+
+    samples = pilot_samples
+    num_cl_tmp = num_pilots
+    csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type)
+
+
     csi = csi[:, cell, :, :, :, :]
     # zoom in too look at behavior around peak (and reduce processing time)
     if zoom > 0:
@@ -438,7 +447,7 @@ def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0):
         frame = zoom
     noise = csi[:, -1, :, :, :]  # noise is last set of data.
     # don't include noise, average over both LTSs
-    userCSI = np.mean(csi[:, :num_cl, :, :, :], 2)
+    userCSI = np.mean(csi[:, :num_cl_tmp, :, :, :], 2)
 
     # compute beamweights based on the specified frame.
     conjbws = np.transpose(
@@ -467,34 +476,46 @@ def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0):
     mubf_conj = conj[1]
     mubf_zf = zf[1]
     fig1, axes1 = plt.subplots(nrows=2, ncols=2, squeeze=False, figsize=(10, 8))
-    for j in range(2):
+    for j in range(num_cl_tmp - 1):
         axes1[0, 0].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], mubf_conj[:,j], label = 'Conj User: {}'.format(j) )
-    for j in range(2):
+    for j in range(num_cl_tmp - 1):
         axes1[0, 1].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], mubf_zf[:,j], label = 'ZF User: {}'.format(j) )
     axes1[0,0].legend(loc='upper right', ncol=1, frameon=False)
     axes1[0,0].set_xlabel('Time (s)', fontsize=18)
     axes1[0,0].set_ylabel('MUBF User Achievable Rate (bps/Hz)', fontsize=18)
     axes1[0,1].legend(loc='upper right', ncol=1, frameon=False)
-    axes1[0,1].set_xlabel('Time (s)')
-    for j in range(2):
+    axes1[0,1].set_xlabel('Time (s)', fontsize=18)
+    for j in range(num_cl_tmp - 1):
         axes1[1, 0].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], subf_conj[:,j], label = 'Conj User: {}'.format(j) )
-    for j in range(2):
+    for j in range(num_cl_tmp - 1):
         axes1[1, 1].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], subf_zf[:,j], label = 'ZF User: {}'.format(j) )
     axes1[1,0].legend(loc='upper right', ncol=1, frameon=False)
     axes1[1,0].set_xlabel('Time (s)', fontsize=18)
     axes1[1,0].set_ylabel('SUBF User Achievable Rate (bps/Hz)', fontsize=18)
     axes1[1,1].legend(loc='upper right', ncol=1, frameon=False)
-    axes1[1,1].set_xlabel('Time (s)')
+    axes1[1,1].set_xlabel('Time (s)', fontsize=18)
     #axes1[1].set_ylabel('Per User Achievable Rate (bps/Hz)')
 
 
     # demmel number
-    plt.figure(1000*pl+3, figsize=(10, 8))
-    plt.plot(
-            np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], demmel[:, 7])
+    plt.figure(pl+2, figsize=(10, 8))
+    plt.plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], demmel[:, 7])
     # plt.ylim([0,2])
-    plt.xlabel('Time (s)')
-    plt.ylabel('Demmel condition number, Subcarrier 7')
+    plt.xlabel('Time (s)', fontsize=18)
+    plt.ylabel('Demmel condition number, Subcarrier 7', fontsize=18)
+    plt.show()
+    pl += 1
+
+    # SNR 
+    snr_linear = np.mean(zf[-1], axis = -1)
+    snr_dB = 10 * np.log10(snr_linear)
+    plt.figure(pl+2, figsize=(10, 8))
+    for i in range(num_cl_tmp - 1):
+        plt.plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], snr_dB[:, i], label = 'User: {}'.format(i))
+    # plt.ylim([0,2])
+    plt.xlabel('Time (s)', fontsize=18)
+    plt.ylabel('ZF SNR (dB)', fontsize=18)
+    plt.legend()
     plt.show()
     pl += 1
 
@@ -798,7 +819,7 @@ def main():
             if verify:
                 verify_hdf5(hdf5, ref_frame, ref_cell, ref_ofdm_sym, ref_ant, ref_user, ref_ul_subframe, ref_subcarrier, signal_offset, downlink_calib_offset, uplink_calib_offset, fr_strt, thresh, deep_inspect, sub_sample)
             if analyze:
-                analyze_hdf5(hdf5)
+                analyze_hdf5(hdf5, sub_sample = sub_sample)
     scrpt_end = time.time()
     print(">>>> Script Duration: time: %f \n" % ( scrpt_end - scrpt_strt) )
 
