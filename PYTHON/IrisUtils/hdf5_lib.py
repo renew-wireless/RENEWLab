@@ -626,8 +626,14 @@ class hdf5_lib:
                 iq_fft = np.fft.fft(iq, fft_size, 5)
                 seq_freq_inv = 1 / seq_freq
                 csi = iq_fft * seq_freq
+                endtime = time.time()
+                if debug:
+                    print("chunk time: %f fft time: %f" %
+                          (fftstart - chunkstart, endtime - fftstart))
                 csi = csi[:, : , :, :, :, start_i:stop_i]
-                print("csi.shape:{}".format(csi.shape))
+                if debug:
+                    print("csi.shape:{}".format(csi.shape))
+                print("samps2csi took %f seconds" % (time.time() - samps2csi_start))
 
         return csi, iq
 
