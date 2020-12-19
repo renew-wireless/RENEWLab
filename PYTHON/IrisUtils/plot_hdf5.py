@@ -12,7 +12,7 @@
 
 
 ---------------------------------------------------------------------
- Copyright © 2018-2019. Rice University.
+ Copyright © 2018-2020. Rice University.
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
 ---------------------------------------------------------------------
 """
@@ -32,12 +32,20 @@ import matplotlib
 #matplotlib.use("Agg")
 
 
-def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_i=0, ul_sf_i=0, subcarrier_i=10, offset=-1, dn_calib_offset=0, up_calib_offset=0, n_frm_st=0, thresh=0.001, deep_inspect=False, sub_sample=1, exclude_bs_nodes=[]):
-    """
-    Plot data in file to verify contents.
+def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
+                user_i=0, ul_sf_i=0, subcarrier_i=10, offset=-1,
+                dn_calib_offset=0, up_calib_offset=0, n_frm_st=0,
+                thresh=0.001, deep_inspect=False, sub_sample=1,
+                corr_thresh=0.32, exclude_bs_nodes=[]):
+    """Plot data in the hdf5 file to verify contents.
 
-    Input:
-        default_frame: Index of frame to be plotted. Default to frame #100
+    Args:
+        hdf5: An hdf5_lib object.
+        default_frame: The index of the frame to be plotted.
+        cell_i: The index of the hub where base station is connected.
+        ofdm_sym_i: The index of the reference ofdm symbol in a pilot.
+        ant_i: The index of the reference base station antenna.
+        user_i: The index of the reference user.
     """
     plt.close("all")
     data = hdf5.data
@@ -113,6 +121,9 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_
     csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
 
     cellCSI = csi[:, cell_i, :, :, :, :]
+    #bad_nodes = find_bad_nodes(cellCSI, corr_thresh=corr_thresh, user=user_i)
+    #print(">>> Warning! A list of bad Iris node indices: {bad_nodes}".format(
+    #    bad_nodes=bad_nodes))
     if ofdm_sym_i >= num_pilots_per_sym:  # if out of range index, do average
         userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
     else:
@@ -383,24 +394,24 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_
         cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, 100, 11), orientation='horizontal')
         cbar.ax.set_xticklabels(['0%', '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'])
 
-        #fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
-        #c = []
-        #fig.suptitle('Frame Map')
-        #for n_c in range(n_cell):
-        #    for n_u in range(n_ue):
-        #        c.append( axes[n_u, n_c].imshow(frame_map[:,n_c,n_u,:].T, cmap=plt.cm.get_cmap('Blues', 3), interpolation='none',
-        #              extent=[hdf5.n_frm_st,hdf5.n_frm_end, n_ant,0],  aspect="auto") )
-        #        axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
-        #        axes[n_u, n_c].set_ylabel('Antenna #')
-        #        axes[n_u, n_c].set_xlabel('Frame #')
-        #        # Minor ticks
-        #        axes[n_u, n_c].set_xticks(np.arange(hdf5.n_frm_st, hdf5.n_frm_end, 1), minor=True)
-        #        axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
-        #        # Gridlines based on minor ticks
-        #        axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
+        fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+        c = []
+        fig.suptitle('Frame Map')
+        for n_c in range(n_cell):
+            for n_u in range(n_ue):
+                c.append( axes[n_u, n_c].imshow(frame_map[:,n_c,n_u,:].T, cmap=plt.cm.get_cmap('Blues', 3), interpolation='none',
+                      extent=[hdf5.n_frm_st,hdf5.n_frm_end, n_ant,0],  aspect="auto") )
+                axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
+                axes[n_u, n_c].set_ylabel('Antenna #')
+                axes[n_u, n_c].set_xlabel('Frame #')
+                # Minor ticks
+                axes[n_u, n_c].set_xticks(np.arange(hdf5.n_frm_st, hdf5.n_frm_end, 1), minor=True)
+                axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
+                # Gridlines based on minor ticks
+                axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
 
-        #cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')
-        #cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])
+        cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')
+        cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])
         ##plt.show()
 
         # SHOW FIGURES
@@ -411,7 +422,7 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0, user_
         plt.show()
 
 
-def analyze_hdf5(hdf5, frame=10, cell=0, offset=-1, zoom=0, pl=0):
+def analyze_hdf5(hdf5, frame=10, cell=0, offset=-1, zoom=0, pl=0, sub_sample = 1):
     '''
     Calculates and plots achievable rates from hdf5 traces
 
@@ -436,10 +447,14 @@ def analyze_hdf5(hdf5, frame=10, cell=0, offset=-1, zoom=0, pl=0):
     nonzero_sc_size = metadata['DATA_SUBCARRIER_NUM']
 
     # compute CSI for each user and get a nice numpy array
-    # Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier
+    # Returns csi with Frame, User, pilot repetitions, BS ant, Subcarrier
     # also, iq samples nicely chunked out, same dims, but subcarrier is sample.
-    # csi, _ = hdf5_lib.samps2csi(pilot_samples, num_pilots, symbol_length, offset=offset)
-    csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = z_padding, cp = cp, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
+    samples = pilot_samples
+    num_cl_tmp = num_pilots
+    csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, 
+                                offset = offset, bound = z_padding, cp = cp, sub = sub_sample, 
+                                pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
+
     csi = csi[:, cell, :, :, :, :]
     # zoom in too look at behavior around peak (and reduce processing time)
     if zoom > 0:
@@ -448,7 +463,7 @@ def analyze_hdf5(hdf5, frame=10, cell=0, offset=-1, zoom=0, pl=0):
         frame = zoom
     noise = csi[:, -1, :, :, :]  # noise is last set of data.
     # don't include noise, average over both LTSs
-    userCSI = np.mean(csi[:, :num_cl, :, :, :], 2)
+    userCSI = np.mean(csi[:, :num_cl_tmp, :, :, :], 2)
 
     # compute beamweights based on the specified frame.
     conjbws = np.transpose(
@@ -477,34 +492,46 @@ def analyze_hdf5(hdf5, frame=10, cell=0, offset=-1, zoom=0, pl=0):
     mubf_conj = conj[1]
     mubf_zf = zf[1]
     fig1, axes1 = plt.subplots(nrows=2, ncols=2, squeeze=False, figsize=(10, 8))
-    for j in range(2):
+    for j in range(num_cl_tmp - 1):
         axes1[0, 0].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], mubf_conj[:,j], label = 'Conj User: {}'.format(j) )
-    for j in range(2):
+    for j in range(num_cl_tmp - 1):
         axes1[0, 1].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], mubf_zf[:,j], label = 'ZF User: {}'.format(j) )
     axes1[0,0].legend(loc='upper right', ncol=1, frameon=False)
     axes1[0,0].set_xlabel('Time (s)', fontsize=18)
     axes1[0,0].set_ylabel('MUBF User Achievable Rate (bps/Hz)', fontsize=18)
     axes1[0,1].legend(loc='upper right', ncol=1, frameon=False)
-    axes1[0,1].set_xlabel('Time (s)')
-    for j in range(2):
+    axes1[0,1].set_xlabel('Time (s)', fontsize=18)
+    for j in range(num_cl_tmp - 1):
         axes1[1, 0].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], subf_conj[:,j], label = 'Conj User: {}'.format(j) )
-    for j in range(2):
+    for j in range(num_cl_tmp - 1):
         axes1[1, 1].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], subf_zf[:,j], label = 'ZF User: {}'.format(j) )
     axes1[1,0].legend(loc='upper right', ncol=1, frameon=False)
     axes1[1,0].set_xlabel('Time (s)', fontsize=18)
     axes1[1,0].set_ylabel('SUBF User Achievable Rate (bps/Hz)', fontsize=18)
     axes1[1,1].legend(loc='upper right', ncol=1, frameon=False)
-    axes1[1,1].set_xlabel('Time (s)')
+    axes1[1,1].set_xlabel('Time (s)', fontsize=18)
     #axes1[1].set_ylabel('Per User Achievable Rate (bps/Hz)')
 
 
     # demmel number
-    plt.figure(1000*pl+3, figsize=(10, 8))
-    plt.plot(
-            np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], demmel[:, 7])
+    plt.figure(pl+2, figsize=(10, 8))
+    plt.plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], demmel[:, 7])
     # plt.ylim([0,2])
-    plt.xlabel('Time (s)')
-    plt.ylabel('Demmel condition number, Subcarrier 7')
+    plt.xlabel('Time (s)', fontsize=18)
+    plt.ylabel('Demmel condition number, Subcarrier 7', fontsize=18)
+    plt.show()
+    pl += 1
+
+    # SNR 
+    snr_linear = np.mean(zf[-1], axis = -1)
+    snr_dB = 10 * np.log10(snr_linear)
+    plt.figure(pl+2, figsize=(10, 8))
+    for i in range(num_cl_tmp - 1):
+        plt.plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], snr_dB[:, i], label = 'User: {}'.format(i))
+    # plt.ylim([0,2])
+    plt.xlabel('Time (s)', fontsize=18)
+    plt.ylabel('ZF SNR (dB)', fontsize=18)
+    plt.legend()
     plt.show()
     pl += 1
 
@@ -739,6 +766,9 @@ def main():
     parser.add_option("--frame-start", type="int", dest="fr_strt", help="Starting frame. Must have set n_frames_to_inspect first and make sure fr_strt is within boundaries ", default=0)
     parser.add_option("--verify-trace", action="store_true", dest="verify", help="Run script without analysis", default= True)
     parser.add_option("--analyze-trace", action="store_true", dest="analyze", help="Run script without analysis", default= False)
+    parser.add_option("--corr-thresh", type="float", dest="corr_thresh",
+                      help="Correlation threshold to find bad Iris nodes",
+                      default=0.32)
     (options, args) = parser.parse_args()
 
     show_metadata = options.show_metadata
@@ -760,6 +790,7 @@ def main():
     analyze = options.analyze
     sub_sample = options.sub_sample
     legacy = options.legacy
+    corr_thresh = options.corr_thresh
     exclude_bs_ants_str = options.exclude_bs_ants
     exclude_bs_ants = []
     if len(exclude_bs_ants_str) > 0:
@@ -813,9 +844,13 @@ def main():
         else:
             hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt)
             if verify:
-                verify_hdf5(hdf5, ref_frame, ref_cell, ref_ofdm_sym, ref_ant, ref_user, ref_ul_subframe, ref_subcarrier, signal_offset, downlink_calib_offset, uplink_calib_offset, fr_strt, thresh, deep_inspect, sub_sample, exclude_bs_ants)
+                verify_hdf5(hdf5, ref_frame, ref_cell, ref_ofdm_sym, ref_ant,
+                            ref_user, ref_ul_subframe, ref_subcarrier,
+                            signal_offset, downlink_calib_offset,
+                            uplink_calib_offset, fr_strt, thresh, deep_inspect,
+                            sub_sample, corr_thresh, exclude_bs_ants)
             if analyze:
-                analyze_hdf5(hdf5)
+                analyze_hdf5(hdf5, sub_sample = sub_sample)
     scrpt_end = time.time()
     print(">>>> Script Duration: time: %f \n" % ( scrpt_end - scrpt_strt) )
 
