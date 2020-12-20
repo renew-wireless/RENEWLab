@@ -36,7 +36,7 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 user_i=0, ul_sf_i=0, subcarrier_i=10, offset=-1,
                 dn_calib_offset=0, up_calib_offset=0, n_frm_st=0,
                 thresh=0.001, deep_inspect=False, sub_sample=1,
-                corr_thresh=0.32, exclude_bs_nodes=[]):
+                corr_thresh=0.00, exclude_bs_nodes=[]):
     """Plot data in the hdf5 file to verify contents.
 
     Args:
@@ -121,9 +121,15 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
 
     cellCSI = csi[:, cell_i, :, :, :, :]
-    #bad_nodes = find_bad_nodes(cellCSI, corr_thresh=corr_thresh, user=user_i)
-    #print(">>> Warning! A list of bad Iris node indices: {bad_nodes}".format(
-    #    bad_nodes=bad_nodes))
+    if corr_thresh > 0.0: 
+        bad_nodes = find_bad_nodes(cellCSI, corr_thresh=corr_thresh,
+                                   user=user_i)
+        if bad_nodes:
+            print(">>> Warning! List of bad nodes (1-based): {bad_nodes}".
+                  format(bad_nodes=bad_nodes))
+        else:
+            print(">>> All Iris nodes are good!")
+
     if ofdm_sym_i >= num_pilots_per_sym:  # if out of range index, do average
         userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
     else:
@@ -753,7 +759,7 @@ def main():
     parser.add_option("--ref-cell", type="int", dest="ref_cell", help="Cell number to plot", default=0)
     parser.add_option("--legacy", action="store_true", dest="legacy", help="Parse and plot legacy hdf5 file", default=False)
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Reference antenna", default=0)
-    parser.add_option("--exclude-bs-ants", type="string", dest="exclude_bs_ants", help="Bs antennas to be excluded in plotting", default="")
+    parser.add_option("--exclude-bs-ants", type="string", dest="exclude_bs_nodes", help="Bs antennas to be excluded in plotting", default="")
     parser.add_option("--ref-ofdm-sym", type="int", dest="ref_ofdm_sym", help="Reference ofdm symbol within a pilot", default=0)
     parser.add_option("--ref-user", type="int", dest="ref_user", help="Reference User", default=0)
     parser.add_option("--ref-subcarrier", type="int", dest="ref_subcarrier", help="Reference subcarrier", default=0)
@@ -767,8 +773,8 @@ def main():
     parser.add_option("--verify-trace", action="store_true", dest="verify", help="Run script without analysis", default= True)
     parser.add_option("--analyze-trace", action="store_true", dest="analyze", help="Run script without analysis", default= False)
     parser.add_option("--corr-thresh", type="float", dest="corr_thresh",
-                      help="Correlation threshold to find bad Iris nodes",
-                      default=0.32)
+                      help="Correlation threshold to exclude bad nodes",
+                      default=0.00)
     (options, args) = parser.parse_args()
 
     show_metadata = options.show_metadata
@@ -791,11 +797,11 @@ def main():
     sub_sample = options.sub_sample
     legacy = options.legacy
     corr_thresh = options.corr_thresh
-    exclude_bs_ants_str = options.exclude_bs_ants
-    exclude_bs_ants = []
-    if len(exclude_bs_ants_str) > 0:
-        exclude_ant_ids = exclude_bs_ants_str.split(',')
-        exclude_bs_ants = [int(i) for i in exclude_ant_ids]
+    exclude_bs_nodes_str = options.exclude_bs_nodes
+    exclude_bs_nodes = []
+    if len(exclude_bs_nodes_str) > 0:
+        exclude_ant_ids = exclude_bs_nodes_str.split(',')
+        exclude_bs_nodes = [int(i) for i in exclude_ant_ids]
 
     filename = sys.argv[1]
 
@@ -848,7 +854,7 @@ def main():
                             ref_user, ref_ul_subframe, ref_subcarrier,
                             signal_offset, downlink_calib_offset,
                             uplink_calib_offset, fr_strt, thresh, deep_inspect,
-                            sub_sample, corr_thresh, exclude_bs_ants)
+                            sub_sample, corr_thresh, exclude_bs_nodes)
             if analyze:
                 analyze_hdf5(hdf5, sub_sample = sub_sample)
     scrpt_end = time.time()
