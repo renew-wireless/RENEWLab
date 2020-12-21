@@ -256,6 +256,10 @@ herr_t RecorderWorker::initHDF5()
         // Size of FFT
         write_attribute(mainGroup, "FFT_SIZE", this->cfg_->fft_size());
 
+        // Number of data subcarriers in ofdm symbols
+        write_attribute(mainGroup, "DATA_SUBCARRIER_NUM",
+            this->cfg_->symbol_data_subcarrier_num());
+
         // Length of cyclic prefix
         write_attribute(mainGroup, "CP_LEN", this->cfg_->cp_size());
 
@@ -601,7 +605,7 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
             H5::Exception::dontPrint();
             // Update the max frame number.
             // Note that the 'frame_id' might be out of order.
-            if (pkg->frame_id > this->max_frame_number_) {
+            if (pkg->frame_id >= this->max_frame_number_) {
                 // Open the hdf5 file if we haven't.
                 closeHDF5();
                 openHDF5();

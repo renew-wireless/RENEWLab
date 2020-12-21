@@ -510,7 +510,7 @@ class hdf5_lib:
         print("finished log2csi")
 
     @staticmethod
-    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False, pilot_type='lts'):
+    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False, pilot_type='lts', nonzero_sc_size=52):
         """Convert an Argos HDF5 log file with raw IQ in to CSI.
         Asumes 802.11 style LTS used for trace collection.
     
@@ -614,11 +614,26 @@ class hdf5_lib:
                 csi = np.delete(csi, [0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63], 5)
                 print("samps2csi took %f seconds" % (time.time() - samps2csi_start))
             else:
-                seq_freq = generate_training_seq(
-                    preamble_type=pilot_type, seq_length=fft_size, upsample=1)
+                _, seq_freq = generate_training_seq(
+                    preamble_type=pilot_type, seq_length=nonzero_sc_size, cp=0, upsample=1)
 
-                csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 5), 5) / seq_freq
-                print("csi.shape:{}".format(csi.shape))
+                fft_length = int(np.power(2, np.ceil(np.log2(nonzero_sc_size))))
+                if fft_length != fft_size:
+                    print("Expected fftsize %d, given %d"%(fft_length, fft_size))
+                    return None, iq
+                start_i = int((fft_length - nonzero_sc_size) // 2)
+                stop_i = int(start_i + nonzero_sc_size)
+                iq_fft = np.fft.fft(iq, fft_size, 5)
+                seq_freq_inv = 1 / seq_freq
+                csi = iq_fft * seq_freq
+                endtime = time.time()
+                if debug:
+                    print("chunk time: %f fft time: %f" %
+                          (fftstart - chunkstart, endtime - fftstart))
+                csi = csi[:, : , :, :, :, start_i:stop_i]
+                if debug:
+                    print("csi.shape:{}".format(csi.shape))
+                print("samps2csi took %f seconds" % (time.time() - samps2csi_start))
 
         return csi, iq
 

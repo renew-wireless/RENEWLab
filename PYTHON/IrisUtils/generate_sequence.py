@@ -174,7 +174,20 @@ def generate_training_seq(preamble_type='lts', seq_length=0, root=0, cp=32, upsa
 		# m = (0:N-1).'
                 m = np.mod(np.arange(seq_length).transpose(), M)
                 p = np.exp(-1j * np.pi * q * m * (m + 1) / M)
-                return p
+                fft_length = int(np.power(2, np.ceil(np.log2(seq_length))))
+                start_index = int((fft_length - seq_length) // 2)
+                stop_index = int(start_index + seq_length)
+                zadoff_freq = np.zeros(fft_length, dtype=complex);
+                zadoff_freq[start_index:stop_index] = p;
+
+                up_zeros = np.zeros(len(zadoff_freq) // 2 * (upsample - 1))
+                zadoff_freq_up = np.concatenate((up_zeros, zadoff_freq, up_zeros))
+                signal = np.fft.ifft(zadoff_freq_up)
+                # signal = signal / np.absolute(signal).max()  # normalize - move... do it later
+
+                # Now affix the cyclic prefix
+                sequence = np.concatenate((signal[len(signal) - cp:], signal))
+                return sequence, zadoff_freq
 
 	elif preamble_type == 'gold_ifft':
 		# Generate IFFT GoldCode sequences

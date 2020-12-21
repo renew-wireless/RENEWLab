@@ -27,10 +27,10 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
     if (kUseUHD == false) {
         // Unified gains for both lime and frontend
         if (_cfg->single_gain()) {
-            dev->setGain(
-                SOAPY_SDR_RX, ch, rxgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
-            dev->setGain(
-                SOAPY_SDR_TX, ch, txgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
+            dev->setGain(SOAPY_SDR_RX, ch,
+                rxgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
+            dev->setGain(SOAPY_SDR_TX, ch,
+                txgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
             MLPD_INFO("Tx gain: %lf, Rx gain: %lf\n",
                 dev->getGain(SOAPY_SDR_TX, ch), dev->getGain(SOAPY_SDR_RX, ch));
         } else {

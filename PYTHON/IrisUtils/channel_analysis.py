@@ -276,21 +276,22 @@ def find_bad_nodes(csi, corr_thresh=0.32, user=0):
 	"""
     userCSI = np.mean(csi[1:csi.shape[0]:,:,:,:,:], 2)
     num_nodes = userCSI.shape[2]
-    print(">>> Total {num_nodes} reference Iris nodes: ".format(
-        num_nodes=num_nodes))
+    print(">>> User {user}: Total {num_nodes} reference Iris nodes: ".format(
+        user=user, num_nodes=num_nodes))
     if num_nodes == 1:
         node_good = [True]
     else:
         corr = [None] * num_nodes
         ref_good = False
-        ref = 0
+        ref = num_nodes//2  # 0
         node_good = [True] * num_nodes
         # Must normalize amplitude so that the phase shift always has 
         # the same effect on correlation.
         userCSI_abs = np.abs(userCSI)
         userCSI_abs[userCSI_abs == 0] = 1
         userCSI /= userCSI_abs  # Handles the division by zero case.
-        print("1-corr   corr_thresh")
+        print(">>> corr_thresh = {corr_thresh}\n>>> corr:".format(
+            corr_thresh=corr_thresh))
 
         while not ref_good:
             for n in range(num_nodes):
@@ -300,7 +301,7 @@ def find_bad_nodes(csi, corr_thresh=0.32, user=0):
                     c = userCSI[:,:,sl,:]
                     corr[n] = calCorr(c, corr_vec)[0][:,user]
                     v = np.max(np.abs(corr[n] - np.mean(corr[n])))
-                    print(v, corr_thresh)
+                    print(n+1, v)
                     if  v > corr_thresh:
                         node_good[n] = False
             if np.sum(node_good) > 1:  # It is good reference antenna.

@@ -1,7 +1,7 @@
 # RENEWLab
 
 
-[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fbad-nodes)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/bad-nodes/)
+[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fpilot-types)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/pilot-types/)
 
 
 # Description
@@ -17,10 +17,10 @@ The RENEWLab software suite consists of four components.
      It provides a Python-based library which allows users to rapidly program and test the physical layer and the radio layer in real time. It also provides tools for offline data procesing. 
 
   2. [MATLAB Development Suite](https://docs.renew-wireless.org/dev-suite/design-flows/matlab-design-flow/): 
-     It provides a MATLAB-based library which allows users to rapidly develop physical layer algorithms using the MATLAB toolboxes with a highly simplified interface and to perform OTA tests. . 
+     It provides a MATLAB-based library which allows users to rapidly develop physical layer algorithms using the MATLAB toolboxes with a highly simplified interface and to perform OTA tests.
 
   3. [C++ Development Suite](https://docs.renew-wireless.org/dev-suite/design-flows/cpp/): 
-     It provides the Sounder framework for running channel sounding experiments.. 
+     It provides the Sounder framework for running channel sounding experiments.
 
   4. RENEW Dashboard: 
      It provides a web GUI for the RENEW base station health monitoring and for users to run different software frameworks with ease. Please refer to the README under the WEBGUI/ directory. 
@@ -39,7 +39,7 @@ $ ./config_ci.sh  Note: You must run this command immediately after the cd comma
 $ ./install_soapy.sh
 ```
 Note: This installs the SoapySDR app and its dependencies which include SoapySDR, SoapyRemote, and Sklk-SoapyIris. 
-Note for developers: Do not use _ in your branch name. Use - instead. 
+Important for developers: Do not use _ in your branch name. Use - instead. Limit the branch name length to 18 characters or less. 
 
 ### Install project-specific dependencies: 
   1. If you are going to use the RENEW Python Development Suite, please install its library as below. 
@@ -62,11 +62,20 @@ Note for developers: Do not use _ in your branch name. Use - instead.
      $ cmake .. -DCMAKE_BUILD_TYPE=Release -DLOG_LEVEL=info && make -j
      ```
        
-  3. If you are going to use the RENEW MATLAB Development Suite, there is no dependency needed for it. 
+  3. If you are going to use the RENEW MATLAB Development Suite, no dependency is needed.
   4. If you are going to use the RENEW Dashboard, please follow the README in the WEBGUI/ directory to install dependencies. 
 
-# Development
+# Contributing and Support
 
-Want to contribute? Great! Email support@renew-wireless.org. 
+Want to contribute? Great! Please email support@renew-wireless.org. 
+
+# License
+
+RENEWLab shall be used under the [RENEW OPEN SOURCE LICENSE](https://renew-wireless.org/license).
+
+# Acknowledgement
+
+RENEW was funded by the NSF PAWR project.
+
 
 

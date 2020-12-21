@@ -12,7 +12,7 @@
 
 
 ---------------------------------------------------------------------
- Copyright © 2018-2019. Rice University.
+ Copyright © 2018-2020. Rice University.
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
 ---------------------------------------------------------------------
 """
@@ -36,7 +36,7 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 user_i=0, ul_sf_i=0, subcarrier_i=10, offset=-1,
                 dn_calib_offset=0, up_calib_offset=0, n_frm_st=0,
                 thresh=0.001, deep_inspect=False, sub_sample=1,
-                corr_thresh=0.32):
+                corr_thresh=0.00, exclude_bs_nodes=[]):
     """Plot data in the hdf5 file to verify contents.
 
     Args:
@@ -73,14 +73,15 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     symbol_length = int(metadata['SYMBOL_LEN'])
     num_pilots = int(metadata['PILOT_NUM'])
     num_cl = int(metadata['CL_NUM'])
-    cp = int(metadata['CP_LEN'])
     prefix_len = int(metadata['PREFIX_LEN'])
     postfix_len = int(metadata['POSTFIX_LEN'])
     z_padding = prefix_len + postfix_len
     if offset < 0: # if no offset is given use prefix from HDF5
         offset = int(prefix_len)
     fft_size = int(metadata['FFT_SIZE'])
+    cp = int(metadata['CP_LEN'])
     pilot_type = metadata['PILOT_SEQ_TYPE'].astype(str)[0]
+    nonzero_sc_size = metadata['DATA_SUBCARRIER_NUM']
     ofdm_pilot = np.array(metadata['OFDM_PILOT'])
     reciprocal_calib = np.array(metadata['RECIPROCAL_CALIB'])
     symbol_length_no_pad = symbol_length - z_padding
@@ -94,7 +95,10 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
     print("symbol_length = {}, offset = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}, pilot_rep = {}".format(symbol_length, offset, cp, prefix_len, postfix_len, z_padding, num_pilots_per_sym))
 
-    samples = pilot_samples 
+    samples = pilot_samples
+    all_bs_nodes = set(range(samples.shape[3]))
+    plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
+    samples = samples[:, :, :, plot_bs_nodes, :]
     num_cl_tmp = num_pilots  # number of UEs to plot data for
 
     samps_mat = np.reshape(
@@ -114,12 +118,18 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
     # For correlation use a fft size of 64
     print("*verify_hdf5(): Calling samps2csi with fft_size = {}, offset = {}, bound = {}, cp = {} *".format(fft_size, offset, z_padding, cp))
-    csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type)
+    csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
 
     cellCSI = csi[:, cell_i, :, :, :, :]
-    bad_nodes = find_bad_nodes(cellCSI, corr_thresh=corr_thresh, user=user_i)
-    print(">>> Warning! A list of bad Iris node indices: {bad_nodes}".format(
-        bad_nodes=bad_nodes))
+    if corr_thresh > 0.0: 
+        bad_nodes = find_bad_nodes(cellCSI, corr_thresh=corr_thresh,
+                                   user=user_i)
+        if bad_nodes:
+            print(">>> Warning! List of bad nodes (1-based): {bad_nodes}".
+                  format(bad_nodes=bad_nodes))
+        else:
+            print(">>> All Iris nodes are good!")
+
     if ofdm_sym_i >= num_pilots_per_sym:  # if out of range index, do average
         userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
     else:
@@ -147,13 +157,13 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     axes2[0, 0].set_title('Pilot CSI Stats Across Frames- Cell %d - User %d - Subcarrier %d' % (cell_i, user_i, subcarrier_i))
     axes2[0, 0].set_ylabel('Magnitude')
     for i in range(csi.shape[4]):
-        axes2[0, 0].plot(np.abs(userCSI[:, user_i, i, subcarrier_i]).flatten(), label="ant %d"%i)
+        axes2[0, 0].plot(np.abs(userCSI[:, user_i, i, subcarrier_i]).flatten(), label="ant %d"%plot_bs_nodes[i])
     axes2[0, 0].legend(loc='lower right', frameon=False)
     axes2[0, 0].set_xlabel('Frame')
 
     axes2[1, 0].set_ylabel('Phase')
     for i in range(csi.shape[4]):
-        axes2[1, 0].plot(np.angle(userCSI[:, user_i, i, subcarrier_i]).flatten(), label="ant %d"%i)
+        axes2[1, 0].plot(np.angle(userCSI[:, user_i, i, subcarrier_i]).flatten(), label="ant %d"%plot_bs_nodes[i])
     axes2[1, 0].legend(loc='lower right', frameon=False)
     axes2[1, 0].set_ylim(-np.pi, np.pi)
     axes2[1, 0].set_xlabel('Frame')
@@ -168,8 +178,8 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
     if reciprocal_calib:
         # frame, downlink(0)-uplink(1), antennas, subcarrier
-        csi_u, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = up_calib_offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type)
-        csi_d, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = dn_calib_offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type)
+        csi_u, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = up_calib_offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
+        csi_d, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = dn_calib_offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
         calib_corrected_csi = np.zeros(csi_d.shape, dtype='complex64')
         calib_corrected_csi[:, :, 0, :, :, :] = csi_d[:, :, 0, :, :, :]
         calib_corrected_csi[:, :, 1, :, :, :] = csi_u[:, :, 1, :, :, :]
@@ -193,13 +203,13 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
         axes3[2, 0].set_ylabel('Magnitude')
         for i in range(calib_mat.shape[1]):
-            axes3[2, 0].plot(np.abs(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d"%i)
+            axes3[2, 0].plot(np.abs(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d"%plot_bs_nodes[i])
         axes3[2, 0].set_xlabel('Frame')
         axes3[2, 0].legend(loc='lower right', frameon=False)
 
         axes3[3, 0].set_ylabel('Phase')
         for i in range(calib_mat.shape[1]):
-            axes3[3, 0].plot(np.angle(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d"%i)
+            axes3[3, 0].plot(np.angle(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d"%plot_bs_nodes[i])
         axes3[3, 0].set_xlabel('Frame')
         axes3[3, 0].set_ylim(-np.pi, np.pi)
         axes3[3, 0].legend(loc='lower right', frameon=False)
@@ -217,13 +227,13 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
         axes4[2, 0].set_ylabel('Magnitude')
         for i in range(calib_mat.shape[1]):
-            axes4[2, 0].plot(np.abs(calib_mat[ref_frame, i, :]).flatten(), label="ant %d"%i)
+            axes4[2, 0].plot(np.abs(calib_mat[ref_frame, i, :]).flatten(), label="ant %d"%plot_bs_nodes[i])
         axes4[2, 0].set_xlabel('Subcarrier')
         axes4[2, 0].legend(loc='lower right', frameon=False)
 
         axes4[3, 0].set_ylabel('Phase')
         for i in range(calib_mat.shape[1]):
-            axes4[3, 0].plot(np.angle(calib_mat[ref_frame, i, :]).flatten(), label="ant %d"%i)
+            axes4[3, 0].plot(np.angle(calib_mat[ref_frame, i, :]).flatten(), label="ant %d"%plot_bs_nodes[i])
         axes4[3, 0].set_xlabel('Subcarrier')
         axes4[3, 0].set_ylim(-np.pi, np.pi)
         axes4[3, 0].legend(loc='lower right', frameon=False)
@@ -418,7 +428,7 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         plt.show()
 
 
-def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0, sub_sample = 1):
+def analyze_hdf5(hdf5, frame=10, cell=0, offset=-1, zoom=0, pl=0, sub_sample = 1):
     '''
     Calculates and plots achievable rates from hdf5 traces
 
@@ -432,23 +442,24 @@ def analyze_hdf5(hdf5, frame=10, cell=0, zoom=0, pl=0, sub_sample = 1):
     timestep = symbol_length*symbol_num/rate
     num_cl = int(metadata['CL_NUM'])
     num_pilots = int(metadata['PILOT_NUM'])
-    cp = int(metadata['CP_LEN'])
     prefix_len = int(metadata['PREFIX_LEN'])
     postfix_len = int(metadata['POSTFIX_LEN'])
     z_padding = prefix_len + postfix_len
+    if offset < 0: # if no offset is given use prefix from HDF5
+        offset = int(prefix_len)
     fft_size = int(metadata['FFT_SIZE'])
+    cp = int(metadata['CP_LEN'])
     pilot_type = metadata['PILOT_SEQ_TYPE'].astype(str)[0]
-    offset = prefix_len
+    nonzero_sc_size = metadata['DATA_SUBCARRIER_NUM']
 
     # compute CSI for each user and get a nice numpy array
-    # Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier
-    #also, iq samples nicely chunked out, same dims, but subcarrier is sample.
-    # csi, _ = hdf5_lib.samps2csi(pilot_samples, num_pilots, symbol_length, offset=offset)
-
+    # Returns csi with Frame, User, pilot repetitions, BS ant, Subcarrier
+    # also, iq samples nicely chunked out, same dims, but subcarrier is sample.
     samples = pilot_samples
     num_cl_tmp = num_pilots
-    csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type)
-
+    csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, 
+                                offset = offset, bound = z_padding, cp = cp, sub = sub_sample, 
+                                pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
 
     csi = csi[:, cell, :, :, :, :]
     # zoom in too look at behavior around peak (and reduce processing time)
@@ -748,6 +759,7 @@ def main():
     parser.add_option("--ref-cell", type="int", dest="ref_cell", help="Cell number to plot", default=0)
     parser.add_option("--legacy", action="store_true", dest="legacy", help="Parse and plot legacy hdf5 file", default=False)
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Reference antenna", default=0)
+    parser.add_option("--exclude-bs-ants", type="string", dest="exclude_bs_nodes", help="Bs antennas to be excluded in plotting", default="")
     parser.add_option("--ref-ofdm-sym", type="int", dest="ref_ofdm_sym", help="Reference ofdm symbol within a pilot", default=0)
     parser.add_option("--ref-user", type="int", dest="ref_user", help="Reference User", default=0)
     parser.add_option("--ref-subcarrier", type="int", dest="ref_subcarrier", help="Reference subcarrier", default=0)
@@ -761,8 +773,8 @@ def main():
     parser.add_option("--verify-trace", action="store_true", dest="verify", help="Run script without analysis", default= True)
     parser.add_option("--analyze-trace", action="store_true", dest="analyze", help="Run script without analysis", default= False)
     parser.add_option("--corr-thresh", type="float", dest="corr_thresh",
-                      help="Correlation threshold to find bad Iris nodes",
-                      default=0.32)
+                      help="Correlation threshold to exclude bad nodes",
+                      default=0.00)
     (options, args) = parser.parse_args()
 
     show_metadata = options.show_metadata
@@ -785,8 +797,14 @@ def main():
     sub_sample = options.sub_sample
     legacy = options.legacy
     corr_thresh = options.corr_thresh
+    exclude_bs_nodes_str = options.exclude_bs_nodes
+    exclude_bs_nodes = []
+    if len(exclude_bs_nodes_str) > 0:
+        exclude_ant_ids = exclude_bs_nodes_str.split(',')
+        exclude_bs_nodes = [int(i) for i in exclude_ant_ids]
 
     filename = sys.argv[1]
+
     scrpt_strt = time.time()
 
     if n_frames_to_inspect == 0:
@@ -836,7 +854,7 @@ def main():
                             ref_user, ref_ul_subframe, ref_subcarrier,
                             signal_offset, downlink_calib_offset,
                             uplink_calib_offset, fr_strt, thresh, deep_inspect,
-                            sub_sample, corr_thresh)
+                            sub_sample, corr_thresh, exclude_bs_nodes)
             if analyze:
                 analyze_hdf5(hdf5, sub_sample = sub_sample)
     scrpt_end = time.time()
