@@ -81,6 +81,7 @@ public:
         }
         return out;
     }
+    static float find_max_abs(std::vector<std::complex<float>> in);
     static std::vector<std::complex<double>> csign(
         std::vector<std::complex<double>> iq);
     static inline int hadamard2(int i, int j)

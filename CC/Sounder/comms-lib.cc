@@ -233,6 +233,18 @@ std::vector<std::complex<double>> CommsLib::csign(
     return iq_sign;
 }
 
+float CommsLib::find_max_abs(std::vector<std::complex<float>> in)
+{
+    float max_val = 0;
+    for (size_t j = 0; j < in.size(); j++) {
+        auto cur_val = std::abs(in[j]);
+        if (cur_val > max_val) {
+            max_val = cur_val;
+        }
+    }
+    return max_val;
+}
+
 std::vector<float> CommsLib::magnitudeFFT(
     std::vector<std::complex<float>> const& samps,
     std::vector<float> const& win, size_t fftSize)

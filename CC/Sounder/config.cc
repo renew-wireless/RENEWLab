@@ -355,6 +355,7 @@ Config::Config(const std::string& jsonfile)
 
     pilot_ = Utils::cint16_to_uint32(pilot_ci16_, false, "QI");
     pilot_cf32_ = Utils::uint32tocfloat(pilot_, "QI");
+    auto pilot_sym_highest_mag = CommsLib::find_max_abs(pilot_cf32_);
     size_t remain_size = kFpgaTxRamSize
         - pilot_.size(); // 4096 is the size of TX_RAM in the FPGA
     for (size_t j = 0; j < remain_size; j++)
@@ -387,9 +388,11 @@ Config::Config(const std::string& jsonfile)
                 data_cf.begin(), prefix_zpad_f.begin(), prefix_zpad_f.end());
             std::vector<std::vector<int>> dataBits;
             dataBits.resize(symbol_per_subframe_);
+            float all_syms_highest_mag = 0;
             for (size_t s = 0; s < symbol_per_subframe_; s++) {
-                for (size_t c = 0; c < nDataScs; c++)
+                for (size_t c = 0; c < nDataScs; c++) {
                     dataBits[s].push_back(rand() % mod_order);
+                }
                 std::vector<std::complex<float>> mod_data
                     = CommsLib::modulate(dataBits[s], mod_type);
 #if DEBUG_PRINT
@@ -414,8 +417,11 @@ Config::Config(const std::string& jsonfile)
                 std::cout << "Pilot symbol: " << ofdmSym[pilot_sc_.at(0).at(0)]
                           << " " << ofdmSym[pilot_sc_.at(0).at(1)] << std::endl;
 #endif
-                std::vector<std::complex<float>> txSym = CommsLib::IFFT(
-                    ofdmSym, fft_size_, 0.25); // normalize and scale with 0.25;
+                auto txSym = CommsLib::IFFT(ofdmSym, fft_size_, 1, false);
+                auto cur_sym_highest_mag = CommsLib::find_max_abs(txSym);
+                if (cur_sym_highest_mag > all_syms_highest_mag) {
+                    all_syms_highest_mag = cur_sym_highest_mag;
+                }
                 txSym.insert(txSym.begin(), txSym.end() - cp_size_,
                     txSym.end()); // add CP
 #if DEBUG_PRINT
@@ -425,6 +431,11 @@ Config::Config(const std::string& jsonfile)
                 data_cf.insert(data_cf.end(), txSym.begin(), txSym.end());
                 data_freq_dom.insert(
                     data_freq_dom.end(), ofdmSym.begin(), ofdmSym.end());
+            }
+            for (size_t s = 0; s < data_cf.size(); s++) {
+                // scale data samples with pilot's maximum amplitude
+                data_cf[s] = (data_cf[s] / all_syms_highest_mag)
+                    * pilot_sym_highest_mag;
             }
             data_cf.insert(
                 data_cf.end(), postfix_zpad_f.begin(), postfix_zpad_f.end());
