@@ -1,7 +1,7 @@
 # RENEWLab
 
 
-[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fpilot-types)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/pilot-types/)
+[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fbugfix-update-for-powder)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/bugfix-update-for-powder/)
 
 
 # Description
@@ -48,7 +48,7 @@ Important for developers: Do not use _ in your branch name. Use - instead. Limit
      ```
      Note: The Python packages listed below are needed to use the RENEW Python Development Suite. 
      ```sh
-     $ sudo apt-get install python-scipy python-h5py python-json python-matplotlib transitions
+     $ sudo apt -y install python-scipy python3-scipy python-matplotlib python3-matplotlib python-h5py python3-h5py python-setuptools python-sklearn python3-sklearn 
      ```
   2. If you are going to use the RENEW C++ Development Suite, please install its library and dependencies as below. 
      ```sh
