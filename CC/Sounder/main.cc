@@ -16,10 +16,8 @@
 int main(int argc, char const* argv[])
 {
     int ret;
-    if (argc != 3) {
-        std::cerr << "Usage: " << argv[0]
-                  << " CONFIG_FILE_NAME --freq=<value in Hz>" << std::endl;
-        std::cerr << "NOTE: POWDER users must set --freq=2.5e9" << std::endl;
+    if (argc != 2) {
+        std::cerr << "Usage: " << argv[0] << " CONFIG_FILE_NAME" << std::endl;
         return EXIT_FAILURE;
     }
     if (strcmp(argv[1], "--help") == 0 or strcmp(argv[1], "-h") == 0) {

@@ -53,7 +53,7 @@ Config::Config(const std::string& jsonfile)
 
     // common (BaseStation config overrides these)
     if (bs_present_ == true) {
-        freq_ = tddConf.value("frequency", 3.6e9);
+        freq_ = tddConf.value("frequency", 2.5e9);
         rate_ = tddConf.value("rate", 5e6);
         nco_ = tddConf.value("nco_frequency", 0.75 * rate_);
         bw_filter_ = rate_ + 2 * nco_;
@@ -223,7 +223,7 @@ Config::Config(const std::string& jsonfile)
 
         // read commons from Client json config
         if (bs_present_ == false) {
-            freq_ = tddConfCl.value("frequency", 3.6e9);
+            freq_ = tddConfCl.value("frequency", 2.5e9);
             rate_ = tddConfCl.value("rate", 5e6);
             nco_ = tddConfCl.value("nco_frequency", 0.75 * rate_);
             bw_filter_ = rate_ + 2 * nco_;

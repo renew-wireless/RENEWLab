@@ -1,9 +1,9 @@
 {
         "BaseStations" : {
                  "cells" : 1,
-                 "sdr_id" : ["files/renew-iris-serials1.txt"],
-                 "hub_id" : "files/renew-hub-serials1.txt",
-                 "frequency" : 3.6e9,
+                 "sdr_id" : ["files/iris-serials.txt"],
+                 "hub_id" : "files/hub-serials.txt",
+		 "frequency" : 2.5e9,
                  "channel" : "AB",
                  "rxgainA" : 70,
                  "txgainA" : 70,
@@ -11,39 +11,41 @@
                  "txgainB" : 70,
                  "rate" : 5e6,
                  "frame_schedule" : [
-		     "BGGGGGPPGGGGGGGGGGGG"
+                    "BGGGGGPPPPGGGGGGGGGG"
                  ],
                  "max_frame" : 4000,
-		 "ofdm_symbol_per_subframe" : 10,
+                 "ofdm_symbol_per_subframe" : 10,
                  "fft_size" : 64,
                  "cp_size" : 16,
                  "prefix" : 160,
                  "postfix" : 160,
-                 "beamsweep" : false,
+                 "beamsweep" : true,
                  "beacon_antenna" : 0
         },
 
         "Clients" : {
                  "sdr_id" : [
-                     "RF3E000029"
+                     "RF3E000030",
+                     "RF3E0000xx"
                  ],
-                 "frequency" : 3.6e9,
+		 "frequency" : 2.5e9,
                  "channel" : "AB",
-                 "rxgainA" : [70],
-                 "txgainA" : [70],
-                 "rxgainB" : [70],
-                 "txgainB" : [70],
+                 "rxgainA" : [70, 70],
+                 "txgainA" : [70, 70],
+                 "rxgainB" : [70, 70],
+                 "txgainB" : [70, 70],
                  "rate" : 5e6,
                  "frame_schedule" : [
-		     "GGGGGGPPGGGGGGGGGGGG"
+                     "GGGGGGPPGGGGGGGGGGGG",
+                     "GGGGGGGGPPGGGGGGGGGG"
                  ],
                  "frame_mode" : "continuous_resync",
-		 "ofdm_symbol_per_subframe" : 10,
+                 "ofdm_symbol_per_subframe" : 10,
                  "fft_size" : 64,
                  "cp_size" : 16,
                  "prefix" : 160,
                  "postfix" : 160,
-		 "tx_advance" : 135,
-		 "hw_framer" : false
+                 "tx_advance" : 135,
+                 "hw_framer" : false
         }
 }

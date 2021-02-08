@@ -1,6 +1,6 @@
 {
 	"Clients" : {
-		 "frequency" : 3.6e9,
+		 "frequency" : 2.5e9,
 		 "channel" : "AB",
 		 "agc_en" : false,
 		 "rxgainA" : [70],
@@ -18,7 +18,7 @@
 		 ],
 		 "frame_mode" : "continuous_resync",
 		 "sdr_id" : [
-		     "RF3E000080"
+		     "RF3E000030"
 		 ],
 		 "tx_advance" : 135,
 		 "hw_framer" : false
