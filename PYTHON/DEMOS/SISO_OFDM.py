@@ -412,7 +412,7 @@ def animate(i, num_samps_rd, rxStream, sdr, sdrTx, ofdm_params, tx_struct, ota, 
 
     line8.set_data(payload_start * np.ones(100), np.linspace(0.0, 1.0, num=100))
     line9.set_data(payload_end * np.ones(100), np.linspace(0.0, 1.0, num=100))
-    line10.set_data(lts_start * np.ones(100), np.linspace(0.0, 1.0, num=100))
+    line10.set_data((a - 2*lts_syms_len + 1) * np.ones(100), np.linspace(0.0, 1.0, num=100))
     line11.set_data(np.linspace(0.0, FIG_LEN, num=1000), (lts_thresh * np.max(peaks0)) * np.ones(1000))
     line12.set_data(x_ax, np.fft.fftshift(abs(rx_H_est_plot)))
 
