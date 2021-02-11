@@ -270,7 +270,7 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
 
 class hdf5_lib:
 
-    def __init__(self, filename, n_frames_to_inspect=0, n_fr_insp_st = 0):
+    def __init__(self, filename, n_frames_to_inspect=0, n_fr_insp_st = 0, sub_sample = 0):
         self.h5file = None
         self.filename = filename
         self.h5struct = []
@@ -280,6 +280,7 @@ class hdf5_lib:
         self.uplink_samples = []
         self.n_frm_st = n_fr_insp_st                                # index of last frame
         self.n_frm_end = self.n_frm_st + n_frames_to_inspect    # index of last frame in the range of n_frames_to_inspect
+        self.sub_sample = sub_sample
         self.open_hdf5()
         self.get_data()
         self.get_metadata()
@@ -333,7 +334,7 @@ class hdf5_lib:
                 # Consider the entire dataset (for demos etc)
                 self.pilot_samples = self.data['Pilot_Samples']
             else:
-                self.pilot_samples = self.data['Pilot_Samples'][self.n_frm_st:self.n_frm_end, ...]
+                self.pilot_samples = self.data['Pilot_Samples'][self.n_frm_st:self.n_frm_end:self.sub_sample, ...]
 
         if len(self.data.keys()) > 1:
             print("looking into UplinkData")
@@ -342,7 +343,7 @@ class hdf5_lib:
                     # Consider the entire dataset (for demos etc)
                     self.uplink_samples = self.data['UplinkData']
                 else:
-                    self.uplink_samples = self.data['UplinkData'][self.n_frm_st:self.n_frm_end, ...]
+                    self.uplink_samples = self.data['UplinkData'][self.n_frm_st:self.n_frm_end:self.sub_sample, ...]
 
         return self.data
 
