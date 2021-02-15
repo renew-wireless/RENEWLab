@@ -1,7 +1,7 @@
 # RENEWLab
 
 
-[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fbugfix-update-for-powder)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/bugfix-update-for-powder/)
+[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Ffeat-hjson)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/feat-hjson/)
 
 
 # Description
