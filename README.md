@@ -1,7 +1,6 @@
 # RENEWLab
 
-
-[![Build Status](https://20c824d1cf78.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fci-badge-update)](https://20c824d1cf78.ngrok.io/job/github_public_renewlab/job/ci-badge-update/)
+[![Build Status](https://9741c1ddb314.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fci-badge-update)](https://9741c1ddb314.ngrok.io/job/github_public_renewlab/job/ci-badge-update/)
 
 # Description
 RENEWLab is an open-source software toolbox for the [RENEW massive MIMO platform](https://renew-wireless.org). It provides a user interface through a set of APIs. Users can generate, manipulate, transmit, and receive RF signals on the RENEW hardware by calling these APIs. 
