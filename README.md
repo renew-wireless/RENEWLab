@@ -1,7 +1,7 @@
 # RENEWLab
 
 
-[![Build Status](http://falcon.ecg.rice.edu:8080/buildStatus/icon?job=github_public_renewlab%2Fci-badge-update)](http://falcon.ecg.rice.edu:8080/job/github_public_renewlab/job/ci-badge-update/)
+[![Build Status](https://20c824d1cf78.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fci-badge-update)](https://20c824d1cf78.ngrok.io/job/github_public_renewlab/job/ci-badge-update/)
 
 
 # Description
