@@ -1,7 +1,7 @@
 # RENEWLab
 
 
-[![Build Status](https://smee.io/VWn0CNLxxzVy7rSO/buildStatus/icon?job=github_public_renewlab%2Fpilot-types)](https://smee.io/VWn0CNLxxzVy7rSO/job/github_public_renewlab/job/pilot-types/)
+[![Build Status](https://smee.io/VWn0CNLxxzVy7rSO/buildStatus/icon?job=github_public_renewlab%2Fci-badge-update)](https://smee.io/VWn0CNLxxzVy7rSO/job/github_public_renewlab/job/ci-badge-update/)
 
 
 # Description
