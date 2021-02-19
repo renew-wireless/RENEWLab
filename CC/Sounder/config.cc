@@ -135,22 +135,23 @@ Config::Config(const std::string& jsonfile)
             for (size_t c = 0; c < num_cells_; c++) {
                 calib_frames_[c].resize(n_bs_sdrs_[c]);
                 size_t num_channels = bs_channel_.size();
+                size_t frame_length
+                    = num_channels * n_bs_sdrs_[c] - (num_channels - 1);
                 calib_frames_[c][cal_ref_sdr_id_]
-                    = std::string(num_channels * n_bs_sdrs_[c], 'G');
+                    = std::string(frame_length, 'G');
                 calib_frames_[c][cal_ref_sdr_id_].replace(
                     num_channels * cal_ref_sdr_id_, 1, "P");
                 for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
                     if (i != cal_ref_sdr_id_) {
-                        calib_frames_[c][i] = std::string(
-                            bs_channel_.size() * n_bs_sdrs_[c], 'G');
+                        calib_frames_[c][i] = std::string(frame_length, 'G');
                         for (size_t ch = 0; ch < num_channels; ch++) {
                             calib_frames_[c][i].replace(
                                 i * num_channels + ch, 1, "P");
+                            calib_frames_[c][cal_ref_sdr_id_].replace(
+                                num_channels * i + ch, 1, "R");
                         }
                         calib_frames_[c][i].replace(
                             num_channels * cal_ref_sdr_id_, 1, "R");
-                        calib_frames_[c][cal_ref_sdr_id_].replace(
-                            num_channels * i, 1, "R");
                     }
                 }
             }
@@ -448,10 +449,9 @@ Config::Config(const std::string& jsonfile)
         time_t now = time(0);
         tm* ltm = localtime(&now);
         int cell_num = num_cells_;
+        size_t ant_num = getTotNumAntennas();
         std::string filename;
         if (reciprocal_calib_) {
-            size_t ant_num
-                = getTotNumAntennas() - 1; // FIXME: How about multi-cell?
             filename = "logs/trace-reciprocal-calib-"
                 + std::to_string(1900 + ltm->tm_year) + "-"
                 + std::to_string(1 + ltm->tm_mon) + "-"
@@ -461,7 +461,6 @@ Config::Config(const std::string& jsonfile)
                 + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num)
                 + "x" + std::to_string(ant_num) + ".hdf5";
         } else {
-            size_t ant_num = getTotNumAntennas();
             std::string ul_present_str
                 = (ul_data_sym_present_ ? "uplink-" : "");
             filename = "logs/trace-" + ul_present_str
@@ -558,6 +557,8 @@ size_t Config::getTotNumAntennas()
         size_t totNumSdr = 0;
         for (size_t i = 0; i < num_cells_; i++) {
             totNumSdr += n_bs_sdrs_.at(i);
+            if (reciprocal_calib_ == true)
+                totNumSdr--;
         }
         ret = totNumSdr * bs_channel_.length();
     }

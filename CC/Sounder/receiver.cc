@@ -293,9 +293,13 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             }
 
             size_t radio_idx = it - config_->n_bs_sdrs_agg().at(cell);
+            size_t num_packets = config_->reciprocal_calib()
+                    && radio_idx == config_->cal_ref_sdr_id()
+                ? 1
+                : num_channels; // receive only on one channel at the ref antenna
 
             // Set buffer status(es) to full; fail if full already
-            for (size_t ch = 0; ch < num_channels; ++ch) {
+            for (size_t ch = 0; ch < num_packets; ++ch) {
                 int bit = 1 << (cursor + ch) % sizeof(std::atomic_int);
                 int offs = (cursor + ch) / sizeof(std::atomic_int);
                 int old = std::atomic_fetch_or(
@@ -311,10 +315,13 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             // Receive data into buffers
             size_t packageLength
                 = sizeof(Package) + config_->getPackageDataLength();
-            for (size_t ch = 0; ch < num_channels; ++ch) {
+            for (size_t ch = 0; ch < num_packets; ++ch) {
                 pkg[ch] = (Package*)(buffer + (cursor + ch) * packageLength);
                 samp[ch] = pkg[ch]->data;
             }
+            if (num_packets != num_channels)
+                samp[num_channels - 1]
+                    = std::vector<char>(packageLength).data();
 
             assert(this->base_radio_set_ != NULL);
             ant_id = radio_idx * num_channels;
@@ -384,7 +391,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             }
 
 #if DEBUG_PRINT
-            for (size_t ch = 0; ch < num_channels; ++ch) {
+            for (size_t ch = 0; ch < num_packets; ++ch) {
                 printf(
                     "receive thread %d, frame %zu, symbol %zu, cell %zu, ant "
                     "%zu samples: %d %d %d %d %d %d %d %d ...\n",
@@ -395,10 +402,6 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             }
 #endif
 
-            size_t num_packets = config_->reciprocal_calib()
-                    && radio_idx == config_->cal_ref_sdr_id()
-                ? 1
-                : num_channels; // receive only on one channel at the ref antenna
             for (size_t ch = 0; ch < num_packets; ++ch) {
                 // new (pkg[ch]) Package(frame_id, symbol_id, 0, ant_id + ch);
                 new (pkg[ch]) Package(frame_id, symbol_id, cell, ant_id + ch);
