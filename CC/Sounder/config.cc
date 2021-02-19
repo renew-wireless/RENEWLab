@@ -326,21 +326,16 @@ Config::Config(const std::string& jsonfile)
                   << std::endl;
     }
 
-    if (pilot_seq_ == "lts" || fft_size_ == 64) {
+    if (fft_size_ == 64) {
         pilot_sym_ = CommsLib::getSequence(CommsLib::LTS_SEQ);
-        if (fft_size_ != 64) {
-            fft_size_ = 64;
-            std::cout << "LTS pilot sequence default fft size is 64! Setting "
-                         "fft size to 64"
-                      << std::endl;
-        }
     } else if (pilot_seq_ == "zadoff-chu") {
         pilot_sym_ = CommsLib::getSequence(
             CommsLib::LTE_ZADOFF_CHU, symbol_data_subcarrier_num_);
     } else
-        std::cout << pilot_seq_
-                  << " is not supported! Choose either lts or zaddof-chu."
-                  << std::endl;
+        std::cout
+            << pilot_seq_
+            << " is not supported! Choose either LTS (64-fft) or zaddof-chu."
+            << std::endl;
 
     auto iq_ci16 = Utils::double_to_cint16(pilot_sym_);
     iq_ci16.insert(iq_ci16.begin(), iq_ci16.end() - cp_size_, iq_ci16.end());
@@ -355,7 +350,6 @@ Config::Config(const std::string& jsonfile)
 
     pilot_ = Utils::cint16_to_uint32(pilot_ci16_, false, "QI");
     pilot_cf32_ = Utils::uint32tocfloat(pilot_, "QI");
-    auto pilot_sym_highest_mag = CommsLib::find_max_abs(pilot_cf32_);
     size_t remain_size = kFpgaTxRamSize
         - pilot_.size(); // 4096 is the size of TX_RAM in the FPGA
     for (size_t j = 0; j < remain_size; j++)
@@ -388,7 +382,6 @@ Config::Config(const std::string& jsonfile)
                 data_cf.begin(), prefix_zpad_f.begin(), prefix_zpad_f.end());
             std::vector<std::vector<int>> dataBits;
             dataBits.resize(symbol_per_subframe_);
-            float all_syms_highest_mag = 0;
             for (size_t s = 0; s < symbol_per_subframe_; s++) {
                 for (size_t c = 0; c < nDataScs; c++) {
                     dataBits[s].push_back(rand() % mod_order);
@@ -418,10 +411,6 @@ Config::Config(const std::string& jsonfile)
                           << " " << ofdmSym[pilot_sc_.at(0).at(1)] << std::endl;
 #endif
                 auto txSym = CommsLib::IFFT(ofdmSym, fft_size_, 1, false);
-                auto cur_sym_highest_mag = CommsLib::find_max_abs(txSym);
-                if (cur_sym_highest_mag > all_syms_highest_mag) {
-                    all_syms_highest_mag = cur_sym_highest_mag;
-                }
                 txSym.insert(txSym.begin(), txSym.end() - cp_size_,
                     txSym.end()); // add CP
 #if DEBUG_PRINT
@@ -431,11 +420,6 @@ Config::Config(const std::string& jsonfile)
                 data_cf.insert(data_cf.end(), txSym.begin(), txSym.end());
                 data_freq_dom.insert(
                     data_freq_dom.end(), ofdmSym.begin(), ofdmSym.end());
-            }
-            for (size_t s = 0; s < data_cf.size(); s++) {
-                // scale data samples with pilot's maximum amplitude
-                data_cf[s] = (data_cf[s] / all_syms_highest_mag)
-                    * pilot_sym_highest_mag;
             }
             data_cf.insert(
                 data_cf.end(), postfix_zpad_f.begin(), postfix_zpad_f.end());
