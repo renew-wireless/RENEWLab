@@ -31,17 +31,15 @@ from hdf5_lib import *
 import matplotlib
 #matplotlib.use("Agg")
 
-def verify_hdf5(pilot_samples, uplink_samples, metadata,
-                default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
+def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 user_i=0, ul_sf_i=0, subcarrier_i=10, offset=-1,
-                dn_calib_offset=0, up_calib_offset=0, n_frm_st=0,
-                thresh=0.001, deep_inspect=False, corr_thresh=0.00,
-                plot_bs_nodes=[]):
+                dn_calib_offset=0, up_calib_offset=0, thresh=0.001,
+                deep_inspect=False, corr_thresh=0.00, exclude_bs_nodes=[]):
     """Plot data in the hdf5 file to verify contents.
 
     Args:
         hdf5: An hdf5_lib object.
-        default_frame: The index of the frame to be plotted.
+        frame_i: The index of the frame to be plotted.
         cell_i: The index of the hub where base station is connected.
         ofdm_sym_i: The index of the reference ofdm symbol in a pilot.
         ant_i: The index of the reference base station antenna.
@@ -50,6 +48,9 @@ def verify_hdf5(pilot_samples, uplink_samples, metadata,
     plt.close("all")
 
     # Retrieve attributes
+    n_frm_end = hdf5.n_frm_end
+    n_frm_st = hdf5.n_frm_st
+    metadata = hdf5.metadata
     symbol_length = int(metadata['SYMBOL_LEN'])
     num_pilots = int(metadata['PILOT_NUM'])
     num_cl = int(metadata['CL_NUM'])
@@ -66,12 +67,19 @@ def verify_hdf5(pilot_samples, uplink_samples, metadata,
     reciprocal_calib = np.array(metadata['RECIPROCAL_CALIB'])
     symbol_length_no_pad = symbol_length - z_padding
     num_pilots_per_sym = ((symbol_length_no_pad) // len(ofdm_pilot))
-
     n_ue = num_cl
-    frm_plt = min(default_frame, pilot_samples.shape[0] + n_frm_st)
 
-    # Verify default_frame does not exceed max number of collected frames
-    ref_frame = min(default_frame - n_frm_st, pilot_samples.shape[0])
+    all_bs_nodes = set(range(hdf5.pilot_samples.shape[3]))
+    plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
+    pilot_samples = hdf5.pilot_samples[:, :, :, plot_bs_nodes, :]
+    ul_data_avail = len(hdf5.uplink_samples) > 0
+    if ul_data_avail:
+        uplink_samples = hdf.uplink_samples[:, :, :, plot_bs_nodes, :]
+
+    frm_plt = min(frame_i, pilot_samples.shape[0] + n_frm_st)
+
+    # Verify frame_i does not exceed max number of collected frames
+    ref_frame = min(frame_i - n_frm_st, pilot_samples.shape[0])
 
     print("symbol_length = {}, offset = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}, pilot_rep = {}".format(symbol_length, offset, cp, prefix_len, postfix_len, z_padding, num_pilots_per_sym))
 
@@ -225,7 +233,7 @@ def verify_hdf5(pilot_samples, uplink_samples, metadata,
 
 
     # Plot UL data symbols
-    if len(uplink_samples) > 0:
+    if ul_data_avail > 0:
         fig4, axes4 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
         samples = uplink_samples
         num_cl_tmp = samples.shape[2]  # number of UEs to plot data for
@@ -310,7 +318,7 @@ def verify_hdf5(pilot_samples, uplink_samples, metadata,
         fig.suptitle('MF Frame # {} Antenna # {}'.format(ref_frame, ant_i))
         for n_c in range(n_cell):
             for n_u in range(n_ue):
-                axes[n_c, n_u].stem(match_filt_clr[ref_frame - hdf5.n_frm_st, n_c, n_u, ant_i, :])
+                axes[n_c, n_u].stem(match_filt_clr[ref_frame - n_frm_st, n_c, n_u, ant_i, :])
                 axes[n_c, n_u].set_xlabel('Samples')
                 axes[n_c, n_u].set_title('Cell {} UE {}'.format(n_c, n_u))
                 axes[n_c, n_u].grid(True)
@@ -352,13 +360,13 @@ def verify_hdf5(pilot_samples, uplink_samples, metadata,
         fig.suptitle('Frames\' starting indices per antenna')
         #plot channel analysis
 
-        show_plot(cmpx_pilots, lts_seq_orig, match_filt, user_i, ant_i, ref_frame, hdf5.n_frm_st)
+        show_plot(cmpx_pilots, lts_seq_orig, match_filt, user_i, ant_i, ref_frame, n_frm_st)
 
 
         for n_c in range(n_cell):
             for n_u in range(n_ue):
                 sf_strts = sub_fr_strt[:,n_c,n_u,:]
-                x_pl = np.arange(sf_strts.shape[0]) + hdf5.n_frm_st
+                x_pl = np.arange(sf_strts.shape[0]) + n_frm_st
                 for j in range(n_ant):
                     axes[n_u, n_c].plot(x_pl,sf_strts[:,j].flatten(), label = 'Antenna: {}'.format(j) )
                 axes[n_u, n_c].legend(loc='lower right', ncol=8, frameon=False)
@@ -374,12 +382,12 @@ def verify_hdf5(pilot_samples, uplink_samples, metadata,
             for n_u in range(n_ue):
                 c.append(axes[n_u, n_c].imshow(seq_found[:, n_c, n_u, :].T, vmin=0, vmax=100, cmap='Blues',
                                                interpolation='nearest',
-                                               extent=[hdf5.n_frm_st, hdf5.n_frm_end, n_ant, 0],
+                                               extent=[n_frm_st, n_frm_end, n_ant, 0],
                                                aspect="auto"))
                 axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
                 axes[n_u, n_c].set_ylabel('Antenna #')
                 axes[n_u, n_c].set_xlabel('Frame #')
-                axes[n_u, n_c].set_xticks(np.arange(hdf5.n_frm_st, hdf5.n_frm_end, 1), minor=True)
+                axes[n_u, n_c].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
                 axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
                 axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
         cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, 100, 11), orientation='horizontal')
@@ -391,12 +399,12 @@ def verify_hdf5(pilot_samples, uplink_samples, metadata,
         for n_c in range(n_cell):
             for n_u in range(n_ue):
                 c.append( axes[n_u, n_c].imshow(frame_map[:,n_c,n_u,:].T, cmap=plt.cm.get_cmap('Blues', 3), interpolation='none',
-                      extent=[hdf5.n_frm_st,hdf5.n_frm_end, n_ant,0],  aspect="auto") )
+                      extent=[n_frm_st,hdf5.n_frm_end, n_ant,0],  aspect="auto") )
                 axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
                 axes[n_u, n_c].set_ylabel('Antenna #')
                 axes[n_u, n_c].set_xlabel('Frame #')
                 # Minor ticks
-                axes[n_u, n_c].set_xticks(np.arange(hdf5.n_frm_st, hdf5.n_frm_end, 1), minor=True)
+                axes[n_u, n_c].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
                 axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
                 # Gridlines based on minor ticks
                 axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
@@ -835,37 +843,27 @@ def main():
         else:
             hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt, sub_sample)
             data = hdf5.data
-            metadata = hdf5.metadata
             pilot_samples = hdf5.pilot_samples
             uplink_samples = hdf5.uplink_samples
 
             # Check which data we have available
-            data_types_avail = []
             pilots_avail = len(pilot_samples) > 0
             ul_data_avail = len(uplink_samples) > 0
 
             if pilots_avail:
-                data_types_avail.append("PILOTS")
                 print("Found Pilots!")
-            if ul_data_avail:
-                data_types_avail.append("UL_DATA")
-                print("Found Uplink Data")
+                if ul_data_avail:
+                    print("Found Uplink Data")
+            else:
+                if not ul_data_avail:
+                    raise Exception(' **** No pilots or uplink data found **** ')
 
-            # Empty structure
-            if not data_types_avail:
-                raise Exception(' **** No pilots or uplink data found **** ')
-
-            all_bs_nodes = set(range(pilot_samples.shape[3]))
-            plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
-            pilot_samples = pilot_samples[:, :, :, plot_bs_nodes, :]
-            if ul_data_avail:
-                uplink_samples = uplink_samples[:, :, :, plot_bs_nodes, :]
             if verify:
-                verify_hdf5(pilot_samples, uplink_samples, metadata, ref_frame, ref_cell, ref_ofdm_sym, ref_ant,
+                verify_hdf5(hdf5, ref_frame, ref_cell, ref_ofdm_sym, ref_ant,
                             ref_user, ref_ul_subframe, ref_subcarrier,
                             signal_offset, downlink_calib_offset,
-                            uplink_calib_offset, fr_strt, thresh, deep_inspect,
-                            corr_thresh, plot_bs_nodes)
+                            uplink_calib_offset, thresh, deep_inspect,
+                            corr_thresh, exclude_bs_nodes)
             if analyze:
                 analyze_hdf5(hdf5, sub_sample = sub_sample)
     scrpt_end = time.time()
