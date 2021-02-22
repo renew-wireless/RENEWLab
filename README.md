@@ -46,10 +46,6 @@ Important for developers: Do not use _ in your branch name. Use - instead. Limit
      ```sh
      $ ./install_pylibs.sh
      ```
-     Note: The Python packages listed below are needed to use the RENEW Python Development Suite. 
-     ```sh
-     $ sudo apt -y install python-scipy python3-scipy python-matplotlib python3-matplotlib python-h5py python3-h5py python-setuptools python-sklearn python3-sklearn 
-     ```
   2. If you are going to use the RENEW C++ Development Suite, please install its library and dependencies as below. 
      ```sh
      $ ./install_cclibs.sh
