@@ -1,7 +1,6 @@
 # RENEWLab
 
-
-[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fpilot-types)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/pilot-types/)
+[![Build Status](https://falcon.ecg.rice.edu:443/buildStatus/icon?job=github_public_renewlab%2Fci-badge-update)](https://falcon.ecg.rice.edu:443/job/github_public_renewlab/job/ci-badge-update/)
 
 
 # Description
