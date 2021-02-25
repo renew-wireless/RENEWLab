@@ -26,7 +26,7 @@ int main(int argc, char const* argv[])
     }
 
     Config config(argv[1]);
-
+    exit(0);
     try {
         SignalHandler signalHandler;
 

@@ -20,88 +20,94 @@ static size_t kMaxSupportedCPSize = 128;
 
 Config::Config(const std::string& jsonfile)
 {
-    std::string conf;
-    Utils::loadTDDConfig(jsonfile, conf);
-    const auto jConf = json::parse(conf);
-    std::stringstream ss;
-    json tddConf;
 
-    ss << jConf.value("BaseStations", tddConf);
-    tddConf = json::parse(ss);
-    bs_present_ = (tddConf.empty() == false);
+    // Parse HJSON file
+    Hjson::Value tddConf;
+    Hjson::Value tddConfCl;
+    Hjson::Value default_bs_hjson
+        = Hjson::UnmarshalFromFile("./files/conf-bs-default.hjson");
+    Hjson::Value default_cl_hjson
+        = Hjson::UnmarshalFromFile("./files/conf-ue-default.hjson");
+    Hjson::Value user_hjson = Hjson::UnmarshalFromFile(jsonfile);
+
+    Hjson::Value tddConf_user_bs = user_hjson["BaseStations"];
+    Hjson::Value tddConf_user_cl = user_hjson["Clients"];
+
+    bs_present_ = (tddConf_user_bs.empty() == false);
     if (bs_present_ == true) {
-        ss.str(std::string());
-        ss.clear();
-        ss << tddConf << std::endl << std::endl;
-        MLPD_INFO("Base Stations present: %s", ss.str().c_str());
+        tddConf = Hjson::Merge(default_bs_hjson, tddConf_user_bs);
+        std::string hjson = Hjson::Marshal(tddConf);
+        printf("BASE STATIONS PRESENT: %s \n", hjson.c_str());
+        MLPD_INFO("BASE STATIONS PRESENT: %s", hjson.c_str());
     }
-    ss.str(std::string());
-    ss.clear();
 
-    json tddConfCl;
-    ss << jConf.value("Clients", tddConfCl);
-    tddConfCl = json::parse(ss);
-    client_present_ = (tddConfCl.empty() == false);
+    client_present_ = (tddConf_user_cl.empty() == false);
     if (client_present_ == true) {
-        ss.str(std::string());
-        ss.clear();
-        ss << tddConfCl << std::endl << std::endl;
-        MLPD_INFO("Clients present: %s", ss.str().c_str());
+        tddConfCl = Hjson::Merge(default_cl_hjson, tddConf_user_cl);
+        std::string hjson = Hjson::Marshal(tddConfCl);
+        printf("CLIENTS PRESENT: %s \n", hjson.c_str());
+        MLPD_INFO("CLIENTS PRESENT: %s", hjson.c_str());
     }
-    ss.str(std::string());
-    ss.clear();
 
     // common (BaseStation config overrides these)
     if (bs_present_ == true) {
-        freq_ = tddConf.value("frequency", 2.5e9);
-        rate_ = tddConf.value("rate", 5e6);
-        nco_ = tddConf.value("nco_frequency", 0.75 * rate_);
+        freq_ = tddConf["frequency"];
+        rate_ = tddConf["rate"];
+        nco_ = tddConf["nco_frequency"];
         bw_filter_ = rate_ + 2 * nco_;
         radio_rf_freq_ = freq_ - nco_;
-        symbol_per_subframe_ = tddConf.value("ofdm_symbol_per_subframe", 1);
-        fft_size_ = tddConf.value("fft_size", 0);
-        cp_size_ = tddConf.value("cp_size", 0);
-        prefix_ = tddConf.value("prefix", 0);
-        postfix_ = tddConf.value("postfix", 0);
+        symbol_per_subframe_ = tddConf["ofdm_symbol_per_subframe"];
+        fft_size_ = tddConf["fft_size"];
+        cp_size_ = tddConf["cp_size"];
+        prefix_ = tddConf["prefix"];
+        postfix_ = tddConf["postfix"];
         ofdm_symbol_size_ = fft_size_ + cp_size_;
         subframe_size_ = symbol_per_subframe_ * ofdm_symbol_size_;
         samps_per_symbol_ = subframe_size_ + prefix_ + postfix_;
-        symbol_data_subcarrier_num_
-            = tddConf.value("ofdm_data_subcarrier_num", fft_size_);
-        tx_scale_ = tddConf.value("tx_scale", 0.5);
-        beacon_seq_ = tddConf.value("beacon_seq", "gold_ifft");
-        pilot_seq_ = tddConf.value("pilot_seq", "lts");
-        data_mod_ = tddConf.value("modulation", "QPSK");
+
+        if (tddConf["ofdm_data_subcarrier_num"].empty() == true) {
+            symbol_data_subcarrier_num_ = fft_size_;
+        }
+
+        tx_scale_ = tddConf["tx_scale"];
+        beacon_seq_ = (std::string)tddConf["beacon_seq"];
+        pilot_seq_ = (std::string)tddConf["pilot_seq"];
+        data_mod_ = (std::string)tddConf["modulation"];
 
         // BS
         if (kUseUHD == false) {
-            hub_file_ = tddConf.value("hub_id", "hub_serials.txt");
+            hub_file_ = (std::string)tddConf["hub_id"];
         }
-        auto sdr_id_files = tddConf.value("sdr_id", json::array());
+        auto sdr_id_files = tddConf["sdr_id"];
+
+        for (int index = 0; index < int(sdr_id_files.size()); ++index) {
+            bs_sdr_file_.push_back(sdr_id_files[index]);
+        }
+
         num_cells_ = sdr_id_files.size();
-        bs_sdr_file_.assign(sdr_id_files.begin(), sdr_id_files.end());
-        bs_channel_ = tddConf.value("channel", "A");
+        //bs_sdr_file_.assign(sdr_id_files.begin(), sdr_id_files.end());
+        bs_channel_ = (std::string)tddConf["channel"];
         if ((bs_channel_ != "A") && (bs_channel_ != "B")
             && (bs_channel_ != "AB")) {
             throw std::invalid_argument(
                 "error channel config: not any of A/B/AB!\n");
         }
-        single_gain_ = tddConf.value("single_gain", true);
-        tx_gain_.push_back(tddConf.value("txgainA", 20));
-        rx_gain_.push_back(tddConf.value("rxgainA", 20));
-        tx_gain_.push_back(tddConf.value("txgainB", 20));
-        rx_gain_.push_back(tddConf.value("rxgainB", 20));
-        cal_tx_gain_.push_back(tddConf.value("calTxGainA", 10));
-        cal_tx_gain_.push_back(tddConf.value("calTxGainB", 10));
+        single_gain_ = (bool)tddConf["single_gain"];
+        tx_gain_.push_back(tddConf["txgainA"]);
+        rx_gain_.push_back(tddConf["rxgainA"]);
+        tx_gain_.push_back(tddConf["txgainB"]);
+        rx_gain_.push_back(tddConf["rxgainB"]);
+        cal_tx_gain_.push_back(tddConf["calTxGainA"]);
+        cal_tx_gain_.push_back(tddConf["calTxGainB"]);
         tx_gain_.shrink_to_fit();
         rx_gain_.shrink_to_fit();
         cal_tx_gain_.shrink_to_fit();
 
-        sample_cal_en_ = tddConf.value("sample_calibrate", false);
-        imbalance_cal_en_ = tddConf.value("imbalance_calibrate", false);
-        beam_sweep_ = tddConf.value("beamsweep", false);
-        beacon_ant_ = tddConf.value("beacon_antenna", 0);
-        max_frame_ = tddConf.value("max_frame", 0);
+        sample_cal_en_ = (bool)tddConf["sample_calibrate"];
+        imbalance_cal_en_ = (bool)tddConf["imbalance_calibrate"];
+        beam_sweep_ = (bool)tddConf["beamsweep"];
+        beacon_ant_ = tddConf["beacon_antenna"];
+        max_frame_ = tddConf["max_frame"];
 
         MLPD_TRACE("Number cells: %zu\n", num_cells_);
         bs_sdr_ids_.resize(num_cells_);
@@ -124,11 +130,13 @@ Config::Config(const std::string& jsonfile)
         for (size_t i = 0; i < num_cells_; i++) {
             n_bs_sdrs_agg_.at(i + 1) = n_bs_sdrs_agg_.at(i) + n_bs_sdrs_.at(i);
         }
-
         if (kUseUHD == false)
             Utils::loadDevices(hub_file_, hub_ids_);
-        reciprocal_calib_ = tddConf.value("reciprocal_calibration", false);
-        cal_ref_sdr_id_ = tddConf.value("ref_sdr_index", num_bs_sdrs_all_ - 1);
+        reciprocal_calib_ = (bool)tddConf["reciprocal_calibration"];
+
+        if (tddConf["ref_sdr_index"].empty() == true) {
+            cal_ref_sdr_id_ = num_bs_sdrs_all_ - 1;
+        }
 
         if (reciprocal_calib_ == true) {
             calib_frames_.resize(num_cells_);
@@ -159,8 +167,13 @@ Config::Config(const std::string& jsonfile)
             ul_syms_per_frame_ = 0;
             dl_syms_per_frame_ = 0;
         } else {
-            auto jBsFrames = tddConf.value("frame_schedule", json::array());
-            frames_.assign(jBsFrames.begin(), jBsFrames.end());
+            auto jBsFrames = tddConf["frame_schedule"];
+
+            for (int index = 0; index < int(jBsFrames.size()); ++index) {
+                frames_.push_back(jBsFrames[index]);
+            }
+
+            // frames_.assign(jBsFrames.begin(), jBsFrames.end());
             assert(frames_.size() == num_cells_);
             pilot_symbols_ = Utils::loadSymbols(frames_, 'P');
             ul_symbols_ = Utils::loadSymbols(frames_, 'U');
@@ -177,44 +190,46 @@ Config::Config(const std::string& jsonfile)
         }
     }
 
+    exit(0);
+    /*
     MLPD_TRACE("Starting clients -- %zu", num_bs_sdrs_all_);
 
     // Clients
     assert(!(client_present_ == true && reciprocal_calib_ == true));
     if (client_present_ == true) {
-        auto jClSdrs = tddConfCl.value("sdr_id", json::array());
+        auto jClSdrs = tddConfCl["sdr_id"];
         // auto jClSdrs = tddConfCl.value("sdr_ip", json::array());
         num_cl_sdrs_ = jClSdrs.size();
         cl_sdr_ids_.assign(jClSdrs.begin(), jClSdrs.end());
         // cl_sdr_ips.assign(jClSdrs.begin(), jClSdrs.end());
-        cl_channel_ = tddConfCl.value("channel", "A");
+        cl_channel_ = tddConfCl["channel"];
         if (cl_channel_ != "A" && cl_channel_ != "B" && cl_channel_ != "AB")
             throw std::invalid_argument(
                 "error channel config: not any of A/B/AB!\n");
         cl_sdr_ch_ = (cl_channel_ == "AB") ? 2 : 1;
         num_cl_antennas_ = num_cl_sdrs_ * cl_sdr_ch_;
-        cl_agc_en_ = tddConfCl.value("agc_en", false);
-        cl_agc_gain_init_ = tddConfCl.value("agc_gain_init", 70); // 0 to 108
-        frame_mode_ = tddConfCl.value("frame_mode", "continuous_resync");
-        hw_framer_ = tddConfCl.value("hw_framer", true);
-        tx_advance_ = tddConfCl.value("tx_advance", 250); // 250
+        cl_agc_en_ = tddConfCl["agc_en"];
+        cl_agc_gain_init_ = tddConfCl["agc_gain_init"]; // 0 to 108
+        frame_mode_ = tddConfCl["frame_mode"];
+        hw_framer_ = tddConfCl["hw_framer"];
+        tx_advance_ = tddConfCl["tx_advance"]; // 250
 
         cl_txgain_vec_.resize(2);
         cl_rxgain_vec_.resize(2);
-        auto jClTxgainA_vec = tddConfCl.value("txgainA", json::array());
+        auto jClTxgainA_vec = tddConfCl["txgainA"];
         cl_txgain_vec_.at(0).assign(
             jClTxgainA_vec.begin(), jClTxgainA_vec.end());
-        auto jClRxgainA_vec = tddConfCl.value("rxgainA", json::array());
+        auto jClRxgainA_vec = tddConfCl["rxgainA"];
         cl_rxgain_vec_.at(0).assign(
             jClRxgainA_vec.begin(), jClRxgainA_vec.end());
-        auto jClTxgainB_vec = tddConfCl.value("txgainB", json::array());
+        auto jClTxgainB_vec = tddConfCl["txgainB"];
         cl_txgain_vec_.at(1).assign(
             jClTxgainB_vec.begin(), jClTxgainB_vec.end());
-        auto jClRxgainB_vec = tddConfCl.value("rxgainB", json::array());
+        auto jClRxgainB_vec = tddConfCl["rxgainB"];
         cl_rxgain_vec_.at(1).assign(
             jClRxgainB_vec.begin(), jClRxgainB_vec.end());
 
-        auto jClFrames = tddConfCl.value("frame_schedule", json::array());
+        auto jClFrames = tddConfCl["frame_schedule"];
         assert(jClSdrs.size() == jClFrames.size());
         cl_frames_.assign(jClFrames.begin(), jClFrames.end());
         cl_pilot_symbols_ = Utils::loadSymbols(cl_frames_, 'P');
@@ -223,26 +238,25 @@ Config::Config(const std::string& jsonfile)
 
         // read commons from Client json config
         if (bs_present_ == false) {
-            freq_ = tddConfCl.value("frequency", 2.5e9);
-            rate_ = tddConfCl.value("rate", 5e6);
-            nco_ = tddConfCl.value("nco_frequency", 0.75 * rate_);
+            freq_ = tddConfCl["frequency"];
+            rate_ = tddConfCl["rate", 5e6];
+            nco_ = tddConfCl["nco_frequency"];
             bw_filter_ = rate_ + 2 * nco_;
             radio_rf_freq_ = freq_ - nco_;
-            symbol_per_subframe_
-                = tddConfCl.value("ofdm_symbol_per_subframe", 1);
-            fft_size_ = tddConfCl.value("fft_size", 0);
-            cp_size_ = tddConfCl.value("cp_size", 0);
-            prefix_ = tddConfCl.value("prefix", 0);
-            postfix_ = tddConfCl.value("postfix", 0);
+            symbol_per_subframe_ = tddConfCl["ofdm_symbol_per_subframe"];
+            fft_size_ = tddConfCl["fft_size"];
+            cp_size_ = tddConfCl["cp_size"];
+            prefix_ = tddConfCl["prefix"];
+            postfix_ = tddConfCl["postfix"];
             ofdm_symbol_size_ = fft_size_ + cp_size_;
             subframe_size_ = symbol_per_subframe_ * ofdm_symbol_size_;
             samps_per_symbol_ = subframe_size_ + prefix_ + postfix_;
-            tx_scale_ = tddConfCl.value("tx_scale", 0.5);
-            beacon_seq_ = tddConfCl.value("beacon_seq", "gold_ifft");
-            pilot_seq_ = tddConfCl.value("pilot_seq", "lts");
+            tx_scale_ = tddConfCl["tx_scale"];
+            beacon_seq_ = tddConfCl["beacon_seq"];
+            pilot_seq_ = tddConfCl["pilot_seq"];
             symbols_per_frame_ = cl_frames_.at(0).size();
-            single_gain_ = tddConfCl.value("single_gain", true);
-            data_mod_ = tddConfCl.value("modulation", "QPSK");
+            single_gain_ = tddConfCl["single_gain"];
+            data_mod_ = tddConfCl["modulation"];
         }
     }
 
@@ -414,8 +428,9 @@ Config::Config(const std::string& jsonfile)
                 std::cout << "Pilot symbol: " << ofdmSym[pilot_sc_.at(0).at(0)]
                           << " " << ofdmSym[pilot_sc_.at(0).at(1)] << std::endl;
 #endif
-                std::vector<std::complex<float>> txSym = CommsLib::IFFT(
-                    ofdmSym, fft_size_, 0.25); // normalize and scale with 0.25;
+                std::vector<std::complex<float>> txSym
+                    = CommsLib::IFFT(ofdmSym, fft_size_,
+                        0.25); // normalize and scale with 0.25;
                 txSym.insert(txSym.begin(), txSym.end() - cp_size_,
                     txSym.end()); // add CP
 #if DEBUG_PRINT
@@ -479,7 +494,8 @@ Config::Config(const std::string& jsonfile)
                 + "x" + std::to_string(ant_num) + "x"
                 + std::to_string(pilot_syms_per_frame_) + ".hdf5";
         }
-        trace_file_ = tddConf.value("trace_file", filename);
+        // FIXME OBCH  - check if trace_file provided
+        trace_file_ = filename; // tddConf.value("trace_file", filename);
     }
 
     // Multi-threading settings
@@ -488,7 +504,8 @@ Config::Config(const std::string& jsonfile)
     core_alloc_ = num_cores > RX_THREAD_NUM;
     if ((bs_present_ == true)
         && (pilot_syms_per_frame_ + ul_syms_per_frame_ > 0)) {
-        task_thread_num_ = tddConf.value("task_thread", TASK_THREAD_NUM);
+        task_thread_num_
+            = TASK_THREAD_NUM; // tddConf.value("task_thread", TASK_THREAD_NUM); // OBCH FIXME
         rx_thread_num_ = (num_cores >= (2 * RX_THREAD_NUM))
             ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_sdrs_all_))
             : 1;
@@ -519,6 +536,7 @@ Config::Config(const std::string& jsonfile)
     }
     running_.store(true);
     MLPD_INFO("Configuration file was successfully parsed!\n");
+*/
 }
 
 size_t Config::getNumAntennas()

@@ -11,14 +11,26 @@ BASEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 LIBDIR="$BASEDIR"/CC/Sounder/lib 
 mkdir -p $LIBDIR
 
+#mkdir -p deps
+#cd deps/
+#git clone https://github.com/nlohmann/json.git
+#cd json/
+#git checkout eab68e77
+#mkdir -p build/
+#cd build/
+#cmake ..
+#make -j
+#sudo make install
+#cd ../..
+
+
 mkdir -p deps
 cd deps/
-git clone https://github.com/nlohmann/json.git
-cd json/
-git checkout eab68e77
+git clone https://github.com/hjson/hjson-cpp.git
+cd hjson-cpp/
 mkdir -p build/
 cd build/
-cmake ..
-make -j
+cmake .. -DHJSON_ENABLE_TEST=ON -DHJSON_ENABLE_INSTALL=ON -DCMAKE_BUILD_TYPE=Release
+make runtest
 sudo make install
 cd ../..

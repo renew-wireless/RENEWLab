@@ -1,0 +1,35 @@
+{
+	# BASE STATION DEFAULT PARAMETERS
+	# DO NOT MODIFY!
+ 
+	frequency : 2.5e9,
+	rate : 5e6,
+	nco_frequency : 3.75e6,        # 0.75 * rate 
+	ofdm_symbol_per_subframe : 1,
+	fft_size : 0,
+	cp_size : 0,
+	prefix : 0,
+	postfix : 0,
+	tx_scale : 0.5,
+	beacon_seq : "gold_ifft",
+	pilot_seq : "lts",
+	modulation : "QPSK",
+	hub_id : "hub_serials.txt",
+	sdr_id : [""],
+	channel : "A",
+	single_gain : true,
+	txgainA : 20,
+	rxgainA : 20,
+	txgainB : 20,
+	rxgainB : 20,
+	calTxGainA : 10,
+	calTxGainB : 10,
+	sample_calibrate : false,
+	imbalance_calibrate : false,
+	beamsweep : false,
+	beacon_antenna : 0,
+	max_frame : 0,
+	reciprocal_calibration : false,
+	frame_schedule : [""],
+	cells : 1,
+}

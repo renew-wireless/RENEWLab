@@ -19,6 +19,10 @@
 using json = nlohmann::json;
 #endif
 
+#ifdef HJSON
+#include <hjson.h>
+#endif
+
 class Config {
 public:
     Config(const std::string&);

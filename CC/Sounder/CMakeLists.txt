@@ -83,6 +83,11 @@ set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 #find_package(Threads REQUIRED)
 find_package(nlohmann_json 3.2 REQUIRED)
 
+find_package(hjson REQUIRED)
+if (NOT hjson_FOUND)
+	message(FATAL_ERROR "HJSON development files not found")
+    return()
+endif ()
 message(STATUS "Using Pthread Library: ${CMAKE_THREAD_LIBS_INIT}: ${CMAKE_USE_PTHREADS_INIT}")
 
 set(USE_UHD False CACHE STRING "USE_UHD defaulting to 'False'")
@@ -112,13 +117,14 @@ set(directory "logs")
 file(MAKE_DIRECTORY ${directory})
 
 add_definitions(-DJSON)
+add_definitions(-DHJSON)
 add_definitions(-DTHREADED_INIT)
 
 message(STATUS "SoapySDR_INCLUDE_DIRS: ${SoapySDR_INCLUDE_DIRS}")
 message(STATUS "SoapySDR_LIBRARIES: ${SoapySDR_LIBRARIES}")
 message(STATUS "HDF5_INCLUDE_DIRS: ${HDF5_INCLUDE_DIRS}")
 message(STATUS "HDF5_LIBRARIES: ${HDF5_LIBRARIES}")
-include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS})
+include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS} /usr/local/include/hjson)
 
 set(SOUNDER_SOURCES 
     ClientRadioSet.cc
@@ -139,7 +145,7 @@ add_executable(sounder
     main.cc
     ${SOUNDER_SOURCES})
 
-target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe
+target_link_libraries(sounder -lhjson -lpthread -lhdf5_cpp --enable-threadsafe
     ${SoapySDR_LIBRARIES}
     ${HDF5_LIBRARIES}
     ${CMAKE_SOURCE_DIR}/mufft/libmuFFT.a
