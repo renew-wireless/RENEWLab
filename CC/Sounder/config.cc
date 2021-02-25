@@ -471,7 +471,7 @@ Config::Config(const std::string& jsonfile)
                 + std::to_string(ltm->tm_min) + "-"
                 + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num)
                 + "x" + std::to_string(ant_num) + "x"
-                + std::to_string(pilot_syms_per_frame_) + ".hdf5";
+                + std::to_string(num_cl_antennas_) + ".hdf5";
         }
         trace_file_ = tddConf.value("trace_file", filename);
     }

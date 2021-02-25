@@ -708,8 +708,8 @@ void Receiver::clientSyncTxRx(int tid)
                         resync_retry_cnt = 0;
                         resync_success++;
                         MLPD_INFO("Re-syncing with offset: %d, after %zu "
-                                  "tries, index: %d\n",
-                            rx_offset, resync_retry_cnt + 1, sync_index);
+                                  "tries, index: %d, tid %d\n",
+                            rx_offset, resync_retry_cnt + 1, sync_index, tid);
                     } else {
                         resync_retry_cnt++;
                     }
