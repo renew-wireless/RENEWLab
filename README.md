@@ -1,7 +1,7 @@
 # RENEWLab
 
 
-[![Build Status](https://4489496cb62a.ngrok.io/buildStatus/icon?job=github_public_renewlab%2Fh-monitor)](https://4489496cb62a.ngrok.io/job/github_public_renewlab/job/h-monitor/)
+[![Build Status](https://falcon.ecg.rice.edu:443/buildStatus/icon?job=github_public_renewlab%2Fdevelop)](https://falcon.ecg.rice.edu:443/job/github_public_renewlab/job/develop/)
 
 
 # Description
@@ -76,6 +76,5 @@ RENEWLab shall be used under the [RENEW OPEN SOURCE LICENSE](https://renew-wirel
 # Acknowledgement
 
 RENEW was funded by the NSF PAWR project.
-
 
 
