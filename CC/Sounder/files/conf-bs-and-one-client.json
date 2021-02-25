@@ -5,10 +5,10 @@
 		 "hub_id" : "files/hub-serials.txt",
 		 "frequency" : 2.5e9,
 		 "channel" : "AB",
-		 "rxgainA" : 70,
-		 "txgainA" : 70,
-		 "rxgainB" : 70,
-		 "txgainB" : 70,
+		 "rxgainA" : 65,
+		 "txgainA" : 87,
+		 "rxgainB" : 65,
+		 "txgainB" : 87,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
 		     "BGPPGGGGGGGGGGGGGGGG"
@@ -29,10 +29,10 @@
 		 ],
 		 "frequency" : 2.5e9,
 		 "channel" : "AB",
-		 "rxgainA" : [70],
-		 "txgainA" : [70],
-		 "rxgainB" : [70],
-		 "txgainB" : [70],
+		 "rxgainA" : [65],
+		 "txgainA" : [87],
+		 "rxgainB" : [65],
+		 "txgainB" : [87],
 		 "rate" : 5e6,
 		 "frame_schedule" : [
 		     "GGPPGGGGGGGGGGGGGGGG"
