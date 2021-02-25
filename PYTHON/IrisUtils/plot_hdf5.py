@@ -85,9 +85,12 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
     samples = pilot_samples
     num_cl_tmp = num_pilots  # number of UEs to plot data for
+    num_frames = samples.shape[0]
+    num_cells = samples.shape[1]
+    num_bs_ants = samples.shape[3]
 
     samps_mat = np.reshape(
-            samples, (samples.shape[0], samples.shape[1], num_cl_tmp, samples.shape[3], symbol_length, 2))
+            samples, (num_frames, num_cells, num_cl_tmp, num_bs_ants, symbol_length, 2))
     samps = (samps_mat[:, :, :, :, :, 0] +
             samps_mat[:, :, :, :, :, 1]*1j)*2**-15
 
@@ -123,20 +126,30 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
     # Plotter
     # Plot pilots
-    fig1, axes1 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
-    axes1[0, 0].set_title('Pilots IQ - Cell %d - Antenna %d - User %d'%(cell_i, ant_i, user_i))
-    # Samps Dimensions: (Frame, Cell, User, Pilot Rep, Antenna, Sample)
-    axes1[0, 0].set_ylabel('Frame %d (I)' %( (ref_frame + n_frm_st)) )
-    axes1[0, 0].plot(np.real(samps[ref_frame, cell_i, user_i, ant_i, :]))
+    if ant_i > num_bs_ants - 1:
+        for i in range(samps.shape[3]):
+            fig1, axes1 = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
+            axes1[0, 0].set_title('Pilots IQ - Cell %d - Antenna %d - User %d'%(cell_i, i, user_i))
+            # Samps Dimensions: (Frame, Cell, User, Pilot Rep, Antenna, Sample)
+            axes1[0, 0].set_ylabel('Frame %d (IQ)' %( (ref_frame + n_frm_st)) )
+            axes1[0, 0].plot(np.real(samps[ref_frame, cell_i, user_i, i, :]))
+            axes1[0, 0].plot(np.imag(samps[ref_frame, cell_i, user_i, i, :]))
 
-    axes1[1, 0].set_ylabel('Frame %d (Q)' %( (ref_frame + n_frm_st)) )
-    axes1[1, 0].plot(np.imag(samps[ref_frame, cell_i, user_i, ant_i, :]))
+            axes1[1, 0].set_ylabel('All Frames (I)')
+            axes1[1, 0].plot(np.real(samps[:, cell_i, user_i, i, :]).flatten())
+            axes1[1, 0].plot(np.imag(samps[:, cell_i, user_i, i, :]).flatten())
 
-    axes1[2, 0].set_ylabel('All Frames (I)')
-    axes1[2, 0].plot(np.real(samps[:, cell_i, user_i, ant_i, :]).flatten())
+    else:
+        fig1, axes1 = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
+        axes1[0, 0].set_title('Pilots IQ - Cell %d - Antenna %d - User %d'%(cell_i, ant_i, user_i))
+        # Samps Dimensions: (Frame, Cell, User, Pilot Rep, Antenna, Sample)
+        axes1[0, 0].set_ylabel('Frame %d (IQ)' %( (ref_frame + n_frm_st)) )
+        axes1[0, 0].plot(np.real(samps[ref_frame, cell_i, user_i, ant_i, :]))
+        axes1[0, 0].plot(np.imag(samps[ref_frame, cell_i, user_i, ant_i, :]))
 
-    axes1[3, 0].set_ylabel('All Frames (Q)')
-    axes1[3, 0].plot(np.imag(samps[:, cell_i, user_i, ant_i, :]).flatten())
+        axes1[1, 0].set_ylabel('All Frames (I)')
+        axes1[1, 0].plot(np.real(samps[:, cell_i, user_i, ant_i, :]).flatten())
+        axes1[1, 0].plot(np.imag(samps[:, cell_i, user_i, ant_i, :]).flatten())
 
     fig2, axes2 = plt.subplots(nrows=3, ncols=1, squeeze=False, figsize=(10, 8))
     axes2[0, 0].set_title('Pilot CSI Stats Across Frames- Cell %d - User %d - Subcarrier %d' % (cell_i, user_i, subcarrier_i))
