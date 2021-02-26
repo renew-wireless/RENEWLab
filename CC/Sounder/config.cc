@@ -156,6 +156,7 @@ Config::Config(const std::string& jsonfile)
             }
             symbols_per_frame_ = calib_frames_.at(0).size();
             pilot_syms_per_frame_ = 2; // up and down reciprocity pilots
+            noise_syms_per_frame_ = 0;
             ul_syms_per_frame_ = 0;
             dl_syms_per_frame_ = 0;
         } else {
@@ -163,10 +164,12 @@ Config::Config(const std::string& jsonfile)
             frames_.assign(jBsFrames.begin(), jBsFrames.end());
             assert(frames_.size() == num_cells_);
             pilot_symbols_ = Utils::loadSymbols(frames_, 'P');
+            noise_symbols_ = Utils::loadSymbols(frames_, 'N');
             ul_symbols_ = Utils::loadSymbols(frames_, 'U');
             dl_symbols_ = Utils::loadSymbols(frames_, 'D');
             symbols_per_frame_ = frames_.at(0).size();
             pilot_syms_per_frame_ = pilot_symbols_.at(0).size();
+            noise_syms_per_frame_ = noise_symbols_.at(0).size();
             ul_syms_per_frame_ = ul_symbols_.at(0).size();
             dl_syms_per_frame_ = dl_symbols_.at(0).size();
             // read commons from client json config
@@ -585,6 +588,17 @@ int Config::getClientId(int frame_id, int symbol_id)
     return -1;
 }
 
+int Config::getNSFIndex(int frame_id, int symbol_id)
+{
+    std::vector<size_t>::iterator it;
+    int fid = frame_id % frames_.size();
+    it = find(noise_symbols_.at(fid).begin(), noise_symbols_.at(fid).end(),
+        symbol_id);
+    if (it != noise_symbols_.at(fid).end())
+        return (it - noise_symbols_.at(fid).begin());
+    return -1;
+}
+
 int Config::getUlSFIndex(int frame_id, int symbol_id)
 {
     std::vector<size_t>::iterator it;
@@ -612,6 +626,15 @@ bool Config::isPilot(int frame_id, int symbol_id)
 {
     try {
         return frames_[frame_id % frames_.size()].at(symbol_id) == 'P';
+    } catch (const std::out_of_range&) {
+        return false;
+    }
+}
+
+bool Config::isNoise(int frame_id, int symbol_id)
+{
+    try {
+        return frames_[frame_id % frames_.size()].at(symbol_id) == 'N';
     } catch (const std::out_of_range&) {
         return false;
     }

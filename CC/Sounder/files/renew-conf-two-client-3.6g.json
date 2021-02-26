@@ -11,7 +11,7 @@
                  "txgainB" : 70,
                  "rate" : 5e6,
                  "frame_schedule" : [
-		     "BGGGGGPPGGGGGGGGGGGG"
+		     "BGGGGGPPGNGGGGGGGGGG"
                  ],
                  "max_frame" : 4000,
 		 "ofdm_symbol_per_subframe" : 10,
@@ -25,7 +25,7 @@
 
         "Clients" : {
                  "sdr_id" : [
-                     "RF3E000029"
+                     "RF3E000080"
                  ],
                  "frequency" : 3.6e9,
                  "channel" : "AB",

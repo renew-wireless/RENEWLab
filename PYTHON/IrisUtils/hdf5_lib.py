@@ -278,6 +278,7 @@ class hdf5_lib:
         self.metadata = {}
         self.pilot_samples = []
         self.uplink_samples = []
+        self.noise_samples = []
         self.n_frm_st = n_fr_insp_st                                # index of last frame
         self.n_frm_end = self.n_frm_st + n_frames_to_inspect    # index of last frame in the range of n_frames_to_inspect
         self.open_hdf5()
@@ -343,6 +344,14 @@ class hdf5_lib:
                     self.uplink_samples = self.data['UplinkData']
                 else:
                     self.uplink_samples = self.data['UplinkData'][self.n_frm_st:self.n_frm_end, ...]
+
+            print("looking into Noise Samples (if enabled)")
+            if bool(self.data['Noise_Samples']):
+                if self.n_frm_st == self.n_frm_end:
+                    # Consider the entire dataset (for demos etc)
+                    self.noise_samples = self.data['Noise_Samples']
+                else:
+                    self.noise_samples = self.data['Noise_Samples'][self.n_frm_st:self.n_frm_end, ...]
 
         return self.data
 

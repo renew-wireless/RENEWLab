@@ -52,22 +52,27 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     metadata = hdf5.metadata
     pilot_samples = hdf5.pilot_samples
     uplink_samples = hdf5.uplink_samples
+    noise_samples = hdf5.noise_samples
 
     # Check which data we have available
     data_types_avail = []
     pilots_avail = len(pilot_samples) > 0
     ul_data_avail = len(uplink_samples) > 0
+    noise_avail = len(noise_samples) > 0
 
     if pilots_avail:
         data_types_avail.append("PILOTS")
         print("Found Pilots!")
     if ul_data_avail:
         data_types_avail.append("UL_DATA")
-        print("Found Uplink Data")
+        print("Found Uplink Data!")
+    if noise_avail:
+        data_types_avail.append("NOISE")
+        print("Found Noise Samples!")
 
     # Empty structure
     if not data_types_avail:
-        raise Exception(' **** No pilots or uplink data found **** ')
+        raise Exception(' **** No pilots, uplink data, or noise samples found **** ')
 
     # Retrieve attributes
     symbol_length = int(metadata['SYMBOL_LEN'])

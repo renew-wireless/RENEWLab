@@ -28,6 +28,7 @@ RecorderWorker::RecorderWorker(
 {
     file_ = nullptr;
     pilot_dataset_ = nullptr;
+    noise_dataset_ = nullptr;
     data_dataset_ = nullptr;
     antenna_offset_ = antenna_offset;
     num_antennas_ = num_antennas;
@@ -44,6 +45,13 @@ void RecorderWorker::gc(void)
         this->pilot_dataset_->close();
         delete this->pilot_dataset_;
         this->pilot_dataset_ = nullptr;
+    }
+
+    if (this->noise_dataset_ != nullptr) {
+        MLPD_TRACE("Noise Dataset exists during garbage collection\n");
+        this->noise_dataset_->close();
+        delete this->noise_dataset_;
+        this->noise_dataset_ = nullptr;
     }
 
     if (this->data_dataset_ != nullptr) {
@@ -206,14 +214,22 @@ herr_t RecorderWorker::initHDF5()
     hsize_t IQ = 2 * this->cfg_->samps_per_symbol();
     DataspaceIndex cdims
         = { 1, 1, 1, 1, IQ }; // pilot chunk size, TODO: optimize size
-    this->frame_number_pilot_ = MAX_FRAME_INC; //this->cfg_->maxFrame;
+    this->frame_number_pilot_ = MAX_FRAME_INC;
+    // pilots
     DataspaceIndex dims_pilot
         = { this->frame_number_pilot_, this->cfg_->num_cells(),
               this->cfg_->pilot_syms_per_frame(), this->num_antennas_, IQ };
     DataspaceIndex max_dims_pilot = { H5S_UNLIMITED, this->cfg_->num_cells(),
         this->cfg_->pilot_syms_per_frame(), this->num_antennas_, IQ };
-
-    this->frame_number_data_ = MAX_FRAME_INC; //this->cfg_->maxFrame;
+    // noise
+    this->frame_number_noise_ = MAX_FRAME_INC;
+    DataspaceIndex dims_noise
+        = { this->frame_number_noise_, this->cfg_->num_cells(),
+              this->cfg_->noise_syms_per_frame(), this->num_antennas_, IQ };
+    DataspaceIndex max_dims_noise = { H5S_UNLIMITED, this->cfg_->num_cells(),
+        this->cfg_->noise_syms_per_frame(), this->num_antennas_, IQ };
+    // data
+    this->frame_number_data_ = MAX_FRAME_INC;
     DataspaceIndex dims_data
         = { this->frame_number_data_, this->cfg_->num_cells(),
               this->cfg_->ul_syms_per_frame(), this->num_antennas_, IQ };
@@ -230,7 +246,7 @@ herr_t RecorderWorker::initHDF5()
         H5::DataSpace pilot_dataspace(kDsDim, dims_pilot, max_dims_pilot);
         this->file_->createDataSet("/Data/Pilot_Samples",
             H5::PredType::STD_I16BE, pilot_dataspace, this->pilot_prop_);
-        pilot_dataspace.close();
+        // pilot_dataspace.close(); // OBCH FIXME - seems to be done during garbage collection gc() func
 
         // ******* COMMON ******** //
         // TX/RX Frequencyfile
@@ -436,6 +452,14 @@ herr_t RecorderWorker::initHDF5()
         // ********************* //
 
         this->pilot_prop_.close();
+        if (this->cfg_->noise_syms_per_frame() > 0) {
+            H5::DataSpace noise_dataspace(kDsDim, dims_noise, max_dims_noise);
+            this->noise_prop_.setChunk(kDsDim, cdims);
+            this->file_->createDataSet("/Data/Noise_Samples",
+                H5::PredType::STD_I16BE, noise_dataspace, this->noise_prop_);
+            this->noise_prop_.close();
+        }
+
         if (this->cfg_->ul_syms_per_frame() > 0) {
             H5::DataSpace data_dataspace(kDsDim, dims_data, max_dims_data);
             this->data_prop_.setChunk(kDsDim, cdims);
@@ -518,10 +542,36 @@ void RecorderWorker::openHDF5()
                   this->cfg_->ul_syms_per_frame(), this->antennas_.size(), IQ };
         cout << "New Data Dataset Dimension " << ndims << ",";
         for (auto i = 0; i < kDsSim - 1; ++i)
-            cout << dims_pilot[i] << ",";
-        cout << dims_pilot[kDsSim - 1] << std::endl;
+            cout << dims_data[i] << ",";
+        cout << dims_data[kDsSim - 1] << std::endl;
 #endif
         data_filespace.close();
+    }
+
+    // Get Dataset for NOISE (If Enabled) and check the shape of it
+    if (this->cfg_->noise_syms_per_frame() > 0) {
+        this->noise_dataset_
+            = new H5::DataSet(this->file_->openDataSet("/Data/Noise_Samples"));
+        H5::DataSpace noise_filespace(this->noise_dataset_->getSpace());
+        this->noise_prop_.copy(this->noise_dataset_->getCreatePlist());
+
+#if DEBUG_PRINT
+        int ndims = noise_filespace.getSimpleExtentNdims();
+        int cndims_noise = 0;
+        DataspaceIndex cdims_noise
+            = { 1, 1, 1, 1, IQ }; // data chunk size, TODO: optimize size
+        if (H5D_CHUNKED == this->noise_prop_.getLayout())
+            cndims_noise = this->noise_prop_.getChunk(ndims, cdims_noise);
+        cout << "dim noise chunk = " << cndims_noise << std::endl;
+        DataspaceIndex dims_noise = { this->frame_number_noise_,
+            this->cfg_->num_cells(), this->cfg_->noise_syms_per_frame(),
+            this->antennas_.size(), IQ };
+        cout << "New Noise Dataset Dimension " << ndims << ",";
+        for (auto i = 0; i < kDsSim - 1; ++i)
+            cout << dims_noise[i] << ",";
+        cout << dims_noise[kDsSim - 1] << std::endl;
+#endif
+        noise_filespace.close();
     }
 }
 
@@ -560,6 +610,20 @@ void RecorderWorker::closeHDF5()
             this->data_dataset_->close();
             delete this->data_dataset_;
             this->data_dataset_ = nullptr;
+        }
+
+        // Resize Noise Dataset (If Needed)
+        if (this->cfg_->noise_syms_per_frame() > 0) {
+            assert(this->noise_dataset_ != nullptr);
+            this->frame_number_noise_ = frame_number;
+            DataspaceIndex dims_noise = { this->frame_number_noise_,
+                this->cfg_->num_cells(), this->cfg_->noise_syms_per_frame(),
+                this->num_antennas_, IQ };
+            this->noise_dataset_->extend(dims_noise);
+            this->noise_prop_.close();
+            this->noise_dataset_->close();
+            delete this->noise_dataset_;
+            this->noise_dataset_ = nullptr;
         }
 
         this->file_->close();
@@ -614,7 +678,6 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
             }
 
             uint32_t antenna_index = pkg->ant_id - this->antenna_offset_;
-
             DataspaceIndex hdfoffset
                 = { pkg->frame_id, pkg->cell_id, 0, antenna_index, 0 };
             if ((this->cfg_->reciprocal_calib() == true)
@@ -686,6 +749,42 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
                 H5::DataSpace data_memspace(kDsDim, count, NULL);
                 this->data_dataset_->write(pkg->data,
                     H5::PredType::NATIVE_INT16, data_memspace, data_filespace);
+                data_filespace.close(); // XXX FIXME OBCH - needed???
+
+            } else if (this->cfg_->isNoise(pkg->frame_id, pkg->symbol_id)
+                == true) {
+                assert(this->noise_dataset_ != nullptr);
+                // Are we going to extend the dataset?
+                if (pkg->frame_id >= this->frame_number_noise_) {
+                    this->frame_number_noise_ += kConfigDataExtentStep;
+                    if (this->cfg_->max_frame() != 0)
+                        this->frame_number_noise_
+                            = std::min(this->frame_number_noise_,
+                                this->cfg_->max_frame() + 1);
+                    DataspaceIndex dims_noise
+                        = { this->frame_number_noise_, this->cfg_->num_cells(),
+                              this->cfg_->noise_syms_per_frame(),
+                              this->num_antennas_, IQ };
+                    this->noise_dataset_->extend(dims_noise);
+#if DEBUG_PRINT
+                    std::cout
+                        << "FrameId " << pkg->frame_id << ", (Noise) Extent to "
+                        << this->frame_number_noise_ << " Frames" << std::endl;
+#endif
+                }
+                hdfoffset[kDsSymsPerFrame]
+                    = this->cfg_->getNSFIndex(pkg->frame_id, pkg->symbol_id);
+                // Select a hyperslab in extended portion of the dataset
+                H5::DataSpace noise_filespace(this->noise_dataset_->getSpace());
+                DataspaceIndex count = { 1, 1, 1, 1, IQ };
+                noise_filespace.selectHyperslab(
+                    H5S_SELECT_SET, count, hdfoffset);
+                // define memory space
+                H5::DataSpace noise_memspace(kDsDim, count, NULL);
+                this->noise_dataset_->write(pkg->data,
+                    H5::PredType::NATIVE_INT16, noise_memspace,
+                    noise_filespace);
+                noise_filespace.close();
             }
         }
         // catch failure caused by the H5File operations

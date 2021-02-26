@@ -68,6 +68,10 @@ public:
     {
         return this->pilot_syms_per_frame_;
     }
+    inline size_t noise_syms_per_frame(void) const
+    {
+        return this->noise_syms_per_frame_;
+    }
     inline size_t ul_syms_per_frame(void) const
     {
         return this->ul_syms_per_frame_;
@@ -243,9 +247,11 @@ public:
     size_t getMaxNumAntennas();
     size_t getTotNumAntennas();
     int getClientId(int, int);
+    int getNSFIndex(int, int);
     int getUlSFIndex(int, int);
     int getDlSFIndex(int, int);
     bool isPilot(int, int);
+    bool isNoise(int, int);
     bool isData(int, int);
     unsigned getCoreCount();
 
@@ -271,6 +277,7 @@ private:
     size_t postfix_;
     size_t symbols_per_frame_;
     size_t pilot_syms_per_frame_;
+    size_t noise_syms_per_frame_;
     size_t ul_syms_per_frame_;
     size_t dl_syms_per_frame_; // No accessor
     float tx_scale_; // No accessor
@@ -303,6 +310,7 @@ private:
     size_t max_frame_;
     std::vector<std::vector<size_t>>
         pilot_symbols_; // Accessed through getClientId
+    std::vector<std::vector<size_t>> noise_symbols_;
     std::vector<std::vector<size_t>>
         ul_symbols_; // Accessed through getUlSFIndex()
     std::vector<std::vector<size_t>> dl_symbols_; // No accessor
