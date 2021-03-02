@@ -554,8 +554,8 @@ std::vector<std::vector<double>> CommsLib::getSequence(
         lts_freq_shifted.insert(
             lts_freq_shifted.end(), lts_freq.begin(), lts_freq.begin() + 32);
 
-        std::vector<std::complex<float>> lts_iq
-            = CommsLib::IFFT(lts_freq_shifted, 64, 1, false);
+        std::vector<std::complex<float>> lts_iq = CommsLib::IFFT(
+            lts_freq_shifted, lts_seq_len, 1.f / lts_seq_len, false);
 
         matrix[0].resize(lts_seq_len);
         matrix[1].resize(lts_seq_len);

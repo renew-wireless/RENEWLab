@@ -411,7 +411,8 @@ Config::Config(const std::string& jsonfile)
                 std::cout << "Pilot symbol: " << ofdmSym[pilot_sc_.at(0).at(0)]
                           << " " << ofdmSym[pilot_sc_.at(0).at(1)] << std::endl;
 #endif
-                auto txSym = CommsLib::IFFT(ofdmSym, fft_size_, 1, false);
+                auto txSym = CommsLib::IFFT(
+                    ofdmSym, fft_size_, 1.f / fft_size_, false);
                 txSym.insert(txSym.begin(), txSym.end() - cp_size_,
                     txSym.end()); // add CP
 #if DEBUG_PRINT
