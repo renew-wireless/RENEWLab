@@ -1,6 +1,6 @@
 # RENEWLab
 
-[![Build Status](https://falcon.ecg.rice.edu:443/buildStatus/icon?job=github_public_renewlab%2Fci-git-hook)](https://falcon.ecg.rice.edu:443/job/github_public_renewlab/job/ci-git-hook/)
+[![Build Status](https://falcon.ecg.rice.edu:443/buildStatus/icon?job=github_public_renewlab%2Fdevelop)](https://falcon.ecg.rice.edu:443/job/github_public_renewlab/job/develop/)
 
 # Description
 RENEWLab is an open-source software toolbox for the [RENEW massive MIMO platform](https://renew-wireless.org). It provides a user interface through a set of APIs. Users can generate, manipulate, transmit, and receive RF signals on the RENEW hardware by calling these APIs. 
@@ -70,5 +70,4 @@ RENEWLab shall be used under the [RENEW OPEN SOURCE LICENSE](https://renew-wirel
 # Acknowledgement
 
 RENEW was funded by the NSF PAWR project.
-
 
