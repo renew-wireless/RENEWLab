@@ -125,13 +125,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         while (thread_count.load() > 0) {
         }
 
-        std::vector<size_t> channels;
-        if (_cfg->bs_channel() == "A")
-            channels = { 0 };
-        else if (_cfg->bs_channel() == "B")
-            channels = { 1 };
-        else
-            channels = { 0, 1 };
+        auto channels = Utils::strToChannels(_cfg->bs_channel());
 
         for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
             auto dev = bsRadios.at(c).at(i)->dev;
