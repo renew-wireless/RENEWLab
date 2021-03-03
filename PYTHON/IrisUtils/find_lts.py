@@ -49,11 +49,13 @@ def find_lts(iq, thresh=0.8, us=1, cp=32, flip=False, lts_seq=[]):
 	else:
 		# If provided...
 		lts = lts_seq
-		# Special case - If half lts used
-		if len(lts_seq) == 80:
-			peak_spacing = 80
-		else:
-			peak_spacing = 64
+		peak_spacing = 80
+
+		# Deprecated
+		#if len(lts_seq) == 80:
+		#	peak_spacing = 80
+		#else:
+		#	peak_spacing = 64
 
 	lts_tmp = lts[-64:]
 	if flip:
