@@ -246,7 +246,6 @@ herr_t RecorderWorker::initHDF5()
         H5::DataSpace pilot_dataspace(kDsDim, dims_pilot, max_dims_pilot);
         this->file_->createDataSet("/Data/Pilot_Samples",
             H5::PredType::STD_I16BE, pilot_dataspace, this->pilot_prop_);
-        // pilot_dataspace.close(); // OBCH FIXME - seems to be done during garbage collection gc() func
 
         // ******* COMMON ******** //
         // TX/RX Frequencyfile
