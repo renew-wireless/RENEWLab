@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.10)
 project(Sounder)
 
 if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 7.0)

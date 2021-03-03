@@ -1,12 +1,12 @@
 {
 	"Clients" : {
-		 "frequency" : 3.6e9,
+		 "frequency" : 2.5e9,
 		 "channel" : "AB",
 		 "agc_en" : false,
-		 "rxgainA" : [70],
-		 "txgainA" : [70],
-		 "rxgainB" : [70],
-		 "txgainB" : [70],
+		 "rxgainA" : [65],
+		 "txgainA" : [87],
+		 "rxgainB" : [65],
+		 "txgainB" : [87],
 		 "rate" : 5e6,
 		 "fft_size" : 64,
 		 "ofdm_symbol_per_subframe" : 10,
@@ -18,7 +18,7 @@
 		 ],
 		 "frame_mode" : "continuous_resync",
 		 "sdr_id" : [
-		     "RF3E000080"
+		     "RF3E000030"
 		 ],
 		 "tx_advance" : 135,
 		 "hw_framer" : false
