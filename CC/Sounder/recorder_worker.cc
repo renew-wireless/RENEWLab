@@ -771,8 +771,8 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
                         << this->frame_number_noise_ << " Frames" << std::endl;
 #endif
                 }
-                hdfoffset[kDsSymsPerFrame]
-                    = this->cfg_->getNSFIndex(pkg->frame_id, pkg->symbol_id);
+                hdfoffset[kDsSymsPerFrame] = this->cfg_->getNoiseSFIndex(
+                    pkg->frame_id, pkg->symbol_id);
                 // Select a hyperslab in extended portion of the dataset
                 H5::DataSpace noise_filespace(this->noise_dataset_->getSpace());
                 DataspaceIndex count = { 1, 1, 1, 1, IQ };
