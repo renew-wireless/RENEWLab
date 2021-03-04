@@ -70,4 +70,3 @@ RENEWLab shall be used under the [RENEW OPEN SOURCE LICENSE](https://renew-wirel
 # Acknowledgement
 
 RENEW was funded by the NSF PAWR project.
-

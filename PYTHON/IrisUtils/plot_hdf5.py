@@ -52,22 +52,27 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     metadata = hdf5.metadata
     pilot_samples = hdf5.pilot_samples
     uplink_samples = hdf5.uplink_samples
+    noise_samples = hdf5.noise_samples
 
     # Check which data we have available
     data_types_avail = []
     pilots_avail = len(pilot_samples) > 0
     ul_data_avail = len(uplink_samples) > 0
+    noise_avail = len(noise_samples) > 0
 
     if pilots_avail:
         data_types_avail.append("PILOTS")
         print("Found Pilots!")
     if ul_data_avail:
         data_types_avail.append("UL_DATA")
-        print("Found Uplink Data")
+        print("Found Uplink Data!")
+    if noise_avail:
+        data_types_avail.append("NOISE")
+        print("Found Noise Samples!")
 
     # Empty structure
     if not data_types_avail:
-        raise Exception(' **** No pilots or uplink data found **** ')
+        raise Exception(' **** No pilots, uplink data, or noise samples found **** ')
 
     # Retrieve attributes
     symbol_length = int(metadata['SYMBOL_LEN'])
@@ -80,6 +85,7 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         offset = int(prefix_len)
     fft_size = int(metadata['FFT_SIZE'])
     cp = int(metadata['CP_LEN'])
+    rate = int(metadata['RATE'])
     pilot_type = metadata['PILOT_SEQ_TYPE'].astype(str)[0]
     nonzero_sc_size = metadata['DATA_SUBCARRIER_NUM']
     ofdm_pilot = np.array(metadata['OFDM_PILOT'])
@@ -120,7 +126,8 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
     # For correlation use a fft size of 64
     print("*verify_hdf5(): Calling samps2csi with fft_size = {}, offset = {}, bound = {}, cp = {} *".format(fft_size, offset, z_padding, cp))
-    csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = offset, bound = z_padding, cp = cp, sub = sub_sample, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
+    csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size=fft_size, offset=offset, bound=z_padding,
+                                cp=cp, sub=sub_sample, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
 
     cellCSI = csi[:, cell_i, :, :, :, :]
     if corr_thresh > 0.0: 
@@ -194,7 +201,7 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         fig3, axes3 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
         axes3[0, 0].set_title('Reciprocity Calibration Factor Across Frames - Cell 0 - Subcarrier %d'%subcarrier_i)
 
-        axes3[0, 0].set_ylabel('Magtinute (ant %d)' % (ant_i))
+        axes3[0, 0].set_ylabel('Magnitude (ant %d)' % (ant_i))
         axes3[0, 0].plot(np.abs(calib_mat[:, ant_i, subcarrier_i]).flatten())
         axes3[0, 0].set_xlabel('Frame')
 
@@ -285,16 +292,24 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
 
         # Find LTS peaks across frame
+        snr_start = time.time()
         n_frame = pilot_samples.shape[0]
         n_cell = pilot_samples.shape[1]
         n_ue = pilot_samples.shape[2]
         n_ant = pilot_samples.shape[3]
         seq_found = np.zeros((n_frame, n_cell, n_ue, n_ant))
 
+        td_pwr_dbm_noise = np.empty_like(samples[:, :, :, :, 0], dtype=float)
+        td_pwr_dbm_signal = np.empty_like(samples[:, :, :, :, 0], dtype=float)
+        snr = np.empty_like(samples[:, :, :, :, 0], dtype=float)
+
+        # Signal and Noise Power
         for frameIdx in range(n_frame):    # Frame
             for cellIdx in range(n_cell):  # Cell
                 for ueIdx in range(n_ue):  # UE
                     for bsAntIdx in range(n_ant):  # BS ANT
+
+                        # Signal
                         I = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 0:symbol_length * 2:2] / 2 ** 15
                         Q = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 1:symbol_length * 2:2] / 2 ** 15
                         IQ = I + (Q * 1j)
@@ -306,6 +321,29 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                         # seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / num_pilots_per_sym)
                         seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (peak_map[frameIdx, cellIdx, ueIdx, bsAntIdx] / num_pilots_per_sym)  # use matched filter analysis output
 
+                        # Compute Power of Time Domain Signal
+                        rms = np.sqrt(np.mean(IQ * np.conj(IQ)))
+                        td_pwr_lin = np.real(rms) ** 2
+                        td_pwr_dbm_s = 10 * np.log10(td_pwr_lin / 1e-3)
+                        td_pwr_dbm_signal[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_s
+
+                        # Compute SNR
+                        # Noise
+                        if noise_avail:
+                            # noise_samples
+                            In = noise_samples[frameIdx, cellIdx, 0, bsAntIdx, 0:symbol_length * 2:2] / 2 ** 15
+                            Qn = noise_samples[frameIdx, cellIdx, 0, bsAntIdx, 1:symbol_length * 2:2] / 2 ** 15
+                            IQn = In + (Qn * 1j)
+                            # sio.savemat('test_pwr.mat', {'pilot_t': IQn})
+
+                            # Compute Noise Power (Time Domain)
+                            rms = np.sqrt(np.mean(IQn * np.conj(IQn)))
+                            td_pwr_lin = np.real(rms) ** 2
+                            td_pwr_dbm_n = 10 * np.log10(td_pwr_lin / 1e-3)
+                            td_pwr_dbm_noise[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_n
+                            # SNR
+                            snr[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_s - td_pwr_dbm_n
+
                         dbg2 = False
                         if dbg2:
                             fig = plt.figure(1234)
@@ -316,7 +354,10 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                             ax2.scatter(np.linspace(0.0, len(lts_corr), num=1000), pilot_thresh * np.ones(1000), color='r')
                             plt.show()
 
-        #plots:
+        snr_end = time.time()
+        print(">>>> compute_snr time: %f \n" % (snr_end - snr_start))
+
+        # Plots
         print("Plotting the results:\n")
         n_cell = match_filt_clr.shape[1]
         n_ue = match_filt_clr.shape[2]
@@ -330,7 +371,6 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 axes[n_c, n_u].set_xlabel('Samples')
                 axes[n_c, n_u].set_title('Cell {} UE {}'.format(n_c, n_u))
                 axes[n_c, n_u].grid(True)
-        #plt.show()
  
         # plot frame_map:
         n_cell = frame_map.shape[1]
@@ -419,7 +459,29 @@ def verify_hdf5(hdf5, default_frame=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
         cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')
         cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])
-        ##plt.show()
+
+        #############
+        #  SNR MAP  #
+        #############
+        if noise_avail:
+            fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+            c = []
+            fig.suptitle('SNR Map')
+            for n_c in range(n_cell):
+                for n_u in range(n_ue):
+                    c.append(
+                        axes[n_u, n_c].imshow(snr[:, n_c, n_u, :].T, vmin=np.min(snr), vmax=np.max(snr), cmap='Blues',
+                                              interpolation='nearest',
+                                              extent=[hdf5.n_frm_st, hdf5.n_frm_end, n_ant, 0],
+                                              aspect="auto"))
+                    axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
+                    axes[n_u, n_c].set_ylabel('Antenna #')
+                    axes[n_u, n_c].set_xlabel('Frame #')
+                    axes[n_u, n_c].set_xticks(np.arange(hdf5.n_frm_st, hdf5.n_frm_end, 1), minor=True)
+                    axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
+                    axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
+            cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, np.max(snr), 10),
+                                orientation='horizontal')
 
         # SHOW FIGURES
         plt.show()
@@ -555,10 +617,6 @@ def compute_legacy(hdf5):
     show_plots = True
     zoom = 0  # samples to zoom in around frame (to look at local behavior), 0 to disable
     pl = 0
-    # static = h5py.File('ArgosCSI-96x8-2016-11-03-03-03-45_5GHz_static.hdf5', 'r')   #h5py.File('logs/ArgosCSI-76x2-2017-02-07-18-25-47.hdf5','r')
-    # static = h5py.File('trace-2020-5-26-15-27-29_1x8x3.hdf5','r')  # h5py.File('logs/ArgosCSI-76x2-2017-02-07-18-25-47.hdf5','r')
-    # env = h5py.File('logs/ArgosCSI-76x2-2017-02-07-18-25-47.hdf5','r')
-    # mobile = h5py.File('logs/ArgosCSI-76x2-2017-02-07-18-25-47.hdf5','r')
 
     frame = 10  # frame to compute beamweights from
     conjdata = []
@@ -753,8 +811,8 @@ def main():
     # Tested with inputs: ./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5 300  (for two users)
     #                     ./data_in/Argos-2019-3-30-12-20-50_1x8x1.hdf5 300  (for one user) 
     parser = OptionParser()
-    parser.add_option("--show-metadata", action="store_true", dest="show_metadata", help="Displays hdf5 metadata", default= False)
-    parser.add_option("--deep-inspect", action="store_true", dest="deep_inspect", help="Run script without analysis", default= False)
+    parser.add_option("--show-metadata", action="store_true", dest="show_metadata", help="Displays hdf5 metadata", default=False)
+    parser.add_option("--deep-inspect", action="store_true", dest="deep_inspect", help="Run script without analysis", default=False)
     parser.add_option("--ref-frame", type="int", dest="ref_frame", help="Frame number to plot", default=1000)
     parser.add_option("--ref-ul-subframe", type="int", dest="ref_ul_subframe", help="Frame number to plot", default=0)
     parser.add_option("--ref-cell", type="int", dest="ref_cell", help="Cell number to plot", default=0)
@@ -771,8 +829,8 @@ def main():
     parser.add_option("--sub-sample", type="int", dest="sub_sample", help="Sub sample rate", default=1)
     parser.add_option("--thresh", type="float", dest="thresh", help="Ampiltude Threshold for valid frames", default=0.001)
     parser.add_option("--frame-start", type="int", dest="fr_strt", help="Starting frame. Must have set n_frames_to_inspect first and make sure fr_strt is within boundaries ", default=0)
-    parser.add_option("--verify-trace", action="store_true", dest="verify", help="Run script without analysis", default= True)
-    parser.add_option("--analyze-trace", action="store_true", dest="analyze", help="Run script without analysis", default= False)
+    parser.add_option("--verify-trace", action="store_true", dest="verify", help="Run script without analysis", default=True)
+    parser.add_option("--analyze-trace", action="store_true", dest="analyze", help="Run script without analysis", default=False)
     parser.add_option("--corr-thresh", type="float", dest="corr_thresh",
                       help="Correlation threshold to exclude bad nodes",
                       default=0.00)
@@ -805,7 +863,6 @@ def main():
         exclude_bs_nodes = [int(i) for i in exclude_ant_ids]
 
     filename = sys.argv[1]
-
     scrpt_strt = time.time()
 
     if n_frames_to_inspect == 0:

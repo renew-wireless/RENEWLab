@@ -267,6 +267,8 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
                         char sym_type = fw_frame.at(s);
                         if (sym_type == 'P')
                             fw_frame.replace(s, 1, "R"); // uplink pilots
+                        else if (sym_type == 'N')
+                            fw_frame.replace(s, 1, "R"); // uplink data
                         else if (sym_type == 'U')
                             fw_frame.replace(s, 1, "R"); // uplink data
                         else if (sym_type == 'D')

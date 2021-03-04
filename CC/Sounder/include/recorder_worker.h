@@ -44,12 +44,15 @@ private:
     H5::H5File* file_;
     // Group* group;
     H5::DSetCreatPropList pilot_prop_;
+    H5::DSetCreatPropList noise_prop_;
     H5::DSetCreatPropList data_prop_;
 
     H5::DataSet* pilot_dataset_;
+    H5::DataSet* noise_dataset_;
     H5::DataSet* data_dataset_;
 
     size_t frame_number_pilot_;
+    size_t frame_number_noise_;
     size_t frame_number_data_;
 
     size_t max_frame_number_;
