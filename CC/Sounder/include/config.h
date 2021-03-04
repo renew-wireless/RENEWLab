@@ -247,7 +247,7 @@ public:
     size_t getMaxNumAntennas();
     size_t getTotNumAntennas();
     int getClientId(int, int);
-    int getNSFIndex(int, int);
+    int getNoiseSFIndex(int, int);
     int getUlSFIndex(int, int);
     int getDlSFIndex(int, int);
     bool isPilot(int, int);

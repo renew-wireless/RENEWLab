@@ -748,7 +748,7 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
                 H5::DataSpace data_memspace(kDsDim, count, NULL);
                 this->data_dataset_->write(pkg->data,
                     H5::PredType::NATIVE_INT16, data_memspace, data_filespace);
-                data_filespace.close(); // XXX FIXME OBCH - needed???
+                data_filespace.close();
 
             } else if (this->cfg_->isNoise(pkg->frame_id, pkg->symbol_id)
                 == true) {

@@ -588,7 +588,7 @@ int Config::getClientId(int frame_id, int symbol_id)
     return -1;
 }
 
-int Config::getNSFIndex(int frame_id, int symbol_id)
+int Config::getNoiseSFIndex(int frame_id, int symbol_id)
 {
     std::vector<size_t>::iterator it;
     int fid = frame_id % frames_.size();
