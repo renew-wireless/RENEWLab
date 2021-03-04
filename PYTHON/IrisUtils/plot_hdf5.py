@@ -183,9 +183,11 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         csi_u = csi
         csi_d = csi
         if up_calib_offset != offset:
-            csi_u, _ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = up_calib_offset, bound = z_padding, cp = cp, sub = 1, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
+            csi_u,_ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, symbol_length, fft_size=fft_size, offset=up_calib_offset,
+                                         bound=z_padding, cp=cp, sub=1, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
         if dn_calib_offset != offset:
-            csi_d, _ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, symbol_length, fft_size = fft_size, offset = dn_calib_offset, bound = z_padding, cp = cp, sub = 1, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
+            csi_d,_ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, symbol_length, fft_size=fft_size, offset=dn_calib_offset,
+                                        bound=z_padding, cp=cp, sub=1, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
         calib_corrected_csi = np.zeros(csi_d.shape, dtype='complex64')
         calib_corrected_csi[:, :, 0, :, :, :] = csi_d[:, :, 0, :, :, :]
         calib_corrected_csi[:, :, 1, :, :, :] = csi_u[:, :, 1, :, :, :]
@@ -483,7 +485,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             plt.show()
 
 
-def analyze_hdf5(hdf5, frame=10, cell=0, offset=-1, zoom=0, pl=0, sub_sample = 1):
+def analyze_hdf5(hdf5, frame_i=10, cell_i=0, subcarrier_i=7, offset=-1, zoom=0, pl=0):
     '''
     Calculates and plots achievable rates from hdf5 traces
 
@@ -491,6 +493,14 @@ def analyze_hdf5(hdf5, frame=10, cell=0, offset=-1, zoom=0, pl=0, sub_sample = 1
 
     metadata = hdf5.metadata
     pilot_samples = hdf5.pilot_samples
+    noise_avail = len(hdf5.noise_samples) > 0
+    # TODO: noise can be estimated from null subcarriers
+    if noise_avail:
+        noise_samples = hdf5.noise_samples
+    else:
+        print('Trace-based Estimation of performance requires presense of noise samples!')
+        print('Noise data not present. Exitting...')
+        return
     symbol_length = int(metadata['SYMBOL_LEN'])
     rate = float(metadata['RATE'])
     symbol_num = int(metadata['BS_FRAME_LEN'])
@@ -507,33 +517,44 @@ def analyze_hdf5(hdf5, frame=10, cell=0, offset=-1, zoom=0, pl=0, sub_sample = 1
     pilot_type = metadata['PILOT_SEQ_TYPE'].astype(str)[0]
     nonzero_sc_size = metadata['DATA_SUBCARRIER_NUM']
 
-    # compute CSI for each user and get a nice numpy array
-    # Returns csi with Frame, User, pilot repetitions, BS ant, Subcarrier
-    # also, iq samples nicely chunked out, same dims, but subcarrier is sample.
-    samples = pilot_samples
-    num_cl_tmp = num_pilots
-    csi, _ = hdf5_lib.samps2csi(samples, num_cl_tmp, symbol_length, fft_size = fft_size, 
-                                offset = offset, bound = z_padding, cp = cp, sub = sub_sample, 
-                                pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
+    num_noise_syms = noise_samples.shape[2]
+    n_frame = pilot_samples.shape[0]
+    n_cell = pilot_samples.shape[1]
+    n_ue = pilot_samples.shape[2]
+    n_ant = pilot_samples.shape[3]
 
-    csi = csi[:, cell, :, :, :, :]
+    # compute CSI for each user and get a nice numpy array
+    # Returns csi with Frame, Cell, User, pilot repetitions, BS ant, Subcarrier
+    # also, iq samples nicely chunked out, same dims, but subcarrier is sample.
+    num_cl_tmp = num_pilots
+    csi,_ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, symbol_length, fft_size=fft_size,
+                                offset=offset, bound=z_padding, cp=cp, sub=1,
+                                pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
+    csi = csi[:, cell_i, :, :, :, :]
+
+    noise,_ = hdf5_lib.samps2csi(noise_samples, num_noise_syms, symbol_length, fft_size=fft_size,
+                                offset=offset, bound=z_padding, cp=cp, sub=1,
+                                pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
+    noise = noise[:, cell_i, :, :, :, :]
+
     # zoom in too look at behavior around peak (and reduce processing time)
     if zoom > 0:
-        csi = csi[frame-zoom:frame+zoom, :, :, :, :]
+        csi = csi[frame_i-zoom:frame_i+zoom, :, :, :, :]
+        noise = noise[frame_i-zoom:frame_i+zoom, :, :, :, :]
         # recenter the plots (otherwise it errors)
         frame = zoom
-    noise = csi[:, -1, :, :, :]  # noise is last set of data.
-    # don't include noise, average over both LTSs
-    userCSI = np.mean(csi[:, :num_cl_tmp, :, :, :], 2)
+    # don't include noise, average over all pilot repetitions
+    userCSI = np.mean(csi, 2)
+    noise = np.mean(noise, 2)
 
     # compute beamweights based on the specified frame.
     conjbws = np.transpose(
-        np.conj(userCSI[frame, :, :, :]), (1, 0, 2))
+        np.conj(userCSI[frame_i, :, :, :]), (1, 0, 2))
     zfbws = np.empty(
         (userCSI.shape[2], userCSI.shape[1], userCSI.shape[3]), dtype='complex64')
     for sc in range(userCSI.shape[3]):
         zfbws[:, :, sc] = np.linalg.pinv(
-            userCSI[frame, :, :, sc])
+            userCSI[frame_i, :, :, sc])
 
     downlink = True
     # calculate capacity based on these weights
@@ -553,50 +574,50 @@ def analyze_hdf5(hdf5, frame=10, cell=0, offset=-1, zoom=0, pl=0, sub_sample = 1
     mubf_conj = conj[1]
     mubf_zf = zf[1]
     fig1, axes1 = plt.subplots(nrows=2, ncols=2, squeeze=False, figsize=(10, 8))
-    for j in range(num_cl_tmp - 1):
+    axes1[0, 0].set_title('Subcarrier-Mean Spectral Efficiency Using Beamforming Weights at Frame %d'%frame_i)
+    for j in range(num_cl_tmp):
         axes1[0, 0].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], mubf_conj[:,j], label = 'Conj User: {}'.format(j) )
-    for j in range(num_cl_tmp - 1):
+    for j in range(num_cl_tmp):
         axes1[0, 1].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], mubf_zf[:,j], label = 'ZF User: {}'.format(j) )
     axes1[0,0].legend(loc='upper right', ncol=1, frameon=False)
-    axes1[0,0].set_xlabel('Time (s)', fontsize=18)
-    axes1[0,0].set_ylabel('MUBF User Achievable Rate (bps/Hz)', fontsize=18)
+    axes1[0,0].set_xlabel('Time (s)', fontsize=14)
+    axes1[0,0].set_ylabel('MUBF %dx%d (bps/Hz)'%(n_ant, n_ue), fontsize=14)
     axes1[0,1].legend(loc='upper right', ncol=1, frameon=False)
-    axes1[0,1].set_xlabel('Time (s)', fontsize=18)
-    for j in range(num_cl_tmp - 1):
+    axes1[0,1].set_xlabel('Time (s)', fontsize=14)
+    for j in range(num_cl_tmp):
         axes1[1, 0].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], subf_conj[:,j], label = 'Conj User: {}'.format(j) )
-    for j in range(num_cl_tmp - 1):
+    for j in range(num_cl_tmp):
         axes1[1, 1].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], subf_zf[:,j], label = 'ZF User: {}'.format(j) )
     axes1[1,0].legend(loc='upper right', ncol=1, frameon=False)
-    axes1[1,0].set_xlabel('Time (s)', fontsize=18)
-    axes1[1,0].set_ylabel('SUBF User Achievable Rate (bps/Hz)', fontsize=18)
+    axes1[1,0].set_xlabel('Time (s)', fontsize=14)
+    axes1[1,0].set_ylabel('SUBF %dx1 (bps/Hz)'%n_ant, fontsize=14)
     axes1[1,1].legend(loc='upper right', ncol=1, frameon=False)
-    axes1[1,1].set_xlabel('Time (s)', fontsize=18)
-    #axes1[1].set_ylabel('Per User Achievable Rate (bps/Hz)')
+    axes1[1,1].set_xlabel('Time (s)', fontsize=14)
 
 
     # demmel number
     plt.figure(pl+2, figsize=(10, 8))
-    plt.plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], demmel[:, 7])
-    # plt.ylim([0,2])
-    plt.xlabel('Time (s)', fontsize=18)
-    plt.ylabel('Demmel condition number, Subcarrier 7', fontsize=18)
-    plt.show()
-    pl += 1
+    plt.plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], demmel[:, subcarrier_i])
+    plt.xlabel('Time (s)', fontsize=14)
+    plt.ylabel('Condition Number', fontsize=14)
+    plt.title('CSI Matrix Demmel condition number across time, Subcarrier %d'%subcarrier_i)
+    #pl += 1
 
     # SNR 
-    snr_linear = np.mean(zf[-1], axis = -1)
-    snr_dB = 10 * np.log10(snr_linear)
-    plt.figure(pl+2, figsize=(10, 8))
-    for i in range(num_cl_tmp - 1):
-        plt.plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], snr_dB[:, i], label = 'User: {}'.format(i))
-    # plt.ylim([0,2])
-    plt.xlabel('Time (s)', fontsize=18)
-    plt.ylabel('ZF SNR (dB)', fontsize=18)
-    plt.legend()
+    #snr_linear = np.mean(zf[-1], axis = -1)
+    #snr_dB = 10 * np.log10(snr_linear)
+    #plt.figure(pl+2, figsize=(10, 8))
+    #for i in range(num_cl_tmp):
+    #    plt.plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], snr_dB[:, i], label = 'User: {}'.format(i))
+    ## plt.ylim([0,2])
+    #plt.xlabel('Time (s)', fontsize=14)
+    #plt.ylabel('ZF SNR (dB)', fontsize=14)
+    #plt.title('ZF SNR Across Frames')
+    #plt.legend()
     plt.show()
-    pl += 1
 
     del csi  # free the memory
+    del noise
 
 
 def compute_legacy(hdf5):
@@ -927,7 +948,7 @@ def main():
                             uplink_calib_offset, thresh, deep_inspect,
                             corr_thresh, exclude_bs_nodes)
             if analyze:
-                analyze_hdf5(hdf5, sub_sample = sub_sample)
+                analyze_hdf5(hdf5, ref_frame, ref_cell, ref_subcarrier, signal_offset)
     scrpt_end = time.time()
     print(">>>> Script Duration: time: %f \n" % ( scrpt_end - scrpt_strt) )
 
