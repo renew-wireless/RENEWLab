@@ -233,6 +233,18 @@ std::vector<std::complex<double>> CommsLib::csign(
     return iq_sign;
 }
 
+float CommsLib::find_max_abs(std::vector<std::complex<float>> in)
+{
+    float max_val = 0;
+    for (size_t j = 0; j < in.size(); j++) {
+        auto cur_val = std::abs(in[j]);
+        if (cur_val > max_val) {
+            max_val = cur_val;
+        }
+    }
+    return max_val;
+}
+
 std::vector<float> CommsLib::magnitudeFFT(
     std::vector<std::complex<float>> const& samps,
     std::vector<float> const& win, size_t fftSize)
@@ -542,8 +554,8 @@ std::vector<std::vector<double>> CommsLib::getSequence(
         lts_freq_shifted.insert(
             lts_freq_shifted.end(), lts_freq.begin(), lts_freq.begin() + 32);
 
-        std::vector<std::complex<float>> lts_iq
-            = CommsLib::IFFT(lts_freq_shifted, 64, 1);
+        std::vector<std::complex<float>> lts_iq = CommsLib::IFFT(
+            lts_freq_shifted, lts_seq_len, 1.f / lts_seq_len, false);
 
         matrix[0].resize(lts_seq_len);
         matrix[1].resize(lts_seq_len);
@@ -610,7 +622,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(
         }
 
         std::vector<std::complex<float>> zc_iq
-            = CommsLib::IFFT(zc_freq, zc_iq_len, 0.5);
+            = CommsLib::IFFT(zc_freq, zc_iq_len, 1.f / zc_iq_len, false);
 
         matrix[0].resize(zc_iq_len);
         matrix[1].resize(zc_iq_len);

@@ -508,7 +508,7 @@ void RecorderWorker::openHDF5()
     int ndims = pilot_filespace.getSimpleExtentNdims();
     DataspaceIndex dims_pilot
         = { this->frame_number_pilot_, this->cfg_->num_cells(),
-              this->cfg_->pilot_syms_per_frame(), this->antennas_.size(), IQ };
+              this->cfg_->pilot_syms_per_frame(), this->num_antennas(), IQ };
     if (H5D_CHUNKED == this->pilot_prop_.getLayout())
         cndims_pilot = this->pilot_prop_.getChunk(ndims, dims_pilot);
     using std::cout;
@@ -538,7 +538,7 @@ void RecorderWorker::openHDF5()
         cout << "dim data chunk = " << cndims_data << std::endl;
         DataspaceIndex dims_data
             = { this->frame_number_data_, this->cfg_->num_cells(),
-                  this->cfg_->ul_syms_per_frame(), this->antennas_.size(), IQ };
+                  this->cfg_->ul_syms_per_frame(), this->num_antennas(), IQ };
         cout << "New Data Dataset Dimension " << ndims << ",";
         for (auto i = 0; i < kDsSim - 1; ++i)
             cout << dims_data[i] << ",";

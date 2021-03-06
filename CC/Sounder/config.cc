@@ -135,22 +135,23 @@ Config::Config(const std::string& jsonfile)
             for (size_t c = 0; c < num_cells_; c++) {
                 calib_frames_[c].resize(n_bs_sdrs_[c]);
                 size_t num_channels = bs_channel_.size();
+                size_t frame_length
+                    = num_channels * n_bs_sdrs_[c] - (num_channels - 1);
                 calib_frames_[c][cal_ref_sdr_id_]
-                    = std::string(num_channels * n_bs_sdrs_[c], 'G');
+                    = std::string(frame_length, 'G');
                 calib_frames_[c][cal_ref_sdr_id_].replace(
                     num_channels * cal_ref_sdr_id_, 1, "P");
                 for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
                     if (i != cal_ref_sdr_id_) {
-                        calib_frames_[c][i] = std::string(
-                            bs_channel_.size() * n_bs_sdrs_[c], 'G');
+                        calib_frames_[c][i] = std::string(frame_length, 'G');
                         for (size_t ch = 0; ch < num_channels; ch++) {
                             calib_frames_[c][i].replace(
                                 i * num_channels + ch, 1, "P");
+                            calib_frames_[c][cal_ref_sdr_id_].replace(
+                                num_channels * i + ch, 1, "R");
                         }
                         calib_frames_[c][i].replace(
                             num_channels * cal_ref_sdr_id_, 1, "R");
-                        calib_frames_[c][cal_ref_sdr_id_].replace(
-                            num_channels * i, 1, "R");
                     }
                 }
             }
@@ -329,21 +330,16 @@ Config::Config(const std::string& jsonfile)
                   << std::endl;
     }
 
-    if (pilot_seq_ == "lts" || fft_size_ == 64) {
+    if (fft_size_ == 64) {
         pilot_sym_ = CommsLib::getSequence(CommsLib::LTS_SEQ);
-        if (fft_size_ != 64) {
-            fft_size_ = 64;
-            std::cout << "LTS pilot sequence default fft size is 64! Setting "
-                         "fft size to 64"
-                      << std::endl;
-        }
     } else if (pilot_seq_ == "zadoff-chu") {
         pilot_sym_ = CommsLib::getSequence(
             CommsLib::LTE_ZADOFF_CHU, symbol_data_subcarrier_num_);
     } else
-        std::cout << pilot_seq_
-                  << " is not supported! Choose either lts or zaddof-chu."
-                  << std::endl;
+        std::cout
+            << pilot_seq_
+            << " is not supported! Choose either LTS (64-fft) or zaddof-chu."
+            << std::endl;
 
     auto iq_ci16 = Utils::double_to_cint16(pilot_sym_);
     iq_ci16.insert(iq_ci16.begin(), iq_ci16.end() - cp_size_, iq_ci16.end());
@@ -391,8 +387,9 @@ Config::Config(const std::string& jsonfile)
             std::vector<std::vector<int>> dataBits;
             dataBits.resize(symbol_per_subframe_);
             for (size_t s = 0; s < symbol_per_subframe_; s++) {
-                for (size_t c = 0; c < nDataScs; c++)
+                for (size_t c = 0; c < nDataScs; c++) {
                     dataBits[s].push_back(rand() % mod_order);
+                }
                 std::vector<std::complex<float>> mod_data
                     = CommsLib::modulate(dataBits[s], mod_type);
 #if DEBUG_PRINT
@@ -417,8 +414,8 @@ Config::Config(const std::string& jsonfile)
                 std::cout << "Pilot symbol: " << ofdmSym[pilot_sc_.at(0).at(0)]
                           << " " << ofdmSym[pilot_sc_.at(0).at(1)] << std::endl;
 #endif
-                std::vector<std::complex<float>> txSym = CommsLib::IFFT(
-                    ofdmSym, fft_size_, 0.25); // normalize and scale with 0.25;
+                auto txSym = CommsLib::IFFT(
+                    ofdmSym, fft_size_, 1.f / fft_size_, false);
                 txSym.insert(txSym.begin(), txSym.end() - cp_size_,
                     txSym.end()); // add CP
 #if DEBUG_PRINT
@@ -456,10 +453,9 @@ Config::Config(const std::string& jsonfile)
         time_t now = time(0);
         tm* ltm = localtime(&now);
         int cell_num = num_cells_;
+        size_t ant_num = getTotNumAntennas();
         std::string filename;
         if (reciprocal_calib_) {
-            size_t ant_num
-                = getTotNumAntennas() - 1; // FIXME: How about multi-cell?
             filename = "logs/trace-reciprocal-calib-"
                 + std::to_string(1900 + ltm->tm_year) + "-"
                 + std::to_string(1 + ltm->tm_mon) + "-"
@@ -469,7 +465,6 @@ Config::Config(const std::string& jsonfile)
                 + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num)
                 + "x" + std::to_string(ant_num) + ".hdf5";
         } else {
-            size_t ant_num = getTotNumAntennas();
             std::string ul_present_str
                 = (ul_data_sym_present_ ? "uplink-" : "");
             filename = "logs/trace-" + ul_present_str
@@ -480,7 +475,7 @@ Config::Config(const std::string& jsonfile)
                 + std::to_string(ltm->tm_min) + "-"
                 + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num)
                 + "x" + std::to_string(ant_num) + "x"
-                + std::to_string(pilot_syms_per_frame_) + ".hdf5";
+                + std::to_string(num_cl_antennas_) + ".hdf5";
         }
         trace_file_ = tddConf.value("trace_file", filename);
     }
@@ -566,6 +561,8 @@ size_t Config::getTotNumAntennas()
         size_t totNumSdr = 0;
         for (size_t i = 0; i < num_cells_; i++) {
             totNumSdr += n_bs_sdrs_.at(i);
+            if (reciprocal_calib_ == true)
+                totNumSdr--;
         }
         ret = totNumSdr * bs_channel_.length();
     }

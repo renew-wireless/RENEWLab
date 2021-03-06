@@ -377,7 +377,7 @@ void BaseRadioSet::dciqCalibrationProc(size_t channel)
     double toneBBFreq = sampleRate / 7;
     size_t radioSize = _cfg->n_bs_sdrs().at(0);
 
-    size_t referenceRadio = radioSize / 2;
+    size_t referenceRadio = _cfg->cal_ref_sdr_id(); //radioSize / 2;
     Radio* refRadio = bsRadios[0][referenceRadio];
     SoapySDR::Device* refDev = refRadio->dev;
 
@@ -627,7 +627,7 @@ void BaseRadioSet::collectCSI(bool& adjust)
         }
     }
 
-    int ref_ant = 0;
+    int ref_ant = _cfg->cal_ref_sdr_id();
     int ref_offset = ref_ant == 0 ? 1 : 0;
     std::vector<int> offset(R);
 
