@@ -622,7 +622,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(
         }
 
         std::vector<std::complex<float>> zc_iq
-            = CommsLib::IFFT(zc_freq, zc_iq_len, 1, false);
+            = CommsLib::IFFT(zc_freq, zc_iq_len, 1.f / zc_iq_len, false);
 
         matrix[0].resize(zc_iq_len);
         matrix[1].resize(zc_iq_len);
