@@ -81,8 +81,6 @@ endif()
 
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 #find_package(Threads REQUIRED)
-find_package(nlohmann_json 3.2 REQUIRED)
-
 message(STATUS "Using Pthread Library: ${CMAKE_THREAD_LIBS_INIT}: ${CMAKE_USE_PTHREADS_INIT}")
 
 set(USE_UHD False CACHE STRING "USE_UHD defaulting to 'False'")
@@ -118,7 +116,7 @@ message(STATUS "SoapySDR_INCLUDE_DIRS: ${SoapySDR_INCLUDE_DIRS}")
 message(STATUS "SoapySDR_LIBRARIES: ${SoapySDR_LIBRARIES}")
 message(STATUS "HDF5_INCLUDE_DIRS: ${HDF5_INCLUDE_DIRS}")
 message(STATUS "HDF5_LIBRARIES: ${HDF5_LIBRARIES}")
-include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS})
+include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS} third_party/ third_party/nlohmann/include )
 
 set(SOUNDER_SOURCES 
     ClientRadioSet.cc
