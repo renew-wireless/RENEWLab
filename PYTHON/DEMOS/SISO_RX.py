@@ -40,7 +40,7 @@
   If using only Dev Board:
   rxgain: at both frequency bands [0:1:30]
 
-  Usage example: python3 SISO_RX.py --serial="RF3C000034" --rxMode="REC" --AGCen=1
+  Usage example: python3 SISO_RX.py --serial="RF3C000034" --rxMode="REC" --AGCen=0
 ---------------------------------------------------------------------
  Copyright © 2018-2019. Rice University.
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
@@ -431,17 +431,21 @@ def replay(name, leng):
 def main():
     parser = OptionParser()
     parser.add_option("--label", type="string", dest="label", help="label for recorded file name", default="rx2.600GHz_TEST.hdf5")
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="RX GAIN (dB)", default=65.0)  # See documentation at top of file for info on gain range
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="RX GAIN (dB)", default=70.0)  # See documentation at top of file for info on gain range
     parser.add_option("--latitude", type="float", dest="latitude", help="Latitude", default=0.0)
     parser.add_option("--longitude", type="float", dest="longitude", help="Longitude", default=0.0)
     parser.add_option("--elevation", type="float", dest="elevation", help="Elevation", default=0.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Rx freq (Hz)", default=2.5e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Optional Rx freq (Hz)", default=0)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=16384)
-    parser.add_option("--serial", type="string", dest="serial", help="Serial number of the device", default="RF3E000060")
+    parser.add_option("--serial", type="string", dest="serial", help="Serial number of the device", default="RF3E000030")
     parser.add_option("--rxMode", type="string", dest="rxMode", help="RX Mode, Options:BASIC/REC/REPLAY", default="BASIC")
     parser.add_option("--AGCen", type="int", dest="AGCen", help="Enable AGC Flag. Options:0/1", default=0)
     parser.add_option("--wait-trigger", action="store_true", dest="wait_trigger", help="wait for a trigger to start a frame",default=False)
     (options, args) = parser.parse_args()
+
+    if options.freq == 0:
+        print("[ERROR] Please provide RF Freq (Hz). POWDER users must set to 2.5e9")
+        exit(0)
 
     # Verify RX Mode
     if not (options.rxMode == "BASIC" or options.rxMode == "REC" or options.rxMode == "REPLAY"):

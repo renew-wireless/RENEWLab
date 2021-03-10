@@ -28,74 +28,121 @@ static void freeRadios(std::vector<Radio*>& radios)
 ClientRadioSet::ClientRadioSet(Config* cfg)
     : _cfg(cfg)
 {
-    Radio* new_radio;
-    bool has_runtime_error;
+    size_t num_radios = _cfg->num_cl_sdrs();
 
     //load channels
     auto channels = Utils::strToChannels(_cfg->cl_channel());
     radios.clear();
-    radios.reserve(_cfg->num_cl_sdrs());
+    radios.resize(num_radios);
     radioNotFound = false;
     std::vector<std::string> radioSerialNotFound;
-    for (size_t i = 0; i < _cfg->num_cl_sdrs(); i++) {
-        MLPD_TRACE("ClientRadioSet setting up radio: %zu : %zu\n", (i + 1),
-            _cfg->num_cl_sdrs());
-        has_runtime_error = false;
-        new_radio = nullptr;
-        SoapySDR::Kwargs args;
-        args["timeout"] = "1000000";
-        if (kUseUHD == false) {
-            args["driver"] = "iris";
-            args["serial"] = _cfg->cl_sdr_ids().at(i);
-        } else {
-            args["driver"] = "uhd";
-            args["addr"] = _cfg->cl_sdr_ids().at(i);
-        }
-        try {
-            new_radio = new Radio(args, SOAPY_SDR_CF32, channels, _cfg->rate());
-            if (new_radio != nullptr) {
-                radios.push_back(new_radio);
-            } else {
-                throw std::runtime_error("Radio allocation failed");
-            }
+    std::atomic_ulong thread_count = ATOMIC_VAR_INIT(num_radios);
+    for (size_t i = 0; i < num_radios; i++) {
+        ClientRadioContext* context = new ClientRadioContext;
+        context->crs = this;
+        context->thread_count = &thread_count;
+        context->tid = i;
+#ifdef THREADED_INIT
+        pthread_t init_thread_;
 
-        } catch (std::runtime_error& err) {
-            radioSerialNotFound.push_back(_cfg->cl_sdr_ids().at(i));
+        if (pthread_create(
+                &init_thread_, NULL, ClientRadioSet::init_launch, context)
+            != 0) {
+            delete context;
+            throw std::runtime_error(
+                "ClientRadioSet - init thread create failed");
+        }
+#else
+        init(context);
+#endif
+    }
+    // Wait for init
+    while (thread_count.load() > 0) {
+    }
+    // Strip out broken radios.
+    for (size_t i = 0; i < num_radios; i++) {
+        if (radios.at(i) == nullptr) {
             radioNotFound = true;
-            has_runtime_error = true;
-
-            if (new_radio != nullptr) {
-                MLPD_TRACE("Radio not used due to exception\n");
-                delete new_radio;
+            radioSerialNotFound.push_back(_cfg->cl_sdr_ids().at(i));
+            while (num_radios != 0 && radios.at(num_radios - 1) == NULL) {
+                --num_radios;
+                radios.pop_back();
             }
-        } catch (...) {
-            MLPD_WARN("Unknown exception\n");
-            if (new_radio != nullptr) {
-                delete new_radio;
-            }
-            throw;
-        }
-
-        if (has_runtime_error == false) {
-            auto dev = radios.back()->dev;
-            SoapySDR::Kwargs info = dev->getHardwareInfo();
-
-            for (auto ch : channels) {
-                double rxgain = _cfg->cl_rxgain_vec().at(ch).at(
-                    i); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
-                double txgain = _cfg->cl_txgain_vec().at(ch).at(
-                    i); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
-                radios.back()->dev_init(_cfg, ch, rxgain, txgain);
-            }
-
-            // Init AGC only for Iris device
-            if (kUseUHD == false) {
-                initAGC(dev, _cfg);
+            if (i < num_radios) {
+                radios.at(i) = radios.at(--num_radios);
+                radios.pop_back();
             }
         }
     }
     radios.shrink_to_fit();
 
+    for (size_t i = 0; i < radios.size(); i++) {
+        auto dev = radios.at(i)->dev;
+        std::cout << _cfg->cl_sdr_ids().at(i) << ": Front end "
+                  << dev->getHardwareInfo()["frontend"] << std::endl;
+        for (auto ch : channels) {
+            if (ch < dev->getNumChannels(SOAPY_SDR_RX)) {
+                printf("RX Channel %zu\n", ch);
+                printf("Actual RX sample rate: %fMSps...\n",
+                    (dev->getSampleRate(SOAPY_SDR_RX, ch) / 1e6));
+                printf("Actual RX frequency: %fGHz...\n",
+                    (dev->getFrequency(SOAPY_SDR_RX, ch) / 1e9));
+                printf("Actual RX gain: %f...\n",
+                    (dev->getGain(SOAPY_SDR_RX, ch)));
+                if (!kUseUHD) {
+                    printf("Actual RX LNA gain: %f...\n",
+                        (dev->getGain(SOAPY_SDR_RX, ch, "LNA")));
+                    printf("Actual RX PGA gain: %f...\n",
+                        (dev->getGain(SOAPY_SDR_RX, ch, "PGA")));
+                    printf("Actual RX TIA gain: %f...\n",
+                        (dev->getGain(SOAPY_SDR_RX, ch, "TIA")));
+                    if (dev->getHardwareInfo()["frontend"].find("CBRS")
+                        != std::string::npos) {
+                        printf("Actual RX LNA1 gain: %f...\n",
+                            (dev->getGain(SOAPY_SDR_RX, ch, "LNA1")));
+                        printf("Actual RX LNA2 gain: %f...\n",
+                            (dev->getGain(SOAPY_SDR_RX, ch, "LNA2")));
+                    }
+                }
+                printf("Actual RX bandwidth: %fM...\n",
+                    (dev->getBandwidth(SOAPY_SDR_RX, ch) / 1e6));
+                printf("Actual RX antenna: %s...\n",
+                    (dev->getAntenna(SOAPY_SDR_RX, ch).c_str()));
+            }
+        }
+
+        for (auto ch : channels) {
+            if (ch < dev->getNumChannels(SOAPY_SDR_TX)) {
+                printf("TX Channel %zu\n", ch);
+                printf("Actual TX sample rate: %fMSps...\n",
+                    (dev->getSampleRate(SOAPY_SDR_TX, ch) / 1e6));
+                printf("Actual TX frequency: %fGHz...\n",
+                    (dev->getFrequency(SOAPY_SDR_TX, ch) / 1e9));
+                printf("Actual TX gain: %f...\n",
+                    (dev->getGain(SOAPY_SDR_TX, ch)));
+                if (!kUseUHD) {
+                    printf("Actual TX PAD gain: %f...\n",
+                        (dev->getGain(SOAPY_SDR_TX, ch, "PAD")));
+                    printf("Actual TX IAMP gain: %f...\n",
+                        (dev->getGain(SOAPY_SDR_TX, ch, "IAMP")));
+                    if (dev->getHardwareInfo()["frontend"].find("CBRS")
+                        != std::string::npos) {
+                        printf("Actual TX PA1 gain: %f...\n",
+                            (dev->getGain(SOAPY_SDR_TX, ch, "PA1")));
+                        printf("Actual TX PA2 gain: %f...\n",
+                            (dev->getGain(SOAPY_SDR_TX, ch, "PA2")));
+                        printf("Actual TX PA3 gain: %f...\n",
+                            (dev->getGain(SOAPY_SDR_TX, ch, "PA3")));
+                    }
+                }
+                printf("Actual TX bandwidth: %fM...\n",
+                    (dev->getBandwidth(SOAPY_SDR_TX, ch) / 1e6));
+                printf("Actual TX antenna: %s...\n",
+                    (dev->getAntenna(SOAPY_SDR_TX, ch).c_str()));
+            }
+        }
+        std::cout << std::endl;
+    }
     if (radioNotFound == true) {
         for (auto st = radioSerialNotFound.begin();
              st != radioSerialNotFound.end(); st++)
@@ -197,6 +244,76 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         }
         MLPD_INFO("%s done!\n", __func__);
     }
+}
+
+void* ClientRadioSet::init_launch(void* in_context)
+{
+    ClientRadioContext* context
+        = reinterpret_cast<ClientRadioContext*>(in_context);
+    context->crs->init(context);
+    return 0;
+}
+
+void ClientRadioSet::init(ClientRadioContext* context)
+{
+    int i = context->tid;
+    std::atomic_ulong* thread_count = context->thread_count;
+    delete context;
+
+    MLPD_TRACE("Deleting context for tid: %d\n", i);
+
+    bool has_runtime_error(false);
+    auto channels = Utils::strToChannels(_cfg->cl_channel());
+    MLPD_TRACE("ClientRadioSet setting up radio: %zu : %zu\n", (i + 1),
+        _cfg->num_cl_sdrs());
+    SoapySDR::Kwargs args;
+    args["timeout"] = "1000000";
+    if (kUseUHD == false) {
+        args["driver"] = "iris";
+        args["serial"] = _cfg->cl_sdr_ids().at(i);
+    } else {
+        args["driver"] = "uhd";
+        args["addr"] = _cfg->cl_sdr_ids().at(i);
+    }
+    try {
+        radios.at(i) = nullptr;
+        radios.at(i) = new Radio(args, SOAPY_SDR_CF32, channels, _cfg->rate());
+    } catch (std::runtime_error& err) {
+        has_runtime_error = true;
+
+        if (radios.at(i) != nullptr) {
+            MLPD_TRACE("Radio not used due to exception\n");
+            delete radios.at(i);
+            radios.at(i) = nullptr;
+        }
+    } catch (...) {
+        MLPD_WARN("Unknown exception\n");
+        if (radios.at(i) != nullptr) {
+            delete radios.at(i);
+            radios.at(i) = nullptr;
+        }
+        throw;
+    }
+    if (has_runtime_error == false) {
+        auto dev = radios.at(i)->dev;
+        SoapySDR::Kwargs info = dev->getHardwareInfo();
+
+        for (auto ch : channels) {
+            double rxgain = _cfg->cl_rxgain_vec().at(ch).at(
+                i); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
+            double txgain = _cfg->cl_txgain_vec().at(ch).at(
+                i); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
+            radios.at(i)->dev_init(_cfg, ch, rxgain, txgain);
+        }
+
+        // Init AGC only for Iris device
+        if (kUseUHD == false) {
+            initAGC(dev, _cfg);
+        }
+    }
+    MLPD_TRACE("BaseRadioSet: Init complete\n");
+    assert(thread_count->load() != 0);
+    thread_count->store(thread_count->load() - 1);
 }
 
 ClientRadioSet::~ClientRadioSet(void) { freeRadios(radios); }

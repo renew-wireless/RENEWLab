@@ -377,7 +377,7 @@ void BaseRadioSet::dciqCalibrationProc(size_t channel)
     double toneBBFreq = sampleRate / 7;
     size_t radioSize = _cfg->n_bs_sdrs().at(0);
 
-    size_t referenceRadio = radioSize / 2;
+    size_t referenceRadio = _cfg->cal_ref_sdr_id(); //radioSize / 2;
     Radio* refRadio = bsRadios[0][referenceRadio];
     SoapySDR::Device* refDev = refRadio->dev;
 
@@ -525,24 +525,21 @@ void BaseRadioSet::collectCSI(bool& adjust)
                   << std::endl;
         return;
     }
-    std::vector<std::vector<double>> pilot;
+    std::vector<std::complex<double>> pilot;
     //std::vector<std::complex<float>> pilot_cf32;
     std::vector<std::complex<int16_t>> pilot_cint16;
-    int type = CommsLib::LTS_SEQ;
     int seqLen = 160; // Sequence length
-    pilot = CommsLib::getSequence(seqLen, type);
-    // double array to complex 32-bit float vector
-    double max_abs = 0;
+    auto lts = CommsLib::getSequence(CommsLib::LTS_SEQ);
+    auto lts_size = pilot.size();
     for (int i = 0; i < seqLen; i++) {
-        std::complex<double> samp(pilot[0][i], pilot[1][i]);
-        max_abs = max_abs > std::abs(samp) ? max_abs : std::abs(samp);
+        pilot.push_back(
+            std::complex<double>(lts[0][i % lts_size], lts[1][i % lts_size]));
     }
 
+    auto iq_ci16 = Utils::double_to_cint16(lts);
     pilot_cint16.resize(seqLen);
     for (int i = 0; i < seqLen; i++) {
-        auto re = 0.25 * pilot[0][i] / max_abs * 32767;
-        auto im = 0.25 * pilot[1][i] / max_abs * 32767;
-        pilot_cint16[i] = std::complex<int16_t>((int16_t)re, (int16_t)im);
+        pilot_cint16.push_back(iq_ci16[i % lts_size]);
     }
 
     // Prepend/Append vectors with prefix/postfix number of null samples
@@ -630,7 +627,7 @@ void BaseRadioSet::collectCSI(bool& adjust)
         }
     }
 
-    int ref_ant = 0;
+    int ref_ant = _cfg->cal_ref_sdr_id();
     int ref_offset = ref_ant == 0 ? 1 : 0;
     std::vector<int> offset(R);
 
@@ -643,7 +640,7 @@ void BaseRadioSet::collectCSI(bool& adjust)
                 return std::complex<double>(
                     cf.real() / 32768.0, cf.imag() / 32768.0);
             });
-        int peak = CommsLib::findLTS(rx, seqLen);
+        int peak = CommsLib::find_pilot_seq(rx, pilot, seqLen);
         offset[i] = peak < 128 ? 0 : peak - 128;
         //std::cout << i << " " << offset[i] << std::endl;
         if (offset[i] == 0)

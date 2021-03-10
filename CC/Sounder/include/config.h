@@ -60,9 +60,17 @@ public:
     inline size_t num_cl_antennas(void) const { return this->num_cl_antennas_; }
     inline size_t fft_size(void) const { return this->fft_size_; }
     inline size_t cp_size(void) const { return this->cp_size_; }
+    inline size_t symbol_data_subcarrier_num(void) const
+    {
+        return this->symbol_data_subcarrier_num_;
+    }
     inline size_t pilot_syms_per_frame(void) const
     {
         return this->pilot_syms_per_frame_;
+    }
+    inline size_t noise_syms_per_frame(void) const
+    {
+        return this->noise_syms_per_frame_;
     }
     inline size_t ul_syms_per_frame(void) const
     {
@@ -239,9 +247,11 @@ public:
     size_t getMaxNumAntennas();
     size_t getTotNumAntennas();
     int getClientId(int, int);
+    int getNoiseSFIndex(int, int);
     int getUlSFIndex(int, int);
     int getDlSFIndex(int, int);
     bool isPilot(int, int);
+    bool isNoise(int, int);
     bool isData(int, int);
     unsigned getCoreCount();
 
@@ -259,6 +269,7 @@ private:
     size_t fft_size_;
     size_t cp_size_;
     size_t ofdm_symbol_size_;
+    size_t symbol_data_subcarrier_num_;
     size_t symbol_per_subframe_;
     size_t subframe_size_;
     size_t samps_per_symbol_;
@@ -266,6 +277,7 @@ private:
     size_t postfix_;
     size_t symbols_per_frame_;
     size_t pilot_syms_per_frame_;
+    size_t noise_syms_per_frame_;
     size_t ul_syms_per_frame_;
     size_t dl_syms_per_frame_; // No accessor
     float tx_scale_; // No accessor
@@ -298,6 +310,7 @@ private:
     size_t max_frame_;
     std::vector<std::vector<size_t>>
         pilot_symbols_; // Accessed through getClientId
+    std::vector<std::vector<size_t>> noise_symbols_;
     std::vector<std::vector<size_t>>
         ul_symbols_; // Accessed through getUlSFIndex()
     std::vector<std::vector<size_t>> dl_symbols_; // No accessor

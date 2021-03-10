@@ -12,7 +12,7 @@
   NOTE ON GAINS:
   Gain settings will vary depending on RF frontend board being used
   If using CBRS:
-  gain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
+  gain: at 2.5GHz [16:1:90], at 3.6GHz [15:1:95]
 
   If using only Dev Board:
   gain: at both frequency bands [0:1:42]
@@ -211,14 +211,18 @@ def main():
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
     parser.add_option("--gain", type="float", dest="gain", help="Tx gain [0:105] (dB)", default=42.0)
-    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=2.5e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=0)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
     parser.add_option("--waveFreq", type="float", dest="waveFreq", help="Baseband waveform freq (Hz)", default=None)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=1024)
-    parser.add_option("--serial", type="string", dest="serial", help="serial number of the device", default="RF3E000157")
+    parser.add_option("--serial", type="string", dest="serial", help="serial number of the device", default="RF3E000034")
     parser.add_option("--sigType", type="string", dest="sigType", help="Signal Type: LTE/LTS/STS/SINE", default="SINE")
     parser.add_option("--lo-tone", action="store_true", dest="lo_tone", help="generate tone using the LO ", default=False)
     (options, args) = parser.parse_args()
+
+    if options.freq == 0:
+        print("[ERROR] Please provide Tx Freq (Hz). POWDER users must set to 2.5e9")
+        exit(0)
 
     # Display parameters
     print("\n")

@@ -21,6 +21,14 @@ public:
     bool getRadioNotFound() { return radioNotFound; }
 
 private:
+    struct ClientRadioContext {
+        ClientRadioSet* crs;
+        std::atomic_ulong* thread_count;
+        size_t tid;
+    };
+    void init(ClientRadioContext* context);
+    static void* init_launch(void* in_context);
+
     Config* _cfg;
     std::vector<Radio*> radios;
     bool radioNotFound;

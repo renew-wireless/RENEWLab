@@ -44,7 +44,8 @@ public:
     CommsLib(std::string);
     ~CommsLib();
 
-    static std::vector<std::vector<double>> getSequence(int N, int type);
+    static std::vector<std::vector<double>> getSequence(
+        size_t type, size_t seq_len = 0);
     static std::vector<std::complex<float>> modulate(std::vector<int>, int);
     static std::vector<int> getDataSc(int fftSize);
     static std::vector<int> getNullSc(int fftSize);
@@ -56,6 +57,8 @@ public:
         bool normalize = true);
 
     static int findLTS(const std::vector<std::complex<double>>& iq, int seqLen);
+    static size_t find_pilot_seq(std::vector<std::complex<double>> iq,
+        std::vector<std::complex<double>> pilot, size_t seqLen);
     template <typename T>
     //static std::vector<T> convolve(std::vector<T> const& f, std::vector<T> const& g);
     static std::vector<T> convolve(
@@ -78,6 +81,7 @@ public:
         }
         return out;
     }
+    static float find_max_abs(std::vector<std::complex<float>> in);
     static std::vector<std::complex<double>> csign(
         std::vector<std::complex<double>> iq);
     static inline int hadamard2(int i, int j)

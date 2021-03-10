@@ -322,7 +322,7 @@ class OFDMplotter:
         ax.set_ylabel('')
         self.line_corr_pk, = ax.plot([], [], color='r', label='RFA')
         self.line_corr_th, = ax.plot([], [], '--b', label='Thresh')  # markers
-        ax.set_ylim(0, 8)
+        ax.set_ylim(0, 50)
         ax.set_xlim(0, self.pilot_len)
         ax.legend(fontsize=10)
 
@@ -333,7 +333,7 @@ class OFDMplotter:
         ax.set_ylabel('')
         self.line_corr_pk2, = ax.plot([], [], color='b', label='RFA')
         self.line_corr_th2, = ax.plot([], [], '--r', label='Thresh')  # markers
-        ax.set_ylim(0, 8)
+        ax.set_ylim(0, 50)
         ax.set_xlim(0, self.pilot_len)
         ax.legend(fontsize=10)
 
@@ -405,7 +405,7 @@ class OFDMplotter:
         ax.set_xlabel('Baseband Freq.')
         ax.set_ylabel('')
         self.line_chan_est_mag, = ax.plot([], [], color='r')
-        ax.set_ylim(-2, 2)
+        ax.set_ylim(-2, 10)
         ax.set_xlim(-10, 10)
         #ax.legend(fontsize=10)
 
@@ -415,7 +415,7 @@ class OFDMplotter:
         ax.set_xlabel('Baseband Freq.')
         ax.set_ylabel('')
         self.line_chan_est_mag2, = ax.plot([], [], color='b')
-        ax.set_ylim(-2, 2)
+        ax.set_ylim(-2, 10)
         ax.set_xlim(-10, 10)
         #ax.legend(fontsize=10)
 

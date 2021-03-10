@@ -24,16 +24,16 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
     dev->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->radio_rf_freq());
     dev->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->radio_rf_freq());
 
-    // Unified gains for both lime and frontend
-    if (_cfg->single_gain()) {
-        dev->setGain(
-            SOAPY_SDR_RX, ch, rxgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
-        dev->setGain(
-            SOAPY_SDR_TX, ch, txgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
-        MLPD_INFO("Tx gain: %lf, Rx gain: %lf\n",
-            dev->getGain(SOAPY_SDR_TX, ch), dev->getGain(SOAPY_SDR_RX, ch));
-    } else {
-        if (kUseUHD == false) {
+    if (kUseUHD == false) {
+        // Unified gains for both lime and frontend
+        if (_cfg->single_gain()) {
+            dev->setGain(SOAPY_SDR_RX, ch,
+                rxgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
+            dev->setGain(SOAPY_SDR_TX, ch,
+                txgain); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
+            MLPD_INFO("Tx gain: %lf, Rx gain: %lf\n",
+                dev->getGain(SOAPY_SDR_TX, ch), dev->getGain(SOAPY_SDR_RX, ch));
+        } else {
             dev->setGain(SOAPY_SDR_RX, ch, "LNA",
                 std::min(
                     30.0, rxgain)); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
@@ -49,10 +49,10 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
             dev->setGain(SOAPY_SDR_TX, ch, "IAMP", 0);
             dev->setGain(SOAPY_SDR_TX, ch, "PA2", 0);
             dev->setGain(SOAPY_SDR_TX, ch, "ATTN", -6);
-        } else {
-            dev->setGain(SOAPY_SDR_RX, ch, "PGA0", std::min(31.5, rxgain));
-            dev->setGain(SOAPY_SDR_TX, ch, "PGA0", std::min(31.5, txgain));
         }
+    } else {
+        dev->setGain(SOAPY_SDR_RX, ch, "PGA0", std::min(31.5, rxgain));
+        dev->setGain(SOAPY_SDR_TX, ch, "PGA0", std::min(31.5, txgain));
     }
 
     // DC Offset for Iris

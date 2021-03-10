@@ -67,7 +67,7 @@
   Gain settings will vary depending on RF frontend board being used
   If using CBRS:
   rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
-  txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
+  txgain: at 2.5GHz [16:1:90], at 3.6GHz [15:1:95]
 
   If using only Dev Board:
   rxgain: at both frequency bands [0:1:30]
@@ -422,9 +422,9 @@ def main():
     parser.add_option("--clnode", type="string", dest="clnode", help="serial number of the slave (client node) device", default="RF3E000157")
     parser.add_option("--hub", type="string", dest="hub", help="Hub node", default="")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=30.0)  # Check top of file for info on gain range
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Rx gain (dB)", default=30.0)  # Check top of file for info on gain range
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=2.5e9)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=80.0)  # Check top of file for info on gain range
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Rx gain (dB)", default=70.0)  # Check top of file for info on gain range
+    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=0)
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=100)     # to compensate for front-end group delay
     parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=100)  # to compensate for rf path delay
@@ -440,6 +440,10 @@ def main():
     parser.add_option("--record", action="store_true", dest="record", help="record received pilots and data", default=True)
     parser.add_option("--agc-enable", action="store_true", dest="agc_en", help="Enable AGC flag", default=False)
     (options, args) = parser.parse_args()
+
+    if options.freq == 0:
+        print("[ERROR] Please provide RF Freq (Hz). POWDER users must set to 2.5e9")
+        exit(0)
 
     siso_sounder(
         hub=options.hub,

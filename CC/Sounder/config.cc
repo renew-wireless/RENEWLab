@@ -15,6 +15,7 @@
 
 static size_t kFpgaTxRamSize = 4096;
 static size_t kMaxSupportedFFTSize = 2048;
+static size_t kMinSupportedFFTSize = 64;
 static size_t kMaxSupportedCPSize = 128;
 
 Config::Config(const std::string& jsonfile)
@@ -52,7 +53,7 @@ Config::Config(const std::string& jsonfile)
 
     // common (BaseStation config overrides these)
     if (bs_present_ == true) {
-        freq_ = tddConf.value("frequency", 3.6e9);
+        freq_ = tddConf.value("frequency", 2.5e9);
         rate_ = tddConf.value("rate", 5e6);
         nco_ = tddConf.value("nco_frequency", 0.75 * rate_);
         bw_filter_ = rate_ + 2 * nco_;
@@ -65,6 +66,8 @@ Config::Config(const std::string& jsonfile)
         ofdm_symbol_size_ = fft_size_ + cp_size_;
         subframe_size_ = symbol_per_subframe_ * ofdm_symbol_size_;
         samps_per_symbol_ = subframe_size_ + prefix_ + postfix_;
+        symbol_data_subcarrier_num_
+            = tddConf.value("ofdm_data_subcarrier_num", fft_size_);
         tx_scale_ = tddConf.value("tx_scale", 0.5);
         beacon_seq_ = tddConf.value("beacon_seq", "gold_ifft");
         pilot_seq_ = tddConf.value("pilot_seq", "lts");
@@ -132,27 +135,29 @@ Config::Config(const std::string& jsonfile)
             for (size_t c = 0; c < num_cells_; c++) {
                 calib_frames_[c].resize(n_bs_sdrs_[c]);
                 size_t num_channels = bs_channel_.size();
+                size_t frame_length
+                    = num_channels * n_bs_sdrs_[c] - (num_channels - 1);
                 calib_frames_[c][cal_ref_sdr_id_]
-                    = std::string(num_channels * n_bs_sdrs_[c], 'G');
+                    = std::string(frame_length, 'G');
                 calib_frames_[c][cal_ref_sdr_id_].replace(
                     num_channels * cal_ref_sdr_id_, 1, "P");
                 for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
                     if (i != cal_ref_sdr_id_) {
-                        calib_frames_[c][i] = std::string(
-                            bs_channel_.size() * n_bs_sdrs_[c], 'G');
+                        calib_frames_[c][i] = std::string(frame_length, 'G');
                         for (size_t ch = 0; ch < num_channels; ch++) {
                             calib_frames_[c][i].replace(
                                 i * num_channels + ch, 1, "P");
+                            calib_frames_[c][cal_ref_sdr_id_].replace(
+                                num_channels * i + ch, 1, "R");
                         }
                         calib_frames_[c][i].replace(
                             num_channels * cal_ref_sdr_id_, 1, "R");
-                        calib_frames_[c][cal_ref_sdr_id_].replace(
-                            num_channels * i, 1, "R");
                     }
                 }
             }
             symbols_per_frame_ = calib_frames_.at(0).size();
             pilot_syms_per_frame_ = 2; // up and down reciprocity pilots
+            noise_syms_per_frame_ = 0;
             ul_syms_per_frame_ = 0;
             dl_syms_per_frame_ = 0;
         } else {
@@ -160,10 +165,12 @@ Config::Config(const std::string& jsonfile)
             frames_.assign(jBsFrames.begin(), jBsFrames.end());
             assert(frames_.size() == num_cells_);
             pilot_symbols_ = Utils::loadSymbols(frames_, 'P');
+            noise_symbols_ = Utils::loadSymbols(frames_, 'N');
             ul_symbols_ = Utils::loadSymbols(frames_, 'U');
             dl_symbols_ = Utils::loadSymbols(frames_, 'D');
             symbols_per_frame_ = frames_.at(0).size();
             pilot_syms_per_frame_ = pilot_symbols_.at(0).size();
+            noise_syms_per_frame_ = noise_symbols_.at(0).size();
             ul_syms_per_frame_ = ul_symbols_.at(0).size();
             dl_syms_per_frame_ = dl_symbols_.at(0).size();
             // read commons from client json config
@@ -220,7 +227,7 @@ Config::Config(const std::string& jsonfile)
 
         // read commons from Client json config
         if (bs_present_ == false) {
-            freq_ = tddConfCl.value("frequency", 3.6e9);
+            freq_ = tddConfCl.value("frequency", 2.5e9);
             rate_ = tddConfCl.value("rate", 5e6);
             nco_ = tddConfCl.value("nco_frequency", 0.75 * rate_);
             bw_filter_ = rate_ + 2 * nco_;
@@ -256,7 +263,7 @@ Config::Config(const std::string& jsonfile)
     srand(time(NULL));
     const int seqLen = 128;
     std::vector<std::vector<double>> gold_ifft
-        = CommsLib::getSequence(seqLen, CommsLib::GOLD_IFFT);
+        = CommsLib::getSequence(CommsLib::GOLD_IFFT);
     std::vector<std::complex<int16_t>> gold_ifft_ci16
         = Utils::double_to_cint16(gold_ifft);
     gold_cf32_.clear();
@@ -266,7 +273,7 @@ Config::Config(const std::string& jsonfile)
     }
 
     std::vector<std::vector<double>> sts_seq
-        = CommsLib::getSequence(0, CommsLib::STS_SEQ);
+        = CommsLib::getSequence(CommsLib::STS_SEQ);
     std::vector<std::complex<int16_t>> sts_seq_ci16
         = Utils::double_to_cint16(sts_seq);
 
@@ -307,8 +314,14 @@ Config::Config(const std::string& jsonfile)
     // compose pilot subframe
     if (fft_size_ > kMaxSupportedFFTSize) {
         fft_size_ = kMaxSupportedFFTSize;
-        std::cout << "Unsupported fft size! Setting fftSize to "
+        std::cout << "Unsupported fft size! Setting fft size to "
                   << kMaxSupportedFFTSize << "..." << std::endl;
+    }
+
+    if (fft_size_ < kMinSupportedFFTSize) {
+        fft_size_ = kMinSupportedFFTSize;
+        std::cout << "Unsupported fft size! Setting fft size to "
+                  << kMinSupportedFFTSize << "..." << std::endl;
     }
 
     if (cp_size_ > kMaxSupportedCPSize) {
@@ -317,20 +330,25 @@ Config::Config(const std::string& jsonfile)
                   << std::endl;
     }
 
-    if (pilot_seq_ == "lts" || fft_size_ == 64) {
-        pilot_sym_ = CommsLib::getSequence(fft_size_, CommsLib::LTS_SEQ);
+    if (fft_size_ == 64) {
+        pilot_sym_ = CommsLib::getSequence(CommsLib::LTS_SEQ);
     } else if (pilot_seq_ == "zadoff-chu") {
-        pilot_sym_ = CommsLib::getSequence(fft_size_, CommsLib::LTE_ZADOFF_CHU);
-    }
-    auto lts_ci16 = Utils::double_to_cint16(pilot_sym_);
-    lts_ci16.insert(
-        lts_ci16.begin(), lts_ci16.end() - cp_size_, lts_ci16.end());
+        pilot_sym_ = CommsLib::getSequence(
+            CommsLib::LTE_ZADOFF_CHU, symbol_data_subcarrier_num_);
+    } else
+        std::cout
+            << pilot_seq_
+            << " is not supported! Choose either LTS (64-fft) or zaddof-chu."
+            << std::endl;
+
+    auto iq_ci16 = Utils::double_to_cint16(pilot_sym_);
+    iq_ci16.insert(iq_ci16.begin(), iq_ci16.end() - cp_size_, iq_ci16.end());
 
     pilot_ci16_.clear();
     pilot_ci16_.insert(
         pilot_ci16_.begin(), prefix_zpad.begin(), prefix_zpad.end());
     for (size_t i = 0; i < symbol_per_subframe_; i++)
-        pilot_ci16_.insert(pilot_ci16_.end(), lts_ci16.begin(), lts_ci16.end());
+        pilot_ci16_.insert(pilot_ci16_.end(), iq_ci16.begin(), iq_ci16.end());
     pilot_ci16_.insert(
         pilot_ci16_.end(), postfix_zpad.begin(), postfix_zpad.end());
 
@@ -369,8 +387,9 @@ Config::Config(const std::string& jsonfile)
             std::vector<std::vector<int>> dataBits;
             dataBits.resize(symbol_per_subframe_);
             for (size_t s = 0; s < symbol_per_subframe_; s++) {
-                for (size_t c = 0; c < nDataScs; c++)
+                for (size_t c = 0; c < nDataScs; c++) {
                     dataBits[s].push_back(rand() % mod_order);
+                }
                 std::vector<std::complex<float>> mod_data
                     = CommsLib::modulate(dataBits[s], mod_type);
 #if DEBUG_PRINT
@@ -395,8 +414,8 @@ Config::Config(const std::string& jsonfile)
                 std::cout << "Pilot symbol: " << ofdmSym[pilot_sc_.at(0).at(0)]
                           << " " << ofdmSym[pilot_sc_.at(0).at(1)] << std::endl;
 #endif
-                std::vector<std::complex<float>> txSym = CommsLib::IFFT(
-                    ofdmSym, fft_size_, 0.25); // normalize and scale with 0.25;
+                auto txSym = CommsLib::IFFT(
+                    ofdmSym, fft_size_, 1.f / fft_size_, false);
                 txSym.insert(txSym.begin(), txSym.end() - cp_size_,
                     txSym.end()); // add CP
 #if DEBUG_PRINT
@@ -434,10 +453,9 @@ Config::Config(const std::string& jsonfile)
         time_t now = time(0);
         tm* ltm = localtime(&now);
         int cell_num = num_cells_;
+        size_t ant_num = getTotNumAntennas();
         std::string filename;
         if (reciprocal_calib_) {
-            size_t ant_num
-                = getTotNumAntennas() - 1; // FIXME: How about multi-cell?
             filename = "logs/trace-reciprocal-calib-"
                 + std::to_string(1900 + ltm->tm_year) + "-"
                 + std::to_string(1 + ltm->tm_mon) + "-"
@@ -447,7 +465,6 @@ Config::Config(const std::string& jsonfile)
                 + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num)
                 + "x" + std::to_string(ant_num) + ".hdf5";
         } else {
-            size_t ant_num = getTotNumAntennas();
             std::string ul_present_str
                 = (ul_data_sym_present_ ? "uplink-" : "");
             filename = "logs/trace-" + ul_present_str
@@ -458,7 +475,7 @@ Config::Config(const std::string& jsonfile)
                 + std::to_string(ltm->tm_min) + "-"
                 + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num)
                 + "x" + std::to_string(ant_num) + "x"
-                + std::to_string(pilot_syms_per_frame_) + ".hdf5";
+                + std::to_string(num_cl_antennas_) + ".hdf5";
         }
         trace_file_ = tddConf.value("trace_file", filename);
     }
@@ -473,8 +490,7 @@ Config::Config(const std::string& jsonfile)
         rx_thread_num_ = (num_cores >= (2 * RX_THREAD_NUM))
             ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_sdrs_all_))
             : 1;
-        if (reciprocal_calib_ == true)
-        {
+        if (reciprocal_calib_ == true) {
             rx_thread_num_ = 2;
         }
         if ((client_present_ == true)
@@ -545,6 +561,8 @@ size_t Config::getTotNumAntennas()
         size_t totNumSdr = 0;
         for (size_t i = 0; i < num_cells_; i++) {
             totNumSdr += n_bs_sdrs_.at(i);
+            if (reciprocal_calib_ == true)
+                totNumSdr--;
         }
         ret = totNumSdr * bs_channel_.length();
     }
@@ -564,6 +582,17 @@ int Config::getClientId(int frame_id, int symbol_id)
     if (it != pilot_symbols_.at(fid).end()) {
         return (it - pilot_symbols_.at(fid).begin());
     }
+    return -1;
+}
+
+int Config::getNoiseSFIndex(int frame_id, int symbol_id)
+{
+    std::vector<size_t>::iterator it;
+    int fid = frame_id % frames_.size();
+    it = find(noise_symbols_.at(fid).begin(), noise_symbols_.at(fid).end(),
+        symbol_id);
+    if (it != noise_symbols_.at(fid).end())
+        return (it - noise_symbols_.at(fid).begin());
     return -1;
 }
 
@@ -594,6 +623,15 @@ bool Config::isPilot(int frame_id, int symbol_id)
 {
     try {
         return frames_[frame_id % frames_.size()].at(symbol_id) == 'P';
+    } catch (const std::out_of_range&) {
+        return false;
+    }
+}
+
+bool Config::isNoise(int frame_id, int symbol_id)
+{
+    try {
+        return frames_[frame_id % frames_.size()].at(symbol_id) == 'N';
     } catch (const std::out_of_range&) {
         return false;
     }

@@ -39,7 +39,7 @@ int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
     int best_peak;
 
     // Original LTS sequence
-    lts_seq = CommsLib::getSequence(seqLen, LTS_SEQ);
+    lts_seq = CommsLib::getSequence(LTS_SEQ);
 
     // Re-arrange into complex vector, flip, and compute conjugate
     std::vector<std::complex<double>> lts_sym(64);
@@ -83,6 +83,34 @@ int CommsLib::findLTS(const std::vector<std::complex<double>>& iq, int seqLen)
     return best_peak;
 }
 
+size_t CommsLib::find_pilot_seq(std::vector<std::complex<double>> iq,
+    std::vector<std::complex<double>> pilot, size_t seq_len)
+{
+
+    // Re-arrange into complex vector, flip, and compute conjugate
+    std::vector<std::complex<double>> pilot_conj;
+    for (size_t i = 0; i < seq_len; i++) {
+        // conjugate
+        pilot_conj.push_back(std::conj(pilot[seq_len - i - 1]));
+    }
+
+    // Equivalent to numpy's sign function
+    auto iq_sign = CommsLib::csign(iq);
+
+    // Convolution
+    auto pilot_corr = CommsLib::convolve(iq_sign, pilot_conj);
+
+    std::vector<double> pilot_corr_abs(pilot_corr.size());
+    for (size_t i = 0; i < pilot_corr_abs.size(); i++)
+        pilot_corr_abs[i] = computePower(pilot_corr[i]);
+
+    // Find all peaks
+    auto best_peak
+        = std::max_element(pilot_corr_abs.begin(), pilot_corr_abs.end())
+        - pilot_corr_abs.begin();
+    return best_peak;
+}
+
 int CommsLib::find_beacon(const std::vector<std::complex<double>>& iq)
 {
     //std::vector<std::vector<double>> gold_seq;
@@ -91,7 +119,7 @@ int CommsLib::find_beacon(const std::vector<std::complex<double>>& iq)
 
     // Original LTS sequence
     int seqLen = 128;
-    auto gold_seq = CommsLib::getSequence(seqLen, GOLD_IFFT);
+    auto gold_seq = CommsLib::getSequence(GOLD_IFFT);
     struct timespec tv, tv2;
 
     // Re-arrange into complex vector, flip, and compute conjugate
@@ -203,6 +231,18 @@ std::vector<std::complex<double>> CommsLib::csign(
         }
     }
     return iq_sign;
+}
+
+float CommsLib::find_max_abs(std::vector<std::complex<float>> in)
+{
+    float max_val = 0;
+    for (size_t j = 0; j < in.size(); j++) {
+        auto cur_val = std::abs(in[j]);
+        if (cur_val > max_val) {
+            max_val = cur_val;
+        }
+    }
+    return max_val;
 }
 
 std::vector<float> CommsLib::magnitudeFFT(
@@ -343,15 +383,14 @@ std::vector<std::complex<float>> CommsLib::IFFT(
     memcpy(fft_in, in.data(), fftSize * sizeof(std::complex<float>));
     mufft_execute_plan_1d(mufftplan, fft_out, fft_in);
     memcpy(out.data(), fft_out, fftSize * sizeof(std::complex<float>));
-    float max_val = 0;
+    float max_val = 1;
     if (normalize) {
         for (int i = 0; i < fftSize; i++) {
             if (std::abs(out[i]) > max_val)
                 max_val = std::abs(out[i]);
         }
-    } else {
-        max_val = 1;
     }
+
     std::cout << "IFFT output is normalized with " << std::to_string(max_val)
               << std::endl;
     for (int i = 0; i < fftSize; i++)
@@ -447,7 +486,8 @@ std::vector<std::complex<float>> CommsLib::modulate(
     return out;
 }
 
-std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
+std::vector<std::vector<double>> CommsLib::getSequence(
+    size_t type, size_t seq_len)
 {
     std::vector<std::vector<double>> matrix;
 
@@ -514,8 +554,8 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
         lts_freq_shifted.insert(
             lts_freq_shifted.end(), lts_freq.begin(), lts_freq.begin() + 32);
 
-        std::vector<std::complex<float>> lts_iq
-            = CommsLib::IFFT(lts_freq_shifted, 64, 1);
+        std::vector<std::complex<float>> lts_iq = CommsLib::IFFT(
+            lts_freq_shifted, lts_seq_len, 1.f / lts_seq_len, false);
 
         matrix[0].resize(lts_seq_len);
         matrix[1].resize(lts_seq_len);
@@ -529,19 +569,19 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
         matrix.resize(2);
         double u = 1; // Cell ID 1
         double v = 0;
-        int prime[309] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43,
-            47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113,
-            127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191,
-            193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263,
-            269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347,
-            349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421,
-            431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 499,
-            503, 509, 521, 523, 541, 547, 557, 563, 569, 571, 577, 587, 593,
-            599, 601, 607, 613, 617, 619, 631, 641, 643, 647, 653, 659, 661,
-            673, 677, 683, 691, 701, 709, 719, 727, 733, 739, 743, 751, 757,
-            761, 769, 773, 787, 797, 809, 811, 821, 823, 827, 829, 839, 853,
-            857, 859, 863, 877, 881, 883, 887, 907, 911, 919, 929, 937, 941,
-            947, 953, 967, 971, 977, 983, 991, 997, 1009, 1013, 1019, 1021,
+        size_t prime[309] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41,
+            43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109,
+            113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181,
+            191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257,
+            263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331, 337,
+            347, 349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419,
+            421, 431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491,
+            499, 503, 509, 521, 523, 541, 547, 557, 563, 569, 571, 577, 587,
+            593, 599, 601, 607, 613, 617, 619, 631, 641, 643, 647, 653, 659,
+            661, 673, 677, 683, 691, 701, 709, 719, 727, 733, 739, 743, 751,
+            757, 761, 769, 773, 787, 797, 809, 811, 821, 823, 827, 829, 839,
+            853, 857, 859, 863, 877, 881, 883, 887, 907, 911, 919, 929, 937,
+            941, 947, 953, 967, 971, 977, 983, 991, 997, 1009, 1013, 1019, 1021,
             1031, 1033, 1039, 1049, 1051, 1061, 1063, 1069, 1087, 1091, 1093,
             1097, 1103, 1109, 1117, 1123, 1129, 1151, 1153, 1163, 1171, 1181,
             1187, 1193, 1201, 1213, 1217, 1223, 1229, 1231, 1237, 1249, 1259,
@@ -555,22 +595,40 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
             1847, 1861, 1867, 1871, 1873, 1877, 1879, 1889, 1901, 1907, 1913,
             1931, 1933, 1949, 1951, 1973, 1979, 1987, 1993, 1997, 1999, 2003,
             2011, 2017, 2027, 2029, 2039 };
-        int M = prime[308];
-        for (int j = 0; j < 308; j++) {
-            if (prime[j] < N && prime[j + 1] > N) {
+        size_t M = prime[308];
+        for (size_t j = 0; j < 308; j++) {
+            if (prime[j] < seq_len && prime[j + 1] > seq_len) {
                 M = prime[j];
                 break;
             }
         }
-        double qh = M * (u + 1) / 31;
-        double q = std::floor(qh + 0.5) + v * std::pow(-1, std::floor(2 * qh));
-        std::vector<double> a;
-        for (int i = 0; i < N; i++) {
-            int m = i % M;
-            double a_re = std::cos(-M_PI * q * m * (m + 1) / M);
-            double a_im = std::sin(-M_PI * q * m * (m + 1) / M);
-            matrix[0].push_back(a_re);
-            matrix[1].push_back(a_im);
+        float qh = M * (u + 1) / 31;
+        float q = std::floor(qh + 0.5) + v * std::pow(-1, std::floor(2 * qh));
+        std::vector<std::complex<float>> zc_freq;
+        for (size_t i = 0; i < seq_len; i++) {
+            size_t m = i % M;
+            float re = std::cos(-M_PI * q * m * (m + 1) / M);
+            float im = std::sin(-M_PI * q * m * (m + 1) / M);
+            zc_freq.push_back(std::complex<float>(re, im));
+        }
+
+        auto zc_iq_len = (size_t)std::pow(2, std::ceil(std::log2(seq_len)));
+        auto zero_sc_len = zc_iq_len - seq_len;
+        if (zero_sc_len > 0) {
+            std::vector<std::complex<float>> zeros(
+                zero_sc_len / 2, std::complex<float>(0, 0));
+            zc_freq.insert(zc_freq.begin(), zeros.begin(), zeros.end());
+            zc_freq.insert(zc_freq.end(), zeros.begin(), zeros.end());
+        }
+
+        std::vector<std::complex<float>> zc_iq
+            = CommsLib::IFFT(zc_freq, zc_iq_len, 1.f / zc_iq_len, false);
+
+        matrix[0].resize(zc_iq_len);
+        matrix[1].resize(zc_iq_len);
+        for (size_t i = 0; i < zc_iq_len; i++) {
+            matrix[0][i] = zc_iq[i].real();
+            matrix[1][i] = zc_iq[i].imag();
         }
     } else if (type == GOLD_IFFT) {
         // Gold IFFT Sequence - seq_length=128, cp=0, upsample=1
@@ -592,8 +650,7 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
 
         std::vector<std::complex<float>> gold_freq(2 * gold_seq_len);
         for (size_t i = 0; i < gold_seq_len; i++) {
-            gold_freq[2 * i]
-                = std::complex((float)gold_code[i], (float)gold_code[i]);
+            gold_freq[2 * i] = std::complex<float>(gold_code[i], gold_code[i]);
         }
 
         // Perform ifft-shift on gold_freq
@@ -671,11 +728,12 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
 
     } else if (type == HADAMARD) {
         // Hadamard - using Sylvester's construction for powers of 2.
-        matrix.resize(N);
-        if ((N & (N - 1)) == 0) {
-            for (int i = 0; i < N; i++) {
-                matrix[i].resize(N);
-                for (int j = 0; j < N; j++)
+        matrix.resize(seq_len);
+        ;
+        if ((seq_len & (seq_len - 1)) == 0) {
+            for (size_t i = 0; i < seq_len; i++) {
+                matrix[i].resize(seq_len);
+                for (size_t j = 0; j < seq_len; j++)
                     matrix[i][j] = hadamard2(i, j);
             }
         }
@@ -694,19 +752,21 @@ std::vector<std::vector<double>> CommsLib::getSequence(int N, int type)
 }
 
 /*
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
-    std::vector<std::vector<double> > sequence;
-    int type = CommsLib::LTS_SEQ; //atoi(argv[1]);
-    int N = 160; 			  //atoi(argv[2]); 	// If Hadamard, possible N: {2, 4, 8, 16, 32, 64}
-    sequence = CommsLib::getSequence(N, type);
+    std::vector<std::vector<double>> sequence;
+    int type = CommsLib::LTE_ZADOFF_CHU; //atoi(argv[1]);
+    int N
+        = 304; //atoi(argv[2]); 	// If Hadamard, possible N: {2, 4, 8, 16, 32, 64}
+    sequence = CommsLib::getSequence(type, N);
 
     std::vector<std::complex<double>> sequence_c;
-    for(int i=0; i<sequence[0].size(); i++){
-        sequence_c.push_back(std::complex<double>(sequence[0][i], sequence[1][i]));
+    for (int i = 0; i < sequence[0].size(); i++) {
+        sequence_c.push_back(
+            std::complex<double>(sequence[0][i], sequence[1][i]));
     }
-    double peak = CommsLib::findLTS(sequence_c, N);
-    std::cout << "LTS PEAK: " << peak << std::endl;
+    // double peak = CommsLib::findLTS(sequence_c, N);
+    // std::cout << "LTS PEAK: " << peak << std::endl;
 
     return 0;
 }

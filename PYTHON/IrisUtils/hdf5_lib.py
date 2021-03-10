@@ -270,7 +270,7 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
 
 class hdf5_lib:
 
-    def __init__(self, filename, n_frames_to_inspect=0, n_fr_insp_st = 0):
+    def __init__(self, filename, n_frames_to_inspect=0, n_fr_insp_st = 0, sub_sample = 0):
         self.h5file = None
         self.filename = filename
         self.h5struct = []
@@ -278,8 +278,10 @@ class hdf5_lib:
         self.metadata = {}
         self.pilot_samples = []
         self.uplink_samples = []
+        self.noise_samples = []
         self.n_frm_st = n_fr_insp_st                                # index of last frame
         self.n_frm_end = self.n_frm_st + n_frames_to_inspect    # index of last frame in the range of n_frames_to_inspect
+        self.sub_sample = sub_sample
         self.open_hdf5()
         self.get_data()
         self.get_metadata()
@@ -328,21 +330,29 @@ class hdf5_lib:
 
         self.data = self.h5file['Data']
 
-        if bool(self.data['Pilot_Samples']):
+        if 'Pilot_Samples' in self.data:
             if self.n_frm_st == self.n_frm_end:
                 # Consider the entire dataset (for demos etc)
                 self.pilot_samples = self.data['Pilot_Samples']
             else:
-                self.pilot_samples = self.data['Pilot_Samples'][self.n_frm_st:self.n_frm_end, ...]
+                self.pilot_samples = self.data['Pilot_Samples'][self.n_frm_st:self.n_frm_end:self.sub_sample, ...]
 
         if len(self.data.keys()) > 1:
             print("looking into UplinkData")
-            if bool(self.data['UplinkData']):
+            if 'UplinkData' in self.data:
                 if self.n_frm_st == self.n_frm_end:
                     # Consider the entire dataset (for demos etc)
                     self.uplink_samples = self.data['UplinkData']
                 else:
-                    self.uplink_samples = self.data['UplinkData'][self.n_frm_st:self.n_frm_end, ...]
+                    self.uplink_samples = self.data['UplinkData'][self.n_frm_st:self.n_frm_end:self.sub_sample, ...]
+
+            print("looking into Noise Samples (if enabled in Sounder)")
+            if 'Noise_Samples' in self.data:
+                if self.n_frm_st == self.n_frm_end:
+                    # Consider the entire dataset (for demos etc)
+                    self.noise_samples = self.data['Noise_Samples']
+                else:
+                    self.noise_samples = self.data['Noise_Samples'][self.n_frm_st:self.n_frm_end:self.sub_sample, ...]
 
         return self.data
 
@@ -510,7 +520,7 @@ class hdf5_lib:
         print("finished log2csi")
 
     @staticmethod
-    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False, pilot_type='lts'):
+    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False, pilot_type='lts', nonzero_sc_size=52):
         """Convert an Argos HDF5 log file with raw IQ in to CSI.
         Asumes 802.11 style LTS used for trace collection.
     
@@ -614,11 +624,26 @@ class hdf5_lib:
                 csi = np.delete(csi, [0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63], 5)
                 print("samps2csi took %f seconds" % (time.time() - samps2csi_start))
             else:
-                seq_freq = generate_training_seq(
-                    preamble_type=pilot_type, seq_length=fft_size, upsample=1)
+                _, seq_freq = generate_training_seq(
+                    preamble_type=pilot_type, seq_length=nonzero_sc_size, cp=0, upsample=1)
 
-                csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 5), 5) / seq_freq
-                print("csi.shape:{}".format(csi.shape))
+                fft_length = int(np.power(2, np.ceil(np.log2(nonzero_sc_size))))
+                if fft_length != fft_size:
+                    print("Expected fftsize %d, given %d"%(fft_length, fft_size))
+                    return None, iq
+                start_i = int((fft_length - nonzero_sc_size) // 2)
+                stop_i = int(start_i + nonzero_sc_size)
+                iq_fft = np.fft.fft(iq, fft_size, 5)
+                seq_freq_inv = 1 / seq_freq
+                csi = iq_fft * seq_freq
+                endtime = time.time()
+                if debug:
+                    print("chunk time: %f fft time: %f" %
+                          (fftstart - chunkstart, endtime - fftstart))
+                csi = csi[:, : , :, :, :, start_i:stop_i]
+                if debug:
+                    print("csi.shape:{}".format(csi.shape))
+                print("samps2csi took %f seconds" % (time.time() - samps2csi_start))
 
         return csi, iq
 
