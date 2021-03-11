@@ -109,7 +109,6 @@ endif ()
 set(directory "logs")
 file(MAKE_DIRECTORY ${directory})
 
-add_definitions(-DJSON)
 add_definitions(-DTHREADED_INIT)
 
 message(STATUS "SoapySDR_INCLUDE_DIRS: ${SoapySDR_INCLUDE_DIRS}")

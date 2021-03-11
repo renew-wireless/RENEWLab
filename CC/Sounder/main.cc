@@ -12,6 +12,7 @@
 
 #include "include/recorder.h"
 #include "include/signalHandler.hpp"
+#include <cstring>
 
 int main(int argc, char const* argv[])
 {

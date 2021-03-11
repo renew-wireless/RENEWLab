@@ -17,9 +17,12 @@
 #include "include/macros.h"
 #include "include/utils.h"
 
+#include "nlohmann/json.hpp"
 #include <SoapySDR/Errors.hpp>
 #include <SoapySDR/Formats.hpp>
 #include <SoapySDR/Time.hpp>
+
+using json = nlohmann::json;
 
 BaseRadioSet::BaseRadioSet(Config* cfg)
     : _cfg(cfg)
@@ -226,7 +229,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
             std::cout << "sample offset calibration done!" << std::endl;
         }
 
-        json tddConf;
+        nlohmann::json tddConf;
         tddConf["tdd_enabled"] = true;
         tddConf["frame_mode"] = "free_running";
         tddConf["max_frame"] = _cfg->max_frame();

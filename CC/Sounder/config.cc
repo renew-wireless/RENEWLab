@@ -12,6 +12,8 @@
 #include "include/logger.h"
 #include "include/macros.h"
 #include "include/utils.h"
+#include "nlohmann/json.hpp"
+using json = nlohmann::json;
 
 static size_t kFpgaTxRamSize = 4096;
 static size_t kMaxSupportedFFTSize = 2048;
@@ -22,7 +24,8 @@ Config::Config(const std::string& jsonfile)
 {
     std::string conf;
     Utils::loadTDDConfig(jsonfile, conf);
-    const auto jConf = json::parse(conf);
+    // Enable comments in json file
+    const auto jConf = json::parse(conf, nullptr, true, true);
     std::stringstream ss;
     json tddConf;
 
