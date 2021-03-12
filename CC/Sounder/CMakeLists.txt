@@ -115,7 +115,7 @@ message(STATUS "SoapySDR_INCLUDE_DIRS: ${SoapySDR_INCLUDE_DIRS}")
 message(STATUS "SoapySDR_LIBRARIES: ${SoapySDR_LIBRARIES}")
 message(STATUS "HDF5_INCLUDE_DIRS: ${HDF5_INCLUDE_DIRS}")
 message(STATUS "HDF5_LIBRARIES: ${HDF5_LIBRARIES}")
-include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS} third_party/ third_party/nlohmann/include )
+include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS} third_party/ third_party/nlohmann/single_include )
 
 set(SOUNDER_SOURCES 
     ClientRadioSet.cc
