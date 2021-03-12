@@ -14,10 +14,6 @@
 #include <atomic>
 #include <complex.h>
 #include <vector>
-#ifdef JSON
-#include <nlohmann/json.hpp>
-using json = nlohmann::json;
-#endif
 
 class Config {
 public:
