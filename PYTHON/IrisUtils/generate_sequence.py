@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def generate_training_seq(preamble_type='lts', seq_length=0, root=0, cp=32, upsample=1, reps=10):
+def generate_training_seq(preamble_type='lts', seq_length=0, cp=32, upsample=1, reps=10):
 	"""
 	Generate any of the following preambles/training sequences.
 	802.11 STS, 802.11 LTS, Zadoff-Chu, and Gold Sequence (ifft)
@@ -26,7 +26,6 @@ def generate_training_seq(preamble_type='lts', seq_length=0, root=0, cp=32, upsa
 	ARGS:
 		preamble_type: sequence name
 		seq_length: length of sequence, doesn't apply to all types
-		root: specific to Zadoff-Chu sequences
 		cp: cyclic prefix
 		upsample: upsampling factor
 		reps: number of symbol repetition. Specific to STS
@@ -57,8 +56,8 @@ def generate_training_seq(preamble_type='lts', seq_length=0, root=0, cp=32, upsa
 			generate_training_seq(preamble_type='lts', seq_length=[], cp=32, upsample=1, reps=[])
 
 	lte_zadoffchu_seq:
-		Generate a root Zadoff-Chu sequence of complex symbols.
-		SEQ = LTEZADOFFCHUSEQ(R, N) generates the Rth root Zadoff-Chu sequence
+		Generate a 3GPP-based Zadoff-Chu sequence of complex symbols.
+		SEQ = LTEZADOFFCHUSEQ(R, N) generates a Zadoff-Chu sequence
 		of length N as per LTE specifications. The output SEQ is an N-length
 		column vector of complex symbols.
 

@@ -63,7 +63,9 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     cp = int(metadata['CP_LEN'])
     rate = int(metadata['RATE'])
     pilot_type = metadata['PILOT_SEQ_TYPE'].astype(str)[0]
-    nonzero_sc_size = metadata['DATA_SUBCARRIER_NUM']
+    nonzero_sc_size = fft_size
+    if 'DATA_SUBCARRIER_NUM' in metadata:
+        nonzero_sc_size = metadata['DATA_SUBCARRIER_NUM']
     ofdm_pilot = np.array(metadata['OFDM_PILOT'])
     reciprocal_calib = np.array(metadata['RECIPROCAL_CALIB'])
     symbol_length_no_pad = symbol_length - z_padding
@@ -196,7 +198,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         #calibCSI = np.mean(calib_corrected_csi_cell0, 2) # average several csi copies
         calibCSI = calib_corrected_csi_cell0[:, :, 0, :, :] # take first csi
         calib_mat = np.divide(calibCSI[:, 0, :, :], calibCSI[:, 1, :, :])
-
+        if (ant_i > num_bs_ants - 1):
+            ant_i = num_bs_ants - 1
         fig3, axes3 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
         axes3[0, 0].set_title('Reciprocity Calibration Factor Across Frames - Cell 0 - Subcarrier %d' % subcarrier_i)
 
@@ -281,11 +284,11 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
         if deep_inspect:
             filter_pilots_start = time.time()
-            match_filt, k_lts, n_lts, cmpx_pilots, lts_seq_orig = hdf5_lib.filter_pilots(pilot_samples, z_padding, fft_size = fft_size, cp = cp)
+            match_filt, seq_num, seq_len, cmpx_pilots, seq_orig = hdf5_lib.filter_pilots(samps, z_padding, fft_size, cp, pilot_type, nonzero_sc_size)
             filter_pilots_end = time.time()
 
             frame_sanity_start = time.time()
-            match_filt_clr, frame_map, f_st, peak_map = hdf5_lib.frame_sanity(match_filt, k_lts, n_lts, n_frm_st, frm_plt, plt_ant=ant_i, cp = cp)
+            match_filt_clr, frame_map, f_st, peak_map = hdf5_lib.frame_sanity(match_filt, seq_num, seq_len, n_frm_st, frm_plt, plt_ant=ant_i, cp = cp)
             frame_sanity_end = time.time()
             print(">>>> filter_pilots time: %f \n" % ( filter_pilots_end - filter_pilots_start) )
             print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
@@ -363,7 +366,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             fig.suptitle('MF Frame # {} Antenna # {}'.format(ref_frame, ant_i))
             for n_c in range(n_cell):
                 for n_u in range(n_ue):
-                    axes[n_c, n_u].stem(match_filt_clr[ref_frame - n_frm_st, n_c, n_u, ant_i, :])
+                    axes[n_c, n_u].stem(match_filt[ref_frame - n_frm_st, n_c, n_u, ant_i, :])
                     axes[n_c, n_u].set_xlabel('Samples')
                     axes[n_c, n_u].set_title('Cell {} UE {}'.format(n_c, n_u))
                     axes[n_c, n_u].grid(True)
@@ -404,7 +407,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             fig.suptitle('Frames\' starting indices per antenna')
             #plot channel analysis
 
-            show_plot(cmpx_pilots, lts_seq_orig, match_filt, user_i, ant_i, ref_frame, n_frm_st)
+            show_plot(cmpx_pilots, seq_orig, match_filt, user_i, ant_i, ref_frame, n_frm_st)
 
 
             for n_c in range(n_cell):
@@ -437,24 +440,24 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, 100, 11), orientation='horizontal')
             cbar.ax.set_xticklabels(['0%', '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'])
 
-            fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
-            c = []
-            fig.suptitle('Frame Map')
-            for n_c in range(n_cell):
-                for n_u in range(n_ue):
-                    c.append( axes[n_u, n_c].imshow(frame_map[:,n_c,n_u,:].T, cmap=plt.cm.get_cmap('Blues', 3), interpolation='none',
-                          extent=[n_frm_st,n_frm_end, n_ant,0],  aspect="auto") )
-                    axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
-                    axes[n_u, n_c].set_ylabel('Antenna #')
-                    axes[n_u, n_c].set_xlabel('Frame #')
-                    # Minor ticks
-                    axes[n_u, n_c].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
-                    axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
-                    # Gridlines based on minor ticks
-                    axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
+            #fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+            #c = []
+            #fig.suptitle('Frame Map')
+            #for n_c in range(n_cell):
+            #    for n_u in range(n_ue):
+            #        c.append( axes[n_u, n_c].imshow(frame_map[:,n_c,n_u,:].T, cmap=plt.cm.get_cmap('Blues', 3), interpolation='none',
+            #              extent=[n_frm_st,n_frm_end, n_ant,0],  aspect="auto") )
+            #        axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
+            #        axes[n_u, n_c].set_ylabel('Antenna #')
+            #        axes[n_u, n_c].set_xlabel('Frame #')
+            #        # Minor ticks
+            #        axes[n_u, n_c].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
+            #        axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
+            #        # Gridlines based on minor ticks
+            #        axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
 
-            cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')
-            cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])
+            #cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')
+            #cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])
             ##plt.show()
 
             #############
@@ -776,7 +779,7 @@ def show_plot(cmpx_pilots, lts_seq_orig, match_filt, ref_user, ref_ant, ref_fram
     ax3.set_xlabel('Samples')
 
 
-def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[]):
+def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[], seq_length=64,cp=0):
     """
     Find pilots from clients to each of the base station antennas
 
@@ -794,7 +797,7 @@ def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[]):
     if pilot_type.find('lts') != -1:
         # LTS-based pilot
         lts_thresh = 0.8
-        best_pk, lts_pks, lts_corr = find_lts(samples, thresh=lts_thresh, flip=flip, lts_seq=pilot_seq)
+        best_pk, pilot_pks, pilot_corr = find_lts(samples, thresh=lts_thresh, flip=flip, lts_seq=pilot_seq)
 
         # full lts contains 2.5 64-sample-LTS sequences, we need only one symbol
         lts, lts_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
@@ -803,21 +806,20 @@ def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[]):
             # pilot provided, overwrite the one returned above
             lts = pilot_seq
 
-        lts_syms_len = len(lts)
-        pilot_thresh = lts_thresh * np.max(lts_corr)
+        pilot_thresh = lts_thresh * np.max(pilot_corr)
         # We'll need the transmitted version of the pilot (for channel estimation, for example)
         tx_pilot = [lts, lts_f]
-        lts_start = 0
 
-        # Check if LTS found
-        if not best_pk:
-            # print("SISO_OFDM: No LTS Found! Continue...")
-            pilot = np.array([])
-            return tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk
+    elif pilot_type.find('zadoff-chu') != -1:
+        best_pk, pilot_pks, pilot_corr = find_zc_pilot(samples, seq_length=seq_length, cp=cp, pilot_seq=pilot_seq)
+        pilot, pilot_f = generate_training_seq(preamble_type='zadoff-chu', seq_length=seq_length, cp=cp, upsample=1, reps=1)
+        tx_pilot = [pilot, pilot_f]
+        pilot_thresh = 0.8 * np.max(pilot_corr)
+
     else:
-        raise Exception("Only LTS Pilots supported at the moment")
+        raise Exception("Only LTS & Zadoff-Chu Pilots are currently supported!")
 
-    return tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk
+    return tx_pilot, pilot_pks, pilot_corr, pilot_thresh, best_pk
 
 
 def main():
@@ -907,7 +909,7 @@ def main():
             print(hdf5.metadata)
             pilot_samples = hdf5.pilot_samples
             uplink_samples = hdf5.uplink_samples
-            noise_avail = len(noise_samples) > 0
+            noise_avail = len(hdf5.noise_samples) > 0
 
             # Check which data we have available
             pilots_avail = len(pilot_samples) > 0
