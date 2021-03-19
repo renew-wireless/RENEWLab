@@ -8,71 +8,45 @@
  Record received frames from massive-mimo base station in HDF5 format
 ---------------------------------------------------------------------
 */
-#ifndef DATARECORDER_HEADER
-#define DATARECORDER_HEADER
+#ifndef SOUDER_RECORDER_H_
+#define SOUDER_RECORDER_H_
 
-#include "H5Cpp.h"
 #include "receiver.h"
+#include "recorder_thread.h"
 
-using namespace H5;
+namespace Sounder {
 class Recorder {
 public:
-    Recorder(Config* cfg);
+    Recorder(Config* in_cfg, unsigned int core_start = 0u);
     ~Recorder();
 
     void do_it();
     int getRecordedFrameNum();
-    std::string getTraceFileName() {return cfg->trace_file;}
+    std::string getTraceFileName() { return this->cfg_->trace_file(); }
 
 private:
-    struct EventHandlerContext {
-        Recorder* obj_ptr;
-        int id;
-    };
-    herr_t record(int tid, int offset);
-    void taskThread(EventHandlerContext* context);
-    herr_t initHDF5(const std::string&);
-    void openHDF5();
-    void closeHDF5();
-    void finishHDF5();
-    static void* taskThread_launch(void* in_context);
+    void gc(void);
 
     // buffer length of each rx thread
-    static const int SAMPLE_BUFFER_FRAME_NUM;
-    // buffer length of recording part
-    static const int TASK_BUFFER_FRAME_NUM;
+    static const int kSampleBufferFrameNum;
     // dequeue bulk size, used to reduce the overhead of dequeue in main thread
-    static const int dequeue_bulk_size;
-    // pilot dataset size increment
-    static const int config_pilot_extent_step;
-    // data dataset size increment
-    static const int config_data_extent_step;
+    static const int KDequeueBulkSize;
 
-    Config* cfg;
+    Config* cfg_;
     std::unique_ptr<Receiver> receiver_;
     SampleBuffer* rx_buffer_;
+    size_t rx_thread_buff_size_;
 
-    H5std_string hdf5name;
-    H5std_string hdf5group;
+    //RecorderWorker worker_;
+    std::vector<Sounder::RecorderThread*> recorders_;
+    size_t max_frame_number_;
 
-    H5File* file;
-    // Group* group;
-    DSetCreatPropList pilot_prop;
-    DSetCreatPropList data_prop;
-
-    DataSet* pilot_dataset;
-    DataSet* data_dataset;
-
-    size_t frame_number_pilot;
-    size_t frame_number_data;
-#if DEBUG_PRINT
-    hsize_t cdims_pilot[5];
-    hsize_t cdims_data[5];
-#endif
-
-    size_t maxFrameNumber;
-    moodycamel::ConcurrentQueue<Event_data> task_queue_;
     moodycamel::ConcurrentQueue<Event_data> message_queue_;
-    // std::vector<std::unique_ptr<moodycamel::ProducerToken>> task_ptok; //[TASK_THREAD_NUM];
-};
-#endif
+
+    /* Core assignment start variables */
+    const unsigned int kMainDispatchCore;
+    const unsigned int kRecorderCore;
+    const unsigned int kRecvCore;
+}; /* class Recorder */
+}; /* Namespace sounder */
+#endif /* SOUDER_RECORDER_H_ */

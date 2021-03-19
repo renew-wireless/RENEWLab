@@ -1,0 +1,26 @@
+{
+	"Clients" : {
+		 "frequency" : 2.5e9,
+		 "channel" : "AB",
+		 "agc_en" : false,
+		 "rxgainA" : [65],
+		 "txgainA" : [87],
+		 "rxgainB" : [65],
+		 "txgainB" : [87],
+		 "rate" : 5e6,
+		 "fft_size" : 64,
+		 "ofdm_symbol_per_subframe" : 10,
+		 "cp_size" : 16,
+		 "prefix" : 160,
+		 "postfix" : 160,
+		 "frame_schedule" : [
+		     "GGPPGGGGGGGGGGGGGGGG"
+		 ],
+		 "frame_mode" : "continuous_resync",
+		 "sdr_id" : [
+		     "RF3E000030"
+		 ],
+		 "tx_advance" : 135,
+		 "hw_framer" : false
+	}
+}

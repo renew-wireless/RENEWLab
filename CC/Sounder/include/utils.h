@@ -31,6 +31,7 @@
 #include <unistd.h>
 #include <vector>
 
+int pin_thread_to_core(int core_id, pthread_t& thread_to_pin);
 int pin_to_core(int core_id);
 
 class Utils {
@@ -39,18 +40,28 @@ public:
     ~Utils();
 
     static std::vector<size_t> strToChannels(const std::string& channel);
-    static std::vector<std::complex<int16_t>> float_to_cint16(std::vector<std::vector<float>> in);
-    static std::vector<std::complex<float>> cint16_to_cfloat(std::vector<std::complex<int16_t>> in);
-    static std::vector<std::complex<float>> uint32tocfloat(std::vector<uint32_t> in,
+    static std::vector<std::complex<float>> cint16_to_cfloat(
+        std::vector<std::complex<int16_t>> in);
+    static std::vector<std::complex<int16_t>> float_to_cint16(
+        std::vector<std::vector<float>> in);
+    static std::vector<std::complex<float>> doubletocfloat(
+        std::vector<std::vector<double>> in);
+    static std::vector<std::complex<float>> uint32tocfloat(
+        std::vector<uint32_t> in, const std::string& order);
+    static std::vector<uint32_t> cint16_to_uint32(
+        std::vector<std::complex<int16_t>> in, bool conj,
         const std::string& order);
-    static std::vector<uint32_t> cint16_to_uint32(std::vector<std::complex<int16_t>> in, bool conj,
-        const std::string& order);
-    static std::vector<std::vector<size_t>> loadSymbols(std::vector<std::string> frames, char sym);
-    static void loadDevices(const std::string& filename, std::vector<std::string>& data);
-    static void loadData(const char* filename, std::vector<std::complex<int16_t>>& data, int samples);
-    static void loadData(const char* filename, std::vector<unsigned>& data, int samples);
-    static void loadTDDConfig(const std::string& filename, std::string& jconfig);
+    static std::vector<std::vector<size_t>> loadSymbols(
+        std::vector<std::string> frames, char sym);
+    static void loadDevices(
+        const std::string& filename, std::vector<std::string>& data);
+    static void loadData(const char* filename,
+        std::vector<std::complex<int16_t>>& data, int samples);
+    static void loadData(
+        const char* filename, std::vector<unsigned>& data, int samples);
+    static void loadTDDConfig(
+        const std::string& filename, std::string& jconfig);
     static std::vector<std::string> split(const std::string& s, char delimiter);
     static void printVector(std::vector<std::complex<int16_t>>& data);
 };
-#endif
+#endif /* UTILS_HEADER */

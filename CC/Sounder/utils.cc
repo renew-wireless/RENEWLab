@@ -12,6 +12,12 @@
 
 int pin_to_core(int core_id)
 {
+    pthread_t current_thread = pthread_self();
+    return pin_thread_to_core(core_id, current_thread);
+}
+
+int pin_thread_to_core(int core_id, pthread_t& thread_to_pin)
+{
     int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     if (core_id < 0 || core_id >= num_cores)
         return -1;
@@ -20,8 +26,7 @@ int pin_to_core(int core_id)
     CPU_ZERO(&cpuset);
     CPU_SET(core_id, &cpuset);
 
-    pthread_t current_thread = pthread_self();
-    return pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
+    return pthread_setaffinity_np(thread_to_pin, sizeof(cpu_set_t), &cpuset);
 }
 
 std::vector<size_t> Utils::strToChannels(const std::string& channel)
@@ -31,8 +36,16 @@ std::vector<size_t> Utils::strToChannels(const std::string& channel)
         channels = { 0 };
     else if (channel == "B")
         channels = { 1 };
-    else
+    else if (channel == "AB")
         channels = { 0, 1 };
+    else if (channel == "C")
+        channels = { 2 };
+    else if (channel == "D")
+        channels = { 3 };
+    else if (channel == "CD")
+        channels = { 2, 3 };
+    else if (channel == "ABCD")
+        channels = { 0, 1, 2, 3 };
     return (channels);
 }
 
@@ -41,7 +54,8 @@ std::vector<std::complex<int16_t>> Utils::float_to_cint16(std::vector<std::vecto
     int len = in[0].size();
     std::vector<std::complex<int16_t>> out(len, 0);
     for (int i = 0; i < len; i++)
-        out[i] = std::complex<int16_t>((int16_t)(in[0][i] * 32768), (int16_t)(in[1][i] * 32768));
+        out[i] = std::complex<int16_t>(
+            (int16_t)(in[0][i] * 32768), (int16_t)(in[1][i] * 32768));
     return out;
 }
 
@@ -54,8 +68,8 @@ std::vector<std::complex<float>> Utils::cint16_to_cfloat(std::vector<std::comple
     return out;
 }
 
-std::vector<std::complex<float>> Utils::uint32tocfloat(std::vector<uint32_t> in,
-    const std::string& order)
+std::vector<std::complex<float>> Utils::uint32tocfloat(
+    std::vector<uint32_t> in, const std::string& order)
 {
     int len = in.size();
     std::vector<std::complex<float>> out(len, 0);
@@ -77,8 +91,8 @@ std::vector<std::complex<float>> Utils::uint32tocfloat(std::vector<uint32_t> in,
     return out;
 }
 
-std::vector<uint32_t> Utils::cint16_to_uint32(std::vector<std::complex<int16_t>> in, bool conj,
-    const std::string& order)
+std::vector<uint32_t> Utils::cint16_to_uint32(
+    std::vector<std::complex<int16_t>> in, bool conj, const std::string& order)
 {
     std::vector<uint32_t> out(in.size(), 0);
     for (size_t i = 0; i < in.size(); i++) {
@@ -92,12 +106,13 @@ std::vector<uint32_t> Utils::cint16_to_uint32(std::vector<std::complex<int16_t>>
     return out;
 }
 
-std::vector<std::vector<size_t>> Utils::loadSymbols(std::vector<std::string> frames, char sym)
+std::vector<std::vector<size_t>> Utils::loadSymbols(
+    std::vector<std::string> frames, char sym)
 {
     std::vector<std::vector<size_t>> symId;
-    int frameSize = frames.size();
+    size_t frameSize = frames.size();
     symId.resize(frameSize);
-    for (int f = 0; f < frameSize; f++) {
+    for (size_t f = 0; f < frameSize; f++) {
         std::string fr = frames[f];
         for (size_t g = 0; g < fr.size(); g++) {
             if (fr[g] == sym) {
@@ -108,7 +123,8 @@ std::vector<std::vector<size_t>> Utils::loadSymbols(std::vector<std::string> fra
     return symId;
 }
 
-void Utils::loadDevices(const std::string& filename, std::vector<std::string>& data)
+void Utils::loadDevices(
+    const std::string& filename, std::vector<std::string>& data)
 {
     std::string line;
     std::ifstream myfile(filename, std::ifstream::in);
@@ -129,7 +145,8 @@ void Utils::loadDevices(const std::string& filename, std::vector<std::string>& d
     }
 }
 
-void Utils::loadData(const char* filename, std::vector<std::complex<int16_t>>& data, int samples)
+void Utils::loadData(
+    const char* filename, std::vector<std::complex<int16_t>>& data, int samples)
 {
     FILE* fp = fopen(filename, "r");
     data.resize(samples);
@@ -137,13 +154,15 @@ void Utils::loadData(const char* filename, std::vector<std::complex<int16_t>>& d
     for (int i = 0; i < samples; i++) {
         if (2 != fscanf(fp, "%f %f", &real, &imag))
             break;
-        data[i] = std::complex<int16_t>(int16_t(real * 32768), int16_t(imag * 32768));
+        data[i] = std::complex<int16_t>(
+            int16_t(real * 32768), int16_t(imag * 32768));
     }
 
     fclose(fp);
 }
 
-void Utils::loadData(const char* filename, std::vector<unsigned>& data, int samples)
+void Utils::loadData(
+    const char* filename, std::vector<unsigned>& data, int samples)
 {
     FILE* fp = fopen(filename, "r");
     data.resize(samples);

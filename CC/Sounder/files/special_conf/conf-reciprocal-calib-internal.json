@@ -1,0 +1,22 @@
+{
+	"BaseStations" : {
+		 "sdr_id" : ["files/renew-iris-serials1.txt"],
+		 "hub_id" : "files/renew-hub-serials1.txt",
+		 "frequency" : 3.6e9,
+		 "channel" : "A",
+		 "rxgainA" : 20,
+		 "txgainA" : 40,
+		 "rxgainB" : 20,
+		 "txgainB" : 40,
+		 "rate" : 5e6,
+		 "max_frame" : 4000,
+		 "ofdm_symbol_per_subframe" : 1,
+		 "fft_size" : 512,
+		 "cp_size" : 32,
+		 "prefix" : 160,
+		 "postfix" : 160,
+		 "pilot_seq" : "zadoff-chu",
+		 "reciprocal_calibration" : true,
+		 "single_gain" : false
+	}
+}

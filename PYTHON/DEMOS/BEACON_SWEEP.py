@@ -20,7 +20,7 @@
     Gain settings will vary depending on RF frontend board being used
     If using CBRS:
     rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
-    txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
+    txgain: at 2.5GHz [16:1:90], at 3.6GHz [15:1:95]
 
     If using only Dev Board:
     rxgain: at both frequency bands [0:1:30]
@@ -175,9 +175,9 @@ def main():
     parser.add_option("--hub", type="string", dest="hub", help="serial number of the hub device", default="")
     parser.add_option("--serials", type="string", dest="serials", help="serial numbers of the devices", default="RF3E000143,RF3E000160,RF3E000025,RF3E000034")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=30.0)
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB)", default=30.0)
+    parser.add_option("--freq", type="float", dest="freq", help="Tx freq (Hz). POWDER users must set to 2.5e9", default=0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=80.0)
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB)", default=70.0)
 
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)
@@ -186,6 +186,11 @@ def main():
     parser.add_option("--calibrate", action="store_true", dest="calibrate", help="transmit from both channels",default=False)
     parser.add_option("--both-channels", action="store_true", dest="both_channels", help="transmit from both channels",default=False)
     (options, args) = parser.parse_args()
+ 
+    if options.freq == 0:
+        print("[ERROR] Please provide RF Freq (Hz). POWDER users must set to 2.5e9. i.e. --freq=2.5e9")
+        exit(0)
+
     beamsweeper(
         hub=options.hub,
         serials=options.serials,

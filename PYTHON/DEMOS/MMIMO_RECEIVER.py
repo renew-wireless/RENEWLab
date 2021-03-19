@@ -152,7 +152,6 @@ def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[]):
         pilot     - Received pilot (from multiple clients)
         tx_pilot  - Transmitted pilot (same pilot sent by all clients)
     """
-
     if pilot_type.find('lts') != -1:
         # LTS-based pilot
         lts_thresh = 0.8
@@ -187,10 +186,11 @@ def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[]):
             return pilot, tx_pilot, lts_corr, pilot_thresh, best_pk, lts_start
 
         # Get pilot
-        lts_start = best_pk - (2 * lts_syms_len) + 1  # go back from second peak to start of sequence where pilot begins
-        pilot = samples[lts_start:lts_start + lts_syms_len]
-        # pilot = samples[lts_start:best_pk+1]
-        # pilot = samples[best_pk:(2 * best_pk)]
+        cp = 16
+        # go back from second peak to start of sequence where pilot begins
+        lts_start = best_pk - (2 * (lts_syms_len + cp)) + 1
+        pilot = samples[lts_start: lts_start + 2 * (lts_syms_len + cp)]
+
     else:
         raise Exception("Only LTS Pilots supported at the moment")
 
@@ -244,15 +244,30 @@ def estimate_channel(this_pilot, tx_pilot, ofdm_obj, user_params, metadata):
 
     # Channel estimation
     # Get LTS again (after CFO correction)
-    if lts_syms_len == pilot_f_len + cp_len:
+    if lts_syms_len == pilot_f_len:  # + cp_len:
         # 80-sample long
         # Half sequence (80-sample long LTS)
         lts = pilot_cfo[lts_start: lts_start + lts_syms_len]
-        lts_1 = lts[-pilot_f_len + -fft_offset + np.array(range(lts_syms_len, (2*lts_syms_len - cp_len)))]
+        lts_1 = lts[-pilot_f_len + -fft_offset + np.array(range(lts_syms_len, (2*lts_syms_len)))]
         # lts_1 = lts[-64 + -fft_offset + np.array(range(80, 160-16))]
 
         # Average 2 LTS symbols to compute channel estimate
         chan_est = np.fft.ifftshift(pilot_freq) * np.fft.fft(lts_1)
+
+        # Compute an estimate of EVM based on TX/RX LTS samples
+        lts1_f = np.fft.fft(lts_1)
+        lts_tx = np.fft.ifftshift(pilot_freq)
+        evm_tmp1 = abs(lts1_f - lts_tx) ** 2
+        lts_evm = np.mean(evm_tmp1)
+
+    elif lts_syms_len == 160:
+        lts = pilot_cfo[lts_start: lts_start + lts_syms_len]
+        lts_1 = lts[-(64+cp_len) + -fft_offset + np.array(range(97, 161))]
+        lts_2 = lts[-fft_offset + np.array(range(97, 161))]
+
+        # Average 2 LTS symbols to compute channel estimate
+        # chan_est = np.fft.ifftshift(pilot_freq) * np.fft.fft(lts_1)
+        chan_est = np.fft.ifftshift(pilot_freq) * (np.fft.fft(lts_1) + np.fft.fft(lts_2)) / 2
 
         # Compute an estimate of EVM based on TX/RX LTS samples
         lts1_f = np.fft.fft(lts_1)
@@ -352,7 +367,7 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est, lts_start)
     w_dim = bf_weights.shape
     num_sc = w_dim[2]
     num_cl = int(metadata['CL_NUM'])
-    num_ant = int(metadata['BS_NUM_ANT'])
+    num_ant = metadata['BS_ANT_NUM_PER_CELL'].astype(int)[0]
     data_cp_len = int(metadata['CP_LEN'])
     fft_size = int(metadata['FFT_SIZE'])
     num_samps = int(metadata['SYMBOL_LEN_NO_PAD'])
@@ -394,7 +409,7 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est, lts_start)
                                                            order="F")
 
     # Remove cyclic prefix
-    payload_samples_mat = payload_samples_mat_cp[:, data_cp_len - fft_offset + 0 + np.array(range(0, num_sc)), :]
+    payload_samples_mat = payload_samples_mat_cp[:, data_cp_len - fft_offset + 1 + np.array(range(0, num_sc)), :]       # TODO: That +1 seems to be a golden value, used to be +0... ??
 
     # FFT
     rxSig_freq = np.zeros((payload_samples_mat.shape[0], payload_samples_mat.shape[1], payload_samples_mat.shape[2]),
@@ -547,7 +562,7 @@ def rx_stats(tx_syms, rx_data, cfo_est, lts_evm, metadata, n_ofdm_syms, ofdm_obj
     num_sc = int(metadata['FFT_SIZE'])
     mod_order_str = metadata['CL_MODULATION']
     rate = int(metadata['RATE'])
-    num_bs_ant = int(metadata['BS_NUM_ANT'])
+    num_bs_ant = metadata['BS_ANT_NUM_PER_CELL'].astype(int)[0]
 
     if mod_order_str == "BPSK":
         mod_order = 2
@@ -588,6 +603,7 @@ def rx_app(filename, user_params, this_plotter):
     """
     global running
     rx_mode = user_params[0]
+    pilot_scaling = user_params[7]
 
     ###########################
     #  Read Received Samples  #
@@ -610,7 +626,7 @@ def rx_app(filename, user_params, this_plotter):
     prefix_len = int(metadata['PREFIX_LEN'])
     postfix_len = int(metadata['POSTFIX_LEN'])
     pilot_type = metadata['PILOT_SEQ_TYPE'].astype(str)[0]
-    num_bs_ant = int(metadata['BS_NUM_ANT'])
+    num_bs_ant = metadata['BS_ANT_NUM_PER_CELL'].astype(int)[0]
     pilot_samples = samples['PILOT_SAMPS']
     data_samples = samples['UL_DATA']
     num_cells = int(metadata['BS_NUM_CELLS'])
@@ -622,6 +638,7 @@ def rx_app(filename, user_params, this_plotter):
     ofdm_data_sc = metadata['OFDM_DATA_SC']
     ofdm_pilot_sc = metadata['OFDM_PILOT_SC']
     ofdm_pilot = np.array(metadata['OFDM_PILOT'])
+    ofdm_pilot_cp = np.concatenate((ofdm_pilot[-16:], ofdm_pilot))
 
     if not cl_present:
         cl_frame_sched = metadata['BS_FRAME_SCHED']
@@ -634,10 +651,9 @@ def rx_app(filename, user_params, this_plotter):
         cl_frame_sched = metadata['CL_FRAME_SCHED']
 
         for idx in range(num_cl):
-            ofdm_data.append(metadata['OFDM_DATA_CL' + str(idx)][idx])             ##FIXME!!!! REMOVE THAT second [idx]  # Freq domain TX data (Does not contain cyclic prefix or prefix/postfix)
-            ofdm_data_time.append(metadata['OFDM_DATA_TIME_CL' + str(idx)][idx])   ##FIXME!!!! REMOVE THAT second [idx]
-            #ofdm_data.append(metadata['OFDM_DATA_CL' + str(idx)])             ##FIXME!!!! REMOVE THAT second [idx]  # Freq domain TX data (Does not contain cyclic prefix or prefix/postfix)
-            #ofdm_data_time.append(metadata['OFDM_DATA_TIME_CL' + str(idx)])   ##FIXME!!!! REMOVE THAT second [idx]
+            # Freq domain TX data (Does not contain cyclic prefix or prefix/postfix)
+            ofdm_data.append(metadata['OFDM_DATA_CL' + str(idx)][idx])
+            ofdm_data_time.append(metadata['OFDM_DATA_TIME_CL' + str(idx)][idx])
 
     pilot_dim = pilot_samples.shape
     num_frames = pilot_dim[0]
@@ -667,29 +683,33 @@ def rx_app(filename, user_params, this_plotter):
     ###########################
     # Process TX freq domain samples (from HDF5). These are the samples generated for transmission and stored in file,
     # not what has been received
-    num_samps_freq_dom = fft_size*(sym_len_no_pad//(fft_size+cp_len))  # len(ofdm_data[0])
-    n_ofdm_syms = num_samps_freq_dom//fft_size
+    num_samps_freq_dom = (fft_size+cp_len)*(sym_len_no_pad//(fft_size+cp_len))
+    n_ofdm_syms = num_samps_freq_dom//(fft_size+cp_len)
 
     # Pilots
-    rep = sym_len_no_pad//len(ofdm_pilot)
-    frac = sym_len_no_pad % len(ofdm_pilot)
+    rep = sym_len_no_pad//len(ofdm_pilot_cp)
+    frac = sym_len_no_pad % len(ofdm_pilot_cp)
 
-    full_pilot = np.concatenate((np.zeros(prefix_len), np.squeeze(np.matlib.repmat(ofdm_pilot, 1, rep)),
-                                 ofdm_pilot[0:frac], np.zeros(postfix_len)))
+    full_pilot = np.concatenate((np.zeros(prefix_len),
+                                 np.squeeze(np.matlib.repmat(ofdm_pilot_cp, 1, rep)),
+                                 ofdm_pilot_cp[0:frac],
+                                 np.zeros(postfix_len)))
 
     # Note:
-    # One pilot per client + overlapping data + add a prefix so that TX and RX plots are the same (for showing purposes)
-    tx_sig = np.zeros((num_cl, (num_cl*sym_len + num_samps_freq_dom + prefix_len)), dtype=complex)
+    # One pilot per client + overlapping data including prefix etc (for showing purposes)
+    tx_sig = np.zeros((num_cl, (num_cl*sym_len + len(ofdm_data_time[0]))), dtype=complex)
 
     if cl_present:
         ofdm_data_mat = []
         for clIdx in range(num_cl):
             data_freq = ofdm_data[clIdx]
             ofdm_data_mat.append(np.reshape(np.squeeze(data_freq), (fft_size, n_ofdm_syms), order='F'))
-            ofdm_data_mat_time = np.fft.ifft(ofdm_data_mat[clIdx], axis=0)
-            ofdm_data_vec_time = np.reshape(ofdm_data_mat_time, (1, ofdm_data_mat_time.shape[0]*ofdm_data_mat_time.shape[1]), order='F')
-            tx_sig[clIdx, (clIdx*len(full_pilot)):(clIdx+1)*len(full_pilot)] = full_pilot
-            tx_sig[clIdx, num_cl*len(full_pilot)::] = np.concatenate((np.zeros(prefix_len), np.squeeze(ofdm_data_vec_time)))
+            # ofdm_data_mat_time = np.fft.ifft(ofdm_data_mat[clIdx], axis=0)
+            # ofdm_data_vec_time = np.reshape(ofdm_data_mat_time,
+            # (1, ofdm_data_mat_time.shape[0]*ofdm_data_mat_time.shape[1]), order='F')
+            tx_sig[clIdx, (clIdx*len(full_pilot)):(clIdx+1)*len(full_pilot)] = full_pilot * pilot_scaling
+            tx_sig[clIdx, num_cl*len(full_pilot)::] = ofdm_data_time[clIdx] / np.max(ofdm_data_time[clIdx])
+            # np.concatenate((np.zeros(prefix_len), np.squeeze(ofdm_data_vec_time)))
 
     # Remove pilots
     ofdm_tx_syms = np.empty((num_cl, len(ofdm_data_sc)*n_ofdm_syms)).astype(complex)
@@ -700,7 +720,6 @@ def rx_app(filename, user_params, this_plotter):
             ofdm_tx_syms[clIdx, :] = np.reshape(tmp, (1, len(ofdm_data_sc)*n_ofdm_syms), order='F')
 
     # Number of uplink data symbols. Assume all clients are transmitting the same number of data symbols
-    #if num_cl > 1:
     if type(cl_frame_sched) == list or type(cl_frame_sched) == numpy.ndarray:
         this_cl_sched = str(cl_frame_sched[0])  # Client index 0
     else:
@@ -751,18 +770,17 @@ def rx_app(filename, user_params, this_plotter):
                 tx_data_sim = np.zeros((num_bs_ant, num_cl*len(full_pilot)+len(ofdm_data_time[0]))).astype(complex)
 
                 if num_cl == 1:
-                    tx_data_sim_cl1 = np.concatenate([full_pilot, np.squeeze(ofdm_data_time[0])])
-                    # tx_data_sim_cl1 = tx_data_sim_cl1 / max(abs(tx_data_sim_cl1))  # remove if already done in sounder
+                    tx_data_sim_cl1 = np.concatenate([full_pilot, np.squeeze(ofdm_data_time[0]/np.max(ofdm_data_time[0]))])
                     tx_data_sim_cl2 = 0 * tx_data_sim_cl1
                 elif num_cl == 2:
-                    tx_data_sim_cl1 = np.concatenate([full_pilot, np.zeros(len(full_pilot)), np.squeeze(ofdm_data_time[0])])
-                    # tx_data_sim_cl1 = tx_data_sim_cl1 / max(abs(tx_data_sim_cl1))  # remove if already done in sounder
-                    tx_data_sim_cl2 = np.concatenate([np.zeros(len(full_pilot)), full_pilot, np.squeeze(ofdm_data_time[1])])
-                    # tx_data_sim_cl2 = tx_data_sim_cl2/max(abs(tx_data_sim_cl2))    # remove if already done in sounder
+                    # tx_data_sim_cl1 = np.concatenate([full_pilot, np.zeros(len(full_pilot)), np.squeeze(ofdm_data_time[0])])
+                    # tx_data_sim_cl2 = np.concatenate([np.zeros(len(full_pilot)), full_pilot, np.squeeze(ofdm_data_time[1])])
+                    tx_data_sim_cl1 = tx_sig[0, :]/np.max(tx_sig[0, :])
+                    tx_data_sim_cl2 = tx_sig[1, :]/np.max(tx_sig[1, :])
 
                 # Merge signals (adding data of both)
                 mult1 = 0.5
-                mult2 = 1
+                mult2 = 0.8
                 for andIdx in range(num_bs_ant):
                     # Alternate magnitude from one antenna to the next
                     tx_data_sim[andIdx, :] = (mult1 if andIdx % 2 == 0 else mult2) * tx_data_sim_cl1 + \
@@ -772,7 +790,7 @@ def rx_app(filename, user_params, this_plotter):
                 num_samps_full_frame = len(tx_data_sim[0, :])
                 ofdm_rx_syms_awgn = np.zeros((num_bs_ant, num_samps_full_frame)).astype(complex)
                 for antIdx in range(num_bs_ant):
-                    noise = 0.0015 * (np.random.randn(num_samps_full_frame) + np.random.randn(num_samps_full_frame) * 1j)
+                    noise = 0.015 * (np.random.randn(num_samps_full_frame) + np.random.randn(num_samps_full_frame) * 1j)
                     ofdm_rx_syms_awgn[antIdx, :] = tx_data_sim[antIdx, :] + noise
                     # Remove DC
                     ofdm_rx_syms_awgn[antIdx, :] -= np.mean(ofdm_rx_syms_awgn[antIdx, :])
@@ -886,7 +904,7 @@ def rx_app(filename, user_params, this_plotter):
                         Q = pilot_samples[frameIdx, num_cells - 1, clIdx, antIdx, 1:sym_len * 2:2] / 2 ** 15
                         IQ = I + (Q * 1j)
 
-                        IQ_pilots[num_cells - 1, clIdx, antIdx, :] = IQ  # For 'plotter' use
+                        IQ_pilots[num_cells - 1, clIdx, antIdx, :] = IQ * pilot_scaling   # For 'plotter' use
 
                         # Find potential pilots. tx_pilot is a "struct" with dims:  [lts_time seq, lts_freq seq]
                         # No need to flip for OTA captures
@@ -1002,7 +1020,7 @@ def rx_app(filename, user_params, this_plotter):
                                           demmelNumber_ave)
 
             # Analyze pilot offsets
-            #    lts_start_all[0, clIdx, antIdx, frameIdx]
+            # lts_start_all[0, clIdx, antIdx, frameIdx]
             debug = 0
             if debug:
                 y0 = [lts_start_all[0, 0, i, iframes] for i in range(1)]
@@ -1045,14 +1063,15 @@ if __name__ == '__main__':
     parser = OptionParser()
     # Params
     parser.add_option("--file",       type="string",       dest="file",       default="../IrisUtils/data_in/<filename>.hdf5", help="HDF5 filename to be read in AWGN or REPLAY mode [default: %default]")
-    parser.add_option("--mode",       type="string",       dest="mode",       default="REPLAY", help="Options: REPLAY/AWGN [default: %default]")
+    parser.add_option("--mode",       type="string",       dest="mode",       default="AWGN", help="Options: REPLAY/AWGN [default: %default]")
     parser.add_option("--bfScheme",   type="string",       dest="bf_scheme",  default="ZF",  help="Beamforming Scheme. Options: ZF (for now) [default: %default]")
     parser.add_option("--cfoCorr",    action="store_true", dest="cfo_corr",   default=False,  help="Apply CFO correction (not recommended) [default: %default]")
     parser.add_option("--sfoCorr",    action="store_true", dest="sfo_corr",   default=False,  help="Apply SFO correction [default: %default]")
     parser.add_option("--phaseCorr",  action="store_true", dest="phase_corr", default=True,  help="Apply phase correction [default: %default]")
     parser.add_option("--fftOfset",   type="int",          dest="fft_offset", default=1,     help="FFT Offset:# CP samples for FFT [default: %default]")
     parser.add_option("--numClPlot",  type="int",          dest="num_cl_plot",default=2,     help="Number of clients to plot. Max of 2. [default: %default]")
-    parser.add_option("--frame",      type="string",       dest="frame",      default="0:end",  help="Range of frames to analyze (as string). Examples: --frame='5' to analyze a single frame, --frame='5:200' for range from frame 5 to 200, --frame='5:end' all frames starting at frame 5 [default: %default]")
+    parser.add_option("--pilotScale", type="int",          dest="pilot_scale",default=0.7,   help="Scaling factor for pilots. [default: %default]")
+    parser.add_option("--frame",      type="string",       dest="frame",      default="100:end",  help="Range of frames to analyze (as string). Examples: --frame='5' to analyze a single frame, --frame='5:200' for range from frame 5 to 200, --frame='5:end' all frames starting at frame 5 [default: %default]")
     (options, args) = parser.parse_args()
 
     # Params
@@ -1062,7 +1081,8 @@ if __name__ == '__main__':
                    options.sfo_corr,
                    options.phase_corr,
                    options.fft_offset,
-                   options.frame
+                   options.frame,
+                   options.pilot_scale
                    ]
 
     # File

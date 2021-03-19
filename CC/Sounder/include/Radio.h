@@ -19,12 +19,15 @@ private:
     friend class BaseRadioSet;
 
 public:
-    Radio(const SoapySDR::Kwargs& args, const char soapyFmt[], const std::vector<size_t>& channels, double rate);
+    Radio(const SoapySDR::Kwargs& args, const char soapyFmt[],
+        const std::vector<size_t>& channels, double rate);
     ~Radio(void);
     int recv(void* const* buffs, int samples, long long& frameTime);
-    int activateRecv(const long long rxTime = 0, const size_t numSamps = 0, int flags = 0);
+    int activateRecv(
+        const long long rxTime = 0, const size_t numSamps = 0, int flags = 0);
     void deactivateRecv(void);
-    int xmit(const void* const* buffs, int samples, int flags, long long& frameTime);
+    int xmit(
+        const void* const* buffs, int samples, int flags, long long& frameTime);
     void activateXmit(void);
     void deactivateXmit(void);
     int getTriggers(void) const;
