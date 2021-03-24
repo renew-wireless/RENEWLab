@@ -480,9 +480,9 @@ void Receiver::clientTxRx(int tid)
     std::vector<void*> txbuff(2);
     if (txSyms > 0) {
         size_t txIndex = tid * config_->cl_sdr_ch();
-        txbuff[0] = config_->tx_data().at(txIndex).data();
+        txbuff[0] = config_->txdata_time_dom().at(txIndex).data();
         if (config_->cl_sdr_ch() == 2)
-            txbuff[1] = config_->tx_data().at(txIndex + 1).data();
+            txbuff[1] = config_->txdata_time_dom().at(txIndex + 1).data();
         std::cout << txSyms << " uplink symbols will be sent per frame..."
                   << std::endl;
     }
@@ -594,14 +594,34 @@ void Receiver::clientSyncTxRx(int tid)
     }
 
     std::vector<void*> txbuff(2);
+    for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
+        txbuff.at(ch)
+            = std::calloc(config_->samps_per_symbol(), sizeof(float) * 2);
+    }
+    size_t slot_byte_size = config_->samps_per_symbol() * sizeof(float) * 2;
     size_t txSyms = config_->cl_ul_symbols().at(tid).size();
     if (txSyms > 0) {
         size_t txIndex = tid * config_->cl_sdr_ch();
-        txbuff.at(0) = config_->tx_data().at(txIndex).data();
-        if (config_->cl_sdr_ch() == 2) {
-            txbuff.at(1) = config_->tx_data().at(txIndex + 1).data();
+        for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
+            //txbuff.at(ch) = config_->txdata_time_dom().at(txIndex + ch).data();
+            std::memcpy(txbuff.at(ch),
+                config_->txdata_time_dom().at(txIndex + ch).data(),
+                slot_byte_size);
         }
         MLPD_INFO("%zu uplink symbols will be sent per frame...\n", txSyms);
+    }
+
+    FILE* fp;
+    if (config_->ul_data_sym_present() == true) {
+        std::string filename_ul_data_t = "logs/ul_data_t_" + config_->data_mod()
+            + "_" + std::to_string(config_->symbol_data_subcarrier_num()) + "_"
+            + std::to_string(config_->fft_size()) + "_"
+            + std::to_string(config_->cl_ul_symbols()[tid].size()) + "_"
+            + std::to_string(config_->frame_data_gen()) + "_"
+            + std::to_string(tid) + ".bin";
+        std::printf("Opening UL time-domain data for radio %d to %s\n", tid,
+            filename_ul_data_t.c_str());
+        fp = std::fopen(filename_ul_data_t.c_str(), "rb");
     }
 
     long long rxTime(0);
@@ -752,6 +772,10 @@ void Receiver::clientSyncTxRx(int tid)
                         txTime = rxTime + txTimeDelta
                             + config_->cl_ul_symbols().at(tid).at(s) * NUM_SAMPS
                             - config_->tx_advance();
+                        for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
+                            std::fread(txbuff.at(ch), 2 * sizeof(float),
+                                config_->samps_per_symbol(), fp);
+                        }
                         if (kUseUHD && s < (txSyms - 1))
                             flagsTxUlData = 1; // HAS_TIME
                         else
@@ -762,11 +786,18 @@ void Receiver::clientSyncTxRx(int tid)
                             MLPD_WARN("BAD Write: %d/%d\n", r, NUM_SAMPS);
                         }
                     } // end for
+                    if (frame_cnt % config_->frame_data_gen() == 0)
+                        std::fseek(fp, 0, SEEK_SET);
                 } // end if config_->ul_data_sym_present()
             } // end if sf == 0
         } // end for
         frame_cnt++;
     } // end while
+    std::fclose(fp);
+
+    for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
+        std::free(txbuff.at(ch));
+    }
 
     for (auto memory : zeros) {
         MLPD_SYMBOL("Process %d -- Client Sync Tx Rx Freed memory at %p\n", tid,

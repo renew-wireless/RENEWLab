@@ -24,10 +24,8 @@
 #include <mutex>
 #include <pthread.h>
 #include <sstream>
-#include <stdlib.h>
 #include <string>
 #include <thread>
-#include <time.h>
 #include <unistd.h>
 #include <vector>
 

@@ -20,6 +20,7 @@
 */
 
 #include "include/comms-lib.h"
+#include "include/utils.h"
 #include <queue>
 //#include <itpp/itbase.h>
 
@@ -331,40 +332,75 @@ float CommsLib::measureTone(std::vector<std::complex<float>> const& samps,
         magnitudeFFT(samps, win, fftSize), winGain, fftBin, fftSize, delta);
 }
 
-std::vector<int> CommsLib::getDataSc(int fftSize)
+std::vector<size_t> CommsLib::getDataSc(size_t fftSize, size_t DataScNum)
 {
-    std::vector<int> data_sc;
-    if (fftSize == 64) {
-        int sc_ind[48] = { 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-            17, 18, 19, 20, 22, 23, 24, 25, 26, 38, 39, 40, 41, 42, 44, 45, 46,
-            47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 58, 59, 60, 61, 62, 63 };
+    std::vector<size_t> data_sc;
+    if (fftSize == 64) { // consider 802.11
+        size_t sc_ind[48]
+            = { 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                  20, 22, 23, 24, 25, 26, 38, 39, 40, 41, 42, 44, 45, 46, 47,
+                  48, 49, 50, 51, 52, 53, 54, 55, 56, 58, 59, 60, 61, 62, 63 };
         data_sc.assign(sc_ind, sc_ind + 48);
-    } else {
-        for (int i = 0; i < fftSize; i++)
+    } else { // consider center subcarriers
+        size_t start_sc = (fftSize - DataScNum) / 2;
+        size_t stop_sc = start_sc + DataScNum;
+        for (size_t i = start_sc; i < stop_sc; i++)
             data_sc.push_back(i);
     }
     return data_sc;
 }
 
-std::vector<int> CommsLib::getNullSc(int fftSize)
+std::vector<size_t> CommsLib::getNullSc(size_t fftSize, size_t DataScNum)
 {
-    std::vector<int> null_sc;
-    if (fftSize == 64) {
+    std::vector<size_t> null_sc;
+    if (fftSize == 64) { // consider 802.11
         int null[12] = { 0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63 };
         null_sc.assign(null, null + 12);
+    } else { // consider center subcarriers
+        size_t start_sc = (fftSize - DataScNum) / 2;
+        size_t stop_sc = start_sc + DataScNum;
+        for (size_t i = 0; i < start_sc; i++)
+            null_sc.push_back(i);
+        for (size_t i = stop_sc; i < fftSize; i++)
+            null_sc.push_back(i);
     }
     return null_sc;
 }
 
-std::vector<std::vector<int>> CommsLib::getPilotSc(int fftSize)
+std::vector<std::complex<float>> CommsLib::getPilotScValue(
+    size_t fftSize, size_t DataScNum)
 {
-    std::vector<std::vector<int>> pilot_sc;
-    pilot_sc.resize(2);
-    if (fftSize == 64) {
+    std::vector<std::complex<float>> pilot_sc;
+    if (fftSize == 64) { // consider 802.11
+        std::complex<float> sc_val[4] = { 1, 1, -1, 1 };
+        pilot_sc.assign(sc_val, sc_val + 4);
+    } else { // consider center subcarriers
+        size_t start_sc = (fftSize - DataScNum) / 2;
+        size_t stop_sc = start_sc + DataScNum;
+        auto pilot_sym
+            = CommsLib::getSequence(CommsLib::LTE_ZADOFF_CHU, DataScNum);
+        auto pilot_sym_cf32 = Utils::doubletocfloat(pilot_sym);
+        auto pilot_fft = CommsLib::FFT(pilot_sym_cf32, fftSize);
+        for (size_t i = start_sc + 6; i < stop_sc; i += 12) {
+            pilot_sc.push_back(pilot_fft.at(i));
+        }
+    }
+    return pilot_sc;
+}
+
+std::vector<size_t> CommsLib::getPilotScIndex(size_t fftSize, size_t DataScNum)
+{
+    std::vector<size_t> pilot_sc;
+    if (fftSize == 64) { // consider 802.11
         int sc_ind[4] = { 7, 21, 43, 57 };
-        int sc_val[4] = { 1, 1, -1, 1 };
-        pilot_sc[0].assign(sc_ind, sc_ind + 4);
-        pilot_sc[1].assign(sc_val, sc_val + 4);
+        pilot_sc.assign(sc_ind, sc_ind + 4);
+    } else { // consider center subcarriers
+        size_t start_sc = (fftSize - DataScNum) / 2;
+        size_t stop_sc = start_sc + DataScNum;
+        // pilot at the center of each RB
+        for (size_t i = start_sc + 6; i < stop_sc; i += 12) {
+            pilot_sc.push_back(i);
+        }
     }
     return pilot_sc;
 }
@@ -390,9 +426,10 @@ std::vector<std::complex<float>> CommsLib::IFFT(
                 max_val = std::abs(out[i]);
         }
     }
-
+#if DEBUG_PRINT
     std::cout << "IFFT output is normalized with " << std::to_string(max_val)
               << std::endl;
+#endif
     for (int i = 0; i < fftSize; i++)
         out[i] = (out[i] / max_val) * scale;
 

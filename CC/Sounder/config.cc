@@ -67,7 +67,7 @@ Config::Config(const std::string& jsonfile)
         subframe_size_ = symbol_per_subframe_ * ofdm_symbol_size_;
         samps_per_symbol_ = subframe_size_ + prefix_ + postfix_;
         symbol_data_subcarrier_num_
-            = tddConf.value("ofdm_data_subcarrier_num", fft_size_);
+            = tddConf.value("ofdm_symbol_data_subcarrier_num_", fft_size_);
         tx_scale_ = tddConf.value("tx_scale", 0.5);
         beacon_seq_ = tddConf.value("beacon_seq", "gold_ifft");
         pilot_seq_ = tddConf.value("pilot_seq", "lts");
@@ -202,6 +202,7 @@ Config::Config(const std::string& jsonfile)
         frame_mode_ = tddConfCl.value("frame_mode", "continuous_resync");
         hw_framer_ = tddConfCl.value("hw_framer", true);
         tx_advance_ = tddConfCl.value("tx_advance", 250); // 250
+        frame_data_gen_ = tddConfCl.value("frame_data_gen", 1); // 250
 
         cl_txgain_vec_.resize(2);
         cl_rxgain_vec_.resize(2);
@@ -367,85 +368,7 @@ Config::Config(const std::string& jsonfile)
 
     // compose data subframe
     if (ul_data_sym_present_) {
-        int mod_type = data_mod_ == "64QAM"
-            ? CommsLib::QAM64
-            : (data_mod_ == "16QAM" ? CommsLib::QAM16 : CommsLib::QPSK);
-        std::cout << mod_type << std::endl;
-        int mod_order = 1 << mod_type;
-        std::cout << mod_order << std::endl;
-
-        data_ind_ = CommsLib::getDataSc(fft_size_);
-        pilot_sc_ = CommsLib::getPilotSc(fft_size_);
-        std::vector<std::complex<float>> prefix_zpad_f(prefix_, 0);
-        std::vector<std::complex<float>> postfix_zpad_f(postfix_, 0);
-        size_t nDataScs = data_ind_.size();
-        for (size_t i = 0; i < num_cl_antennas_; i++) {
-            std::vector<std::complex<float>> data_cf;
-            std::vector<std::complex<float>> data_freq_dom;
-            data_cf.insert(
-                data_cf.begin(), prefix_zpad_f.begin(), prefix_zpad_f.end());
-            std::vector<std::vector<int>> dataBits;
-            dataBits.resize(symbol_per_subframe_);
-            for (size_t s = 0; s < symbol_per_subframe_; s++) {
-                for (size_t c = 0; c < nDataScs; c++) {
-                    dataBits[s].push_back(rand() % mod_order);
-                }
-                std::vector<std::complex<float>> mod_data
-                    = CommsLib::modulate(dataBits[s], mod_type);
-#if DEBUG_PRINT
-                std::cout << "Modulation output: " << mod_data[0] << " "
-                          << mod_data[1] << std::endl;
-#endif
-                std::vector<std::complex<float>> ofdmSym(fft_size_);
-                int sc = 0;
-                for (size_t c = 0; c < nDataScs; c++) {
-                    sc = data_ind_[c];
-                    ofdmSym[sc] = mod_data[c];
-                }
-#if DEBUG_PRINT
-                std::cout << "Data symbol: " << ofdmSym[sc - 2] << " "
-                          << ofdmSym[sc - 1] << std::endl;
-#endif
-                for (size_t c = 0; c < pilot_sc_.at(0).size(); c++) {
-                    sc = pilot_sc_.at(0).at(c);
-                    ofdmSym[sc] = pilot_sc_.at(1).at(c);
-                }
-#if DEBUG_PRINT
-                std::cout << "Pilot symbol: " << ofdmSym[pilot_sc_.at(0).at(0)]
-                          << " " << ofdmSym[pilot_sc_.at(0).at(1)] << std::endl;
-#endif
-                auto txSym = CommsLib::IFFT(
-                    ofdmSym, fft_size_, 1.f / fft_size_, false);
-                txSym.insert(txSym.begin(), txSym.end() - cp_size_,
-                    txSym.end()); // add CP
-#if DEBUG_PRINT
-                std::cout << "IFFT output: " << txSym[0] << " " << txSym[64]
-                          << std::endl;
-#endif
-                data_cf.insert(data_cf.end(), txSym.begin(), txSym.end());
-                data_freq_dom.insert(
-                    data_freq_dom.end(), ofdmSym.begin(), ofdmSym.end());
-            }
-            data_cf.insert(
-                data_cf.end(), postfix_zpad_f.begin(), postfix_zpad_f.end());
-            tx_data_.push_back(data_cf);
-            txdata_time_dom_.push_back(data_cf);
-            txdata_freq_dom_.push_back(data_freq_dom);
-        }
-#if DEBUG_PRINT
-        for (size_t i = 0; i < tx_data_.size(); i++) {
-            for (size_t j = 0; j < tx_data_.at(i).size(); j++) {
-                std::cout << "Values[" << i << "][" << j << "]: \t "
-                          << tx_data_.at(i).at(j) << std::endl;
-            }
-        }
-        for (size_t i = 0; i < txdata_freq_dom_.size(); i++) {
-            for (size_t j = 0; j < txdata_freq_dom_.at(i).size(); j++) {
-                std::cout << "FREQ DOMAIN Values[" << i << "][" << j << "]: \t "
-                          << txdata_freq_dom_.at(i).at(j) << std::endl;
-            }
-        }
-#endif
+        generateULData();
     }
 
     if (bs_present_ == true) {
@@ -519,6 +442,95 @@ Config::Config(const std::string& jsonfile)
     MLPD_INFO("Configuration file was successfully parsed!\n");
 }
 
+void Config::generateULData()
+{
+    int mod_type = data_mod_ == "64QAM"
+        ? CommsLib::QAM64
+        : (data_mod_ == "16QAM" ? CommsLib::QAM16 : CommsLib::QPSK);
+    int mod_order = 1 << mod_type;
+
+    data_ind_ = CommsLib::getDataSc(fft_size_, symbol_data_subcarrier_num_);
+    pilot_sc_
+        = CommsLib::getPilotScValue(fft_size_, symbol_data_subcarrier_num_);
+    pilot_sc_ind_
+        = CommsLib::getPilotScIndex(fft_size_, symbol_data_subcarrier_num_);
+    std::vector<std::complex<float>> prefix_zpad_t(prefix_, 0);
+    std::vector<std::complex<float>> postfix_zpad_t(postfix_, 0);
+    txdata_time_dom_.resize(num_cl_antennas_);
+    txdata_freq_dom_.resize(num_cl_antennas_);
+    for (size_t i = 0; i < num_cl_sdrs_; i++) {
+        std::string filename_ul_data_t = "logs/ul_data_t_" + data_mod_ + "_"
+            + std::to_string(symbol_data_subcarrier_num_) + "_"
+            + std::to_string(fft_size_) + "_"
+            + std::to_string(cl_ul_symbols_[i].size()) + "_"
+            + std::to_string(frame_data_gen_) + "_" + std::to_string(i)
+            + ".bin";
+        std::printf("Saving UL time-domain data for radio %zu to %s\n", i,
+            filename_ul_data_t.c_str());
+        FILE* fp_tx_t = std::fopen(filename_ul_data_t.c_str(), "wb");
+        std::string filename_ul_data_f = "logs/ul_data_f_" + data_mod_ + "_"
+            + std::to_string(symbol_data_subcarrier_num_) + "_"
+            + std::to_string(fft_size_) + "_"
+            + std::to_string(cl_ul_symbols_[i].size()) + "_"
+            + std::to_string(frame_data_gen_) + "_" + std::to_string(i)
+            + ".bin";
+        std::printf("Saving UL frequency-domain data for radio %zu to %s\n", i,
+            filename_ul_data_f.c_str());
+        FILE* fp_tx_f = std::fopen(filename_ul_data_f.c_str(), "wb");
+        // Frame * UL Slots * Channel * Samples
+        for (size_t f = 0; f < frame_data_gen_; f++) {
+            for (size_t u = 0; u < cl_ul_symbols_[i].size(); u++) {
+                for (size_t h = 0; h < cl_sdr_ch_; h++) {
+                    size_t ant_i = i * cl_sdr_ch_ + h;
+                    std::vector<std::complex<float>> data_time_dom;
+                    std::vector<std::complex<float>> data_freq_dom;
+                    data_time_dom.insert(data_time_dom.begin(),
+                        prefix_zpad_t.begin(), prefix_zpad_t.end());
+                    for (size_t s = 0; s < symbol_per_subframe_; s++) {
+                        std::vector<int> data_bits;
+                        for (size_t c = 0; c < symbol_data_subcarrier_num_;
+                             c++) {
+                            data_bits.push_back(rand() % mod_order);
+                        }
+                        std::vector<std::complex<float>> mod_data
+                            = CommsLib::modulate(data_bits, mod_type);
+                        std::vector<std::complex<float>> ofdm_sym(fft_size_);
+                        size_t sc = 0;
+                        for (size_t c = 0; c < symbol_data_subcarrier_num_;
+                             c++) {
+                            sc = data_ind_[c];
+                            ofdm_sym[sc] = mod_data[c];
+                        }
+                        for (size_t c = 0; c < pilot_sc_.size(); c++) {
+                            sc = pilot_sc_ind_.at(c);
+                            ofdm_sym[sc] = pilot_sc_.at(c);
+                        }
+                        auto tx_sym = CommsLib::IFFT(
+                            ofdm_sym, fft_size_, 1.f / fft_size_, false);
+                        tx_sym.insert(tx_sym.begin(), tx_sym.end() - cp_size_,
+                            tx_sym.end()); // add CP
+                        data_time_dom.insert(
+                            data_time_dom.end(), tx_sym.begin(), tx_sym.end());
+                        data_freq_dom.insert(data_freq_dom.end(),
+                            ofdm_sym.begin(), ofdm_sym.end());
+                    }
+                    data_time_dom.insert(data_time_dom.end(),
+                        postfix_zpad_t.begin(), postfix_zpad_t.end());
+                    if (f == 0 && u == 0) {
+                        txdata_time_dom_[ant_i] = data_time_dom;
+                        txdata_freq_dom_[ant_i] = data_freq_dom;
+                    }
+                    std::fwrite(data_freq_dom.data(), fft_size_ * 2,
+                        sizeof(float), fp_tx_f);
+                    std::fwrite(data_time_dom.data(), samps_per_symbol_ * 2,
+                        sizeof(float), fp_tx_t);
+                }
+            }
+        }
+        std::fclose(fp_tx_f);
+        std::fclose(fp_tx_t);
+    }
+}
 size_t Config::getNumAntennas()
 {
     size_t ret;

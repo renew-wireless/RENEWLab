@@ -55,6 +55,7 @@ public:
     inline bool imbalance_cal_en(void) const { return this->imbalance_cal_en_; }
     inline bool sample_cal_en(void) const { return this->sample_cal_en_; }
     inline size_t max_frame(void) const { return this->max_frame_; }
+    inline size_t frame_data_gen(void) const { return this->frame_data_gen_; }
     inline bool beam_sweep(void) const { return this->beam_sweep_; }
     inline size_t beacon_ant(void) const { return this->beacon_ant_; }
     inline size_t num_cl_antennas(void) const { return this->num_cl_antennas_; }
@@ -153,7 +154,7 @@ public:
         return this->cl_sdr_ids_;
     }
 
-    inline const std::vector<int>& data_ind(void) const
+    inline const std::vector<size_t>& data_ind(void) const
     {
         return this->data_ind_;
     }
@@ -182,9 +183,13 @@ public:
     {
         return this->pilot_sym_;
     };
-    inline std::vector<std::vector<int>>& pilot_sc(void)
+    inline std::vector<std::complex<float>>& pilot_sc(void)
     {
         return this->pilot_sc_;
+    };
+    inline std::vector<size_t>& pilot_sc_ind(void)
+    {
+        return this->pilot_sc_ind_;
     };
 
     inline const std::vector<std::string>& frames(void) const
@@ -228,8 +233,7 @@ public:
         return this->cal_tx_gain_;
     }
 
-    inline const std::vector<std::vector<std::complex<float>>>& txdata_time_dom(
-        void) const
+    inline std::vector<std::vector<std::complex<float>>>& txdata_time_dom(void)
     {
         return this->txdata_time_dom_;
     }
@@ -254,6 +258,7 @@ public:
     bool isNoise(int, int);
     bool isData(int, int);
     unsigned getCoreCount();
+    void generateULData();
 
 private:
     bool bs_present_;
@@ -308,6 +313,7 @@ private:
     std::string frame_mode_;
     bool hw_framer_;
     size_t max_frame_;
+    size_t frame_data_gen_;
     std::vector<std::vector<size_t>>
         pilot_symbols_; // Accessed through getClientId
     std::vector<std::vector<size_t>> noise_symbols_;
@@ -334,12 +340,13 @@ private:
     bool cl_agc_en_;
     int cl_agc_gain_init_;
     int tx_advance_;
-    std::vector<int> data_ind_;
+    std::vector<size_t> data_ind_;
     std::vector<uint32_t> coeffs_;
     std::vector<std::complex<int16_t>> pilot_ci16_;
     std::vector<std::complex<float>> pilot_cf32_;
     std::vector<uint32_t> pilot_;
-    std::vector<std::vector<int>> pilot_sc_;
+    std::vector<std::complex<float>> pilot_sc_;
+    std::vector<size_t> pilot_sc_ind_;
     std::vector<std::vector<double>> pilot_sym_;
     std::vector<std::vector<std::complex<float>>> tx_data_;
     std::vector<std::vector<std::complex<float>>> txdata_freq_dom_;
