@@ -527,7 +527,8 @@ void BaseRadioSet::collectCSI(bool& adjust)
     }
     //std::vector<std::complex<float>> pilot_cf32;
     int seqLen = 160; // Sequence length
-    auto pilot = CommsLib::getSequence(CommsLib::LTS_SEQ, seqLen);
+    std::vector<std::vector<float>> pilot
+        = CommsLib::getSequence(CommsLib::LTS_SEQ, seqLen);
     auto pilot_cint16 = Utils::float_to_cint16(pilot);
 
     // Prepend/Append vectors with prefix/postfix number of null samples
@@ -622,7 +623,7 @@ void BaseRadioSet::collectCSI(bool& adjust)
     bool good_csi = true;
     for (int i = 0; i < R; i++) {
         int k = ((i == ref_ant) ? ref_offset : ref_ant) * R + i;
-	auto rx = Utils::cint16_to_cfloat(buff[k]);
+        auto rx = Utils::cint16_to_cfloat(buff[k]);
         int peak = CommsLib::findLTS(rx, seqLen);
         offset[i] = peak < 128 ? 0 : peak - 128;
         //std::cout << i << " " << offset[i] << std::endl;

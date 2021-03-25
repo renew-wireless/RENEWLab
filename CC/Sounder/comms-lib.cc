@@ -42,7 +42,8 @@ int CommsLib::findLTS(const std::vector<std::complex<float>>& iq, int seqLen)
     lts_seq = CommsLib::getSequence(LTS_SEQ, seqLen);
 
     // Re-arrange into complex vector, flip, and compute conjugate
-    std::vector<std::complex<float>> lts_sym(64);
+    const size_t lts_symbol_len = 64;
+    std::vector<std::complex<float>> lts_sym(lts_symbol_len);
     std::vector<std::complex<float>> lts_sym_conj(lts_sym.size());
     for (size_t i = 0; i < lts_sym.size(); i++) {
         // lts_seq is a 2x160 matrix (real/imag by seqLen=160 elements)
