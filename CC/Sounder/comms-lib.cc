@@ -82,8 +82,8 @@ int CommsLib::findLTS(const std::vector<std::complex<float>>& iq, int seqLen)
     return best_peak;
 }
 
-size_t CommsLib::find_pilot_seq(std::vector<std::complex<float>> iq,
-    std::vector<std::complex<float>> pilot, size_t seq_len)
+size_t CommsLib::find_pilot_seq(const std::vector<std::complex<float>>& iq,
+    const std::vector<std::complex<float>>& pilot, size_t seq_len)
 {
 
     // Re-arrange into complex vector, flip, and compute conjugate
@@ -208,7 +208,7 @@ int CommsLib::find_beacon(const std::vector<std::complex<float>>& iq)
 }
 
 std::vector<std::complex<float>> CommsLib::csign(
-    std::vector<std::complex<float>> iq)
+    const std::vector<std::complex<float>>& iq)
 {
     /*
      * Return element-wise indication of the sign of a number (for complex vector).
@@ -232,7 +232,7 @@ std::vector<std::complex<float>> CommsLib::csign(
     return iq_sign;
 }
 
-float CommsLib::find_max_abs(std::vector<std::complex<float>> in)
+float CommsLib::find_max_abs(const std::vector<std::complex<float>>& in)
 {
     float max_val = 0;
     for (size_t j = 0; j < in.size(); j++) {
@@ -369,7 +369,7 @@ std::vector<std::vector<int>> CommsLib::getPilotSc(int fftSize)
 }
 
 std::vector<std::complex<float>> CommsLib::IFFT(
-    std::vector<std::complex<float>> in, int fftSize, float scale,
+    const std::vector<std::complex<float>>& in, int fftSize, float scale,
     bool normalize)
 {
     std::vector<std::complex<float>> out(in.size());
@@ -402,7 +402,7 @@ std::vector<std::complex<float>> CommsLib::IFFT(
 }
 
 std::vector<std::complex<float>> CommsLib::FFT(
-    std::vector<std::complex<float>> in, int fftSize)
+    const std::vector<std::complex<float>>& in, int fftSize)
 {
     std::vector<std::complex<float>> out(in.size());
 
@@ -422,7 +422,7 @@ std::vector<std::complex<float>> CommsLib::FFT(
 }
 
 std::vector<std::complex<float>> CommsLib::modulate(
-    std::vector<int> in, int type)
+    const std::vector<int>& in, int type)
 {
     std::vector<std::complex<float>> out(in.size());
     if (type == QPSK) {
@@ -520,8 +520,8 @@ std::vector<std::vector<float>> CommsLib::getSequence(
         std::vector<std::complex<float>> sts_iq
             = CommsLib::IFFT(sts_freq_shifted, 64, 1);
 
-	size_t out_seq_len = seq_len > 0 ? seq_len : sts_seq_len;
-	size_t frac_seq_len = out_seq_len % sts_seq_len;
+        size_t out_seq_len = seq_len > 0 ? seq_len : sts_seq_len;
+        size_t frac_seq_len = out_seq_len % sts_seq_len;
         matrix[0].resize(out_seq_len);
         matrix[1].resize(out_seq_len);
         for (size_t i = 0; i < out_seq_len; i++) {
@@ -558,8 +558,8 @@ std::vector<std::vector<float>> CommsLib::getSequence(
         std::vector<std::complex<float>> lts_iq = CommsLib::IFFT(
             lts_freq_shifted, lts_seq_len, 1.f / lts_seq_len, false);
 
-	size_t out_seq_len = seq_len > 0 ? seq_len : lts_seq_len;
-	size_t frac_seq_len = out_seq_len % lts_seq_len;
+        size_t out_seq_len = seq_len > 0 ? seq_len : lts_seq_len;
+        size_t frac_seq_len = out_seq_len % lts_seq_len;
         matrix[0].resize(out_seq_len);
         matrix[1].resize(out_seq_len);
         for (size_t i = 0; i < out_seq_len; i++) {

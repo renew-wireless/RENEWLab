@@ -46,19 +46,20 @@ public:
 
     static std::vector<std::vector<float>> getSequence(
         size_t type, size_t seq_len = 0);
-    static std::vector<std::complex<float>> modulate(std::vector<int>, int);
+    static std::vector<std::complex<float>> modulate(
+        const std::vector<int>&, int);
     static std::vector<int> getDataSc(int fftSize);
     static std::vector<int> getNullSc(int fftSize);
     static std::vector<std::vector<int>> getPilotSc(int fftSize);
     static std::vector<std::complex<float>> FFT(
-        std::vector<std::complex<float>>, int);
+        const std::vector<std::complex<float>>&, int);
     static std::vector<std::complex<float>> IFFT(
-        std::vector<std::complex<float>>, int, float scale = 0.5,
+        const std::vector<std::complex<float>>&, int, float scale = 0.5,
         bool normalize = true);
 
     static int findLTS(const std::vector<std::complex<float>>& iq, int seqLen);
-    static size_t find_pilot_seq(std::vector<std::complex<float>> iq,
-        std::vector<std::complex<float>> pilot, size_t seqLen);
+    static size_t find_pilot_seq(const std::vector<std::complex<float>>& iq,
+        const std::vector<std::complex<float>>& pilot, size_t seqLen);
     template <typename T>
     //static std::vector<T> convolve(std::vector<T> const& f, std::vector<T> const& g);
     static std::vector<T> convolve(
@@ -81,9 +82,9 @@ public:
         }
         return out;
     }
-    static float find_max_abs(std::vector<std::complex<float>> in);
+    static float find_max_abs(const std::vector<std::complex<float>>& in);
     static std::vector<std::complex<float>> csign(
-        std::vector<std::complex<float>> iq);
+        const std::vector<std::complex<float>>& iq);
     static inline int hadamard2(int i, int j)
     {
         return (__builtin_parity(i & j) != 0 ? -1 : 1);
