@@ -345,7 +345,8 @@ std::vector<size_t> CommsLib::getDataSc(size_t fftSize, size_t DataScNum)
         size_t start_sc = (fftSize - DataScNum) / 2;
         size_t stop_sc = start_sc + DataScNum;
         for (size_t i = start_sc; i < stop_sc; i++)
-            data_sc.push_back(i);
+            if ((i - start_sc) % 6 != 0)
+                data_sc.push_back(i);
     }
     return data_sc;
 }
@@ -460,7 +461,7 @@ std::vector<std::complex<float>> CommsLib::FFT(
 }
 
 std::vector<std::complex<float>> CommsLib::modulate(
-    std::vector<int> in, int type)
+    std::vector<uint8_t> in, int type)
 {
     std::vector<std::complex<float>> out(in.size());
     if (type == QPSK) {
@@ -472,7 +473,7 @@ std::vector<std::complex<float>> CommsLib::modulate(
             qpsk_table[1][i] = mod_qpsk[i % 2];
         }
         for (size_t i = 0; i < in.size(); i++) {
-            if (in[i] >= 0 and in[i] < 4)
+            if (in[i] < 4u)
                 out[i] = std::complex<float>(
                     qpsk_table[0][in[i]], qpsk_table[1][in[i]]);
             else {
@@ -489,7 +490,7 @@ std::vector<std::complex<float>> CommsLib::modulate(
             qam16_table[1][i] = mod_16qam[i % 4];
         }
         for (size_t i = 0; i < in.size(); i++) {
-            if (in[i] >= 0 and in[i] < 16)
+            if (in[i] < 16u)
                 out[i] = std::complex<float>(
                     qam16_table[0][in[i]], qam16_table[1][in[i]]);
             else {
@@ -507,7 +508,7 @@ std::vector<std::complex<float>> CommsLib::modulate(
             qam64_table[1][i] = mod_64qam[i % 8];
         }
         for (size_t i = 0; i < in.size(); i++) {
-            if (in[i] >= 0 and in[i] < 64)
+            if (in[i] < 64u)
                 out[i] = std::complex<float>(
                     qam64_table[0][in[i]], qam64_table[1][in[i]]);
             else {

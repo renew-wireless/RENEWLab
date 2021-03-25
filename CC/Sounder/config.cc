@@ -459,15 +459,15 @@ void Config::generateULData()
     txdata_time_dom_.resize(num_cl_antennas_);
     txdata_freq_dom_.resize(num_cl_antennas_);
     for (size_t i = 0; i < num_cl_sdrs_; i++) {
-        std::string filename_ul_data_t = "logs/ul_data_t_" + data_mod_ + "_"
+        std::string filename_ul_data_b = "logs/ul_data_b_" + data_mod_ + "_"
             + std::to_string(symbol_data_subcarrier_num_) + "_"
             + std::to_string(fft_size_) + "_"
             + std::to_string(cl_ul_symbols_[i].size()) + "_"
             + std::to_string(frame_data_gen_) + "_" + std::to_string(i)
             + ".bin";
-        std::printf("Saving UL time-domain data for radio %zu to %s\n", i,
-            filename_ul_data_t.c_str());
-        FILE* fp_tx_t = std::fopen(filename_ul_data_t.c_str(), "wb");
+        std::printf("Saving UL data bits for radio %zu to %s\n", i,
+            filename_ul_data_b.c_str());
+        FILE* fp_tx_b = std::fopen(filename_ul_data_b.c_str(), "wb");
         std::string filename_ul_data_f = "logs/ul_data_f_" + data_mod_ + "_"
             + std::to_string(symbol_data_subcarrier_num_) + "_"
             + std::to_string(fft_size_) + "_"
@@ -477,6 +477,15 @@ void Config::generateULData()
         std::printf("Saving UL frequency-domain data for radio %zu to %s\n", i,
             filename_ul_data_f.c_str());
         FILE* fp_tx_f = std::fopen(filename_ul_data_f.c_str(), "wb");
+        std::string filename_ul_data_t = "logs/ul_data_t_" + data_mod_ + "_"
+            + std::to_string(symbol_data_subcarrier_num_) + "_"
+            + std::to_string(fft_size_) + "_"
+            + std::to_string(cl_ul_symbols_[i].size()) + "_"
+            + std::to_string(frame_data_gen_) + "_" + std::to_string(i)
+            + ".bin";
+        std::printf("Saving UL time-domain data for radio %zu to %s\n", i,
+            filename_ul_data_t.c_str());
+        FILE* fp_tx_t = std::fopen(filename_ul_data_t.c_str(), "wb");
         // Frame * UL Slots * Channel * Samples
         for (size_t f = 0; f < frame_data_gen_; f++) {
             for (size_t u = 0; u < cl_ul_symbols_[i].size(); u++) {
@@ -487,17 +496,18 @@ void Config::generateULData()
                     data_time_dom.insert(data_time_dom.begin(),
                         prefix_zpad_t.begin(), prefix_zpad_t.end());
                     for (size_t s = 0; s < symbol_per_subframe_; s++) {
-                        std::vector<int> data_bits;
-                        for (size_t c = 0; c < symbol_data_subcarrier_num_;
-                             c++) {
-                            data_bits.push_back(rand() % mod_order);
+                        std::vector<uint8_t> data_bits;
+                        for (size_t c = 0; c < data_ind_.size(); c++) {
+                            data_bits.push_back((uint8_t)(rand() % mod_order));
                         }
+                        std::fwrite(data_bits.data(),
+                            symbol_data_subcarrier_num_, sizeof(uint8_t),
+                            fp_tx_b);
                         std::vector<std::complex<float>> mod_data
                             = CommsLib::modulate(data_bits, mod_type);
                         std::vector<std::complex<float>> ofdm_sym(fft_size_);
                         size_t sc = 0;
-                        for (size_t c = 0; c < symbol_data_subcarrier_num_;
-                             c++) {
+                        for (size_t c = 0; c < data_ind_.size(); c++) {
                             sc = data_ind_[c];
                             ofdm_sym[sc] = mod_data[c];
                         }
@@ -527,6 +537,7 @@ void Config::generateULData()
                 }
             }
         }
+        std::fclose(fp_tx_b);
         std::fclose(fp_tx_f);
         std::fclose(fp_tx_t);
     }

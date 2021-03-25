@@ -46,7 +46,7 @@ public:
 
     static std::vector<std::vector<double>> getSequence(
         size_t type, size_t seq_len = 0);
-    static std::vector<std::complex<float>> modulate(std::vector<int>, int);
+    static std::vector<std::complex<float>> modulate(std::vector<uint8_t>, int);
     static std::vector<size_t> getDataSc(size_t fftSize, size_t DataScNum);
     static std::vector<size_t> getNullSc(size_t fftSize, size_t DataScNum);
     static std::vector<std::complex<float>> getPilotScValue(
