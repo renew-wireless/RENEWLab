@@ -174,7 +174,7 @@ public:
         return this->beacon_;
     }
 
-    inline std::vector<std::vector<double>>& pilot_sym(void)
+    inline std::vector<std::vector<float>>& pilot_sym(void)
     {
         return this->pilot_sym_;
     };
@@ -336,7 +336,7 @@ private:
     std::vector<std::complex<float>> pilot_cf32_;
     std::vector<uint32_t> pilot_;
     std::vector<std::vector<int>> pilot_sc_;
-    std::vector<std::vector<double>> pilot_sym_;
+    std::vector<std::vector<float>> pilot_sym_;
     std::vector<std::vector<std::complex<float>>> tx_data_;
     std::vector<std::vector<std::complex<float>>> txdata_freq_dom_;
     std::vector<std::vector<std::complex<float>>> txdata_time_dom_;

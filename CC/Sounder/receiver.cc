@@ -633,7 +633,11 @@ void Receiver::clientSyncTxRx(int tid)
             }
         }
         //TODO syncbuff0 is sloppy here since we recevied into syncrxbuff.data(), r bytes.
+#if defined(__X86_64__)
         sync_index = CommsLib::find_beacon_avx(syncbuff0, config_->gold_cf32());
+#else
+        sync_index = CommsLib::find_beacon(syncbuff0);
+#endif
 
         if (sync_index >= 0) {
             MLPD_INFO("Beacon detected at Time %lld, sync_index: %d\n", rxTime,
@@ -698,8 +702,12 @@ void Receiver::clientSyncTxRx(int tid)
                     //TODO: Remove the copy and direct access to syncbuff0
                     std::vector<std::complex<float>> radio_rx_data(
                         syncbuff0.begin(), syncbuff0.begin() + r);
+#if defined(__X86_64__)
                     sync_index = CommsLib::find_beacon_avx(
                         radio_rx_data, config_->gold_cf32());
+#else
+                    sync_index = CommsLib::find_beacon(radio_rx_data);
+#endif
                     if (sync_index >= 0) {
                         rx_offset = sync_index - config_->beacon_size()
                             - config_->prefix();

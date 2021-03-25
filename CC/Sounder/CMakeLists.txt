@@ -39,7 +39,7 @@ if(${CMAKE_C_COMPILER_ID} STREQUAL "GNU")
   message(STATUS "Using GNU compiler, compiler ID ${CMAKE_C_COMPILER_ID}")
   #For Ubuntu 1804 need to keep the c11 std for thread check
   set(CMAKE_C_FLAGS "-std=c11 -Wall")
-  set(CMAKE_CXX_FLAGS "-std=c++17 -Wall -Wextra -mavx2")
+  set(CMAKE_CXX_FLAGS "-std=c++17 -Wall -Wextra -march=native")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
 else()
   message(FATAL_ERROR "Unsupported version of compiler")
@@ -136,23 +136,28 @@ add_executable(sounder
     main.cc
     ${SOUNDER_SOURCES})
 
+if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") 
+    set(MUFFT_LIBRARIES
+        ${CMAKE_SOURCE_DIR}/mufft/libmuFFT.a)
+else()
+    set(MUFFT_LIBRARIES
+        ${CMAKE_SOURCE_DIR}/mufft/libmuFFT.a
+        ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse.a
+        ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse3.a
+        ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-avx.a)
+endif()
+
 target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe
     ${SoapySDR_LIBRARIES}
     ${HDF5_LIBRARIES}
-    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT.a
-    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse.a
-    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse3.a
-    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-avx.a)
+    ${MUFFT_LIBRARIES})
 
 add_library(sounder_module MODULE 
     ${SOUNDER_SOURCES})
 
 target_link_libraries(sounder_module -lpthread -lhdf5_cpp --enable-threadsafe
     -Wl,--whole-archive
-    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT.a
-    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse.a
-    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse3.a
-    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-avx.a
+    ${MUFFT_LIBRARIES}
     -Wl,--no-whole-archive
     ${HDF5_LIBRARIES}
     ${SoapySDR_LIBRARIES})
