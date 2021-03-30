@@ -13,9 +13,12 @@
 #include "include/logger.h"
 #include "include/macros.h"
 #include "include/utils.h"
+#include "nlohmann/json.hpp"
 #include <SoapySDR/Errors.hpp>
 #include <SoapySDR/Formats.hpp>
 #include <SoapySDR/Time.hpp>
+
+using json = nlohmann::json;
 
 static void initAGC(SoapySDR::Device* dev, Config* cfg);
 
@@ -179,8 +182,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
                 }
                 std::cout << "Client " << i << " schedule: " << tddSched
                           << std::endl;
-#ifdef JSON
-                json tddConf;
+                nlohmann::json tddConf;
                 tddConf["tdd_enabled"] = true;
                 tddConf["frame_mode"] = _cfg->frame_mode();
                 int max_frame_ = (int)(2.0
@@ -195,16 +197,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
                 tddConf["frames"].push_back(tddSched);
                 tddConf["symbol_size"] = _cfg->samps_per_symbol();
                 std::string tddConfStr = tddConf.dump();
-#else
-                std::string tddConfStr = "{\"tdd_enabled\":true,\"frame_mode\":"
-                    + _cfg->frame_mode() + ",";
-                tddConfStr += "\"symbol_size\":"
-                    + std::to_string(_cfg->samps_per_symbol());
-                if (_cfg->cl_sdr_ch() == 2)
-                    tddConfStr += "\"dual_pilot\":true,";
-                tddConfStr += ",\"frames\":[\"" + tddSched[i] + "\"]}";
-                std::cout << tddConfStr << std::endl;
-#endif
+
                 dev->writeSetting("TDD_CONFIG", tddConfStr);
 
                 dev->setHardwareTime(
@@ -386,17 +379,10 @@ static void initAGC(SoapySDR::Device* dev, Config* cfg)
     /*
      * Initialize AGC parameters
      */
-#ifdef JSON
     json agcConf;
     agcConf["agc_enabled"] = cfg->cl_agc_en();
     agcConf["agc_gain_init"] = cfg->cl_agc_gain_init();
     std::string agcConfStr = agcConf.dump();
-#else
-    std::string agcConfStr
-        = "{\"agc_enabled\":" + cfg->cl_agc_en() ? "true" : "false";
-    agcConfStr
-        += ",\"agc_gain_init\":" + std::to_string(cfg->cl_agc_gain_init());
-    agcConfStr += "}";
-#endif
+
     dev->writeSetting("AGC_CONFIG", agcConfStr);
 }

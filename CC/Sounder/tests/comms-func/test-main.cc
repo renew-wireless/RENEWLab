@@ -278,10 +278,10 @@ int main(int argc, char const* argv[])
     std::cout << "Testing find_beacon_avx:\n";
 
     // generate beacon
-    std::vector<std::vector<double>> gold_ifft
+    std::vector<std::vector<float>> gold_ifft
         = CommsLib::getSequence(CommsLib::GOLD_IFFT);
     std::vector<std::complex<int16_t>> gold_ifft_ci16
-        = Utils::double_to_cint16(gold_ifft);
+        = Utils::float_to_cint16(gold_ifft);
 
     int goldReps = 2;
     std::vector<std::complex<int16_t>> beacon_ci16;

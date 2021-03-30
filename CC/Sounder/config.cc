@@ -12,6 +12,8 @@
 #include "include/logger.h"
 #include "include/macros.h"
 #include "include/utils.h"
+#include "nlohmann/json.hpp"
+using json = nlohmann::json;
 
 static size_t kFpgaTxRamSize = 4096;
 static size_t kMaxSupportedFFTSize = 2048;
@@ -22,7 +24,8 @@ Config::Config(const std::string& jsonfile)
 {
     std::string conf;
     Utils::loadTDDConfig(jsonfile, conf);
-    const auto jConf = json::parse(conf);
+    // Enable comments in json file
+    const auto jConf = json::parse(conf, nullptr, true, true);
     std::stringstream ss;
     json tddConf;
 
@@ -263,20 +266,18 @@ Config::Config(const std::string& jsonfile)
     // 15reps of STS(16) + 2reps of gold_ifft(128)
     srand(time(NULL));
     const int seqLen = 128;
-    std::vector<std::vector<double>> gold_ifft
+    std::vector<std::vector<float>> gold_ifft
         = CommsLib::getSequence(CommsLib::GOLD_IFFT);
-    std::vector<std::complex<int16_t>> gold_ifft_ci16
-        = Utils::double_to_cint16(gold_ifft);
+    auto gold_ifft_ci16 = Utils::float_to_cint16(gold_ifft);
     gold_cf32_.clear();
     for (size_t i = 0; i < seqLen; i++) {
         gold_cf32_.push_back(
             std::complex<float>(gold_ifft[0][i], gold_ifft[1][i]));
     }
 
-    std::vector<std::vector<double>> sts_seq
+    std::vector<std::vector<float>> sts_seq
         = CommsLib::getSequence(CommsLib::STS_SEQ);
-    std::vector<std::complex<int16_t>> sts_seq_ci16
-        = Utils::double_to_cint16(sts_seq);
+    auto sts_seq_ci16 = Utils::float_to_cint16(sts_seq);
 
     // Populate STS (stsReps repetitions)
     int stsReps = 15;
@@ -342,7 +343,7 @@ Config::Config(const std::string& jsonfile)
             << " is not supported! Choose either LTS (64-fft) or zaddof-chu."
             << std::endl;
 
-    auto iq_ci16 = Utils::double_to_cint16(pilot_sym_);
+    auto iq_ci16 = Utils::float_to_cint16(pilot_sym_);
     iq_ci16.insert(iq_ci16.begin(), iq_ci16.end() - cp_size_, iq_ci16.end());
 
     pilot_ci16_.clear();

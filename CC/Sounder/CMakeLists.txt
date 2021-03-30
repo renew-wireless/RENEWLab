@@ -39,7 +39,7 @@ if(${CMAKE_C_COMPILER_ID} STREQUAL "GNU")
   message(STATUS "Using GNU compiler, compiler ID ${CMAKE_C_COMPILER_ID}")
   #For Ubuntu 1804 need to keep the c11 std for thread check
   set(CMAKE_C_FLAGS "-std=c11 -Wall")
-  set(CMAKE_CXX_FLAGS "-std=c++17 -Wall -Wextra -mavx2")
+  set(CMAKE_CXX_FLAGS "-std=c++17 -Wall -Wextra -march=native")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
 else()
   message(FATAL_ERROR "Unsupported version of compiler")
@@ -81,8 +81,6 @@ endif()
 
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 #find_package(Threads REQUIRED)
-find_package(nlohmann_json 3.2 REQUIRED)
-
 message(STATUS "Using Pthread Library: ${CMAKE_THREAD_LIBS_INIT}: ${CMAKE_USE_PTHREADS_INIT}")
 
 set(USE_UHD False CACHE STRING "USE_UHD defaulting to 'False'")
@@ -111,14 +109,13 @@ endif ()
 set(directory "logs")
 file(MAKE_DIRECTORY ${directory})
 
-add_definitions(-DJSON)
 add_definitions(-DTHREADED_INIT)
 
 message(STATUS "SoapySDR_INCLUDE_DIRS: ${SoapySDR_INCLUDE_DIRS}")
 message(STATUS "SoapySDR_LIBRARIES: ${SoapySDR_LIBRARIES}")
 message(STATUS "HDF5_INCLUDE_DIRS: ${HDF5_INCLUDE_DIRS}")
 message(STATUS "HDF5_LIBRARIES: ${HDF5_LIBRARIES}")
-include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS})
+include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS} third_party/ third_party/nlohmann/single_include )
 
 set(SOUNDER_SOURCES 
     ClientRadioSet.cc
@@ -139,23 +136,28 @@ add_executable(sounder
     main.cc
     ${SOUNDER_SOURCES})
 
+if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") 
+    set(MUFFT_LIBRARIES
+        ${CMAKE_SOURCE_DIR}/mufft/libmuFFT.a)
+else()
+    set(MUFFT_LIBRARIES
+        ${CMAKE_SOURCE_DIR}/mufft/libmuFFT.a
+        ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse.a
+        ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse3.a
+        ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-avx.a)
+endif()
+
 target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe
     ${SoapySDR_LIBRARIES}
     ${HDF5_LIBRARIES}
-    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT.a
-    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse.a
-    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse3.a
-    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-avx.a)
+    ${MUFFT_LIBRARIES})
 
 add_library(sounder_module MODULE 
     ${SOUNDER_SOURCES})
 
 target_link_libraries(sounder_module -lpthread -lhdf5_cpp --enable-threadsafe
     -Wl,--whole-archive
-    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT.a
-    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse.a
-    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-sse3.a
-    ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-avx.a
+    ${MUFFT_LIBRARIES}
     -Wl,--no-whole-archive
     ${HDF5_LIBRARIES}
     ${SoapySDR_LIBRARIES})
