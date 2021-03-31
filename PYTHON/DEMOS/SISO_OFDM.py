@@ -167,6 +167,13 @@ ax6.set_xlim(-10, 10)
 ax6.legend(fontsize=10)
 
 
+cfo_stat = np.array([])
+phase_stat = np.array([])
+avg_evm_stat = np.array([])
+snr_stat = np.array([])
+symbol_err_stat = np.array([])
+cfo_cnt = 0
+
 #########################################
 #              Functions                #
 #########################################
@@ -214,7 +221,7 @@ def find_optimal_gain(sdrTx, sdrRx):
 
 
 def animate(i, num_samps_rd, rxStream, sdr, sdrTx, ofdm_params, tx_struct, ota, ofdm_obj, agc_en, infoTx):
-    global FIG_LEN, pkt_count, ax6
+    global FIG_LEN, pkt_count, ax6, cfo_cnt, cfo_stat, phase_stat, avg_evm_stat, snr_stat, symbol_err_stat
 
     pkt_count = pkt_count + 1
 
@@ -233,6 +240,7 @@ def animate(i, num_samps_rd, rxStream, sdr, sdrTx, ofdm_params, tx_struct, ota, 
     tx_data = tx_struct[3]
     txSignal = tx_struct[4]
     lts_syms_len = len(tx_struct[5])
+    lts_syms = tx_struct[5]
     lts_freq = tx_struct[6]
     pilots_matrix = tx_struct[8]
 
@@ -320,7 +328,7 @@ def animate(i, num_samps_rd, rxStream, sdr, sdrTx, ofdm_params, tx_struct, ota, 
     lts_start = a - lts_syms_len + 1  # where LTS-CP start
 
     # Apply CFO Correction
-    if APPLY_CFO_CORR:
+    if cfo_cnt < 5000:   # APPLY_CFO_CORR:
         coarse_cfo_est = ofdm_obj.cfo_correction(rxSignal, lts_start, lts_syms_len, fft_offset)
     else:
         coarse_cfo_est = 0
@@ -377,7 +385,7 @@ def animate(i, num_samps_rd, rxStream, sdr, sdrTx, ofdm_params, tx_struct, ota, 
         sfo_corr = np.zeros((num_sc, n_ofdm_syms))
 
     # Apply phase correction
-    if APPLY_PHASE_CORR:
+    if cfo_cnt < 5000:  # APPLY_PHASE_CORR:
         phase_error = ofdm_obj.phase_correction(rxSig_freq_eq, pilot_sc, pilots_matrix)
     else:
         phase_error = np.zeros((1, n_ofdm_syms))
@@ -391,9 +399,29 @@ def animate(i, num_samps_rd, rxStream, sdr, sdrTx, ofdm_params, tx_struct, ota, 
     rxSymbols_vec = np.reshape(rxSymbols_mat, n_data_syms, order="F")       # Reshape into vector
     rx_data = ofdm_obj.demodulation(rxSymbols_vec, mod_order)
 
+    # EVM
+    evm_tmp = np.abs(data_const - rxSymbols_mat)**2
+    avg_evm = np.mean(evm_tmp)
+    snr = 10*np.log10(1/avg_evm)
+
     print(" === STATS ===")
     symbol_err = np.sum(tx_data != rx_data)
-    print("Frame#: {} --- Symbol Errors: {} out of {} total symbols".format(pkt_count, symbol_err, n_data_syms))
+    print("Frame#: {} --- Symbol Errors: {} out of {} total symbols, AVG EVM (%): {}, SNR: {}".
+            format(pkt_count, symbol_err, n_data_syms, 100*avg_evm, snr))
+
+    # Collect CFO and Phase error data
+    if APPLY_CFO_CORR and APPLY_PHASE_CORR:
+        cfo_stat = np.append(cfo_stat, coarse_cfo_est)
+        phase_stat = np.append(phase_stat, phase_error)
+        avg_evm_stat = np.append(avg_evm_stat, 100*avg_evm)
+        snr_stat = np.append(snr_stat, snr)
+        symbol_err_stat = np.append(symbol_err_stat, symbol_err)
+        cfo_cnt = cfo_cnt + 1
+        #print("** COUNT: {} \t CFO: {} \t PhaseErr: {} **".format(cfo_cnt, coarse_cfo_est, phase_error))
+        if cfo_cnt == 10000:
+            num_frames_ = cfo_cnt
+            sio.savemat('cfo_vs_evm.mat', {'cfo': cfo_stat, 'phaseErr': phase_stat, 'evm_pct': avg_evm_stat, 
+                'snr': snr_stat, 'symbol_err': symbol_err_stat, 'nOFDMsyms': n_ofdm_syms, 'nframes':num_frames_, 'fc': 3.56e9, 'fs': 5e6})
 
     # PLOTTING SECTION
     rx_H_est_plot = np.squeeze(np.matlib.repmat(complex('nan'), 1, len(chan_est)))
@@ -565,9 +593,9 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx and Rx sample rate", default=5e6)
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
-    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=80.0)  # See documentation at top of file for info on gain range
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Rx gain (dB)", default=75.0)  # See documentation at top of file for info on gain range
-    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=75.0)  # See documentation at top of file for info on gain range
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Rx gain (dB)", default=55.0)  # See documentation at top of file for info on gain range
+    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=3.56e9)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
     parser.add_option("--nOFDMsym", type="int", dest="nOFDMsym", help="Number of OFDM symbols", default=20)
     parser.add_option("--ltsCpLen", type="int", dest="ltsCpLen", help="Length of Cyclic Prefix - LTS", default=32)
@@ -575,8 +603,8 @@ def main():
     parser.add_option("--nSC", type="int", dest="nSC", help="# of subcarriers. Only supports 64 sc at the moment", default=64)
     parser.add_option("--fftOfset", type="int", dest="fftOffset", help="FFT Offset: # of CP samples for FFT", default=6)
     parser.add_option("--modOrder", type="int", dest="modOrder", help="Modulation Order 2=BPSK/4=QPSK/16=16QAM/64=64QAM", default=16)
-    parser.add_option("--serialTx", type="string", dest="serialTx", help="Serial # of TX device", default="RF3E000143")
-    parser.add_option("--serialRx", type="string", dest="serialRx", help="Serial # of RX device", default="RF3E000030")
+    parser.add_option("--serialTx", type="string", dest="serialTx", help="Serial # of TX device", default="RF3E000600")
+    parser.add_option("--serialRx", type="string", dest="serialRx", help="Serial # of RX device", default="RF3E000636")
     parser.add_option("--nSampsRead", type="int", dest="nSampsRead", help="# Samples to read", default=FIG_LEN)
     parser.add_option("--mode", type="string", dest="mode", help="Simulation vs Over-the-Air (i.e., SIM/OTA)", default="OTA")
     parser.add_option("--agc_en", action="store_true", dest="agc_en", help="Flag to enable AGC", default=False)  # Currently under testing

@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import scipy.io as sio  # For .mat format
 
 
-def find_lts(iq, thresh=0.8, us=1, cp=32, flip=False, lts_seq=[]):
+def find_lts(iq, thresh=0.8, us=1, cp=32, flip=True, lts_seq=[]):
 	"""
 		Find the indices of LTSs in the input "iq" signal (upsampled by a factor of "up").
 		"thresh" sets sensitivity.
@@ -64,7 +64,7 @@ def find_lts(iq, thresh=0.8, us=1, cp=32, flip=False, lts_seq=[]):
 		lts_flip = lts_tmp
 
 	lts_flip_conj = np.conjugate(lts_flip)
-	sign_fct = iq/abs(iq)									  	# Equivalent to Matlab's sign function (X/abs(X))
+	sign_fct = iq/abs(iq)									# Equivalent to Matlab's sign function (X/abs(X))
 	sign_fct = np.nan_to_num(sign_fct)							# Replace NaN values
 	lts_corr = np.abs(np.convolve(lts_flip_conj, sign_fct))
 
