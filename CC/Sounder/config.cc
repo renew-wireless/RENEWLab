@@ -464,8 +464,8 @@ void Config::generateULData()
             + std::to_string(symbol_data_subcarrier_num_) + "_"
             + std::to_string(fft_size_) + "_"
             + std::to_string(cl_ul_symbols_[i].size()) + "_"
-            + std::to_string(frame_data_gen_) + "_" + std::to_string(i)
-            + ".bin";
+            + std::to_string(frame_data_gen_) + "_" + cl_channel_ + "_"
+            + std::to_string(i) + ".bin";
         std::printf("Saving UL data bits for radio %zu to %s\n", i,
             filename_ul_data_b.c_str());
         FILE* fp_tx_b = std::fopen(filename_ul_data_b.c_str(), "wb");
@@ -473,8 +473,8 @@ void Config::generateULData()
             + std::to_string(symbol_data_subcarrier_num_) + "_"
             + std::to_string(fft_size_) + "_"
             + std::to_string(cl_ul_symbols_[i].size()) + "_"
-            + std::to_string(frame_data_gen_) + "_" + std::to_string(i)
-            + ".bin";
+            + std::to_string(frame_data_gen_) + "_" + cl_channel_ + "_"
+            + std::to_string(i) + ".bin";
         std::printf("Saving UL frequency-domain data for radio %zu to %s\n", i,
             filename_ul_data_f.c_str());
         FILE* fp_tx_f = std::fopen(filename_ul_data_f.c_str(), "wb");
@@ -482,8 +482,8 @@ void Config::generateULData()
             + std::to_string(symbol_data_subcarrier_num_) + "_"
             + std::to_string(fft_size_) + "_"
             + std::to_string(cl_ul_symbols_[i].size()) + "_"
-            + std::to_string(frame_data_gen_) + "_" + std::to_string(i)
-            + ".bin";
+            + std::to_string(frame_data_gen_) + "_" + cl_channel_ + "_"
+            + std::to_string(i) + ".bin";
         std::printf("Saving UL time-domain data for radio %zu to %s\n", i,
             filename_ul_data_t.c_str());
         FILE* fp_tx_t = std::fopen(filename_ul_data_t.c_str(), "wb");
