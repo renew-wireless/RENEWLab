@@ -463,6 +463,11 @@ void Config::loadULData(const std::string& directory)
                 "Loading UL frequency-domain data for radio %zu to %s\n", i,
                 filename_ul_data_f.c_str());
             FILE* fp_tx_f = std::fopen(filename_ul_data_f.c_str(), "rb");
+            if (!fp_tx_f) {
+                throw std::runtime_error(
+                    filename_ul_data_f + std::string(" not found!"));
+            }
+
             std::string filename_ul_data_t = directory + "/ul_data_t_"
                 + data_mod_ + "_" + std::to_string(symbol_data_subcarrier_num_)
                 + "_" + std::to_string(fft_size_) + "_"
@@ -473,6 +478,11 @@ void Config::loadULData(const std::string& directory)
                 filename_ul_data_t.c_str());
             tx_data_files_.push_back(filename_ul_data_t);
             FILE* fp_tx_t = std::fopen(filename_ul_data_t.c_str(), "rb");
+            if (!fp_tx_t) {
+                throw std::runtime_error(
+                    filename_ul_data_t + std::string(" not found!"));
+            }
+
             // Frame * UL Slots * Channel * Samples
             for (size_t u = 0; u < cl_ul_symbols_[i].size(); u++) {
                 for (size_t h = 0; h < cl_sdr_ch_; h++) {

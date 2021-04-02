@@ -54,6 +54,8 @@ Important for developers: Do not use _ in your branch name. Use - instead. Limit
      $ mkdir build
      $ cd build
      $ cmake .. -DCMAKE_BUILD_TYPE=Release -DLOG_LEVEL=info && make -j
+     $ cd ../
+     $ ./build/sounder -conf PATH_TO_JSON_CONFIG_FILE
      ```
        
   3. If you are going to use the RENEW MATLAB Development Suite, no dependency is needed.
