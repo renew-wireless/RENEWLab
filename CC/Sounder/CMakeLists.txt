@@ -120,6 +120,7 @@ include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS} third_party/ t
 set(SOUNDER_SOURCES 
     ClientRadioSet.cc
     config.cc
+    data_generator.cc
     Radio.cc
     receiver.cc
     recorder.cc

@@ -10,25 +10,31 @@
 ---------------------------------------------------------------------
 */
 
+#include "include/data_generator.h"
 #include "include/recorder.h"
 #include "include/signalHandler.hpp"
 #include <gflags/gflags.h>
 
-DEFINE_uint64(frame_data_gen, false,
+DEFINE_bool(gen_ul_bits, false,
     "Generate random bits for uplink transmissions, otherwise read from file!");
 DEFINE_string(conf, "files/conf.json", "JSON configuration file name");
+DEFINE_string(storepath, "logs", "Dataset store path");
 
 int main(int argc, char* argv[])
 {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
-    Config config(FLAGS_conf);
+    Config config(FLAGS_conf, FLAGS_storepath);
     int ret = EXIT_SUCCESS;
-    if (!FLAGS_frame_data_gen) {
+    if (FLAGS_gen_ul_bits) {
+        DataGenerator dg(&config);
+        dg.GenerateData(FLAGS_storepath);
+    } else {
         try {
             SignalHandler signalHandler;
 
             // Register signal handler to handle kill signal
             signalHandler.setupSignalHandlers();
+            config.loadULData(FLAGS_storepath);
             Sounder::Recorder dr(&config);
             dr.do_it();
             ret = EXIT_SUCCESS;

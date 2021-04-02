@@ -610,17 +610,11 @@ void Receiver::clientSyncTxRx(int tid)
         MLPD_INFO("%zu uplink symbols will be sent per frame...\n", txSyms);
     }
 
-    FILE* fp;
+    FILE* fp = nullptr;
     if (config_->ul_data_sym_present() == true) {
-        std::string filename_ul_data_t = "logs/ul_data_t_" + config_->data_mod()
-            + "_" + std::to_string(config_->symbol_data_subcarrier_num()) + "_"
-            + std::to_string(config_->fft_size()) + "_"
-            + std::to_string(config_->cl_ul_symbols()[tid].size()) + "_"
-            + std::to_string(config_->frame_data_gen()) + "_"
-            + std::to_string(tid) + ".bin";
         std::printf("Opening UL time-domain data for radio %d to %s\n", tid,
-            filename_ul_data_t.c_str());
-        fp = std::fopen(filename_ul_data_t.c_str(), "rb");
+            config_->tx_data_files().at(tid).c_str());
+        fp = std::fopen(config_->tx_data_files().at(tid).c_str(), "rb");
     }
 
     long long rxTime(0);
@@ -793,14 +787,16 @@ void Receiver::clientSyncTxRx(int tid)
                             MLPD_WARN("BAD Write: %d/%d\n", r, NUM_SAMPS);
                         }
                     } // end for
-                    if (frame_cnt % config_->frame_data_gen() == 0)
+                    if (frame_cnt % config_->ul_data_frame_num() == 0)
                         std::fseek(fp, 0, SEEK_SET);
                 } // end if config_->ul_data_sym_present()
             } // end if sf == 0
         } // end for
         frame_cnt++;
     } // end while
-    std::fclose(fp);
+    if (config_->ul_data_sym_present() == true || fp != nullptr) {
+        std::fclose(fp);
+    }
 
     for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
         std::free(txbuff.at(ch));

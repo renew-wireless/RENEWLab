@@ -20,7 +20,7 @@ static size_t kMaxSupportedFFTSize = 2048;
 static size_t kMinSupportedFFTSize = 64;
 static size_t kMaxSupportedCPSize = 128;
 
-Config::Config(const std::string& jsonfile)
+Config::Config(const std::string& jsonfile, const std::string& directory)
 {
     std::string conf;
     Utils::loadTDDConfig(jsonfile, conf);
@@ -205,7 +205,7 @@ Config::Config(const std::string& jsonfile)
         frame_mode_ = tddConfCl.value("frame_mode", "continuous_resync");
         hw_framer_ = tddConfCl.value("hw_framer", true);
         tx_advance_ = tddConfCl.value("tx_advance", 250); // 250
-        frame_data_gen_ = tddConfCl.value("frame_data_gen", 1); // 250
+        ul_data_frame_num_ = tddConfCl.value("ul_data_frame_num", 1);
 
         cl_txgain_vec_.resize(2);
         cl_rxgain_vec_.resize(2);
@@ -367,11 +367,11 @@ Config::Config(const std::string& jsonfile)
     }
 #endif
 
-    // compose data subframe
-    if (ul_data_sym_present_) {
-        generateULData();
-    }
-
+    data_ind_ = CommsLib::getDataSc(fft_size_, symbol_data_subcarrier_num_);
+    pilot_sc_
+        = CommsLib::getPilotScValue(fft_size_, symbol_data_subcarrier_num_);
+    pilot_sc_ind_
+        = CommsLib::getPilotScIndex(fft_size_, symbol_data_subcarrier_num_);
     if (bs_present_ == true) {
         // set trace file path
         time_t now = time(0);
@@ -380,7 +380,7 @@ Config::Config(const std::string& jsonfile)
         size_t ant_num = getTotNumAntennas();
         std::string filename;
         if (reciprocal_calib_) {
-            filename = "logs/trace-reciprocal-calib-"
+            filename = directory + "/trace-reciprocal-calib-"
                 + std::to_string(1900 + ltm->tm_year) + "-"
                 + std::to_string(1 + ltm->tm_mon) + "-"
                 + std::to_string(ltm->tm_mday) + "-"
@@ -391,7 +391,7 @@ Config::Config(const std::string& jsonfile)
         } else {
             std::string ul_present_str
                 = (ul_data_sym_present_ ? "uplink-" : "");
-            filename = "logs/trace-" + ul_present_str
+            filename = directory + "/trace-" + ul_present_str
                 + std::to_string(1900 + ltm->tm_year) + "-"
                 + std::to_string(1 + ltm->tm_mon) + "-"
                 + std::to_string(ltm->tm_mday) + "-"
@@ -443,106 +443,64 @@ Config::Config(const std::string& jsonfile)
     MLPD_INFO("Configuration file was successfully parsed!\n");
 }
 
-void Config::generateULData()
+void Config::loadULData(const std::string& directory)
 {
-    int mod_type = data_mod_ == "64QAM"
-        ? CommsLib::QAM64
-        : (data_mod_ == "16QAM" ? CommsLib::QAM16 : CommsLib::QPSK);
-    int mod_order = 1 << mod_type;
-
-    data_ind_ = CommsLib::getDataSc(fft_size_, symbol_data_subcarrier_num_);
-    pilot_sc_
-        = CommsLib::getPilotScValue(fft_size_, symbol_data_subcarrier_num_);
-    pilot_sc_ind_
-        = CommsLib::getPilotScIndex(fft_size_, symbol_data_subcarrier_num_);
-    std::vector<std::complex<float>> prefix_zpad_t(prefix_, 0);
-    std::vector<std::complex<float>> postfix_zpad_t(postfix_, 0);
-    txdata_time_dom_.resize(num_cl_antennas_);
-    txdata_freq_dom_.resize(num_cl_antennas_);
-    for (size_t i = 0; i < num_cl_sdrs_; i++) {
-        std::string filename_ul_data_b = "logs/ul_data_b_" + data_mod_ + "_"
-            + std::to_string(symbol_data_subcarrier_num_) + "_"
-            + std::to_string(fft_size_) + "_"
-            + std::to_string(cl_ul_symbols_[i].size()) + "_"
-            + std::to_string(frame_data_gen_) + "_" + cl_channel_ + "_"
-            + std::to_string(i) + ".bin";
-        std::printf("Saving UL data bits for radio %zu to %s\n", i,
-            filename_ul_data_b.c_str());
-        FILE* fp_tx_b = std::fopen(filename_ul_data_b.c_str(), "wb");
-        std::string filename_ul_data_f = "logs/ul_data_f_" + data_mod_ + "_"
-            + std::to_string(symbol_data_subcarrier_num_) + "_"
-            + std::to_string(fft_size_) + "_"
-            + std::to_string(cl_ul_symbols_[i].size()) + "_"
-            + std::to_string(frame_data_gen_) + "_" + cl_channel_ + "_"
-            + std::to_string(i) + ".bin";
-        std::printf("Saving UL frequency-domain data for radio %zu to %s\n", i,
-            filename_ul_data_f.c_str());
-        FILE* fp_tx_f = std::fopen(filename_ul_data_f.c_str(), "wb");
-        std::string filename_ul_data_t = "logs/ul_data_t_" + data_mod_ + "_"
-            + std::to_string(symbol_data_subcarrier_num_) + "_"
-            + std::to_string(fft_size_) + "_"
-            + std::to_string(cl_ul_symbols_[i].size()) + "_"
-            + std::to_string(frame_data_gen_) + "_" + cl_channel_ + "_"
-            + std::to_string(i) + ".bin";
-        std::printf("Saving UL time-domain data for radio %zu to %s\n", i,
-            filename_ul_data_t.c_str());
-        FILE* fp_tx_t = std::fopen(filename_ul_data_t.c_str(), "wb");
-        // Frame * UL Slots * Channel * Samples
-        for (size_t f = 0; f < frame_data_gen_; f++) {
+    // compose data subframe
+    if (ul_data_sym_present_) {
+        std::vector<std::complex<float>> prefix_zpad_t(prefix_, 0);
+        std::vector<std::complex<float>> postfix_zpad_t(postfix_, 0);
+        txdata_time_dom_.resize(num_cl_antennas_);
+        txdata_freq_dom_.resize(num_cl_antennas_);
+        // For now, we're reading one frame worth of data
+        for (size_t i = 0; i < num_cl_sdrs_; i++) {
+            std::string filename_ul_data_f = directory + "/ul_data_f_"
+                + data_mod_ + "_" + std::to_string(symbol_data_subcarrier_num_)
+                + "_" + std::to_string(fft_size_) + "_"
+                + std::to_string(cl_ul_symbols_[i].size()) + "_"
+                + std::to_string(ul_data_frame_num_) + "_" + cl_channel_ + "_"
+                + std::to_string(i) + ".bin";
+            std::printf(
+                "Loading UL frequency-domain data for radio %zu to %s\n", i,
+                filename_ul_data_f.c_str());
+            FILE* fp_tx_f = std::fopen(filename_ul_data_f.c_str(), "rb");
+            std::string filename_ul_data_t = directory + "/ul_data_t_"
+                + data_mod_ + "_" + std::to_string(symbol_data_subcarrier_num_)
+                + "_" + std::to_string(fft_size_) + "_"
+                + std::to_string(cl_ul_symbols_[i].size()) + "_"
+                + std::to_string(ul_data_frame_num_) + "_" + cl_channel_ + "_"
+                + std::to_string(i) + ".bin";
+            std::printf("Loading UL time-domain data for radio %zu to %s\n", i,
+                filename_ul_data_t.c_str());
+            tx_data_files_.push_back(filename_ul_data_t);
+            FILE* fp_tx_t = std::fopen(filename_ul_data_t.c_str(), "rb");
+            // Frame * UL Slots * Channel * Samples
             for (size_t u = 0; u < cl_ul_symbols_[i].size(); u++) {
                 for (size_t h = 0; h < cl_sdr_ch_; h++) {
                     size_t ant_i = i * cl_sdr_ch_ + h;
-                    std::vector<std::complex<float>> data_time_dom;
-                    std::vector<std::complex<float>> data_freq_dom;
-                    data_time_dom.insert(data_time_dom.begin(),
-                        prefix_zpad_t.begin(), prefix_zpad_t.end());
-                    for (size_t s = 0; s < symbol_per_subframe_; s++) {
-                        std::vector<uint8_t> data_bits;
-                        for (size_t c = 0; c < data_ind_.size(); c++) {
-                            data_bits.push_back((uint8_t)(rand() % mod_order));
-                        }
-                        std::fwrite(data_bits.data(),
-                            symbol_data_subcarrier_num_, sizeof(uint8_t),
-                            fp_tx_b);
-                        std::vector<std::complex<float>> mod_data
-                            = CommsLib::modulate(data_bits, mod_type);
-                        std::vector<std::complex<float>> ofdm_sym(fft_size_);
-                        size_t sc = 0;
-                        for (size_t c = 0; c < data_ind_.size(); c++) {
-                            sc = data_ind_[c];
-                            ofdm_sym[sc] = mod_data[c];
-                        }
-                        for (size_t c = 0; c < pilot_sc_.size(); c++) {
-                            sc = pilot_sc_ind_.at(c);
-                            ofdm_sym[sc] = pilot_sc_.at(c);
-                        }
-                        auto tx_sym = CommsLib::IFFT(
-                            ofdm_sym, fft_size_, 1.f / fft_size_, false);
-                        tx_sym.insert(tx_sym.begin(), tx_sym.end() - cp_size_,
-                            tx_sym.end()); // add CP
-                        data_time_dom.insert(
-                            data_time_dom.end(), tx_sym.begin(), tx_sym.end());
-                        data_freq_dom.insert(data_freq_dom.end(),
-                            ofdm_sym.begin(), ofdm_sym.end());
-                    }
-                    data_time_dom.insert(data_time_dom.end(),
-                        postfix_zpad_t.begin(), postfix_zpad_t.end());
-                    if (f == 0 && u == 0) {
-                        txdata_time_dom_[ant_i] = data_time_dom;
-                        txdata_freq_dom_[ant_i] = data_freq_dom;
-                    }
-                    std::fwrite(data_freq_dom.data(), fft_size_ * 2,
-                        sizeof(float), fp_tx_f);
-                    std::fwrite(data_time_dom.data(), samps_per_symbol_ * 2,
-                        sizeof(float), fp_tx_t);
+
+                    std::vector<std::complex<float>> data_freq_dom(
+                        fft_size_ * symbol_per_subframe_);
+                    std::fread(data_freq_dom.data(), 2 * sizeof(float),
+                        fft_size_ * symbol_per_subframe_, fp_tx_f);
+                    txdata_freq_dom_[ant_i].insert(
+                        txdata_freq_dom_[ant_i].end(), data_freq_dom.begin(),
+                        data_freq_dom.end());
+
+                    std::vector<std::complex<float>> data_time_dom(
+                        samps_per_symbol_);
+                    std::fread(data_time_dom.data(), 2 * sizeof(float),
+                        samps_per_symbol_, fp_tx_t);
+                    txdata_time_dom_[ant_i].insert(
+                        txdata_time_dom_[ant_i].end(), data_time_dom.begin(),
+                        data_time_dom.end());
                 }
             }
+            std::fclose(fp_tx_f);
+            std::fclose(fp_tx_t);
         }
-        std::fclose(fp_tx_b);
-        std::fclose(fp_tx_f);
-        std::fclose(fp_tx_t);
     }
 }
+
 size_t Config::getNumAntennas()
 {
     size_t ret;
@@ -680,10 +638,11 @@ unsigned Config::getCoreCount()
 }
 
 extern "C" {
-__attribute__((visibility("default"))) Config* Config_new(char* filename)
+__attribute__((visibility("default"))) Config* Config_new(
+    char* filename, char* storepath)
 {
 
-    Config* cfg = new Config(filename);
+    Config* cfg = new Config(filename, storepath);
     return cfg;
 }
 }

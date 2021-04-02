@@ -17,7 +17,7 @@
 
 class Config {
 public:
-    Config(const std::string&);
+    Config(const std::string&, const std::string&);
     ~Config();
 
     //Accessors
@@ -31,6 +31,10 @@ public:
     inline size_t symbols_per_frame(void) const
     {
         return this->symbols_per_frame_;
+    }
+    inline size_t symbol_per_subframe(void) const
+    {
+        return this->symbol_per_subframe_;
     }
     inline bool ul_data_sym_present(void) const
     {
@@ -51,7 +55,10 @@ public:
     inline bool imbalance_cal_en(void) const { return this->imbalance_cal_en_; }
     inline bool sample_cal_en(void) const { return this->sample_cal_en_; }
     inline size_t max_frame(void) const { return this->max_frame_; }
-    inline size_t frame_data_gen(void) const { return this->frame_data_gen_; }
+    inline size_t ul_data_frame_num(void) const
+    {
+        return this->ul_data_frame_num_;
+    }
     inline bool beam_sweep(void) const { return this->beam_sweep_; }
     inline size_t beacon_ant(void) const { return this->beacon_ant_; }
     inline size_t num_cl_antennas(void) const { return this->num_cl_antennas_; }
@@ -148,6 +155,10 @@ public:
     inline const std::vector<std::string>& cl_sdr_ids(void) const
     {
         return this->cl_sdr_ids_;
+    }
+    inline const std::vector<std::string>& tx_data_files(void) const
+    {
+        return this->tx_data_files_;
     }
 
     inline const std::vector<size_t>& data_ind(void) const
@@ -254,7 +265,7 @@ public:
     bool isNoise(int, int);
     bool isData(int, int);
     unsigned getCoreCount();
-    void generateULData();
+    void loadULData(const std::string&);
 
 private:
     bool bs_present_;
@@ -309,7 +320,7 @@ private:
     std::string frame_mode_;
     bool hw_framer_;
     size_t max_frame_;
-    size_t frame_data_gen_;
+    size_t ul_data_frame_num_;
     std::vector<std::vector<size_t>>
         pilot_symbols_; // Accessed through getClientId
     std::vector<std::vector<size_t>> noise_symbols_;
@@ -355,6 +366,7 @@ private:
 
     std::vector<std::vector<double>> cl_txgain_vec_;
     std::vector<std::vector<double>> cl_rxgain_vec_;
+    std::vector<std::string> tx_data_files_;
 
     std::atomic<bool> running_;
     bool core_alloc_;
