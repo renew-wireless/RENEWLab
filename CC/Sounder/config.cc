@@ -490,16 +490,25 @@ void Config::loadULData(const std::string& directory)
 
                     std::vector<std::complex<float>> data_freq_dom(
                         fft_size_ * symbol_per_subframe_);
-                    std::fread(data_freq_dom.data(), 2 * sizeof(float),
-                        fft_size_ * symbol_per_subframe_, fp_tx_f);
+                    int read_num
+                        = std::fread(data_freq_dom.data(), 2 * sizeof(float),
+                            fft_size_ * symbol_per_subframe_, fp_tx_f);
+                    if (read_num < (int)(fft_size_ * symbol_per_subframe_))
+                        MLPD_WARN(
+                            "BAD Read of Uplink Freq-Domain Data: %d/%zu\n",
+                            read_num, fft_size_ * symbol_per_subframe_);
                     txdata_freq_dom_[ant_i].insert(
                         txdata_freq_dom_[ant_i].end(), data_freq_dom.begin(),
                         data_freq_dom.end());
 
                     std::vector<std::complex<float>> data_time_dom(
                         samps_per_symbol_);
-                    std::fread(data_time_dom.data(), 2 * sizeof(float),
-                        samps_per_symbol_, fp_tx_t);
+                    read_num = std::fread(data_time_dom.data(),
+                        2 * sizeof(float), samps_per_symbol_, fp_tx_t);
+                    if (read_num < (int)samps_per_symbol_)
+                        MLPD_WARN(
+                            "BAD Read of Uplink Time-Domain Data: %d/%zu\n",
+                            read_num, samps_per_symbol_);
                     txdata_time_dom_[ant_i].insert(
                         txdata_time_dom_[ant_i].end(), data_time_dom.begin(),
                         data_time_dom.end());
