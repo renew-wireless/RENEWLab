@@ -24,6 +24,9 @@
 #include <queue>
 //#include <itpp/itbase.h>
 
+static constexpr size_t kFftSize_80211 = 64;
+static constexpr size_t kPilotSubcarrierSpacing = 12;
+
 int CommsLib::findLTS(const std::vector<std::complex<float>>& iq, int seqLen)
 {
     /*
@@ -43,7 +46,7 @@ int CommsLib::findLTS(const std::vector<std::complex<float>>& iq, int seqLen)
     lts_seq = CommsLib::getSequence(LTS_SEQ, seqLen);
 
     // Re-arrange into complex vector, flip, and compute conjugate
-    const size_t lts_symbol_len = 64;
+    const size_t lts_symbol_len = kFftSize_80211;
     std::vector<std::complex<float>> lts_sym(lts_symbol_len);
     std::vector<std::complex<float>> lts_sym_conj(lts_sym.size());
     for (size_t i = 0; i < lts_sym.size(); i++) {
@@ -332,20 +335,22 @@ float CommsLib::measureTone(std::vector<std::complex<float>> const& samps,
         magnitudeFFT(samps, win, fftSize), winGain, fftBin, fftSize, delta);
 }
 
-std::vector<size_t> CommsLib::getDataSc(size_t fftSize, size_t DataScNum)
+std::vector<size_t> CommsLib::getDataSc(
+    size_t fftSize, size_t DataScNum, size_t PilotScOffset)
 {
     std::vector<size_t> data_sc;
-    if (fftSize == 64) { // consider 802.11
+    if (fftSize == kFftSize_80211) {
+        // We follow 802.11 PHY format here
         size_t sc_ind[48]
             = { 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
                   20, 22, 23, 24, 25, 26, 38, 39, 40, 41, 42, 44, 45, 46, 47,
                   48, 49, 50, 51, 52, 53, 54, 55, 56, 58, 59, 60, 61, 62, 63 };
         data_sc.assign(sc_ind, sc_ind + 48);
-    } else { // consider center subcarriers
+    } else { // Allocate the center subcarriers as data
         size_t start_sc = (fftSize - DataScNum) / 2;
         size_t stop_sc = start_sc + DataScNum;
         for (size_t i = start_sc; i < stop_sc; i++)
-            if ((i - start_sc) % 6 != 0)
+            if ((i - start_sc) % kPilotSubcarrierSpacing != PilotScOffset)
                 data_sc.push_back(i);
     }
     return data_sc;
@@ -354,10 +359,11 @@ std::vector<size_t> CommsLib::getDataSc(size_t fftSize, size_t DataScNum)
 std::vector<size_t> CommsLib::getNullSc(size_t fftSize, size_t DataScNum)
 {
     std::vector<size_t> null_sc;
-    if (fftSize == 64) { // consider 802.11
+    if (fftSize == kFftSize_80211) {
+        // We follow 802.11 PHY format here
         int null[12] = { 0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63 };
         null_sc.assign(null, null + 12);
-    } else { // consider center subcarriers
+    } else { // Allocate the boundary subcarriers as null
         size_t start_sc = (fftSize - DataScNum) / 2;
         size_t stop_sc = start_sc + DataScNum;
         for (size_t i = 0; i < start_sc; i++)
@@ -369,13 +375,14 @@ std::vector<size_t> CommsLib::getNullSc(size_t fftSize, size_t DataScNum)
 }
 
 std::vector<std::complex<float>> CommsLib::getPilotScValue(
-    size_t fftSize, size_t DataScNum)
+    size_t fftSize, size_t DataScNum, size_t PilotScOffset)
 {
     std::vector<std::complex<float>> pilot_sc;
-    if (fftSize == 64) { // consider 802.11
+    if (fftSize == kFftSize_80211) {
+        // We follow 802.11 PHY format here
         std::complex<float> sc_val[4] = { 1, 1, -1, 1 };
         pilot_sc.assign(sc_val, sc_val + 4);
-    } else { // consider center subcarriers
+    } else {
         size_t start_sc = (fftSize - DataScNum) / 2;
         size_t stop_sc = start_sc + DataScNum;
         std::vector<std::vector<float>> pilot_sym
@@ -386,24 +393,28 @@ std::vector<std::complex<float>> CommsLib::getPilotScValue(
                 pilot_sym.at(0).at(i), pilot_sym.at(1).at(i)));
         }
         auto pilot_fft = CommsLib::FFT(pilot_sym_cf32, fftSize);
-        for (size_t i = start_sc + 6; i < stop_sc; i += 12) {
+        for (size_t i = start_sc + PilotScOffset; i < stop_sc;
+             i += kPilotSubcarrierSpacing) {
             pilot_sc.push_back(pilot_fft.at(i));
         }
     }
     return pilot_sc;
 }
 
-std::vector<size_t> CommsLib::getPilotScIndex(size_t fftSize, size_t DataScNum)
+std::vector<size_t> CommsLib::getPilotScIndex(
+    size_t fftSize, size_t DataScNum, size_t PilotScOffset)
 {
     std::vector<size_t> pilot_sc;
-    if (fftSize == 64) { // consider 802.11
+    if (fftSize == kFftSize_80211) {
+        // We follow 802.11 standard here
         int sc_ind[4] = { 7, 21, 43, 57 };
         pilot_sc.assign(sc_ind, sc_ind + 4);
     } else { // consider center subcarriers
         size_t start_sc = (fftSize - DataScNum) / 2;
         size_t stop_sc = start_sc + DataScNum;
         // pilot at the center of each RB
-        for (size_t i = start_sc + 6; i < stop_sc; i += 12) {
+        for (size_t i = start_sc + PilotScOffset; i < stop_sc;
+             i += kPilotSubcarrierSpacing) {
             pilot_sc.push_back(i);
         }
     }
@@ -561,7 +572,7 @@ std::vector<std::vector<float>> CommsLib::getSequence(
             sts_freq_shifted.end(), sts_freq.begin(), sts_freq.begin() + 32);
 
         std::vector<std::complex<float>> sts_iq
-            = CommsLib::IFFT(sts_freq_shifted, 64, 1);
+            = CommsLib::IFFT(sts_freq_shifted, kFftSize_80211, 1);
 
         size_t out_seq_len = seq_len > 0 ? seq_len : sts_seq_len;
         size_t frac_seq_len = out_seq_len % sts_seq_len;
@@ -574,7 +585,7 @@ std::vector<std::vector<float>> CommsLib::getSequence(
     } else if (type == LTS_SEQ) {
         // LTS - 802.11 Long training sequence (160 samples == 2.5 symbols, cp length of 32 samples)
         matrix.resize(2);
-        const size_t lts_seq_len = 64;
+        const size_t lts_seq_len = kFftSize_80211;
 
         // Define freq-domain LTS according to
         // https://standards.ieee.org/standard/802_11a-1999.html
