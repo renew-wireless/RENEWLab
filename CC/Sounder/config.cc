@@ -453,12 +453,16 @@ void Config::loadULData(const std::string& directory)
         txdata_freq_dom_.resize(num_cl_antennas_);
         // For now, we're reading one frame worth of data
         for (size_t i = 0; i < num_cl_sdrs_; i++) {
-            std::string filename_ul_data_f = directory + "/ul_data_f_"
-                + data_mod_ + "_" + std::to_string(symbol_data_subcarrier_num_)
-                + "_" + std::to_string(fft_size_) + "_"
+            std::string filename_tag = data_mod_ + "_"
+                + std::to_string(symbol_data_subcarrier_num_) + "_"
+                + std::to_string(fft_size_) + "_"
+                + std::to_string(symbol_per_subframe_) + "_"
                 + std::to_string(cl_ul_symbols_[i].size()) + "_"
                 + std::to_string(ul_data_frame_num_) + "_" + cl_channel_ + "_"
                 + std::to_string(i) + ".bin";
+
+            std::string filename_ul_data_f
+                = directory + "/ul_data_f_" + filename_tag;
             std::printf(
                 "Loading UL frequency-domain data for radio %zu to %s\n", i,
                 filename_ul_data_f.c_str());
@@ -468,12 +472,8 @@ void Config::loadULData(const std::string& directory)
                     filename_ul_data_f + std::string(" not found!"));
             }
 
-            std::string filename_ul_data_t = directory + "/ul_data_t_"
-                + data_mod_ + "_" + std::to_string(symbol_data_subcarrier_num_)
-                + "_" + std::to_string(fft_size_) + "_"
-                + std::to_string(cl_ul_symbols_[i].size()) + "_"
-                + std::to_string(ul_data_frame_num_) + "_" + cl_channel_ + "_"
-                + std::to_string(i) + ".bin";
+            std::string filename_ul_data_t
+                = directory + "/ul_data_t_" + filename_tag;
             std::printf("Loading UL time-domain data for radio %zu to %s\n", i,
                 filename_ul_data_t.c_str());
             tx_data_files_.push_back(filename_ul_data_t);
@@ -490,13 +490,14 @@ void Config::loadULData(const std::string& directory)
 
                     std::vector<std::complex<float>> data_freq_dom(
                         fft_size_ * symbol_per_subframe_);
-                    int read_num
+                    size_t read_num
                         = std::fread(data_freq_dom.data(), 2 * sizeof(float),
                             fft_size_ * symbol_per_subframe_, fp_tx_f);
-                    if (read_num < (int)(fft_size_ * symbol_per_subframe_))
+                    if (read_num != (fft_size_ * symbol_per_subframe_)) {
                         MLPD_WARN(
-                            "BAD Read of Uplink Freq-Domain Data: %d/%zu\n",
+                            "BAD Read of Uplink Freq-Domain Data: %zu/%zu\n",
                             read_num, fft_size_ * symbol_per_subframe_);
+                    }
                     txdata_freq_dom_[ant_i].insert(
                         txdata_freq_dom_[ant_i].end(), data_freq_dom.begin(),
                         data_freq_dom.end());
@@ -505,10 +506,11 @@ void Config::loadULData(const std::string& directory)
                         samps_per_symbol_);
                     read_num = std::fread(data_time_dom.data(),
                         2 * sizeof(float), samps_per_symbol_, fp_tx_t);
-                    if (read_num < (int)samps_per_symbol_)
+                    if (read_num != samps_per_symbol_) {
                         MLPD_WARN(
-                            "BAD Read of Uplink Time-Domain Data: %d/%zu\n",
+                            "BAD Read of Uplink Time-Domain Data: %zu/%zu\n",
                             read_num, samps_per_symbol_);
+                    }
                     txdata_time_dom_[ant_i].insert(
                         txdata_time_dom_[ant_i].end(), data_time_dom.begin(),
                         data_time_dom.end());

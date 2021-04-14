@@ -12,33 +12,26 @@ void DataGenerator::GenerateData(const std::string& directory)
     std::vector<std::complex<float>> prefix_zpad_t(cfg_->prefix(), 0);
     std::vector<std::complex<float>> postfix_zpad_t(cfg_->postfix(), 0);
     for (size_t i = 0; i < cfg_->num_cl_sdrs(); i++) {
-        std::string filename_ul_data_b = directory + "/ul_data_b_"
-            + cfg_->data_mod() + "_"
+        std::string filename_tag = cfg_->data_mod() + "_"
             + std::to_string(cfg_->symbol_data_subcarrier_num()) + "_"
             + std::to_string(cfg_->fft_size()) + "_"
+            + std::to_string(cfg_->symbol_per_subframe()) + "_"
             + std::to_string(cfg_->cl_ul_symbols()[i].size()) + "_"
             + std::to_string(cfg_->ul_data_frame_num()) + "_"
             + cfg_->cl_channel() + "_" + std::to_string(i) + ".bin";
+
+        std::string filename_ul_data_b
+            = directory + "/ul_data_b_" + filename_tag;
         std::printf("Saving UL data bits for radio %zu to %s\n", i,
             filename_ul_data_b.c_str());
         FILE* fp_tx_b = std::fopen(filename_ul_data_b.c_str(), "wb");
-        std::string filename_ul_data_f = directory + "/ul_data_f_"
-            + cfg_->data_mod() + "_"
-            + std::to_string(cfg_->symbol_data_subcarrier_num()) + "_"
-            + std::to_string(cfg_->fft_size()) + "_"
-            + std::to_string(cfg_->cl_ul_symbols()[i].size()) + "_"
-            + std::to_string(cfg_->ul_data_frame_num()) + "_"
-            + cfg_->cl_channel() + "_" + std::to_string(i) + ".bin";
+        std::string filename_ul_data_f
+            = directory + "/ul_data_f_" + filename_tag;
         std::printf("Saving UL frequency-domain data for radio %zu to %s\n", i,
             filename_ul_data_f.c_str());
         FILE* fp_tx_f = std::fopen(filename_ul_data_f.c_str(), "wb");
-        std::string filename_ul_data_t = directory + "/ul_data_t_"
-            + cfg_->data_mod() + "_"
-            + std::to_string(cfg_->symbol_data_subcarrier_num()) + "_"
-            + std::to_string(cfg_->fft_size()) + "_"
-            + std::to_string(cfg_->cl_ul_symbols()[i].size()) + "_"
-            + std::to_string(cfg_->ul_data_frame_num()) + "_"
-            + cfg_->cl_channel() + "_" + std::to_string(i) + ".bin";
+        std::string filename_ul_data_t
+            = directory + "/ul_data_t_" + filename_tag;
         std::printf("Saving UL time-domain data for radio %zu to %s\n", i,
             filename_ul_data_t.c_str());
         FILE* fp_tx_t = std::fopen(filename_ul_data_t.c_str(), "wb");
@@ -61,7 +54,7 @@ void DataGenerator::GenerateData(const std::string& directory)
                         std::vector<std::complex<float>> mod_data
                             = CommsLib::modulate(data_bits, mod_type);
                         std::vector<std::complex<float>> ofdm_sym(
-                            cfg_->fft_size());
+                            cfg_->fft_size(), 0);
                         size_t sc = 0;
                         for (size_t c = 0; c < cfg_->data_ind().size(); c++) {
                             sc = cfg_->data_ind()[c];
@@ -83,7 +76,8 @@ void DataGenerator::GenerateData(const std::string& directory)
                     }
                     data_time_dom.insert(data_time_dom.end(),
                         postfix_zpad_t.begin(), postfix_zpad_t.end());
-                    std::fwrite(data_freq_dom.data(), cfg_->fft_size(),
+                    std::fwrite(data_freq_dom.data(),
+                        cfg_->fft_size() * cfg_->symbol_per_subframe(),
                         sizeof(float) * 2, fp_tx_f);
                     std::fwrite(data_time_dom.data(), cfg_->samps_per_symbol(),
                         sizeof(float) * 2, fp_tx_t);

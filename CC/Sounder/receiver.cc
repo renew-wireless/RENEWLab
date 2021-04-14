@@ -382,7 +382,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                             * config_->symbols_per_frame() * BEACON_INTERVAL;
                     int r_tx = this->base_radio_set_->radioTx(radio_idx, cell,
                         beaconbuff.data(), kStreamEndBurst, txTimeBs);
-                    if (r_tx != config_->samps_per_symbol())
+                    if (r_tx != (int)config_->samps_per_symbol())
                         std::cerr << "BAD Transmit(" << r_tx << "/"
                                   << config_->samps_per_symbol() << ") at Time "
                                   << txTimeBs << ", frame count " << frame_id
@@ -774,11 +774,11 @@ void Receiver::clientSyncTxRx(int tid)
                             + config_->cl_ul_symbols().at(tid).at(s) * NUM_SAMPS
                             - config_->tx_advance();
                         for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
-                            int read_num
+                            size_t read_num
                                 = std::fread(txbuff.at(ch), 2 * sizeof(float),
                                     config_->samps_per_symbol(), fp);
-                            if (read_num < config_->samps_per_symbol())
-                                MLPD_WARN("BAD Uplink Data Read: %d/%d\n",
+                            if (read_num != config_->samps_per_symbol())
+                                MLPD_WARN("BAD Uplink Data Read: %zu/%zu\n",
                                     read_num, config_->samps_per_symbol());
                         }
                         if (kUseUHD && s < (txSyms - 1))

@@ -27,7 +27,10 @@ public:
     inline size_t num_cl_sdrs(void) const { return this->num_cl_sdrs_; }
     inline size_t core_alloc(void) const { return this->core_alloc_; }
     inline int subframe_size(void) const { return this->subframe_size_; }
-    inline int samps_per_symbol(void) const { return this->samps_per_symbol_; }
+    inline size_t samps_per_symbol(void) const
+    {
+        return this->samps_per_symbol_;
+    }
     inline size_t symbols_per_frame(void) const
     {
         return this->symbols_per_frame_;
