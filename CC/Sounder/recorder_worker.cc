@@ -144,7 +144,8 @@ static void write_attribute(H5::Group& g, const char name[], size_t val)
     H5::DataSpace attr_ds = H5::DataSpace(1, dims);
     H5::Attribute att
         = g.createAttribute(name, H5::PredType::STD_U32BE, attr_ds);
-    att.write(H5::PredType::NATIVE_UINT, &val);
+    uint32_t val_uint = val;
+    att.write(H5::PredType::NATIVE_UINT, &val_uint);
 }
 
 static void write_attribute(H5::Group& g, const char name[], int val)
@@ -163,8 +164,11 @@ static void write_attribute(
     hsize_t dims[] = { size };
     H5::DataSpace attr_ds = H5::DataSpace(1, dims);
     H5::Attribute att
-        = g.createAttribute(name, H5::PredType::STD_I32BE, attr_ds);
-    att.write(H5::PredType::NATIVE_UINT, &val[0]);
+        = g.createAttribute(name, H5::PredType::STD_U32BE, attr_ds);
+    std::vector<uint32_t> val_uint;
+    for (size_t i = 0; i < val.size(); i++)
+        val_uint.push_back((uint32_t)val.at(i));
+    att.write(H5::PredType::NATIVE_UINT, &val_uint[0]);
 }
 
 static void write_attribute(
