@@ -361,7 +361,7 @@ std::vector<size_t> CommsLib::getNullSc(size_t fftSize, size_t DataScNum)
     std::vector<size_t> null_sc;
     if (fftSize == kFftSize_80211) {
         // We follow 802.11 PHY format here
-        int null[12] = { 0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63 };
+        int null[12] = { 0, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37 };
         null_sc.assign(null, null + 12);
     } else { // Allocate the boundary subcarriers as null
         size_t start_sc = (fftSize - DataScNum) / 2;
