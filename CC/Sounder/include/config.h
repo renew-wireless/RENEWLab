@@ -193,6 +193,10 @@ public:
     {
         return this->pilot_sym_;
     };
+    inline std::vector<std::vector<float>>& pilot_sym_f(void)
+    {
+        return this->pilot_sym_f_;
+    };
     inline std::vector<std::complex<float>>& pilot_sc(void)
     {
         return this->pilot_sc_;
@@ -358,6 +362,7 @@ private:
     std::vector<std::complex<float>> pilot_sc_;
     std::vector<size_t> pilot_sc_ind_;
     std::vector<std::vector<float>> pilot_sym_;
+    std::vector<std::vector<float>> pilot_sym_f_;
     std::vector<std::vector<std::complex<float>>> tx_data_;
     std::vector<std::vector<std::complex<float>>> txdata_freq_dom_;
     std::vector<std::vector<std::complex<float>>> txdata_time_dom_;

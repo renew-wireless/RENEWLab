@@ -370,6 +370,17 @@ herr_t RecorderWorker::initHDF5()
 
         // ******* Clients ******** //
         // Freq. Domain Pilot symbols
+        std::vector<double> split_vec_pilot_f(
+            2 * this->cfg_->pilot_sym_f().at(0).size());
+        for (size_t i = 0; i < this->cfg_->pilot_sym_f().at(0).size(); i++) {
+            split_vec_pilot_f[2 * i + 0]
+                = this->cfg_->pilot_sym_f().at(0).at(i);
+            split_vec_pilot_f[2 * i + 1]
+                = this->cfg_->pilot_sym_f().at(1).at(i);
+        }
+        write_attribute(mainGroup, "OFDM_PILOT_F", split_vec_pilot_f);
+
+        // Time Domain Pilot symbols
         std::vector<double> split_vec_pilot(
             2 * this->cfg_->pilot_sym().at(0).size());
         for (size_t i = 0; i < this->cfg_->pilot_sym().at(0).size(); i++) {

@@ -70,7 +70,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
         subframe_size_ = symbol_per_subframe_ * ofdm_symbol_size_;
         samps_per_symbol_ = subframe_size_ + prefix_ + postfix_;
         symbol_data_subcarrier_num_
-            = tddConf.value("ofdm_symbol_data_subcarrier_num_", fft_size_);
+            = tddConf.value("ofdm_data_subcarrier_num", fft_size_);
         tx_scale_ = tddConf.value("tx_scale", 0.5);
         beacon_seq_ = tddConf.value("beacon_seq", "gold_ifft");
         pilot_seq_ = tddConf.value("pilot_seq", "lts");
@@ -333,8 +333,11 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
     }
 
     if (fft_size_ == 64) {
+        pilot_sym_f_ = CommsLib::getSequence(CommsLib::LTS_SEQ_F);
         pilot_sym_ = CommsLib::getSequence(CommsLib::LTS_SEQ);
     } else if (pilot_seq_ == "zadoff-chu") {
+        pilot_sym_f_ = CommsLib::getSequence(
+            CommsLib::LTE_ZADOFF_CHU_F, symbol_data_subcarrier_num_);
         pilot_sym_ = CommsLib::getSequence(
             CommsLib::LTE_ZADOFF_CHU, symbol_data_subcarrier_num_);
     } else
