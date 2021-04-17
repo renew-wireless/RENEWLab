@@ -47,6 +47,16 @@ Important for developers: Do not use _ in your branch name. Use - instead. Limit
   2. If you are going to use the RENEW C++ Development Suite, please install its library and dependencies as below. 
      ```sh
      $ ./install_cclibs.sh
+     ```   
+  3. If you are going to use the RENEW MATLAB Development Suite, no dependency is needed.
+  4. If you are going to use the RENEW Dashboard, please follow the README in the WEBGUI/ directory to install dependencies.
+
+# Collect and Process Channel Datasets
+
+To collect channel dataset, use the Sounder software (C++ Development Suite). Currently the software works with Faros massive MIMO base station and Iris030 SDR Clients, both commercially available from [Skylark Wireless](https://www.skylarkwireless.com). The software partially supports USRP radios as well. For the software to work [SoapyUHD](https://github.com/pothosware/SoapyUHD) plugin is required.
+
+  To start, first compile the Sounder C++ project:
+     ```sh
      $ cd CC/Sounder/mufft/
      $ git submodule update --init
      $ cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON ./ && make -j
@@ -55,11 +65,26 @@ Important for developers: Do not use _ in your branch name. Use - instead. Limit
      $ cd build
      $ cmake .. -DCMAKE_BUILD_TYPE=Release -DLOG_LEVEL=info && make -j
      $ cd ../
+     ```
+  Once compiled successfully, the code can be run as the following.
+    1. If your JSON file includes uplink data transmission, first generate the files, including a random bits source file, as below:
+     ```sh
+     $ ./build/sounder -conf PATH_TO_JSON_CONFIG_FILE -gen_ul_bits
+     ```
+    2. Next, to start collecting data for channel measurement run the Sounder software as below:
+     ```sh
      $ ./build/sounder -conf PATH_TO_JSON_CONFIG_FILE
      ```
-       
-  3. If you are going to use the RENEW MATLAB Development Suite, no dependency is needed.
-  4. If you are going to use the RENEW Dashboard, please follow the README in the WEBGUI/ directory to install dependencies. 
+    3. To store the dataset and bits source files in a specific directory use the `-storepath` switch:
+     ```sh
+     $ ./build/sounder -conf PATH_TO_JSON_CONFIG_FILE -storepath PATH_TO_DIRECTORY -gen_ul_bits
+     $ ./build/sounder -conf PATH_TO_JSON_CONFIG_FILE -storepath PATH_TO_DIRECTORY
+     ```
+    4. The dataset file generated in the specified directory with a software generated file name including a time stamp, e.g. `trace-uplink-2021-4-16-18-41-21_1x8x2_0_7.hdf5`. You can plot different dimension the dataset, such as the pilot of uplink data received on select base station antennas, or from select users, using the `plot_hdf5.py` tool in the PYTHON directory. For example:
+     ```sh
+     $ ../../PYTHON/IrisUtils/plot_hdf5.py PATH_TO_DATASET_FILE # add command line options
+     ```
+    5. For more info on how to use these tools including all the options available for dataset processing as well as other tools available in the RENEWLab codebase, visit the [RENEW Documentation](https://docs.renew-wireless.org) website.
 
 # Contributing and Support
 
