@@ -68,6 +68,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     if 'DATA_SUBCARRIER_NUM' in metadata:
         nonzero_sc_size = metadata['DATA_SUBCARRIER_NUM']
     ofdm_pilot = np.array(metadata['OFDM_PILOT'])
+    ofdm_pilot_f = np.array(metadata['OFDM_PILOT_F'])
     reciprocal_calib = np.array(metadata['RECIPROCAL_CALIB'])
     symbol_length_no_pad = symbol_length - z_padding
     num_pilots_per_sym = ((symbol_length_no_pad) // (cp + fft_size))
@@ -125,8 +126,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
     # For correlation use a fft size of 64
     print("*verify_hdf5(): Calling samps2csi with fft_size = {}, offset = {}, bound = {}, cp = {} *".format(fft_size, offset, z_padding, cp))
-    csi, _ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, symbol_length, fft_size=fft_size, offset=offset, bound=z_padding,
-                                cp=cp, sub=1, pilot_type=pilot_type)
+    csi, _ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, symbol_length, fft_size=fft_size,
+                                    offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
 
     cellCSI = csi[:, cell_i, :, :, :, :]
     if corr_thresh > 0.0: 
@@ -186,11 +187,11 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         csi_u = csi
         csi_d = csi
         if up_calib_offset != offset:
-            csi_u,_ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, symbol_length, fft_size=fft_size, offset=up_calib_offset,
-                                         bound=z_padding, cp=cp, sub=1, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
+            csi_u,_ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, symbol_length, fft_size=fft_size,
+                                          offset=up_calib_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
         if dn_calib_offset != offset:
-            csi_d,_ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, symbol_length, fft_size=fft_size, offset=dn_calib_offset,
-                                        bound=z_padding, cp=cp, sub=1, pilot_type=pilot_type, nonzero_sc_size=nonzero_sc_size)
+            csi_d,_ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, symbol_length, fft_size=fft_size,
+                                          offset=dn_calib_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
         calib_corrected_csi = np.zeros(csi_d.shape, dtype='complex64')
         calib_corrected_csi[:, :, 0, :, :, :] = csi_d[:, :, 0, :, :, :]
         calib_corrected_csi[:, :, 1, :, :, :] = csi_u[:, :, 1, :, :, :]
@@ -315,7 +316,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 # UL DATA: #Frames, #User, # Frame OFDM Symbols, #DATA SCs
                 ul_data = np.transpose(ul_data, (0, 2, 1, 3))
                 # UL DATA: #Frames, #User, # Frame DATA SCs
-                #ul_data = np.reshape(ul_data, (ul_data.shape[0], ul_data.shape[1], ul_data.shape[2] * ul_data.shape[3]))
+                # ul_data = np.reshape(ul_data, (ul_data.shape[0], ul_data.shape[1], ul_data.shape[2] * ul_data.shape[3]))
                 evm = np.empty((ul_data.shape[0], ul_data.shape[1]), dtype='complex64')
 
                 ul_sym_i = ul_sf_i * num_pilots_per_sym + ofdm_sym_i
@@ -581,8 +582,8 @@ def analyze_hdf5(hdf5, frame_i=10, cell_i=0, subcarrier_i=7, offset=-1, zoom=0, 
         offset = int(prefix_len)
     fft_size = int(metadata['FFT_SIZE'])
     cp = int(metadata['CP_LEN'])
-    pilot_type = metadata['PILOT_SEQ_TYPE'].astype(str)[0]
     nonzero_sc_size = metadata['DATA_SUBCARRIER_NUM']
+    ofdm_pilot_f = np.array(metadata['OFDM_PILOT_F'])
 
     num_noise_syms = noise_samples.shape[2]
     n_frame = pilot_samples.shape[0]
@@ -595,13 +596,11 @@ def analyze_hdf5(hdf5, frame_i=10, cell_i=0, subcarrier_i=7, offset=-1, zoom=0, 
     # also, iq samples nicely chunked out, same dims, but subcarrier is sample.
     num_cl_tmp = num_pilots
     csi,_ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, symbol_length, fft_size=fft_size,
-                                offset=offset, bound=z_padding, cp=cp, sub=1,
-                                pilot_type=pilot_type)
+                                offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
     csi = csi[:, cell_i, :, :, :, :]
 
     noise,_ = hdf5_lib.samps2csi(noise_samples, num_noise_syms, symbol_length, fft_size=fft_size,
-                                offset=offset, bound=z_padding, cp=cp, sub=1,
-                                pilot_type=pilot_type)
+                                offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
     noise = noise[:, cell_i, :, :, :, :]
 
     # zoom in too look at behavior around peak (and reduce processing time)

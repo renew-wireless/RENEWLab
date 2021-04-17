@@ -383,7 +383,16 @@ class hdf5_lib:
         # Data cleanup
         # In OFDM_DATA_CLx and OFDM_PILOT, we have stored both real and imaginary in same vector
         # (i.e., RE1,IM1,RE2,IM2...REm,IM,)
-        # Pilots
+
+        # Freq-domain Pilot
+        pilot_vec = self.metadata['OFDM_PILOT_F']
+        # some_list[start:stop:step]
+        I = pilot_vec[0::2]
+        Q = pilot_vec[1::2]
+        pilot_complex = I + Q * 1j
+        self.metadata['OFDM_PILOT_F'] = pilot_complex
+
+        # Time-domain Pilot
         pilot_vec = self.metadata['OFDM_PILOT']
         # some_list[start:stop:step]
         I = pilot_vec[0::2]
@@ -391,7 +400,8 @@ class hdf5_lib:
         pilot_complex = I + Q * 1j
         self.metadata['OFDM_PILOT'] = pilot_complex
 
-        if cl_present:
+        n_ul_syms = self.metadata['UL_SYMS']
+        if n_ul_syms > 0:
             # Phase-Tracking Pilot Subcarrier
             pilot_sc_vals = self.metadata['OFDM_PILOT_SC_VALS']
             pilot_sc_vals_complex = pilot_sc_vals[0::2] + 1j * pilot_sc_vals[1::2]
@@ -507,7 +517,7 @@ class hdf5_lib:
         print("finished log2csi")
 
     @staticmethod
-    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False, pilot_type='lts', pilot_f=[]):
+    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False, pilot_f=[]):
         """Convert an Argos HDF5 log file with raw IQ in to CSI.
         Asumes 802.11 style LTS used for trace collection.
     
@@ -594,51 +604,29 @@ class hdf5_lib:
 
             fftstart = time.time()
             csi = np.empty(iq.shape, dtype='complex64')
-            if pilot_type == 'lts':
-                lts_freq = pilot_f
-                if len(pilot_f) == 0:
-                    # Retrieve frequency-domain LTS sequence
-                    _, lts_freq = generate_training_seq(preamble_type='lts')
-                    lts_freq = np.fft.fftshift(lts_freq)
-                zero_sc = np.where(lts_freq == 0)[0]
-                pre_csi = np.fft.fft(iq, fft_size, 5)
-                #csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 5), 5) * lts_freq
-                csi = pre_csi * lts_freq
-                if debug:
-                    print("csi.shape:{} lts_freq.shape: {}, pre_csi.shape = {}".format(
-                        csi.shape, lts_freq.shape, pre_csi.shape))
-                endtime = time.time()
-                if debug:
-                    print("chunk time: %f fft time: %f" %
-                          (fftstart - chunkstart, endtime - fftstart))
-                # remove zero subcarriers
-                csi = np.delete(csi, zero_sc, 5)
-                print("samps2csi took %f seconds" % (time.time() - samps2csi_start))
-            else:
-                seq_freq = pilot_f
-                zero_sc = np.where(seq_freq == 0)[0]
-                nonzero_sc_size = len(seq_freq) - len(zero_sc)
-                #_, seq_freq = generate_training_seq(
-                #    preamble_type=pilot_type, seq_length=nonzero_sc_size, cp=0, upsample=1)
+            zero_sc = np.where(pilot_f == 0)[0]
+            nonzero_sc_size = len(pilot_f) - len(zero_sc)
 
-                fft_length = int(np.power(2, np.ceil(np.log2(nonzero_sc_size))))
-                if fft_length != fft_size:
-                    print("Expected fftsize %d, given %d"%(fft_length, fft_size))
-                    return None, iq
-                #start_i = int((fft_length - nonzero_sc_size) // 2)
-                #stop_i = int(start_i + nonzero_sc_size)
-                nonzero_sc = np.setdiff1d(range(fft_size), zero_sc)
-                iq_fft = np.fft.fft(iq, fft_size, 5)
-                seq_freq_inv = 1 / seq_freq
-                csi = iq_fft * seq_freq
-                endtime = time.time()
-                if debug:
-                    print("chunk time: %f fft time: %f" %
-                          (fftstart - chunkstart, endtime - fftstart))
-                csi = csi[:, : , :, :, :, nonzero_sc]
-                if debug:
-                    print("csi.shape:{}".format(csi.shape))
-                print("samps2csi took %f seconds" % (time.time() - samps2csi_start))
+            fft_length = int(np.power(2, np.ceil(np.log2(nonzero_sc_size))))
+            if fft_length != fft_size:
+                print("Expected fftsize %d, given %d"%(fft_length, fft_size))
+                return None, iq
+            #start_i = int((fft_length - nonzero_sc_size) // 2)
+            #stop_i = int(start_i + nonzero_sc_size)
+            nonzero_sc = np.setdiff1d(range(fft_size), zero_sc)
+            iq_fft = np.fft.fft(iq, fft_size, 5)
+            seq_freq_inv = 1 / pilot_f[nonzero_sc]
+            csi = iq_fft[:, : , :, :, :, nonzero_sc] * seq_freq_inv
+            endtime = time.time()
+            if debug:
+                print("csi.shape:{} lts_freq.shape: {}, pre_csi.shape = {}".format(
+                    csi.shape, lts_freq.shape, pre_csi.shape))
+            if debug:
+                print("chunk time: %f fft time: %f" %
+                      (fftstart - chunkstart, endtime - fftstart))
+            if debug:
+                print("csi.shape:{}".format(csi.shape))
+            print("samps2csi took %f seconds" % (time.time() - samps2csi_start))
 
         return csi, iq
 
