@@ -15,6 +15,7 @@
 #include "fft.h"
 #include <algorithm>
 #include <complex.h>
+#include <cstring>
 #include <fstream> // std::ifstream
 #include <iostream>
 #include <math.h>
@@ -24,6 +25,9 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
+
+static constexpr size_t kPilotSubcarrierSpacing = 12;
+static constexpr size_t kDefaultPilotScOffset = 6;
 
 static inline double computeAbs(std::complex<double> x) { return std::abs(x); }
 
@@ -37,7 +41,15 @@ static inline double computeSquare(double x) { return x * x; }
 
 class CommsLib {
 public:
-    enum SequenceType { STS_SEQ, LTS_SEQ, LTE_ZADOFF_CHU, GOLD_IFFT, HADAMARD };
+    enum SequenceType {
+        STS_SEQ,
+        LTS_SEQ,
+        LTS_SEQ_F,
+        LTE_ZADOFF_CHU,
+        LTE_ZADOFF_CHU_F,
+        GOLD_IFFT,
+        HADAMARD
+    };
 
     enum ModulationOrder { QPSK = 2, QAM16 = 4, QAM64 = 6 };
 
@@ -46,11 +58,14 @@ public:
 
     static std::vector<std::vector<float>> getSequence(
         size_t type, size_t seq_len = 0);
-    static std::vector<std::complex<float>> modulate(
-        const std::vector<int>&, int);
-    static std::vector<int> getDataSc(int fftSize);
-    static std::vector<int> getNullSc(int fftSize);
-    static std::vector<std::vector<int>> getPilotSc(int fftSize);
+    static std::vector<std::complex<float>> modulate(std::vector<uint8_t>, int);
+    static std::vector<size_t> getDataSc(size_t fftSize, size_t DataScNum,
+        size_t PilotScOffset = kDefaultPilotScOffset);
+    static std::vector<size_t> getNullSc(size_t fftSize, size_t DataScNum);
+    static std::vector<std::complex<float>> getPilotScValue(size_t fftSize,
+        size_t DataScNum, size_t PilotScOffset = kDefaultPilotScOffset);
+    static std::vector<size_t> getPilotScIndex(size_t fftSize, size_t DataScNum,
+        size_t PilotScOffset = kDefaultPilotScOffset);
     static std::vector<std::complex<float>> FFT(
         const std::vector<std::complex<float>>&, int);
     static std::vector<std::complex<float>> IFFT(

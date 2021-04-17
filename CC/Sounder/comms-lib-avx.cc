@@ -14,7 +14,6 @@ find_beacon_avx: Correlation and Peak detection of a beacon with Gold code (2 re
 #include "include/comms-lib.h"
 #include "include/logger.h"
 #include <assert.h>
-#include <cstring>
 #include <immintrin.h>
 #include <iomanip>
 #include <queue>

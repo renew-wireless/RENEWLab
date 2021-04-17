@@ -382,7 +382,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                             * config_->symbols_per_frame() * BEACON_INTERVAL;
                     int r_tx = this->base_radio_set_->radioTx(radio_idx, cell,
                         beaconbuff.data(), kStreamEndBurst, txTimeBs);
-                    if (r_tx != config_->samps_per_symbol())
+                    if (r_tx != (int)config_->samps_per_symbol())
                         std::cerr << "BAD Transmit(" << r_tx << "/"
                                   << config_->samps_per_symbol() << ") at Time "
                                   << txTimeBs << ", frame count " << frame_id
@@ -480,9 +480,9 @@ void Receiver::clientTxRx(int tid)
     std::vector<void*> txbuff(2);
     if (txSyms > 0) {
         size_t txIndex = tid * config_->cl_sdr_ch();
-        txbuff[0] = config_->tx_data().at(txIndex).data();
+        txbuff[0] = config_->txdata_time_dom().at(txIndex).data();
         if (config_->cl_sdr_ch() == 2)
-            txbuff[1] = config_->tx_data().at(txIndex + 1).data();
+            txbuff[1] = config_->txdata_time_dom().at(txIndex + 1).data();
         std::cout << txSyms << " uplink symbols will be sent per frame..."
                   << std::endl;
     }
@@ -594,14 +594,27 @@ void Receiver::clientSyncTxRx(int tid)
     }
 
     std::vector<void*> txbuff(2);
+    for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
+        txbuff.at(ch)
+            = std::calloc(config_->samps_per_symbol(), sizeof(float) * 2);
+    }
+    size_t slot_byte_size = config_->samps_per_symbol() * sizeof(float) * 2;
     size_t txSyms = config_->cl_ul_symbols().at(tid).size();
     if (txSyms > 0) {
         size_t txIndex = tid * config_->cl_sdr_ch();
-        txbuff.at(0) = config_->tx_data().at(txIndex).data();
-        if (config_->cl_sdr_ch() == 2) {
-            txbuff.at(1) = config_->tx_data().at(txIndex + 1).data();
+        for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
+            std::memcpy(txbuff.at(ch),
+                config_->txdata_time_dom().at(txIndex + ch).data(),
+                slot_byte_size);
         }
         MLPD_INFO("%zu uplink symbols will be sent per frame...\n", txSyms);
+    }
+
+    FILE* fp = nullptr;
+    if (config_->ul_data_sym_present() == true) {
+        std::printf("Opening UL time-domain data for radio %d to %s\n", tid,
+            config_->tx_data_files().at(tid).c_str());
+        fp = std::fopen(config_->tx_data_files().at(tid).c_str(), "rb");
     }
 
     long long rxTime(0);
@@ -633,7 +646,7 @@ void Receiver::clientSyncTxRx(int tid)
             }
         }
         //TODO syncbuff0 is sloppy here since we recevied into syncrxbuff.data(), r bytes.
-#if defined(__X86_64__)
+#if defined(__x86_64__)
         sync_index = CommsLib::find_beacon_avx(syncbuff0, config_->gold_cf32());
 #else
         sync_index = CommsLib::find_beacon(syncbuff0);
@@ -702,7 +715,7 @@ void Receiver::clientSyncTxRx(int tid)
                     //TODO: Remove the copy and direct access to syncbuff0
                     std::vector<std::complex<float>> radio_rx_data(
                         syncbuff0.begin(), syncbuff0.begin() + r);
-#if defined(__X86_64__)
+#if defined(__x86_64__)
                     sync_index = CommsLib::find_beacon_avx(
                         radio_rx_data, config_->gold_cf32());
 #else
@@ -760,6 +773,14 @@ void Receiver::clientSyncTxRx(int tid)
                         txTime = rxTime + txTimeDelta
                             + config_->cl_ul_symbols().at(tid).at(s) * NUM_SAMPS
                             - config_->tx_advance();
+                        for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
+                            size_t read_num
+                                = std::fread(txbuff.at(ch), 2 * sizeof(float),
+                                    config_->samps_per_symbol(), fp);
+                            if (read_num != config_->samps_per_symbol())
+                                MLPD_WARN("BAD Uplink Data Read: %zu/%zu\n",
+                                    read_num, config_->samps_per_symbol());
+                        }
                         if (kUseUHD && s < (txSyms - 1))
                             flagsTxUlData = 1; // HAS_TIME
                         else
@@ -770,11 +791,20 @@ void Receiver::clientSyncTxRx(int tid)
                             MLPD_WARN("BAD Write: %d/%d\n", r, NUM_SAMPS);
                         }
                     } // end for
+                    if (frame_cnt % config_->ul_data_frame_num() == 0)
+                        std::fseek(fp, 0, SEEK_SET);
                 } // end if config_->ul_data_sym_present()
             } // end if sf == 0
         } // end for
         frame_cnt++;
     } // end while
+    if (config_->ul_data_sym_present() == true || fp != nullptr) {
+        std::fclose(fp);
+    }
+
+    for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
+        std::free(txbuff.at(ch));
+    }
 
     for (auto memory : zeros) {
         MLPD_SYMBOL("Process %d -- Client Sync Tx Rx Freed memory at %p\n", tid,

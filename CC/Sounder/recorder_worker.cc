@@ -144,7 +144,8 @@ static void write_attribute(H5::Group& g, const char name[], size_t val)
     H5::DataSpace attr_ds = H5::DataSpace(1, dims);
     H5::Attribute att
         = g.createAttribute(name, H5::PredType::STD_U32BE, attr_ds);
-    att.write(H5::PredType::NATIVE_UINT, &val);
+    uint32_t val_uint = val;
+    att.write(H5::PredType::NATIVE_UINT, &val_uint);
 }
 
 static void write_attribute(H5::Group& g, const char name[], int val)
@@ -157,14 +158,17 @@ static void write_attribute(H5::Group& g, const char name[], int val)
 }
 
 static void write_attribute(
-    H5::Group& g, const char name[], const std::vector<int>& val)
+    H5::Group& g, const char name[], const std::vector<size_t>& val)
 {
     size_t size = val.size();
     hsize_t dims[] = { size };
     H5::DataSpace attr_ds = H5::DataSpace(1, dims);
     H5::Attribute att
-        = g.createAttribute(name, H5::PredType::STD_I32BE, attr_ds);
-    att.write(H5::PredType::NATIVE_INT, &val[0]);
+        = g.createAttribute(name, H5::PredType::STD_U32BE, attr_ds);
+    std::vector<uint32_t> val_uint;
+    for (size_t i = 0; i < val.size(); i++)
+        val_uint.push_back((uint32_t)val.at(i));
+    att.write(H5::PredType::NATIVE_UINT, &val_uint[0]);
 }
 
 static void write_attribute(
@@ -366,6 +370,17 @@ herr_t RecorderWorker::initHDF5()
 
         // ******* Clients ******** //
         // Freq. Domain Pilot symbols
+        std::vector<double> split_vec_pilot_f(
+            2 * this->cfg_->pilot_sym_f().at(0).size());
+        for (size_t i = 0; i < this->cfg_->pilot_sym_f().at(0).size(); i++) {
+            split_vec_pilot_f[2 * i + 0]
+                = this->cfg_->pilot_sym_f().at(0).at(i);
+            split_vec_pilot_f[2 * i + 1]
+                = this->cfg_->pilot_sym_f().at(1).at(i);
+        }
+        write_attribute(mainGroup, "OFDM_PILOT_F", split_vec_pilot_f);
+
+        // Time Domain Pilot symbols
         std::vector<double> split_vec_pilot(
             2 * this->cfg_->pilot_sym().at(0).size());
         for (size_t i = 0; i < this->cfg_->pilot_sym().at(0).size(); i++) {
@@ -425,12 +440,12 @@ herr_t RecorderWorker::initHDF5()
                     mainGroup, "OFDM_DATA_SC", this->cfg_->data_ind());
 
             // Pilot subcarriers (indexes)
-            if (this->cfg_->pilot_sc().at(0).size() > 0)
+            if (this->cfg_->pilot_sc_ind().size() > 0)
                 write_attribute(
-                    mainGroup, "OFDM_PILOT_SC", this->cfg_->pilot_sc().at(0));
-            if (this->cfg_->pilot_sc().at(1).size() > 0)
-                write_attribute(mainGroup, "OFDM_PILOT_SC_VALS",
-                    this->cfg_->pilot_sc().at(1));
+                    mainGroup, "OFDM_PILOT_SC", this->cfg_->pilot_sc_ind());
+            if (this->cfg_->pilot_sc().size() > 0)
+                write_attribute(
+                    mainGroup, "OFDM_PILOT_SC_VALS", this->cfg_->pilot_sc());
 
             // Freq. Domain Data Symbols
             for (size_t i = 0; i < this->cfg_->txdata_freq_dom().size(); i++) {

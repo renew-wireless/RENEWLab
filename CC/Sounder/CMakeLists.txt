@@ -120,6 +120,7 @@ include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS} third_party/ t
 set(SOUNDER_SOURCES 
     ClientRadioSet.cc
     config.cc
+    data_generator.cc
     Radio.cc
     receiver.cc
     recorder.cc
@@ -147,7 +148,7 @@ else()
         ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-avx.a)
 endif()
 
-target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe
+target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe gflags
     ${SoapySDR_LIBRARIES}
     ${HDF5_LIBRARIES}
     ${MUFFT_LIBRARIES})
@@ -155,7 +156,7 @@ target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe
 add_library(sounder_module MODULE 
     ${SOUNDER_SOURCES})
 
-target_link_libraries(sounder_module -lpthread -lhdf5_cpp --enable-threadsafe
+target_link_libraries(sounder_module -lpthread -lhdf5_cpp --enable-threadsafe gflags
     -Wl,--whole-archive
     ${MUFFT_LIBRARIES}
     -Wl,--no-whole-archive

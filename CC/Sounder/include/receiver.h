@@ -17,6 +17,7 @@
 #include <arpa/inet.h>
 #include <cassert>
 #include <chrono>
+#include <cstring>
 #include <ctime>
 #include <exception>
 #include <iostream>
