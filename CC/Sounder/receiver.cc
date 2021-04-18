@@ -774,12 +774,8 @@ void Receiver::clientSyncTxRx(int tid)
                             + config_->cl_ul_symbols().at(tid).at(s) * NUM_SAMPS
                             - config_->tx_advance();
                         for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
-                            size_t read_num
-                                = std::fread(txbuff.at(ch), 2 * sizeof(float),
-                                    config_->samps_per_symbol(), fp);
-                            if (read_num != config_->samps_per_symbol())
-                                MLPD_WARN("BAD Uplink Data Read: %zu/%zu\n",
-                                    read_num, config_->samps_per_symbol());
+                            std::fread(txbuff.at(ch), 2 * sizeof(float),
+                                config_->samps_per_symbol(), fp);
                         }
                         if (kUseUHD && s < (txSyms - 1))
                             flagsTxUlData = 1; // HAS_TIME
