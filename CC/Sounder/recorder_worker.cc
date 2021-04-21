@@ -310,12 +310,11 @@ herr_t RecorderWorker::initHDF5()
         write_attribute(mainGroup, "BS_SDR_ID", bs_sdr_id);
 
         // Number of Base Station Cells
-        write_attribute(
-            mainGroup, "BS_NUM_CELLS", (int)this->cfg_->num_cells());
+        write_attribute(mainGroup, "BS_NUM_CELLS", this->cfg_->num_cells());
 
         // How many RF channels per Iris board are enabled ("single" or "dual")
-        write_attribute(mainGroup, "BS_CH_PER_RADIO",
-            (int)this->cfg_->bs_channel().length());
+        write_attribute(
+            mainGroup, "BS_CH_PER_RADIO", this->cfg_->bs_channel().length());
 
         // Frame schedule (vec of strings for now, this should change to matrix when we go to multi-cell)
         write_attribute(mainGroup, "BS_FRAME_SCHED", this->cfg_->frames());
@@ -337,8 +336,7 @@ herr_t RecorderWorker::initHDF5()
             mainGroup, "BS_BEAMSWEEP", this->cfg_->beam_sweep() ? 1 : 0);
 
         // Beacon Antenna
-        write_attribute(
-            mainGroup, "BS_BEACON_ANT", (int)this->cfg_->beacon_ant());
+        write_attribute(mainGroup, "BS_BEACON_ANT", this->cfg_->beacon_ant());
 
         // Number of antennas on Base Station (per cell)
         std::vector<std::string> bs_ant_num_per_cell(
@@ -346,7 +344,7 @@ herr_t RecorderWorker::initHDF5()
         for (size_t i = 0; i < bs_ant_num_per_cell.size(); ++i) {
             bs_ant_num_per_cell[i]
                 = std::to_string(this->cfg_->bs_sdr_ids().at(i).size()
-                    * (int)this->cfg_->bs_channel().length());
+                    * this->cfg_->bs_channel().length());
         }
         write_attribute(mainGroup, "BS_ANT_NUM_PER_CELL", bs_ant_num_per_cell);
 
@@ -361,8 +359,7 @@ herr_t RecorderWorker::initHDF5()
             mainGroup, "BS_FRAME_LEN", this->cfg_->symbols_per_frame());
 
         // Number of uplink symbols per frame
-        write_attribute(
-            mainGroup, "UL_SYMS", (int)this->cfg_->ul_syms_per_frame());
+        write_attribute(mainGroup, "UL_SYMS", this->cfg_->ul_syms_per_frame());
 
         // Reciprocal Calibration Mode
         write_attribute(mainGroup, "RECIPROCAL_CALIB",
@@ -391,11 +388,10 @@ herr_t RecorderWorker::initHDF5()
 
         // Number of Pilots
         write_attribute(
-            mainGroup, "PILOT_NUM", (int)this->cfg_->pilot_syms_per_frame());
+            mainGroup, "PILOT_NUM", this->cfg_->pilot_syms_per_frame());
 
         // Number of Client Antennas
-        write_attribute(
-            mainGroup, "CL_NUM", (int)this->cfg_->num_cl_antennas());
+        write_attribute(mainGroup, "CL_NUM", this->cfg_->num_cl_antennas());
 
         // Data modulation
         write_attribute(mainGroup, "CL_MODULATION", this->cfg_->data_mod());
@@ -403,7 +399,7 @@ herr_t RecorderWorker::initHDF5()
         if (this->cfg_->client_present() == true) {
             // Client antenna polarization
             write_attribute(
-                mainGroup, "CL_CH_PER_RADIO", (int)this->cfg_->cl_sdr_ch());
+                mainGroup, "CL_CH_PER_RADIO", this->cfg_->cl_sdr_ch());
 
             // Client AGC enable flag
             write_attribute(
@@ -427,7 +423,7 @@ herr_t RecorderWorker::initHDF5()
 
             // Number of frames for UL data recorded in bit source files
             write_attribute(mainGroup, "UL_DATA_FRAME_NUM",
-                (int)this->cfg_->ul_data_frame_num());
+                this->cfg_->ul_data_frame_num());
 
             // Names of Files including uplink tx frequency-domain data
             if (this->cfg_->tx_fd_data_files().size() > 0) {
