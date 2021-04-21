@@ -613,8 +613,8 @@ void Receiver::clientSyncTxRx(int tid)
     FILE* fp = nullptr;
     if (config_->ul_data_sym_present() == true) {
         std::printf("Opening UL time-domain data for radio %d to %s\n", tid,
-            config_->tx_data_files().at(tid).c_str());
-        fp = std::fopen(config_->tx_data_files().at(tid).c_str(), "rb");
+            config_->tx_td_data_files().at(tid).c_str());
+        fp = std::fopen(config_->tx_td_data_files().at(tid).c_str(), "rb");
     }
 
     long long rxTime(0);
@@ -777,9 +777,10 @@ void Receiver::clientSyncTxRx(int tid)
                             size_t read_num
                                 = std::fread(txbuff.at(ch), 2 * sizeof(float),
                                     config_->samps_per_symbol(), fp);
-                            if (read_num != config_->samps_per_symbol())
+                            if (read_num != config_->samps_per_symbol()) {
                                 MLPD_WARN("BAD Uplink Data Read: %zu/%zu\n",
                                     read_num, config_->samps_per_symbol());
+                            }
                         }
                         if (kUseUHD && s < (txSyms - 1))
                             flagsTxUlData = 1; // HAS_TIME
