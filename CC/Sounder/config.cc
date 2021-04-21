@@ -469,6 +469,7 @@ void Config::loadULData(const std::string& directory)
             std::printf(
                 "Loading UL frequency-domain data for radio %zu to %s\n", i,
                 filename_ul_data_f.c_str());
+            tx_fd_data_files_.push_back("ul_data_f_" + filename_tag);
             FILE* fp_tx_f = std::fopen(filename_ul_data_f.c_str(), "rb");
             if (!fp_tx_f) {
                 throw std::runtime_error(
@@ -479,7 +480,7 @@ void Config::loadULData(const std::string& directory)
                 = directory + "/ul_data_t_" + filename_tag;
             std::printf("Loading UL time-domain data for radio %zu to %s\n", i,
                 filename_ul_data_t.c_str());
-            tx_data_files_.push_back(filename_ul_data_t);
+            tx_td_data_files_.push_back(filename_ul_data_t);
             FILE* fp_tx_t = std::fopen(filename_ul_data_t.c_str(), "rb");
             if (!fp_tx_t) {
                 throw std::runtime_error(

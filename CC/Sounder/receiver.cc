@@ -613,8 +613,8 @@ void Receiver::clientSyncTxRx(int tid)
     FILE* fp = nullptr;
     if (config_->ul_data_sym_present() == true) {
         std::printf("Opening UL time-domain data for radio %d to %s\n", tid,
-            config_->tx_data_files().at(tid).c_str());
-        fp = std::fopen(config_->tx_data_files().at(tid).c_str(), "rb");
+            config_->tx_td_data_files().at(tid).c_str());
+        fp = std::fopen(config_->tx_td_data_files().at(tid).c_str(), "rb");
     }
 
     long long rxTime(0);

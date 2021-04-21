@@ -425,6 +425,16 @@ herr_t RecorderWorker::initHDF5()
             write_attribute(
                 mainGroup, "CL_TX_GAIN_B", this->cfg_->cl_txgain_vec().at(1));
 
+            // Number of frames for UL data recorded in bit source files
+            write_attribute(mainGroup, "UL_DATA_FRAME_NUM",
+                (int)this->cfg_->ul_data_frame_num());
+
+            // Names of Files including uplink tx frequency-domain data
+            if (this->cfg_->tx_fd_data_files().size() > 0) {
+                write_attribute(mainGroup, "TX_FD_DATA_FILENAMES",
+                    this->cfg_->tx_fd_data_files());
+            }
+
             // Client frame schedule (vec of strings)
             write_attribute(
                 mainGroup, "CL_FRAME_SCHED", this->cfg_->cl_frames());

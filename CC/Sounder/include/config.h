@@ -159,9 +159,13 @@ public:
     {
         return this->cl_sdr_ids_;
     }
-    inline const std::vector<std::string>& tx_data_files(void) const
+    inline const std::vector<std::string>& tx_fd_data_files(void) const
     {
-        return this->tx_data_files_;
+        return this->tx_fd_data_files_;
+    }
+    inline const std::vector<std::string>& tx_td_data_files(void) const
+    {
+        return this->tx_td_data_files_;
     }
 
     inline const std::vector<size_t>& data_ind(void) const
@@ -374,7 +378,8 @@ private:
 
     std::vector<std::vector<double>> cl_txgain_vec_;
     std::vector<std::vector<double>> cl_rxgain_vec_;
-    std::vector<std::string> tx_data_files_;
+    std::vector<std::string> tx_td_data_files_;
+    std::vector<std::string> tx_fd_data_files_;
 
     std::atomic<bool> running_;
     bool core_alloc_;
