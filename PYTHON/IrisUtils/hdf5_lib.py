@@ -273,6 +273,7 @@ class hdf5_lib:
     def __init__(self, filename, n_frames_to_inspect=0, n_fr_insp_st = 0, sub_sample = 0):
         self.h5file = None
         self.filename = filename
+        self.dirpath = '/'.join(filename.split('/')[:-1])
         self.h5struct = []
         self.data = []
         self.metadata = {}

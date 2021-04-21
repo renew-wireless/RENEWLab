@@ -72,6 +72,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     reciprocal_calib = np.array(metadata['RECIPROCAL_CALIB'])
     symbol_length_no_pad = symbol_length - z_padding
     num_pilots_per_sym = ((symbol_length_no_pad) // (cp + fft_size))
+    ul_sf_num = int(metadata['UL_SYMS'])
+    cl_ch_num = int(metadata['CL_CH_PER_RADIO'])
     n_ue = num_cl
 
     all_bs_nodes = set(range(hdf5.pilot_samples.shape[3]))
@@ -285,8 +287,11 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 zero_sc_ind = np.setdiff1d(zero_sc_ind, pilot_sc_ind)
                 nonzero_sc_ind = np.setdiff1d(range(fft_size), zero_sc_ind)
 
+
                 # UL Samps: #Frames, #Uplink SF, #Antennas, #Samples
                 ul_samps = ul_samps[:, cell_i, :, :, :]
+
+                n_frames = ul_samps.shape[0]
                 ul_syms = np.empty((ul_samps.shape[0], ul_samps.shape[1],
                                ul_samps.shape[2], num_pilots_per_sym, fft_size), dtype='complex64')
                 # UL Syms: #Frames, #Uplink SF, #Antennas, #OFDM Symbols, #Samples
@@ -319,6 +324,39 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 # ul_data = np.reshape(ul_data, (ul_data.shape[0], ul_data.shape[1], ul_data.shape[2] * ul_data.shape[3]))
                 evm = np.empty((ul_data.shape[0], ul_data.shape[1]), dtype='complex64')
 
+                ul_data_frame_num = int(metadata['UL_DATA_FRAME_NUM'])
+                txdata = np.empty((ul_data_frame_num, num_cl_tmp, ul_sf_num,
+                             num_pilots_per_sym, fft_size), dtype='complex64')
+                if ul_data_frame_num > 1:
+                    tx_file_names = metadata['TX_FD_DATA_FILENAMES'].astype(str)
+                    read_size = 2 * ul_data_frame_num * ul_sf_num * cl_ch_num * num_pilots_per_sym * fft_size
+                    cl = 0
+                    for fn in tx_file_names:
+                        tx_file_path = hdf5.dirpath + '/' + fn
+                        print('Opening source TX data file %s'%tx_file_path)
+                        with open(tx_file_path, mode='rb') as f:
+                            txdata0 = list(struct.unpack('f'*read_size, f.read(4*read_size)))
+                            I = np.array(txdata0[0::2])
+                            Q = np.array(txdata0[1::2])
+                            IQ = I + Q * 1j
+                            txdata[:, cl:cl+cl_ch_num, :, :, :] = np.transpose(np.reshape(IQ, (ul_data_frame_num, ul_sf_num,
+                                cl_ch_num, num_pilots_per_sym, fft_size)), (0, 2, 1, 3, 4))
+                        cl = cl + cl_ch_num
+                    rep = n_frames // ul_data_frame_num
+                    txdata_ext = np.tile(txdata, (rep, 1, 1, 1, 1))
+                    frac_fr = n_frames % ul_data_frame_num
+                    if frac_fr > 0:
+                        frac = txdata[frac_fr:, :, :, :, :]
+                        txdata_ext = np.concatenate((txdata_ext, frac), axis=0)
+                else:
+                    for f in range(ul_data_frame_num):
+                        for i in range(num_cl_tmp):
+                            tx_data0 = metadata['OFDM_DATA_CL'+str(i)]
+                            tx_data_mat = np.reshape(tx_data0, (ul_sf_num, num_pilots_per_sym, fft_size))
+                            txdata[f, i, :, :, :]  = tx_data_mat
+                    txdata_ext = np.tile(txdata, (n_frames, 1, 1, 1, 1))
+                txdata_ext = txdata_ext[:, :, :, :, data_sc_ind]
+
                 ul_sym_i = ul_sf_i * num_pilots_per_sym + ofdm_sym_i
                 fig5, axes5 = plt.subplots(nrows=num_cl_tmp//2, ncols=2, squeeze=False, figsize=(10, 8))
                 fig5.suptitle('Uplink User Constellations (ZF) - Frame %d - Cell %d - UL SF %d' % (ref_frame, cell_i, ul_sym_i))
@@ -328,20 +366,16 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 axes6[0, 0].set_xlabel('Frame Number')
                 for i in range(num_cl_tmp//2):
                     axes5[i, 0].set_title('User %d'%(2 * i))
-                    tx_data0 = metadata['OFDM_DATA_CL'+str(2 * i)]
-                    tx_data_mat0 = np.reshape(tx_data0, (num_ul_sym, fft_size))
-                    tx_data0 = tx_data_mat0[:, data_sc_ind]
                     axes5[i, 0].scatter(np.real(ul_data[ref_frame, i * 2, ul_sym_i, :]), np.imag(ul_data[ref_frame, i * 2, ul_sym_i, :]))
-                    axes5[i, 0].scatter(np.real(tx_data0[ul_sym_i, :]), np.imag(tx_data0[ul_sym_i, :]))
+                    axes5[i, 0].scatter(np.real(txdata_ext[ref_frame, i * 2, ul_sf_i, ofdm_sym_i, :]), np.imag(txdata_ext[ref_frame, i * 2, ul_sf_i, ofdm_sym_i, :]))
+
                     axes5[i, 1].set_title('User %d'%(2 * i + 1))
-                    tx_data1 = metadata['OFDM_DATA_CL'+str(2 * i + 1)]
-                    tx_data_mat1 = np.reshape(tx_data1, (num_ul_sym, fft_size))
-                    tx_data1 = tx_data_mat1[:, data_sc_ind]
                     axes5[i, 1].scatter(np.real(ul_data[ref_frame, i * 2 + 1, ul_sym_i, :]), np.imag(ul_data[ref_frame, i * 2 + 1, ul_sym_i, :]))
-                    axes5[i, 1].scatter(np.real(tx_data1[ul_sym_i, :]), np.imag(tx_data1[ul_sym_i, :]))
+                    axes5[i, 1].scatter(np.real(txdata_ext[ref_frame, i * 2 + 1, ul_sf_i, ofdm_sym_i, :]), np.imag(txdata_ext[ref_frame, i * 2 + 1, ul_sf_i, ofdm_sym_i, :]))
+
                     for f in range(ul_data.shape[0]):
-                        evm[f, 2 * i] = 100 * np.linalg.norm(ul_data[f, 2 * i, ul_sym_i, :] - tx_data0[ul_sym_i, :], 2) / ul_data.shape[3]
-                        evm[f, 2 * i + 1] = 100 * np.linalg.norm(ul_data[f, 2 * i + 1, ul_sym_i, :] - tx_data1[ul_sym_i, :], 2) / ul_data.shape[3]
+                        evm[f, 2 * i] = 100 * np.linalg.norm(ul_data[f, 2 * i, ul_sym_i, :] - txdata_ext[f, 2 * i, ul_sf_i, ofdm_sym_i, :], 2) / ul_data.shape[3]
+                        evm[f, 2 * i + 1] = 100 * np.linalg.norm(ul_data[f, 2 * i + 1, ul_sym_i, :] - txdata_ext[f, 2 * i + 1, ul_sf_i, ofdm_sym_i, :], 2) / ul_data.shape[3]
                     axes6[0, 0].plot(range(ul_data.shape[0]), evm[:, 2 * i], label='User %d'%(2 * i))
                     axes6[0, 0].plot(range(ul_data.shape[0]), evm[:, 2 * i + 1], label='User %d'%(2 * i + 1))
                 axes6[0, 0].legend(loc='upper right', frameon=False)
@@ -904,10 +938,10 @@ def main():
     parser.add_option("--signal-offset", type="int", dest="signal_offset", help="signal offset from the start of the time-domain symbols", default=-1)
     parser.add_option("--downlink-calib-offset", type="int", dest="downlink_calib_offset", help="signal offset from the start of the time-domain symbols in downlink reciprocal calibration", default=288)
     parser.add_option("--uplink-calib-offset", type="int", dest="uplink_calib_offset", help="signal offset from the start of the time-domain symbols in uplink reciprocal calibration", default=168)
-    parser.add_option("--n-frames", type="int", dest="n_frames_to_inspect", help="Number of frames to inspect", default=2000)
+    parser.add_option("--n-frames", type="int", dest="n_frames", help="Number of frames to inspect", default=2000)
     parser.add_option("--sub-sample", type="int", dest="sub_sample", help="Sub sample rate", default=1)
     parser.add_option("--thresh", type="float", dest="thresh", help="Ampiltude Threshold for valid frames", default=0.001)
-    parser.add_option("--frame-start", type="int", dest="fr_strt", help="Starting frame. Must have set n_frames_to_inspect first and make sure fr_strt is within boundaries ", default=0)
+    parser.add_option("--frame-start", type="int", dest="fr_strt", help="Starting frame. Must have set n_frames first and make sure fr_strt is within boundaries ", default=0)
     parser.add_option("--verify-trace", action="store_true", dest="verify", help="Run script without analysis", default=True)
     parser.add_option("--analyze-trace", action="store_true", dest="analyze", help="Run script without analysis", default=False)
     parser.add_option("--corr-thresh", type="float", dest="corr_thresh",
@@ -918,7 +952,7 @@ def main():
     show_metadata = options.show_metadata
     deep_inspect = options.deep_inspect
     demodulate = options.demodulate
-    n_frames_to_inspect = options.n_frames_to_inspect
+    n_frames = options.n_frames
     ref_frame = options.ref_frame
     ref_cell = options.ref_cell
     ref_ofdm_sym = options.ref_ofdm_sym
@@ -945,22 +979,22 @@ def main():
     filename = sys.argv[1]
     scrpt_strt = time.time()
 
-    if n_frames_to_inspect == 0:
+    if n_frames == 0:
         print("WARNING: No frames_to_inspect given. Will process the whole dataset.") 
 
-    if ref_frame > n_frames_to_inspect:
-        print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames: ref_frame:{} >  n_frames_to_inspect:{}. ".format(
-                ref_frame, n_frames_to_inspect))
+    if ref_frame > n_frames:
+        print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames: ref_frame:{} >  n_frames:{}. ".format(
+                ref_frame, n_frames))
         print("Setting the frame to inspect to 0")
         ref_frame = 0
  
-    if (ref_frame > fr_strt + n_frames_to_inspect) or (ref_frame < fr_strt) :
-        print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames +  or at an index smaller than the required start of the frames: ref_frame:{} > n_frames_to_inspect:{} or ref_frame:{} <  fr_strt:{}. ".format(
-                ref_frame, n_frames_to_inspect, ref_frame, fr_strt))
+    if (ref_frame > fr_strt + n_frames) or (ref_frame < fr_strt) :
+        print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames +  or at an index smaller than the required start of the frames: ref_frame:{} > n_frames:{} or ref_frame:{} <  fr_strt:{}. ".format(
+                ref_frame, n_frames, ref_frame, fr_strt))
         print("Setting the frame to inspect/plot to {}".format(fr_strt))
         ref_frame = fr_strt
 
-    print(">> frame to plot = {}, ref. ant = {}, ref. user = {}, no. of frames to inspect = {}, starting frame = {} <<".format(ref_frame, ref_ant, ref_user, n_frames_to_inspect, fr_strt))
+    print(">> frame to plot = {}, ref. ant = {}, ref. user = {}, no. of frames to inspect = {}, starting frame = {} <<".format(ref_frame, ref_ant, ref_user, n_frames, fr_strt))
 
     # Instantiate
     if legacy:
@@ -987,7 +1021,7 @@ def main():
                 print(uplink_samples.shape)
 
         else:
-            hdf5 = hdf5_lib(filename, n_frames_to_inspect, fr_strt, sub_sample)
+            hdf5 = hdf5_lib(filename, n_frames, fr_strt, sub_sample)
             data = hdf5.data
             pilot_samples = hdf5.pilot_samples
             uplink_samples = hdf5.uplink_samples
