@@ -202,6 +202,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
         num_cl_antennas_ = num_cl_sdrs_ * cl_sdr_ch_;
         cl_agc_en_ = tddConfCl.value("agc_en", false);
         cl_agc_gain_init_ = tddConfCl.value("agc_gain_init", 70); // 0 to 108
+        cfo_correction_en_ = tddConfCl.value("cfo_correction_en", false);
         frame_mode_ = tddConfCl.value("frame_mode", "continuous_resync");
         hw_framer_ = tddConfCl.value("hw_framer", true);
         tx_advance_ = tddConfCl.value("tx_advance", 250); // 250
@@ -294,6 +295,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
     }
 
     beacon_size_ = beacon_ci16_.size();
+    beacon_longsym_len_ = gold_ifft_ci16.size();
+    beacon_longsym_reps_ = goldReps;
 
     if (samps_per_symbol_ < (beacon_size_ + prefix_ + postfix_)) {
         std::string msg = "Minimum supported subframe_size is ";

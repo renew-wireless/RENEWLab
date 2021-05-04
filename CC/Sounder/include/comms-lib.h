@@ -146,6 +146,7 @@ public:
     static std::vector<std::complex<int16_t>> complex_mult_avx(
         std::vector<std::complex<int16_t>> const& f,
         std::vector<std::complex<int16_t>> const& g, const bool conj);
+
     //private:
     //    static inline float** init_qpsk();
     //    static inline float** init_qam16();

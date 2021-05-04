@@ -48,6 +48,8 @@ public:
     inline int prefix(void) const { return this->prefix_; }
     inline int postfix(void) const { return this->postfix_; }
     inline int beacon_size(void) const { return this->beacon_size_; }
+    inline size_t beacon_longsym_len(void) const { return this->beacon_longsym_len_; }
+    inline size_t beacon_longsym_reps(void) const { return this->beacon_longsym_reps_; }
     inline double bw_filter(void) const { return this->bw_filter_; }
     inline double freq(void) const { return this->freq_; }
     inline double nco(void) const { return this->nco_; }
@@ -56,6 +58,7 @@ public:
     inline bool cl_agc_en(void) const { return this->cl_agc_en_; }
     inline int cl_agc_gain_init(void) const { return this->cl_agc_gain_init_; }
     inline bool imbalance_cal_en(void) const { return this->imbalance_cal_en_; }
+    inline bool cfo_correction_en(void) const { return this->cfo_correction_en_; }
     inline bool sample_cal_en(void) const { return this->sample_cal_en_; }
     inline size_t max_frame(void) const { return this->max_frame_; }
     inline size_t ul_data_frame_num(void) const
@@ -82,6 +85,10 @@ public:
     inline size_t ul_syms_per_frame(void) const
     {
         return this->ul_syms_per_frame_;
+    }
+    inline size_t dl_syms_per_frame(void) const
+    {
+        return this->dl_syms_per_frame_;
     }
     inline double rate(void) const { return this->rate_; }
     inline int tx_advance(void) const { return this->tx_advance_; }
@@ -302,7 +309,7 @@ private:
     size_t pilot_syms_per_frame_;
     size_t noise_syms_per_frame_;
     size_t ul_syms_per_frame_;
-    size_t dl_syms_per_frame_; // No accessor
+    size_t dl_syms_per_frame_;
     float tx_scale_; // No accessor
     std::string pilot_seq_;
     std::string beacon_seq_;
@@ -320,6 +327,8 @@ private:
     std::vector<uint32_t> beacon_;
     std::vector<std::complex<int16_t>> beacon_ci16_;
     int beacon_size_;
+    size_t beacon_longsym_len_;
+    size_t beacon_longsym_reps_;
     size_t beacon_ant_;
     bool beam_sweep_;
     std::vector<size_t> n_bs_sdrs_;
@@ -344,6 +353,7 @@ private:
     std::vector<double> cal_tx_gain_;
     bool sample_cal_en_;
     bool imbalance_cal_en_;
+    bool cfo_correction_en_;
     std::string trace_file_;
     std::vector<std::vector<std::string>> calib_frames_;
     bool reciprocal_calib_;
