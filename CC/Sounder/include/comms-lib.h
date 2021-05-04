@@ -15,6 +15,7 @@
 #include "fft.h"
 #include <algorithm>
 #include <complex.h>
+#include <cstring>
 #include <fstream> // std::ifstream
 #include <iostream>
 #include <math.h>
@@ -24,6 +25,9 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
+
+static constexpr size_t kPilotSubcarrierSpacing = 12;
+static constexpr size_t kDefaultPilotScOffset = 6;
 
 static inline double computeAbs(std::complex<double> x) { return std::abs(x); }
 
@@ -37,28 +41,40 @@ static inline double computeSquare(double x) { return x * x; }
 
 class CommsLib {
 public:
-    enum SequenceType { STS_SEQ, LTS_SEQ, LTE_ZADOFF_CHU, GOLD_IFFT, HADAMARD };
+    enum SequenceType {
+        STS_SEQ,
+        LTS_SEQ,
+        LTS_SEQ_F,
+        LTE_ZADOFF_CHU,
+        LTE_ZADOFF_CHU_F,
+        GOLD_IFFT,
+        HADAMARD
+    };
 
     enum ModulationOrder { QPSK = 2, QAM16 = 4, QAM64 = 6 };
 
     CommsLib(std::string);
     ~CommsLib();
 
-    static std::vector<std::vector<double>> getSequence(
+    static std::vector<std::vector<float>> getSequence(
         size_t type, size_t seq_len = 0);
-    static std::vector<std::complex<float>> modulate(std::vector<int>, int);
-    static std::vector<int> getDataSc(int fftSize);
-    static std::vector<int> getNullSc(int fftSize);
-    static std::vector<std::vector<int>> getPilotSc(int fftSize);
+    static std::vector<std::complex<float>> modulate(std::vector<uint8_t>, int);
+    static std::vector<size_t> getDataSc(size_t fftSize, size_t DataScNum,
+        size_t PilotScOffset = kDefaultPilotScOffset);
+    static std::vector<size_t> getNullSc(size_t fftSize, size_t DataScNum);
+    static std::vector<std::complex<float>> getPilotScValue(size_t fftSize,
+        size_t DataScNum, size_t PilotScOffset = kDefaultPilotScOffset);
+    static std::vector<size_t> getPilotScIndex(size_t fftSize, size_t DataScNum,
+        size_t PilotScOffset = kDefaultPilotScOffset);
     static std::vector<std::complex<float>> FFT(
-        std::vector<std::complex<float>>, int);
+        const std::vector<std::complex<float>>&, int);
     static std::vector<std::complex<float>> IFFT(
-        std::vector<std::complex<float>>, int, float scale = 0.5,
+        const std::vector<std::complex<float>>&, int, float scale = 0.5,
         bool normalize = true);
 
-    static int findLTS(const std::vector<std::complex<double>>& iq, int seqLen);
-    static size_t find_pilot_seq(std::vector<std::complex<double>> iq,
-        std::vector<std::complex<double>> pilot, size_t seqLen);
+    static int findLTS(const std::vector<std::complex<float>>& iq, int seqLen);
+    static size_t find_pilot_seq(const std::vector<std::complex<float>>& iq,
+        const std::vector<std::complex<float>>& pilot, size_t seqLen);
     template <typename T>
     //static std::vector<T> convolve(std::vector<T> const& f, std::vector<T> const& g);
     static std::vector<T> convolve(
@@ -81,9 +97,9 @@ public:
         }
         return out;
     }
-    static float find_max_abs(std::vector<std::complex<float>> in);
-    static std::vector<std::complex<double>> csign(
-        std::vector<std::complex<double>> iq);
+    static float find_max_abs(const std::vector<std::complex<float>>& in);
+    static std::vector<std::complex<float>> csign(
+        const std::vector<std::complex<float>>& iq);
     static inline int hadamard2(int i, int j)
     {
         return (__builtin_parity(i & j) != 0 ? -1 : 1);
@@ -101,7 +117,7 @@ public:
         const size_t delta = 10);
 
     // Functions using AVX
-    static int find_beacon(const std::vector<std::complex<double>>& iq);
+    static int find_beacon(const std::vector<std::complex<float>>& iq);
     static int find_beacon_avx(const std::vector<std::complex<float>>& iq,
         const std::vector<std::complex<float>>& seq);
     static std::vector<float> correlate_avx_s(
@@ -121,15 +137,15 @@ public:
     static std::vector<std::complex<float>> correlate_avx(
         std::vector<std::complex<float>> const& f,
         std::vector<std::complex<float>> const& g);
+    static std::vector<std::complex<int16_t>> correlate_avx(
+        std::vector<std::complex<int16_t>> const& f,
+        std::vector<std::complex<int16_t>> const& g);
     static std::vector<std::complex<float>> complex_mult_avx(
         std::vector<std::complex<float>> const& f,
         std::vector<std::complex<float>> const& g, const bool conj);
     static std::vector<std::complex<int16_t>> complex_mult_avx(
         std::vector<std::complex<int16_t>> const& f,
         std::vector<std::complex<int16_t>> const& g, const bool conj);
-    static std::vector<std::complex<int16_t>> correlate_avx(
-        std::vector<std::complex<int16_t>> const& f,
-        std::vector<std::complex<int16_t>> const& g);
     //private:
     //    static inline float** init_qpsk();
     //    static inline float** init_qam16();

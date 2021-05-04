@@ -17,6 +17,46 @@ import matplotlib.pyplot as plt
 import scipy.io as sio  # For .mat format
 
 
+def find_zc_pilot(iq, thresh=0.8, us=1, seq_length=512, cp=32, pilot_seq=[]):
+    debug = False
+    pilot_seq = np.asarray(pilot_seq)
+    if pilot_seq.size == 0:
+        pilot, _ = generate_training_seq(preamble_type='zadoff-chu', seq_length=seq_length, cp=cp, upsample=us, reps=[])
+        fft_length = int(np.power(2, np.ceil(np.log2(seq_length))))
+        peak_spacing = fft_length + cp
+    else:
+        pilot = pilot_seq
+        peak_spacing = pilot_seq.size
+
+    pilot_flip = pilot[::-1]
+    pilot_flip_conj = np.conjugate(pilot_flip)
+    sign_fct = iq/abs(iq)			  	# Equivalent to Matlab's sign function (X/abs(X))
+    sign_fct = np.nan_to_num(sign_fct)			# Replace NaN values
+    pilot_corr = np.abs(np.convolve(pilot_flip_conj, iq))
+    pilot_pks = np.where(pilot_corr > (thresh * np.max(pilot_corr)))
+    pilot_pks = np.squeeze(pilot_pks)
+
+    if not pilot_pks.any():
+        if debug:
+            print("NO PILOT FOUND!")
+        best_pk = []
+    else:
+        # best_pk = pilot_pks[second_peak_idx[0]]  # Grab only the first packet we have received
+        best_pk = np.argmax(pilot_corr)
+
+    if debug:
+        fig = plt.figure()
+        ax1 = fig.add_subplot(2, 1, 1)
+        ax1.grid(True)
+        ax1.plot(np.abs(iq))
+        ax2 = fig.add_subplot(2, 1, 2)
+        ax2.grid(True)
+        ax2.plot(np.abs(pilot_corr))
+        #ax2.scatter(pilot_pks, 2 * np.ones(len(pilot_pks)))
+        plt.show()
+    return best_pk, pilot_pks, pilot_corr
+
+
 def find_lts(iq, thresh=0.8, us=1, cp=32, flip=False, lts_seq=[]):
 	"""
 		Find the indices of LTSs in the input "iq" signal (upsampled by a factor of "up").
@@ -103,5 +143,7 @@ def find_lts(iq, thresh=0.8, us=1, cp=32, flip=False, lts_seq=[]):
 
 if __name__ == '__main__':
 
-	lts, lts_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
-	find_lts(lts)
+	#lts, lts_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
+	#find_lts(lts)
+	zcpilot,_ = generate_training_seq(preamble_type='zadoff-chu', seq_length=336, cp=0, upsample=1, reps=1)
+	find_zc_pilot(iq=zcpilot,seq_length=336,cp=0)

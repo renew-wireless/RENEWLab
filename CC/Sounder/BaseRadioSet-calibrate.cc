@@ -525,22 +525,11 @@ void BaseRadioSet::collectCSI(bool& adjust)
                   << std::endl;
         return;
     }
-    std::vector<std::complex<double>> pilot;
     //std::vector<std::complex<float>> pilot_cf32;
-    std::vector<std::complex<int16_t>> pilot_cint16;
     int seqLen = 160; // Sequence length
-    auto lts = CommsLib::getSequence(CommsLib::LTS_SEQ);
-    auto lts_size = pilot.size();
-    for (int i = 0; i < seqLen; i++) {
-        pilot.push_back(
-            std::complex<double>(lts[0][i % lts_size], lts[1][i % lts_size]));
-    }
-
-    auto iq_ci16 = Utils::double_to_cint16(lts);
-    pilot_cint16.resize(seqLen);
-    for (int i = 0; i < seqLen; i++) {
-        pilot_cint16.push_back(iq_ci16[i % lts_size]);
-    }
+    std::vector<std::vector<float>> pilot
+        = CommsLib::getSequence(CommsLib::LTS_SEQ, seqLen);
+    auto pilot_cint16 = Utils::float_to_cint16(pilot);
 
     // Prepend/Append vectors with prefix/postfix number of null samples
     std::vector<std::complex<int16_t>> prefix_vec(_cfg->prefix(), 0);
@@ -633,14 +622,9 @@ void BaseRadioSet::collectCSI(bool& adjust)
 
     bool good_csi = true;
     for (int i = 0; i < R; i++) {
-        std::vector<std::complex<double>> rx(_cfg->samps_per_symbol());
         int k = ((i == ref_ant) ? ref_offset : ref_ant) * R + i;
-        std::transform(buff[k].begin(), buff[k].end(), rx.begin(),
-            [](std::complex<int16_t> cf) {
-                return std::complex<double>(
-                    cf.real() / 32768.0, cf.imag() / 32768.0);
-            });
-        int peak = CommsLib::find_pilot_seq(rx, pilot, seqLen);
+        auto rx = Utils::cint16_to_cfloat(buff[k]);
+        int peak = CommsLib::findLTS(rx, seqLen);
         offset[i] = peak < 128 ? 0 : peak - 128;
         //std::cout << i << " " << offset[i] << std::endl;
         if (offset[i] == 0)
