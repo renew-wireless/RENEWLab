@@ -679,18 +679,6 @@ void Receiver::clientSyncTxRx(int tid)
         }
     }
 
-    // OBCH - fixme Apply CFO Correction (pre-distortion) to uplink pilots
-    if (config_->cfo_correction_en()) {
-        std::vector<std::complex<float>> pilot_cf32_local(config_->pilot_cf32());
-        bool is_downlink = false;
-        
-        CFOCorrection(is_downlink, pilot_cf32_local);
-        pilotbuffA.at(0) = pilot_cf32_local.data();
-        if (config_->cl_sdr_ch() == 2) {
-            pilotbuffB.at(1) = pilot_cf32_local.data();
-        }
-    }
-
     // Main client read/write loop.
     size_t frame_cnt = 0;
     bool resync = false;
@@ -748,6 +736,11 @@ void Receiver::clientSyncTxRx(int tid)
                         MLPD_INFO("Re-syncing with offset: %d, after %zu "
                                   "tries, index: %d, tid %d\n",
                             rx_offset, resync_retry_cnt + 1, sync_index, tid);
+
+                        // RE-estimate CFO after resync
+                        if (config_->cfo_correction_en()) {
+                            CFOEstimation(sync_index, radio_rx_data);
+                        }
                     } else {
                         resync_retry_cnt++;
                     }
@@ -762,6 +755,18 @@ void Receiver::clientSyncTxRx(int tid)
                     resync_retry_cnt = 0;
                     config_->running(false);
                     break;
+                }
+
+                // OBCH - fixme Apply CFO Correction (pre-distortion) to uplink pilots
+                if (config_->cfo_correction_en()) {
+                    std::vector<std::complex<float>> pilot_cf32_local(config_->pilot_cf32());
+                    bool is_downlink = false;
+
+                    CFOCorrection(is_downlink, pilot_cf32_local);
+                    pilotbuffA.at(0) = pilot_cf32_local.data();
+                    if (config_->cl_sdr_ch() == 2) {
+                        pilotbuffB.at(1) = pilot_cf32_local.data();
+                    }
                 }
 
                 // config_->tx_advance() needs calibration based on SDR model and sampling rate
