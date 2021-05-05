@@ -73,7 +73,6 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     symbol_length_no_pad = symbol_length - z_padding
     num_pilots_per_sym = ((symbol_length_no_pad) // (cp + fft_size))
     ul_sf_num = int(metadata['UL_SYMS'])
-    cl_ch_num = int(metadata['CL_CH_PER_RADIO'])
     n_ue = num_cl
 
     all_bs_nodes = set(range(hdf5.pilot_samples.shape[3]))
@@ -280,6 +279,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             axes4[1, 0].plot(np.imag(ul_samps[:, cell_i, ul_sf_i, ant_i, :]).flatten())
 
             if demodulate:
+                cl_ch_num = int(metadata['CL_CH_PER_RADIO'])
                 data_sc_ind = np.array(metadata['OFDM_DATA_SC'])
                 pilot_sc_ind = np.array(metadata['OFDM_PILOT_SC'])
                 pilot_sc_val = np.array(metadata['OFDM_PILOT_SC_VALS'])
