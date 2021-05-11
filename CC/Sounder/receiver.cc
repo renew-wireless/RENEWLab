@@ -659,6 +659,7 @@ void Receiver::clientSyncTxRx(int tid)
 
             // Carrier Frequency Offset estimation and correction
             if (config_->cfo_correction_en()) {
+                std::cout << "CFO Estimation" << std::endl;
                 CFOEstimation(sync_index, syncbuff0);
             }
         }
@@ -714,6 +715,8 @@ void Receiver::clientSyncTxRx(int tid)
                     resync = resync_enable;
                     MLPD_TRACE("Enable resyncing at frame %zu\n", frame_cnt);
                 }
+
+                //resync = true; // OBCH - FIXME REMOVE
                 rx_offset = 0;
                 if (resync == true) {
                     //Need to bound the beacon detection to the last 'r not the size of the memory (vector)
@@ -759,7 +762,8 @@ void Receiver::clientSyncTxRx(int tid)
 
                 // OBCH - fixme Apply CFO Correction (pre-distortion) to uplink pilots
                 if (config_->cfo_correction_en()) {
-                    std::vector<std::complex<float>> pilot_cf32_local(config_->pilot_cf32());
+                    std::vector<std::complex<float>> pilot_cf32_local(
+                        config_->pilot_cf32());
                     bool is_downlink = false;
 
                     CFOCorrection(is_downlink, pilot_cf32_local);
@@ -837,51 +841,55 @@ void Receiver::clientSyncTxRx(int tid)
     zeros.clear();
 }
 
-void Receiver::CFOEstimation(const int sync_index, const std::vector<std::complex<float>>& beacon_buff)
+void Receiver::CFOEstimation(
+    const int sync_index, const std::vector<std::complex<float>>& beacon_buff)
 {
 
-  // Compute phase error across same-sample index from two consecutive training sequences
-  size_t cfo_start_idx = sync_index - (config_->beacon_longsym_len() * config_->beacon_longsym_reps());
-  std::vector<float> phase_vec(config_->beacon_longsym_len(), 0);
-  std::vector<float> phase_uwrap(config_->beacon_longsym_len(), 0);
+    // Compute phase error across same-sample index from two consecutive training sequences
+    size_t cfo_start_idx = sync_index
+        - (config_->beacon_longsym_len() * config_->beacon_longsym_reps());
+    std::vector<float> phase_vec(config_->beacon_longsym_len(), 0);
+    std::vector<float> phase_uwrap(config_->beacon_longsym_len(), 0);
 
-  for (size_t i = 0; i < config_->beacon_longsym_len(); i++) {
-    std::complex<float> s1 = beacon_buff[cfo_start_idx + i];
-    std::complex<float> s2 = beacon_buff[cfo_start_idx + config_->beacon_longsym_len() + i];
-    std::complex<float> s12 = s1 * std::conj(s2);
-    phase_vec[i] = std::atan2(s12.imag(), s12.real());
+    for (size_t i = 0; i < config_->beacon_longsym_len(); i++) {
+        std::complex<float> s1 = beacon_buff[cfo_start_idx + i];
+        std::complex<float> s2
+            = beacon_buff[cfo_start_idx + config_->beacon_longsym_len() + i];
+        std::complex<float> s12 = s1 * std::conj(s2);
+        phase_vec[i] = std::atan2(s12.imag(), s12.real());
 
-    // Unwrap phase
-    if (i == 0) {
-      phase_uwrap[0] = phase_vec[0];
-    } else {
-      float diff = phase_vec[i] - phase_vec[i - 1];
-      if (diff > M_PI)
-          diff = diff - 2 * M_PI;
-      else if (diff < -M_PI)
-          diff = diff + 2 * M_PI;
+        // Unwrap phase
+        if (i == 0) {
+            phase_uwrap[0] = phase_vec[0];
+        } else {
+            float diff = phase_vec[i] - phase_vec[i - 1];
+            if (diff > M_PI)
+                diff = diff - 2 * M_PI;
+            else if (diff < -M_PI)
+                diff = diff + 2 * M_PI;
 
-      phase_uwrap[i] = phase_vec[i - 1] + diff;
+            phase_uwrap[i] = phase_vec[i - 1] + diff;
+        }
     }
-  }
 
-  float average = accumulate(phase_uwrap.begin(), phase_uwrap.end(), 0.0)
-      / phase_uwrap.size();
-  cfo_ = average / (2 * M_PI); // * c->beacon_longsym_len);
-  double cfo_est_khz = cfo_ * config_->rate() * 1e-3;
-  printf("XXXXX  CFO Estimate2: %f kHz  XXXXX \n", cfo_est_khz);
+    float average = accumulate(phase_uwrap.begin(), phase_uwrap.end(), 0.0)
+        / phase_uwrap.size();
+    cfo_ = average / (2 * M_PI * config_->beacon_longsym_len());
+    //double cfo_est_khz = cfo_ * config_->rate() * 1e-3;
+    //printf("XXXXX  CFO Estimate2: %f kHz  XXXXX \n", cfo_est_khz);
 }
 
-void Receiver::CFOCorrection(bool is_downlink, std::vector<std::complex<float>>& samps)
+void Receiver::CFOCorrection(
+    bool is_downlink, std::vector<std::complex<float>>& samps)
 {
-  const std::complex<double> i(0.0, 1.0);
-  std::complex<float> samps_cf;
+    const std::complex<double> i(0.0, 1.0);
+    std::complex<float> samps_cf;
 
-  double cfo = is_downlink ? -1 * cfo_ : cfo_;
-  for (size_t idx = 0; idx < samps.size(); idx++) {
-    //double tmp = 2 * M_PI * cfo * idx;
-    double tmp = 2 * M_PI * cfo * idx / config_->beacon_longsym_len();
-    std::complex<double> cfo_tmp = exp(tmp * -i);
-    samps[idx] *= (std::complex<float>)cfo_tmp;
-  }
+    double cfo = is_downlink ? -1 * cfo_ : cfo_;
+    for (size_t idx = 0; idx < samps.size(); idx++) {
+        //double tmp = 2 * M_PI * cfo * idx;
+        double tmp = 2 * M_PI * cfo * idx / config_->beacon_longsym_len();
+        std::complex<double> cfo_tmp = exp(tmp * -i);
+        samps[idx] *= (std::complex<float>)cfo_tmp;
+    }
 }
