@@ -9,4 +9,4 @@ if [[ `lsb_release -rs` == "20.04" ]]
 then
     HDF5_LIB=libhdf5-cpp-103
 fi
-sudo apt -y install make cmake g++ libhdf5-dev $HDF5_LIB
+sudo apt -y install make cmake g++ libhdf5-dev $HDF5_LIB libgflags-dev
