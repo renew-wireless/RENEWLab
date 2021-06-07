@@ -54,7 +54,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
     ss.str(std::string());
     ss.clear();
 
-    static const int kMaxTxGain = 81;
+    static const int kMaxTxGainBS = 81;
     // common (BaseStation config overrides these)
     if (bs_present_ == true) {
         freq_ = tddConf.value("frequency", 2.5e9);
@@ -92,19 +92,19 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
         }
         single_gain_ = tddConf.value("single_gain", true);
 
-        if (tddConf.value("txgainA", 20) > kMaxTxGain) {
+        if (tddConf.value("txgainA", 20) > kMaxTxGainBS) {
             std::string msg
                 = "ERROR: BaseStation ChanA - Maximum TX gain value is ";
-            msg += std::to_string(kMaxTxGain);
+            msg += std::to_string(kMaxTxGainBS);
             throw std::invalid_argument(msg);
         } else {
             tx_gain_.push_back(tddConf.value("txgainA", 20));
         }
 
-        if (tddConf.value("txgainB", 20) > kMaxTxGain) {
+        if (tddConf.value("txgainB", 20) > kMaxTxGainBS) {
             std::string msg
                 = "ERROR: BaseStation ChanB - Maximum TX gain value is ";
-            msg += std::to_string(kMaxTxGain);
+            msg += std::to_string(kMaxTxGainBS);
             throw std::invalid_argument(msg);
         } else {
             tx_gain_.push_back(tddConf.value("txgainB", 20));
@@ -249,17 +249,18 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
         cl_rxgain_vec_.at(1).assign(
             jClRxgainB_vec.begin(), jClRxgainB_vec.end());
 
-        compare find_guilty(kMaxTxGain);
+        max_tx_gain_ue_ = tddConfCl.value("maxTxGainUE", 81);
+        compare find_guilty(max_tx_gain_ue_);
         if (std::any_of(cl_txgain_vec_.at(0).begin(),
                 cl_txgain_vec_.at(0).end(), find_guilty)) {
             std::string msg = "ERROR: UE ChanA - Maximum TX gain value is ";
-            msg += std::to_string(kMaxTxGain);
+            msg += std::to_string(max_tx_gain_ue_);
             throw std::invalid_argument(msg);
         }
         if (std::any_of(cl_txgain_vec_.at(1).begin(),
                 cl_txgain_vec_.at(1).end(), find_guilty)) {
             std::string msg = "ERROR: UE ChanB - Maximum TX gain value is ";
-            msg += std::to_string(kMaxTxGain);
+            msg += std::to_string(max_tx_gain_ue_);
             throw std::invalid_argument(msg);
         }
 
