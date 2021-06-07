@@ -26,17 +26,12 @@ USE_HUB                 = 1;
 WIRED_UE                 = 1;
 TX_FRQ                  = 3.6e9;    
 RX_FRQ                  = TX_FRQ;
-TX_GN                   = 30;
+TX_GN                   = limit_gain(30);  % WARNING: Do not remove function!
 RX_GN                   = 20;
 SMPL_RT                 = 5e6;  
 N_FRM                   = 1;
 bs_ids = string.empty();
 bs_sched = string.empty();
-
-if TX_GN > 81
-    display('WARNING: MAXIMUM TX GAIN IS 81!');
-    TX_GN = 81;
-end
 
 % Waveform params
 TX_SCALE                = 0.5;         % Scale for Tx waveform ([0:1])

@@ -54,6 +54,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
     ss.str(std::string());
     ss.clear();
 
+    static const int kMaxTxGain = 81;
     // common (BaseStation config overrides these)
     if (bs_present_ == true) {
         freq_ = tddConf.value("frequency", 2.5e9);
@@ -91,23 +92,25 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
         }
         single_gain_ = tddConf.value("single_gain", true);
 
-        if (tddConf.value("txgainA", 20) > 81) {
-            throw std::invalid_argument(
-                "ERROR: BaseStation ChanA - Maximum TX gain value is 81 \n");
+        if (tddConf.value("txgainA", 20) > kMaxTxGain) {
+            std::string msg
+                = "ERROR: BaseStation ChanA - Maximum TX gain value is ";
+            msg += std::to_string(kMaxTxGain);
+            throw std::invalid_argument(msg);
         } else {
             tx_gain_.push_back(tddConf.value("txgainA", 20));
         }
 
-        if (tddConf.value("txgainB", 20) > 81) {
-            throw std::invalid_argument(
-                "ERROR: BaseStation ChanB - Maximum TX gain value is 81 \n");
+        if (tddConf.value("txgainB", 20) > kMaxTxGain) {
+            std::string msg
+                = "ERROR: BaseStation ChanB - Maximum TX gain value is ";
+            msg += std::to_string(kMaxTxGain);
+            throw std::invalid_argument(msg);
         } else {
             tx_gain_.push_back(tddConf.value("txgainB", 20));
         }
 
-        //tx_gain_.push_back(tddConf.value("txgainA", 20));
         rx_gain_.push_back(tddConf.value("rxgainA", 20));
-        //tx_gain_.push_back(tddConf.value("txgainB", 20));
         rx_gain_.push_back(tddConf.value("rxgainB", 20));
         cal_tx_gain_.push_back(tddConf.value("calTxGainA", 10));
         cal_tx_gain_.push_back(tddConf.value("calTxGainB", 10));
@@ -224,12 +227,12 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
 
         // Help verify whether gain exceeds max value
         struct compare {
-            int key;
+            const int key_;
             compare(int const& i)
-                : key(i)
+                : key_(i)
             {
             }
-            bool operator()(int const& i) { return (i > key); }
+            bool operator()(int const& i) { return (i > key_); }
         };
         cl_txgain_vec_.resize(2);
         cl_rxgain_vec_.resize(2);
@@ -246,15 +249,18 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
         cl_rxgain_vec_.at(1).assign(
             jClRxgainB_vec.begin(), jClRxgainB_vec.end());
 
+        compare find_guilty(kMaxTxGain);
         if (std::any_of(cl_txgain_vec_.at(0).begin(),
-                cl_txgain_vec_.at(0).end(), compare(81))) {
-            throw std::invalid_argument(
-                "ERROR: UE ChanA - Max TX gain is 81. Exit now...\n");
+                cl_txgain_vec_.at(0).end(), find_guilty)) {
+            std::string msg = "ERROR: UE ChanA - Maximum TX gain value is ";
+            msg += std::to_string(kMaxTxGain);
+            throw std::invalid_argument(msg);
         }
         if (std::any_of(cl_txgain_vec_.at(1).begin(),
-                cl_txgain_vec_.at(1).end(), compare(81))) {
-            throw std::invalid_argument(
-                "ERROR: UE ChanB - Max TX gain is 81. Exit now...\n");
+                cl_txgain_vec_.at(1).end(), find_guilty)) {
+            std::string msg = "ERROR: UE ChanB - Maximum TX gain value is ";
+            msg += std::to_string(kMaxTxGain);
+            throw std::invalid_argument(msg);
         }
 
         auto jClFrames = tddConfCl.value("frame_schedule", json::array());

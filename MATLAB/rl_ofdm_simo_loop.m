@@ -170,14 +170,9 @@ else
 
     rxfreq = 2.5e9;
     txfreq = 2.5e9;
-    txgain = 80;
+    txgain = limit_gain(80);  % WARNING: Do not remove function!
     rxgain = 60;
     rate = 5e6;
-
-    if txgain > 81
-        display('WARNING: MAXIMUM TX GAIN IS 81!');
-        txgain = 81;
-    end
 
     N_BS_NODE = length(bs_ids);
     N_UE = length(ue_ids);
