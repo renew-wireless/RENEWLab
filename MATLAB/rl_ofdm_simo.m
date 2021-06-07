@@ -73,7 +73,11 @@ else
     bs_sched = string.empty();
     ue_ids = string.empty();
     ue_scheds = string.empty();
-    
+
+    if TX_GN > 81
+        display('WARNING: MAXIMUM TX GAIN IS 81!');
+        TX_GN = 81;
+    end
 end
 ber_SIM = zeros(nt,nsnr);           % BER
 berr_th = zeros(nsnr,1);            % Theoretical BER

@@ -33,6 +33,10 @@ N_FRM                   = 1;
 bs_ids = string.empty();
 bs_sched = string.empty();
 
+if TX_GN > 81
+    display('WARNING: MAXIMUM TX GAIN IS 81!');
+    TX_GN = 81;
+end
 
 % Waveform params
 

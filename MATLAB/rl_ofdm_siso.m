@@ -69,6 +69,11 @@ RX_GN                   = 20;
 SMPL_RT                 = 5e6;
 N_FRM                   = 10;
 
+if TX_GN > 81
+    display('WARNING: MAXIMUM TX GAIN IS 81!');
+    TX_GN = 81;
+end
+
 bs_ids = string.empty();
 bs_sched = string.empty();
 ue_ids = string.empty();

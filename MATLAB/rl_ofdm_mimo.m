@@ -64,6 +64,12 @@ else
     bs_ids                   = string.empty();
     ue_ids                  = string.empty();
     ue_scheds               = string.empty();
+
+    if TX_GN > 81
+        display('WARNING: MAXIMUM TX GAIN IS 81!');
+        TX_GN = 81;
+    end
+
     if USE_HUB
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
