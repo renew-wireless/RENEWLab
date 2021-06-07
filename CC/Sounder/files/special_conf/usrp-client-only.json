@@ -1,26 +1,29 @@
 {
 	"Clients" : {
 		 "frequency" : 3.6e9,
-	         "channel" : "AB",
-	         "agc_en" : false,
-		 "rxgainA" : [20],
-		 "txgainA" : [20],
-		 "rxgainB" : [20],
-		 "txgainB" : [20],
-		 "rate" : 5e6,
+		 "channel" : "AB",
+		 "agc_en" : false,
+		 "rxgainA" : [60],
+		 "txgainA" : [40],
+		 "rxgainB" : [60],
+		 "txgainB" : [40],
+		 "rate" : 25e6,
 		 "fft_size" : 64,
-		 "ofdm_symbol_per_subframe" : 10,
+		 "subframe_size" : 640,
 		 "cp_size" : 16,
-		 "prefix" : 160,
-		 "postfix" : 160,
+		 "prefix" : 82,
+		 "postfix" : 68,
 		 "frame_schedule" : [
-		     "GGPPGGGGGGGGGGGGGGGG"
+		     "GGPPGUGGGGGGGGGGGGGG"
 		 ],
 	         "frame_mode" : "free_running",
 	         "hw_framer" : false,
 	         "tx_advance" : 100,
+		 "beacon_type" : "gold_ifft",
+		 "modulation" : "QPSK",
+		 "pilot_seq" : "lts-half",
 	         "sdr_id" : [
-		     "10.117.2.2"
+		     "10.118.2.1"
 		 ]
 	}
 }
