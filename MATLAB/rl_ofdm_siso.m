@@ -64,10 +64,15 @@ N_BS_NODE 		= 1;
 N_UE 			= 1;
 TX_FRQ                  = 2.5e9;
 RX_FRQ                  = TX_FRQ;
-TX_GN                   = 42;
+TX_GN                   = limit_gain(42);  % WARNING - Do not remove function!
 RX_GN                   = 20;
 SMPL_RT                 = 5e6;
 N_FRM                   = 10;
+
+if TX_GN > 81
+    display('WARNING: MAXIMUM TX GAIN IS 81!');
+    TX_GN = 81;
+end
 
 bs_ids = string.empty();
 bs_sched = string.empty();

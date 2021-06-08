@@ -351,6 +351,7 @@ private:
 
     // Clients features
     std::vector<std::string> cl_sdr_ids_;
+    size_t max_tx_gain_ue_;
     size_t num_cl_sdrs_;
     size_t cl_sdr_ch_;
     size_t num_cl_antennas_;

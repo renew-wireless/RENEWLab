@@ -354,7 +354,7 @@ def main():
     parser.add_option("--ampl", type="float", dest="ampl", help="Pilot amplitude scaling coefficient", default=0.5)
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
-    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]", default=30.0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB) w/CBRS 3.6GHz [0:81], 2.5GHZ [0:81]", default=30.0)
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]", default=30.0)
     parser.add_option("--cp", action="store_true", dest="cyc_prefix", help="adds cyclic prefix to tx symbols", default=True)
     parser.add_option("--num-samps", type="int", dest="num_samps", help="Number of samples in Symbol", default=400)
@@ -364,6 +364,10 @@ def main():
     parser.add_option("--both-channels", action="store_true", dest="both_channels", help="transmit from both channels",default=False)
     parser.add_option("--plot-samps", action="store_true", dest="plotter", help="plots all rx signals",default=False)
     (options, args) = parser.parse_args()
+
+    if options.txgain > 81:
+        print("[ERROR] Gain should be between 0 and 81")
+        exit(0)
 
     bserials = []
     with open(options.bnodes, "r") as f:

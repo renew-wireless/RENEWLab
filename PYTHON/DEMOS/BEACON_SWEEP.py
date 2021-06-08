@@ -20,7 +20,7 @@
     Gain settings will vary depending on RF frontend board being used
     If using CBRS:
     rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
-    txgain: at 2.5GHz [16:1:90], at 3.6GHz [15:1:95]
+    txgain: at 2.5GHz [16:1:81], at 3.6GHz [15:1:81]
 
     If using only Dev Board:
     rxgain: at both frequency bands [0:1:30]
@@ -189,6 +189,10 @@ def main():
  
     if options.freq == 0:
         print("[ERROR] Please provide RF Freq (Hz). POWDER users must set to 2.5e9. i.e. --freq=2.5e9")
+        exit(0)
+
+    if options.txgain > 81:
+        print("[ERROR] TX Gain must be between 0 and 81")
         exit(0)
 
     beamsweeper(

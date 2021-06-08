@@ -170,10 +170,10 @@ else
 
     rxfreq = 2.5e9;
     txfreq = 2.5e9;
-    txgain = 80;
+    txgain = limit_gain(80);  % WARNING: Do not remove function!
     rxgain = 60;
     rate = 5e6;
-    
+
     N_BS_NODE = length(bs_ids);
     N_UE = length(ue_ids);
     

@@ -26,13 +26,12 @@ WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 USE_HUB                 = 0;
 TX_FRQ                  = 3.6e9;    
 RX_FRQ                  = TX_FRQ;
-TX_GN                   = 70;
+TX_GN                   = limit_gain(70); % WARNING: DO NOT REMOVE FUNCTION
 RX_GN                   = 50;
 SMPL_RT                 = 5e6;  
 N_FRM                   = 1;
 bs_ids = string.empty();
 bs_sched = string.empty();
-
 
 % Waveform params
 

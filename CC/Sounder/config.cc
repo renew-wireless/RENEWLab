@@ -54,6 +54,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
     ss.str(std::string());
     ss.clear();
 
+    static const int kMaxTxGainBS = 81;
     // common (BaseStation config overrides these)
     if (bs_present_ == true) {
         freq_ = tddConf.value("frequency", 2.5e9);
@@ -90,9 +91,26 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
                 "error channel config: not any of A/B/AB!\n");
         }
         single_gain_ = tddConf.value("single_gain", true);
-        tx_gain_.push_back(tddConf.value("txgainA", 20));
+
+        if (tddConf.value("txgainA", 20) > kMaxTxGainBS) {
+            std::string msg
+                = "ERROR: BaseStation ChanA - Maximum TX gain value is ";
+            msg += std::to_string(kMaxTxGainBS);
+            throw std::invalid_argument(msg);
+        } else {
+            tx_gain_.push_back(tddConf.value("txgainA", 20));
+        }
+
+        if (tddConf.value("txgainB", 20) > kMaxTxGainBS) {
+            std::string msg
+                = "ERROR: BaseStation ChanB - Maximum TX gain value is ";
+            msg += std::to_string(kMaxTxGainBS);
+            throw std::invalid_argument(msg);
+        } else {
+            tx_gain_.push_back(tddConf.value("txgainB", 20));
+        }
+
         rx_gain_.push_back(tddConf.value("rxgainA", 20));
-        tx_gain_.push_back(tddConf.value("txgainB", 20));
         rx_gain_.push_back(tddConf.value("rxgainB", 20));
         cal_tx_gain_.push_back(tddConf.value("calTxGainA", 10));
         cal_tx_gain_.push_back(tddConf.value("calTxGainB", 10));
@@ -207,6 +225,15 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
         tx_advance_ = tddConfCl.value("tx_advance", 250); // 250
         ul_data_frame_num_ = tddConfCl.value("ul_data_frame_num", 1);
 
+        // Help verify whether gain exceeds max value
+        struct compare {
+            const int key_;
+            compare(int const& i)
+                : key_(i)
+            {
+            }
+            bool operator()(int const& i) { return (i > key_); }
+        };
         cl_txgain_vec_.resize(2);
         cl_rxgain_vec_.resize(2);
         auto jClTxgainA_vec = tddConfCl.value("txgainA", json::array());
@@ -221,6 +248,21 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
         auto jClRxgainB_vec = tddConfCl.value("rxgainB", json::array());
         cl_rxgain_vec_.at(1).assign(
             jClRxgainB_vec.begin(), jClRxgainB_vec.end());
+
+        max_tx_gain_ue_ = tddConfCl.value("maxTxGainUE", 81);
+        compare find_guilty(max_tx_gain_ue_);
+        if (std::any_of(cl_txgain_vec_.at(0).begin(),
+                cl_txgain_vec_.at(0).end(), find_guilty)) {
+            std::string msg = "ERROR: UE ChanA - Maximum TX gain value is ";
+            msg += std::to_string(max_tx_gain_ue_);
+            throw std::invalid_argument(msg);
+        }
+        if (std::any_of(cl_txgain_vec_.at(1).begin(),
+                cl_txgain_vec_.at(1).end(), find_guilty)) {
+            std::string msg = "ERROR: UE ChanB - Maximum TX gain value is ";
+            msg += std::to_string(max_tx_gain_ue_);
+            throw std::invalid_argument(msg);
+        }
 
         auto jClFrames = tddConfCl.value("frame_schedule", json::array());
         assert(jClSdrs.size() == jClFrames.size());
