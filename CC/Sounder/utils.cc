@@ -49,8 +49,8 @@ std::vector<size_t> Utils::strToChannels(const std::string& channel)
     return (channels);
 }
 
-std::vector<std::complex<int16_t>> Utils::double_to_cint16(
-    std::vector<std::vector<double>> in)
+std::vector<std::complex<int16_t>> Utils::float_to_cint16(
+    const std::vector<std::vector<float>>& in)
 {
     int len = in[0].size();
     std::vector<std::complex<int16_t>> out(len, 0);
@@ -60,19 +60,19 @@ std::vector<std::complex<int16_t>> Utils::double_to_cint16(
     return out;
 }
 
-std::vector<std::complex<float>> Utils::doubletocfloat(
-    std::vector<std::vector<double>> in)
+std::vector<std::complex<float>> Utils::cint16_to_cfloat(
+    const std::vector<std::complex<int16_t>>& in)
 {
-    // Convert two dimensional double array to one dimensional complex double vector
-    int len = in[0].size();
-    std::vector<std::complex<float>> out(len, 0);
+    int len = in.size();
+    std::vector<std::complex<float>> out(len);
     for (int i = 0; i < len; i++)
-        out[i] = std::complex<float>((float)in[0][i], (float)in[1][i]);
+        out[i] = std::complex<float>(
+            in[i].real() / 32768.0, in[i].imag() / 32768.0);
     return out;
 }
 
 std::vector<std::complex<float>> Utils::uint32tocfloat(
-    std::vector<uint32_t> in, const std::string& order)
+    const std::vector<uint32_t>& in, const std::string& order)
 {
     int len = in.size();
     std::vector<std::complex<float>> out(len, 0);
@@ -95,7 +95,8 @@ std::vector<std::complex<float>> Utils::uint32tocfloat(
 }
 
 std::vector<uint32_t> Utils::cint16_to_uint32(
-    std::vector<std::complex<int16_t>> in, bool conj, const std::string& order)
+    const std::vector<std::complex<int16_t>>& in, bool conj,
+    const std::string& order)
 {
     std::vector<uint32_t> out(in.size(), 0);
     for (size_t i = 0; i < in.size(); i++) {
@@ -110,7 +111,7 @@ std::vector<uint32_t> Utils::cint16_to_uint32(
 }
 
 std::vector<std::vector<size_t>> Utils::loadSymbols(
-    std::vector<std::string> frames, char sym)
+    const std::vector<std::string>& frames, char sym)
 {
     std::vector<std::vector<size_t>> symId;
     size_t frameSize = frames.size();

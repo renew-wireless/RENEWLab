@@ -361,18 +361,20 @@ def calCorr(userCSI, corr_vec):
 
 def demult(csi, data, method='zf'):
     # TODO include cell dimension for both csi and data and symbol num for data
-    """csi: Frame, User, Pilot Rep, Antenna, Subcarrier"""
-    """data: Frame, Antenna, Subcarrier"""
+    """csi: Frame, User, Antenna, Subcarrier"""
+    """data: Frame, Uplink Syms, Antenna, Subcarrier"""
     # Compute beamweights based on the specified frame.
-    userCSI = np.mean(csi, 2)  # average over both LTSs
-    sig_intf = np.empty(
-        (userCSI.shape[0], userCSI.shape[1], userCSI.shape[3]), dtype='complex64')
+    demul_data = np.empty(
+        (csi.shape[0], data.shape[1], csi.shape[1], csi.shape[3]), dtype='complex64')
+    bmf_w = np.empty(
+        (csi.shape[0], csi.shape[3], csi.shape[2], csi.shape[1]), dtype='complex64')
+    data_tp = np.transpose(data, (0, 3, 1, 2))
     for frame in range(csi.shape[0]):
-        for sc in range(userCSI.shape[3]):
+        for sc in range(csi.shape[3]):
             if method == 'zf':
-                sig_intf[frame, :, sc] = np.dot(
-                    data[frame, :, sc], np.linalg.pinv(userCSI[frame, :, :, sc]))
+                bmf_w[frame, sc, :, :] = np.linalg.pinv(csi[frame, :, :, sc])
             else:
-                sig_intf[frame, :, sc] = np.dot(data[frame, :, sc], np.transpose(
-                    np.conj(userCSI[frame, :, :, sc]), (1, 0)))
-    return sig_intf
+                bmf_w[frame, sc, :, :] = np.transpose(
+                    np.conj(csi[frame, :, :, sc]), (1, 0))
+    demul_data = np.transpose(np.matmul(data_tp, bmf_w), (0, 2, 3, 1))
+    return demul_data

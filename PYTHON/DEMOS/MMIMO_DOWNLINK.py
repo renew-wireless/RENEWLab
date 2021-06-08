@@ -15,7 +15,7 @@
     Gain settings will vary depending on RF frontend board being used
     If using CBRS:
     rxgain: at 2.5GHz [3:1:105], at 3.6GHz [3:1:102]
-    txgain: at 2.5GHz [16:1:93], at 3.6GHz [15:1:102]
+    txgain: at 2.5GHz [16:1:81], at 3.6GHz [15:1:81]
 
     If using only Dev Board:
     rxgain: at both frequency bands [0:1:30]
@@ -704,6 +704,10 @@ def main():
     parser.add_option("--use-trig", action="store_true", dest="use_trig", help="uses chain triggers for synchronization",default=False)
     parser.add_option("--modOrder", type="int", dest="modOrder", help="Modulation Order 2=BPSK/4=QPSK/16=16QAM/64=64QAM", default=2)
     (options, args) = parser.parse_args()
+
+    if options.txgain > 81:
+        print("[ERROR] TX gain should be between 0 and 81")
+        exit(0)
 
     bserials = []
     with open(options.bnodes, "r") as f:

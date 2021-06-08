@@ -14,14 +14,10 @@
 #include <atomic>
 #include <complex.h>
 #include <vector>
-#ifdef JSON
-#include <nlohmann/json.hpp>
-using json = nlohmann::json;
-#endif
 
 class Config {
 public:
-    Config(const std::string&);
+    Config(const std::string&, const std::string&);
     ~Config();
 
     //Accessors
@@ -31,10 +27,17 @@ public:
     inline size_t num_cl_sdrs(void) const { return this->num_cl_sdrs_; }
     inline size_t core_alloc(void) const { return this->core_alloc_; }
     inline int subframe_size(void) const { return this->subframe_size_; }
-    inline int samps_per_symbol(void) const { return this->samps_per_symbol_; }
+    inline size_t samps_per_symbol(void) const
+    {
+        return this->samps_per_symbol_;
+    }
     inline size_t symbols_per_frame(void) const
     {
         return this->symbols_per_frame_;
+    }
+    inline size_t symbol_per_subframe(void) const
+    {
+        return this->symbol_per_subframe_;
     }
     inline bool ul_data_sym_present(void) const
     {
@@ -55,6 +58,10 @@ public:
     inline bool imbalance_cal_en(void) const { return this->imbalance_cal_en_; }
     inline bool sample_cal_en(void) const { return this->sample_cal_en_; }
     inline size_t max_frame(void) const { return this->max_frame_; }
+    inline size_t ul_data_frame_num(void) const
+    {
+        return this->ul_data_frame_num_;
+    }
     inline bool beam_sweep(void) const { return this->beam_sweep_; }
     inline size_t beacon_ant(void) const { return this->beacon_ant_; }
     inline size_t num_cl_antennas(void) const { return this->num_cl_antennas_; }
@@ -152,8 +159,16 @@ public:
     {
         return this->cl_sdr_ids_;
     }
+    inline const std::vector<std::string>& tx_fd_data_files(void) const
+    {
+        return this->tx_fd_data_files_;
+    }
+    inline const std::vector<std::string>& tx_td_data_files(void) const
+    {
+        return this->tx_td_data_files_;
+    }
 
-    inline const std::vector<int>& data_ind(void) const
+    inline const std::vector<size_t>& data_ind(void) const
     {
         return this->data_ind_;
     }
@@ -178,13 +193,21 @@ public:
         return this->beacon_;
     }
 
-    inline std::vector<std::vector<double>>& pilot_sym(void)
+    inline std::vector<std::vector<float>>& pilot_sym(void)
     {
         return this->pilot_sym_;
     };
-    inline std::vector<std::vector<int>>& pilot_sc(void)
+    inline std::vector<std::vector<float>>& pilot_sym_f(void)
+    {
+        return this->pilot_sym_f_;
+    };
+    inline std::vector<std::complex<float>>& pilot_sc(void)
     {
         return this->pilot_sc_;
+    };
+    inline std::vector<size_t>& pilot_sc_ind(void)
+    {
+        return this->pilot_sc_ind_;
     };
 
     inline const std::vector<std::string>& frames(void) const
@@ -228,8 +251,7 @@ public:
         return this->cal_tx_gain_;
     }
 
-    inline const std::vector<std::vector<std::complex<float>>>& txdata_time_dom(
-        void) const
+    inline std::vector<std::vector<std::complex<float>>>& txdata_time_dom(void)
     {
         return this->txdata_time_dom_;
     }
@@ -254,6 +276,7 @@ public:
     bool isNoise(int, int);
     bool isData(int, int);
     unsigned getCoreCount();
+    void loadULData(const std::string&);
 
 private:
     bool bs_present_;
@@ -308,6 +331,7 @@ private:
     std::string frame_mode_;
     bool hw_framer_;
     size_t max_frame_;
+    size_t ul_data_frame_num_;
     std::vector<std::vector<size_t>>
         pilot_symbols_; // Accessed through getClientId
     std::vector<std::vector<size_t>> noise_symbols_;
@@ -327,6 +351,7 @@ private:
 
     // Clients features
     std::vector<std::string> cl_sdr_ids_;
+    size_t max_tx_gain_ue_;
     size_t num_cl_sdrs_;
     size_t cl_sdr_ch_;
     size_t num_cl_antennas_;
@@ -334,13 +359,15 @@ private:
     bool cl_agc_en_;
     int cl_agc_gain_init_;
     int tx_advance_;
-    std::vector<int> data_ind_;
+    std::vector<size_t> data_ind_;
     std::vector<uint32_t> coeffs_;
     std::vector<std::complex<int16_t>> pilot_ci16_;
     std::vector<std::complex<float>> pilot_cf32_;
     std::vector<uint32_t> pilot_;
-    std::vector<std::vector<int>> pilot_sc_;
-    std::vector<std::vector<double>> pilot_sym_;
+    std::vector<std::complex<float>> pilot_sc_;
+    std::vector<size_t> pilot_sc_ind_;
+    std::vector<std::vector<float>> pilot_sym_;
+    std::vector<std::vector<float>> pilot_sym_f_;
     std::vector<std::vector<std::complex<float>>> tx_data_;
     std::vector<std::vector<std::complex<float>>> txdata_freq_dom_;
     std::vector<std::vector<std::complex<float>>> txdata_time_dom_;
@@ -352,6 +379,8 @@ private:
 
     std::vector<std::vector<double>> cl_txgain_vec_;
     std::vector<std::vector<double>> cl_rxgain_vec_;
+    std::vector<std::string> tx_td_data_files_;
+    std::vector<std::string> tx_fd_data_files_;
 
     std::atomic<bool> running_;
     bool core_alloc_;

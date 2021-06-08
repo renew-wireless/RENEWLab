@@ -12,17 +12,20 @@
 #include "include/logger.h"
 #include "include/macros.h"
 #include "include/utils.h"
+#include "nlohmann/json.hpp"
+using json = nlohmann::json;
 
 static size_t kFpgaTxRamSize = 4096;
 static size_t kMaxSupportedFFTSize = 2048;
 static size_t kMinSupportedFFTSize = 64;
 static size_t kMaxSupportedCPSize = 128;
 
-Config::Config(const std::string& jsonfile)
+Config::Config(const std::string& jsonfile, const std::string& directory)
 {
     std::string conf;
     Utils::loadTDDConfig(jsonfile, conf);
-    const auto jConf = json::parse(conf);
+    // Enable comments in json file
+    const auto jConf = json::parse(conf, nullptr, true, true);
     std::stringstream ss;
     json tddConf;
 
@@ -51,6 +54,7 @@ Config::Config(const std::string& jsonfile)
     ss.str(std::string());
     ss.clear();
 
+    static const int kMaxTxGainBS = 81;
     // common (BaseStation config overrides these)
     if (bs_present_ == true) {
         freq_ = tddConf.value("frequency", 2.5e9);
@@ -87,9 +91,26 @@ Config::Config(const std::string& jsonfile)
                 "error channel config: not any of A/B/AB!\n");
         }
         single_gain_ = tddConf.value("single_gain", true);
-        tx_gain_.push_back(tddConf.value("txgainA", 20));
+
+        if (tddConf.value("txgainA", 20) > kMaxTxGainBS) {
+            std::string msg
+                = "ERROR: BaseStation ChanA - Maximum TX gain value is ";
+            msg += std::to_string(kMaxTxGainBS);
+            throw std::invalid_argument(msg);
+        } else {
+            tx_gain_.push_back(tddConf.value("txgainA", 20));
+        }
+
+        if (tddConf.value("txgainB", 20) > kMaxTxGainBS) {
+            std::string msg
+                = "ERROR: BaseStation ChanB - Maximum TX gain value is ";
+            msg += std::to_string(kMaxTxGainBS);
+            throw std::invalid_argument(msg);
+        } else {
+            tx_gain_.push_back(tddConf.value("txgainB", 20));
+        }
+
         rx_gain_.push_back(tddConf.value("rxgainA", 20));
-        tx_gain_.push_back(tddConf.value("txgainB", 20));
         rx_gain_.push_back(tddConf.value("rxgainB", 20));
         cal_tx_gain_.push_back(tddConf.value("calTxGainA", 10));
         cal_tx_gain_.push_back(tddConf.value("calTxGainB", 10));
@@ -202,7 +223,17 @@ Config::Config(const std::string& jsonfile)
         frame_mode_ = tddConfCl.value("frame_mode", "continuous_resync");
         hw_framer_ = tddConfCl.value("hw_framer", true);
         tx_advance_ = tddConfCl.value("tx_advance", 250); // 250
+        ul_data_frame_num_ = tddConfCl.value("ul_data_frame_num", 1);
 
+        // Help verify whether gain exceeds max value
+        struct compare {
+            const int key_;
+            compare(int const& i)
+                : key_(i)
+            {
+            }
+            bool operator()(int const& i) { return (i > key_); }
+        };
         cl_txgain_vec_.resize(2);
         cl_rxgain_vec_.resize(2);
         auto jClTxgainA_vec = tddConfCl.value("txgainA", json::array());
@@ -217,6 +248,21 @@ Config::Config(const std::string& jsonfile)
         auto jClRxgainB_vec = tddConfCl.value("rxgainB", json::array());
         cl_rxgain_vec_.at(1).assign(
             jClRxgainB_vec.begin(), jClRxgainB_vec.end());
+
+        max_tx_gain_ue_ = tddConfCl.value("maxTxGainUE", 81);
+        compare find_guilty(max_tx_gain_ue_);
+        if (std::any_of(cl_txgain_vec_.at(0).begin(),
+                cl_txgain_vec_.at(0).end(), find_guilty)) {
+            std::string msg = "ERROR: UE ChanA - Maximum TX gain value is ";
+            msg += std::to_string(max_tx_gain_ue_);
+            throw std::invalid_argument(msg);
+        }
+        if (std::any_of(cl_txgain_vec_.at(1).begin(),
+                cl_txgain_vec_.at(1).end(), find_guilty)) {
+            std::string msg = "ERROR: UE ChanB - Maximum TX gain value is ";
+            msg += std::to_string(max_tx_gain_ue_);
+            throw std::invalid_argument(msg);
+        }
 
         auto jClFrames = tddConfCl.value("frame_schedule", json::array());
         assert(jClSdrs.size() == jClFrames.size());
@@ -262,20 +308,18 @@ Config::Config(const std::string& jsonfile)
     // 15reps of STS(16) + 2reps of gold_ifft(128)
     srand(time(NULL));
     const int seqLen = 128;
-    std::vector<std::vector<double>> gold_ifft
+    std::vector<std::vector<float>> gold_ifft
         = CommsLib::getSequence(CommsLib::GOLD_IFFT);
-    std::vector<std::complex<int16_t>> gold_ifft_ci16
-        = Utils::double_to_cint16(gold_ifft);
+    auto gold_ifft_ci16 = Utils::float_to_cint16(gold_ifft);
     gold_cf32_.clear();
     for (size_t i = 0; i < seqLen; i++) {
         gold_cf32_.push_back(
             std::complex<float>(gold_ifft[0][i], gold_ifft[1][i]));
     }
 
-    std::vector<std::vector<double>> sts_seq
+    std::vector<std::vector<float>> sts_seq
         = CommsLib::getSequence(CommsLib::STS_SEQ);
-    std::vector<std::complex<int16_t>> sts_seq_ci16
-        = Utils::double_to_cint16(sts_seq);
+    auto sts_seq_ci16 = Utils::float_to_cint16(sts_seq);
 
     // Populate STS (stsReps repetitions)
     int stsReps = 15;
@@ -331,8 +375,11 @@ Config::Config(const std::string& jsonfile)
     }
 
     if (fft_size_ == 64) {
+        pilot_sym_f_ = CommsLib::getSequence(CommsLib::LTS_SEQ_F);
         pilot_sym_ = CommsLib::getSequence(CommsLib::LTS_SEQ);
     } else if (pilot_seq_ == "zadoff-chu") {
+        pilot_sym_f_ = CommsLib::getSequence(
+            CommsLib::LTE_ZADOFF_CHU_F, symbol_data_subcarrier_num_);
         pilot_sym_ = CommsLib::getSequence(
             CommsLib::LTE_ZADOFF_CHU, symbol_data_subcarrier_num_);
     } else
@@ -341,7 +388,7 @@ Config::Config(const std::string& jsonfile)
             << " is not supported! Choose either LTS (64-fft) or zaddof-chu."
             << std::endl;
 
-    auto iq_ci16 = Utils::double_to_cint16(pilot_sym_);
+    auto iq_ci16 = Utils::float_to_cint16(pilot_sym_);
     iq_ci16.insert(iq_ci16.begin(), iq_ci16.end() - cp_size_, iq_ci16.end());
 
     pilot_ci16_.clear();
@@ -365,89 +412,11 @@ Config::Config(const std::string& jsonfile)
     }
 #endif
 
-    // compose data subframe
-    if (ul_data_sym_present_) {
-        int mod_type = data_mod_ == "64QAM"
-            ? CommsLib::QAM64
-            : (data_mod_ == "16QAM" ? CommsLib::QAM16 : CommsLib::QPSK);
-        std::cout << mod_type << std::endl;
-        int mod_order = 1 << mod_type;
-        std::cout << mod_order << std::endl;
-
-        data_ind_ = CommsLib::getDataSc(fft_size_);
-        pilot_sc_ = CommsLib::getPilotSc(fft_size_);
-        std::vector<std::complex<float>> prefix_zpad_f(prefix_, 0);
-        std::vector<std::complex<float>> postfix_zpad_f(postfix_, 0);
-        size_t nDataScs = data_ind_.size();
-        for (size_t i = 0; i < num_cl_antennas_; i++) {
-            std::vector<std::complex<float>> data_cf;
-            std::vector<std::complex<float>> data_freq_dom;
-            data_cf.insert(
-                data_cf.begin(), prefix_zpad_f.begin(), prefix_zpad_f.end());
-            std::vector<std::vector<int>> dataBits;
-            dataBits.resize(symbol_per_subframe_);
-            for (size_t s = 0; s < symbol_per_subframe_; s++) {
-                for (size_t c = 0; c < nDataScs; c++) {
-                    dataBits[s].push_back(rand() % mod_order);
-                }
-                std::vector<std::complex<float>> mod_data
-                    = CommsLib::modulate(dataBits[s], mod_type);
-#if DEBUG_PRINT
-                std::cout << "Modulation output: " << mod_data[0] << " "
-                          << mod_data[1] << std::endl;
-#endif
-                std::vector<std::complex<float>> ofdmSym(fft_size_);
-                int sc = 0;
-                for (size_t c = 0; c < nDataScs; c++) {
-                    sc = data_ind_[c];
-                    ofdmSym[sc] = mod_data[c];
-                }
-#if DEBUG_PRINT
-                std::cout << "Data symbol: " << ofdmSym[sc - 2] << " "
-                          << ofdmSym[sc - 1] << std::endl;
-#endif
-                for (size_t c = 0; c < pilot_sc_.at(0).size(); c++) {
-                    sc = pilot_sc_.at(0).at(c);
-                    ofdmSym[sc] = pilot_sc_.at(1).at(c);
-                }
-#if DEBUG_PRINT
-                std::cout << "Pilot symbol: " << ofdmSym[pilot_sc_.at(0).at(0)]
-                          << " " << ofdmSym[pilot_sc_.at(0).at(1)] << std::endl;
-#endif
-                auto txSym = CommsLib::IFFT(
-                    ofdmSym, fft_size_, 1.f / fft_size_, false);
-                txSym.insert(txSym.begin(), txSym.end() - cp_size_,
-                    txSym.end()); // add CP
-#if DEBUG_PRINT
-                std::cout << "IFFT output: " << txSym[0] << " " << txSym[64]
-                          << std::endl;
-#endif
-                data_cf.insert(data_cf.end(), txSym.begin(), txSym.end());
-                data_freq_dom.insert(
-                    data_freq_dom.end(), ofdmSym.begin(), ofdmSym.end());
-            }
-            data_cf.insert(
-                data_cf.end(), postfix_zpad_f.begin(), postfix_zpad_f.end());
-            tx_data_.push_back(data_cf);
-            txdata_time_dom_.push_back(data_cf);
-            txdata_freq_dom_.push_back(data_freq_dom);
-        }
-#if DEBUG_PRINT
-        for (size_t i = 0; i < tx_data_.size(); i++) {
-            for (size_t j = 0; j < tx_data_.at(i).size(); j++) {
-                std::cout << "Values[" << i << "][" << j << "]: \t "
-                          << tx_data_.at(i).at(j) << std::endl;
-            }
-        }
-        for (size_t i = 0; i < txdata_freq_dom_.size(); i++) {
-            for (size_t j = 0; j < txdata_freq_dom_.at(i).size(); j++) {
-                std::cout << "FREQ DOMAIN Values[" << i << "][" << j << "]: \t "
-                          << txdata_freq_dom_.at(i).at(j) << std::endl;
-            }
-        }
-#endif
-    }
-
+    data_ind_ = CommsLib::getDataSc(fft_size_, symbol_data_subcarrier_num_);
+    pilot_sc_
+        = CommsLib::getPilotScValue(fft_size_, symbol_data_subcarrier_num_);
+    pilot_sc_ind_
+        = CommsLib::getPilotScIndex(fft_size_, symbol_data_subcarrier_num_);
     if (bs_present_ == true) {
         // set trace file path
         time_t now = time(0);
@@ -456,7 +425,7 @@ Config::Config(const std::string& jsonfile)
         size_t ant_num = getTotNumAntennas();
         std::string filename;
         if (reciprocal_calib_) {
-            filename = "logs/trace-reciprocal-calib-"
+            filename = directory + "/trace-reciprocal-calib-"
                 + std::to_string(1900 + ltm->tm_year) + "-"
                 + std::to_string(1 + ltm->tm_mon) + "-"
                 + std::to_string(ltm->tm_mday) + "-"
@@ -467,7 +436,7 @@ Config::Config(const std::string& jsonfile)
         } else {
             std::string ul_present_str
                 = (ul_data_sym_present_ ? "uplink-" : "");
-            filename = "logs/trace-" + ul_present_str
+            filename = directory + "/trace-" + ul_present_str
                 + std::to_string(1900 + ltm->tm_year) + "-"
                 + std::to_string(1 + ltm->tm_mon) + "-"
                 + std::to_string(ltm->tm_mday) + "-"
@@ -517,6 +486,86 @@ Config::Config(const std::string& jsonfile)
     }
     running_.store(true);
     MLPD_INFO("Configuration file was successfully parsed!\n");
+}
+
+void Config::loadULData(const std::string& directory)
+{
+    // compose data subframe
+    if (ul_data_sym_present_) {
+        std::vector<std::complex<float>> prefix_zpad_t(prefix_, 0);
+        std::vector<std::complex<float>> postfix_zpad_t(postfix_, 0);
+        txdata_time_dom_.resize(num_cl_antennas_);
+        txdata_freq_dom_.resize(num_cl_antennas_);
+        // For now, we're reading one frame worth of data
+        for (size_t i = 0; i < num_cl_sdrs_; i++) {
+            std::string filename_tag = data_mod_ + "_"
+                + std::to_string(symbol_data_subcarrier_num_) + "_"
+                + std::to_string(fft_size_) + "_"
+                + std::to_string(symbol_per_subframe_) + "_"
+                + std::to_string(cl_ul_symbols_[i].size()) + "_"
+                + std::to_string(ul_data_frame_num_) + "_" + cl_channel_ + "_"
+                + std::to_string(i) + ".bin";
+
+            std::string filename_ul_data_f
+                = directory + "/ul_data_f_" + filename_tag;
+            std::printf(
+                "Loading UL frequency-domain data for radio %zu to %s\n", i,
+                filename_ul_data_f.c_str());
+            tx_fd_data_files_.push_back("ul_data_f_" + filename_tag);
+            FILE* fp_tx_f = std::fopen(filename_ul_data_f.c_str(), "rb");
+            if (!fp_tx_f) {
+                throw std::runtime_error(
+                    filename_ul_data_f + std::string(" not found!"));
+            }
+
+            std::string filename_ul_data_t
+                = directory + "/ul_data_t_" + filename_tag;
+            std::printf("Loading UL time-domain data for radio %zu to %s\n", i,
+                filename_ul_data_t.c_str());
+            tx_td_data_files_.push_back(filename_ul_data_t);
+            FILE* fp_tx_t = std::fopen(filename_ul_data_t.c_str(), "rb");
+            if (!fp_tx_t) {
+                throw std::runtime_error(
+                    filename_ul_data_t + std::string(" not found!"));
+            }
+
+            // Frame * UL Slots * Channel * Samples
+            for (size_t u = 0; u < cl_ul_symbols_[i].size(); u++) {
+                for (size_t h = 0; h < cl_sdr_ch_; h++) {
+                    size_t ant_i = i * cl_sdr_ch_ + h;
+
+                    std::vector<std::complex<float>> data_freq_dom(
+                        fft_size_ * symbol_per_subframe_);
+                    size_t read_num
+                        = std::fread(data_freq_dom.data(), 2 * sizeof(float),
+                            fft_size_ * symbol_per_subframe_, fp_tx_f);
+                    if (read_num != (fft_size_ * symbol_per_subframe_)) {
+                        MLPD_WARN(
+                            "BAD Read of Uplink Freq-Domain Data: %zu/%zu\n",
+                            read_num, fft_size_ * symbol_per_subframe_);
+                    }
+                    txdata_freq_dom_[ant_i].insert(
+                        txdata_freq_dom_[ant_i].end(), data_freq_dom.begin(),
+                        data_freq_dom.end());
+
+                    std::vector<std::complex<float>> data_time_dom(
+                        samps_per_symbol_);
+                    read_num = std::fread(data_time_dom.data(),
+                        2 * sizeof(float), samps_per_symbol_, fp_tx_t);
+                    if (read_num != samps_per_symbol_) {
+                        MLPD_WARN(
+                            "BAD Read of Uplink Time-Domain Data: %zu/%zu\n",
+                            read_num, samps_per_symbol_);
+                    }
+                    txdata_time_dom_[ant_i].insert(
+                        txdata_time_dom_[ant_i].end(), data_time_dom.begin(),
+                        data_time_dom.end());
+                }
+            }
+            std::fclose(fp_tx_f);
+            std::fclose(fp_tx_t);
+        }
+    }
 }
 
 size_t Config::getNumAntennas()
@@ -656,10 +705,11 @@ unsigned Config::getCoreCount()
 }
 
 extern "C" {
-__attribute__((visibility("default"))) Config* Config_new(char* filename)
+__attribute__((visibility("default"))) Config* Config_new(
+    char* filename, char* storepath)
 {
 
-    Config* cfg = new Config(filename);
+    Config* cfg = new Config(filename, storepath);
     return cfg;
 }
 }

@@ -273,6 +273,7 @@ class hdf5_lib:
     def __init__(self, filename, n_frames_to_inspect=0, n_fr_insp_st = 0, sub_sample = 0):
         self.h5file = None
         self.filename = filename
+        self.dirpath = '/'.join(filename.split('/')[:-1])
         self.h5struct = []
         self.data = []
         self.metadata = {}
@@ -383,7 +384,16 @@ class hdf5_lib:
         # Data cleanup
         # In OFDM_DATA_CLx and OFDM_PILOT, we have stored both real and imaginary in same vector
         # (i.e., RE1,IM1,RE2,IM2...REm,IM,)
-        # Pilots
+
+        # Freq-domain Pilot
+        pilot_vec = self.metadata['OFDM_PILOT_F']
+        # some_list[start:stop:step]
+        I = pilot_vec[0::2]
+        Q = pilot_vec[1::2]
+        pilot_complex = I + Q * 1j
+        self.metadata['OFDM_PILOT_F'] = pilot_complex
+
+        # Time-domain Pilot
         pilot_vec = self.metadata['OFDM_PILOT']
         # some_list[start:stop:step]
         I = pilot_vec[0::2]
@@ -391,10 +401,15 @@ class hdf5_lib:
         pilot_complex = I + Q * 1j
         self.metadata['OFDM_PILOT'] = pilot_complex
 
-        if cl_present:
+        n_ul_syms = self.metadata['UL_SYMS']
+        if n_ul_syms > 0:
+            # Phase-Tracking Pilot Subcarrier
+            pilot_sc_vals = self.metadata['OFDM_PILOT_SC_VALS']
+            pilot_sc_vals_complex = pilot_sc_vals[0::2] + 1j * pilot_sc_vals[1::2]
+            self.metadata['OFDM_PILOT_SC_VALS'] = pilot_sc_vals_complex
+
             # Time-domain OFDM data
             num_cl = np.squeeze(self.metadata['CL_NUM'])
-            ofdm_data_time = []  # np.zeros((num_cl, 320)).astype(complex)
             for clIdx in range(num_cl):
                 this_str = 'OFDM_DATA_TIME_CL' + str(clIdx)
                 if not this_str in self.metadata.keys():
@@ -406,11 +421,9 @@ class hdf5_lib:
                     I = np.double(data_per_cl[0::2])
                     Q = np.double(data_per_cl[1::2])
                     IQ = I + Q * 1j
-                    ofdm_data_time.append(IQ)
-                self.metadata[this_str] = ofdm_data_time
+                    self.metadata[this_str] = IQ
 
             # Frequency-domain OFDM data
-            ofdm_data = []  # np.zeros((num_cl, 320)).astype(complex)
             for clIdx in range(num_cl):
                 this_str = 'OFDM_DATA_CL' + str(clIdx)
                 if not this_str in self.metadata.keys():
@@ -422,51 +435,36 @@ class hdf5_lib:
                     I = np.double(data_per_cl[0::2])
                     Q = np.double(data_per_cl[1::2])
                     IQ = I + Q * 1j
-                    ofdm_data.append(IQ)
-                self.metadata[this_str] = ofdm_data
+                    self.metadata[this_str] = IQ
 
         return self.metadata
 
-    def filter_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, pilot_type='lts'):
+    def filter_pilots(cmpx_pilots, z_padding=150, fft_size=64, cp=16, pilot_type='lts',seq_length=[]):
         """
         """
-        # dimensions of pilots_dump
-        n_frame = pilots_dump.shape[0]  # no. of captured frames
-        n_cell = pilots_dump.shape[1]  # no. of cells
-        n_ue = pilots_dump.shape[2]  # no. of UEs
-        n_ant = pilots_dump.shape[3]  # no. of BS antennas
-        n_iq = pilots_dump.shape[4]  # no. of IQ samples per frame
+        # dimensions of cmpx_pilots
+        n_frame = cmpx_pilots.shape[0]  # no. of captured frames
+        n_cell = cmpx_pilots.shape[1]  # no. of cells
+        n_ue = cmpx_pilots.shape[2]  # no. of UEs
+        n_ant = cmpx_pilots.shape[3]  # no. of BS antennas
+        n_cmpx = cmpx_pilots.shape[4]  # no. of IQ samples per frame
 
-        if ((n_iq % 2) != 0):
-            print("Size of iq samples:".format(n_iq))
-            raise Exception(
-                ' **** The length of iq samples per frames HAS to be an even number! **** ')
-
-        n_cmpx = n_iq // 2  # no. of complex samples
         # no. of complex samples in a P subframe without pre- and post- fixes
         n_csamp = n_cmpx - z_padding
 
-        idx_e = np.arange(0, n_iq, 2)  # even indices: real part of iq
-        # odd indices: imaginary part of iq
-        idx_o = np.arange(1, n_iq, 2)
-
-        # make a new data structure where the iq samples become complex numbers
-        cmpx_pilots = (pilots_dump[:, :, :, :, idx_e] +
-                       1j * pilots_dump[:, :, :, :, idx_o]) * 2 ** -15
-
         # take a time-domain lts sequence, concatenate more copies, flip, conjugate
-        lts_t, lts_f = generate_training_seq(preamble_type=pilot_type, seq_length=[
-        ], cp=cp, upsample=1, reps=[])  # TD LTS sequences (x2.5), FD LTS sequences
+        seq_t, seq_f = generate_training_seq(preamble_type=pilot_type, seq_length=
+        seq_length, cp=cp, upsample=1, reps=[])  # TD LTS sequences (x2.5), FD LTS sequences
         # DON'T assume cp!
-        lts_tmp = lts_t[- cp - fft_size:]
-        n_lts = len(lts_tmp)
+        seq_tmp = seq_t[- cp - fft_size:]
+        seq_len = len(seq_tmp)
         # no. of LTS sequences in a pilot SF
-        k_lts = n_csamp // n_lts
+        seq_num = n_csamp // seq_len
         # concatenate k LTS's to filter/correlate below
-        lts_seq_orig = np.tile(lts_tmp, k_lts)
-        lts_seq = lts_seq_orig[::-1]  # flip
-        # conjugate the local LTS sequence
-        lts_seq_conj = np.conjugate(lts_seq)
+        seq_orig = np.tile(seq_tmp, seq_num)
+        seq_flip = seq_orig[::-1]  # flip
+        # conjugate the local sequence
+        seq_conj = np.conjugate(seq_flip)
 
         pool = mp.Pool(mp.cpu_count())
         m_filt = np.empty(
@@ -474,14 +472,14 @@ class hdf5_lib:
         indexing_start = time.time()
         for j in range(n_cell):
             result_objects = [pool.apply_async(epd.extract_pilots_data,
-                                               args=(cmpx_pilots[i, j, :, :, :], lts_seq_conj, k_lts, n_lts, i)) for i
+                                               args=(cmpx_pilots[i, j, :, :, :], seq_conj, seq_num, seq_len, i)) for i
                               in range(n_frame)]
             for i in range(n_frame):
                 m_filt[i, j, :, :, :] = result_objects[i].get()[2]
         indexing_end = time.time()
         pool.close()
 
-        return m_filt, k_lts, n_lts, cmpx_pilots, lts_seq_orig
+        return m_filt, seq_num, seq_len, cmpx_pilots, seq_orig
 
     def log2csi_hdf5(self, filename, offset=0):
         """Convert raw IQ log to CSI.
@@ -520,7 +518,7 @@ class hdf5_lib:
         print("finished log2csi")
 
     @staticmethod
-    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False, pilot_type='lts', nonzero_sc_size=52):
+    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False, pilot_f=[]):
         """Convert an Argos HDF5 log file with raw IQ in to CSI.
         Asumes 802.11 style LTS used for trace collection.
     
@@ -607,43 +605,29 @@ class hdf5_lib:
 
             fftstart = time.time()
             csi = np.empty(iq.shape, dtype='complex64')
-            if pilot_type == 'lts':
-                # Retrieve frequency-domain LTS sequence
-                _, lts_freq = generate_training_seq(preamble_type='lts')
-                pre_csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 5), 5)
-                #csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 5), 5) * lts_freq
-                csi = pre_csi * lts_freq
-                if debug:
-                    print("csi.shape:{} lts_freq.shape: {}, pre_csi.shape = {}".format(
-                        csi.shape, lts_freq.shape, pre_csi.shape))
-                endtime = time.time()
-                if debug:
-                    print("chunk time: %f fft time: %f" %
-                          (fftstart - chunkstart, endtime - fftstart))
-                # remove zero subcarriers
-                csi = np.delete(csi, [0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63], 5)
-                print("samps2csi took %f seconds" % (time.time() - samps2csi_start))
-            else:
-                _, seq_freq = generate_training_seq(
-                    preamble_type=pilot_type, seq_length=nonzero_sc_size, cp=0, upsample=1)
+            zero_sc = np.where(pilot_f == 0)[0]
+            nonzero_sc_size = len(pilot_f) - len(zero_sc)
 
-                fft_length = int(np.power(2, np.ceil(np.log2(nonzero_sc_size))))
-                if fft_length != fft_size:
-                    print("Expected fftsize %d, given %d"%(fft_length, fft_size))
-                    return None, iq
-                start_i = int((fft_length - nonzero_sc_size) // 2)
-                stop_i = int(start_i + nonzero_sc_size)
-                iq_fft = np.fft.fft(iq, fft_size, 5)
-                seq_freq_inv = 1 / seq_freq
-                csi = iq_fft * seq_freq
-                endtime = time.time()
-                if debug:
-                    print("chunk time: %f fft time: %f" %
-                          (fftstart - chunkstart, endtime - fftstart))
-                csi = csi[:, : , :, :, :, start_i:stop_i]
-                if debug:
-                    print("csi.shape:{}".format(csi.shape))
-                print("samps2csi took %f seconds" % (time.time() - samps2csi_start))
+            fft_length = int(np.power(2, np.ceil(np.log2(nonzero_sc_size))))
+            if fft_length != fft_size:
+                print("Expected fftsize %d, given %d"%(fft_length, fft_size))
+                return None, iq
+            #start_i = int((fft_length - nonzero_sc_size) // 2)
+            #stop_i = int(start_i + nonzero_sc_size)
+            nonzero_sc = np.setdiff1d(range(fft_size), zero_sc)
+            iq_fft = np.fft.fft(iq, fft_size, 5)
+            seq_freq_inv = 1 / pilot_f[nonzero_sc]
+            csi = iq_fft[:, : , :, :, :, nonzero_sc] * seq_freq_inv
+            endtime = time.time()
+            if debug:
+                print("csi.shape:{} lts_freq.shape: {}, pre_csi.shape = {}".format(
+                    csi.shape, lts_freq.shape, pre_csi.shape))
+            if debug:
+                print("chunk time: %f fft time: %f" %
+                      (fftstart - chunkstart, endtime - fftstart))
+            if debug:
+                print("csi.shape:{}".format(csi.shape))
+            print("samps2csi took %f seconds" % (time.time() - samps2csi_start))
 
         return csi, iq
 
@@ -761,7 +745,7 @@ class hdf5_lib:
         pk_idx = lst_pk_idx - np.tile(base_arr[::-1], (n_frame, n_cell, n_ue, n_ant,1))
         #subtract. In case of a good frame their should only be zeros in every postion
         idx_diff = k_amax - pk_idx
-        frame_map = (idx_diff ==0).astype(np.int)
+        frame_map = (idx_diff == 0).astype(np.int)
         # count the 0 and non-zero elements and reshape to n_frame-by-n_ant
         frame_map = np.sum(frame_map, axis =-1)
         #NB:
@@ -779,22 +763,25 @@ class hdf5_lib:
 
         peak_map = np.copy(frame_map)
 
-        frame_map[frame_map == 1] = -1
-        frame_map[frame_map >= (k_lts -1)] = 1
-        frame_map[frame_map > 1] = 0
-        if debug:
-            print("frame_sanity(): frame_map = \n{}".format(frame_map))
-            print(frame_to_plot - st_frame)
+        # This only works when pilot is repeated
+        # TODO: come up with condition for single peak
+        if (k_lts > 1):
+            frame_map[frame_map == 1] = -1
+            frame_map[frame_map >= (k_lts -1)] = 1
+            frame_map[frame_map > 1] = 0
+            if debug:
+                print("frame_sanity(): frame_map = \n{}".format(frame_map))
+                print(frame_to_plot - st_frame)
 
-        #print results:
-        n_rf = frame_map.size
-        n_gf = frame_map[frame_map == 1].size
-        n_bf = frame_map[frame_map == -1].size
-        n_pr = frame_map[frame_map == 0].size
-        print("===================== frame_sanity(): frame status: ============")
-        print("Out of total {} received frames: \nGood frames: {}\nBad frames: {}\nProbably Partially received or corrupt: {}".format(
-                n_rf, n_gf, n_bf, n_pr,))
-        print("===================== ============================= ============")
+            #print results:
+            n_rf = frame_map.size
+            n_gf = frame_map[frame_map == 1].size
+            n_bf = frame_map[frame_map == -1].size
+            n_pr = frame_map[frame_map == 0].size
+            print("===================== frame_sanity(): frame status: ============")
+            print("Out of total {} received frames: \nGood frames: {}\nBad frames: {}\nProbably Partially received or corrupt: {}".format(
+                    n_rf, n_gf, n_bf, n_pr,))
+            print("===================== ============================= ============")
 
         return match_filt, frame_map, f_st, peak_map
         # WZC: added peak_map for peak_number analysis

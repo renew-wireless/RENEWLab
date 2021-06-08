@@ -12,7 +12,7 @@
   NOTE ON GAINS:
   Gain settings will vary depending on RF frontend board being used
   If using CBRS:
-  gain: at 2.5GHz [16:1:90], at 3.6GHz [15:1:95]
+  gain: at 2.5GHz [16:1:81], at 3.6GHz [15:1:81]
 
   If using only Dev Board:
   gain: at both frequency bands [0:1:42]
@@ -210,7 +210,7 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx and Rx sample rate", default=5e6)
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
-    parser.add_option("--gain", type="float", dest="gain", help="Tx gain [0:105] (dB)", default=42.0)
+    parser.add_option("--gain", type="float", dest="gain", help="Tx gain [0:81] (dB)", default=42.0)
     parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=0)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
     parser.add_option("--waveFreq", type="float", dest="waveFreq", help="Baseband waveform freq (Hz)", default=None)
@@ -222,6 +222,10 @@ def main():
 
     if options.freq == 0:
         print("[ERROR] Please provide Tx Freq (Hz). POWDER users must set to 2.5e9")
+        exit(0)
+
+    if options.gain > 81:
+        print("[ERROR] Gain should be between 0 and 81")
         exit(0)
 
     # Display parameters

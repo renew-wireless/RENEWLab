@@ -24,15 +24,16 @@ const int kDsSim = 5;
 
 static const int kQueueSize = 36;
 
-Recorder::Recorder(Config* in_cfg, unsigned int core_start ) : 
-    cfg_(in_cfg), 
-    kMainDispatchCore(core_start),
-    kRecorderCore(kMainDispatchCore + 1),
-    kRecvCore(kRecorderCore + in_cfg->task_thread_num())
+Recorder::Recorder(Config* in_cfg, unsigned int core_start)
+    : cfg_(in_cfg)
+    , kMainDispatchCore(core_start)
+    , kRecorderCore(kMainDispatchCore + 1)
+    , kRecvCore(kRecorderCore + in_cfg->task_thread_num())
 {
     size_t rx_thread_num = cfg_->rx_thread_num();
-    size_t ant_per_rx_thread
-        = cfg_->bs_present() ? cfg_->getTotNumAntennas() / rx_thread_num : 1;
+    size_t ant_per_rx_thread = cfg_->bs_present() && rx_thread_num > 0
+        ? cfg_->getTotNumAntennas() / rx_thread_num
+        : 1;
     rx_thread_buff_size_
         = kSampleBufferFrameNum * cfg_->symbols_per_frame() * ant_per_rx_thread;
 

@@ -26,13 +26,12 @@ USE_HUB                 = 1;
 WIRED_UE                 = 1;
 TX_FRQ                  = 2.5e9;    
 RX_FRQ                  = TX_FRQ;
-TX_GN                   = 40;
+TX_GN                   = limit_gain(30);  % WARNING: Do not remove function!
 RX_GN                   = 20;
 SMPL_RT                 = 5e6;  
 N_FRM                   = 1;
 bs_ids = string.empty();
 bs_sched = string.empty();
-
 
 % Waveform params
 TX_SCALE                = 0.5;         % Scale for Tx waveform ([0:1])

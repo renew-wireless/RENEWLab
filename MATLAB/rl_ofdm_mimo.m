@@ -56,14 +56,15 @@ else
     USE_HUB                 = 0;
     TX_FRQ                  = 2.5e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = 42;
-    TX_GN_ue                = 42;
+    TX_GN                   = limit_gain(42);  % WARNING - Do not remove function!
+    TX_GN_ue                = limit_gain(42);  % WARNING - Do not remove function!
     RX_GN                   = 20;
     SMPL_RT                 = 5e6;
     N_FRM                   = 10;
     bs_ids                   = string.empty();
     ue_ids                  = string.empty();
     ue_scheds               = string.empty();
+
     if USE_HUB
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
