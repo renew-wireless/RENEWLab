@@ -178,7 +178,6 @@ def main():
     parser.add_option("--freq", type="float", dest="freq", help="Tx freq (Hz). POWDER users must set to 2.5e9", default=0)
     parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=80.0)
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB)", default=70.0)
-
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-length", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)
     parser.add_option("--postfix-length", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)
