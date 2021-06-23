@@ -1,29 +1,24 @@
 {
 	"BaseStations" : {
 	         "cells" : 1,
-	         "sdr_id" : ["files/usrp-bs-serials.txt"],
-		 "frequency" : 3.6e9,
+	         "sdr_id" : ["files/special_conf/usrp-bs-serials.txt"],
+		 "frequency" : 2.5e9,
 		 "channel" : "AB",
-		 "rxgainA" : 20,
-		 "txgainA" : 20,
-		 "rxgainB" : 20,
-		 "txgainB" : 20,
-		 "rate" : 25e6,
+		 "rxgainA" : 10,
+		 "txgainA" : 10,
+		 "rxgainB" : 10,
+		 "txgainB" : 10,
+		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "BGPPGUGGGGGGGGGGGGGG"
+		     "BGPPGGGGGGGGGGGGGGGG"
 		 ],
 		 "max_frame" : 0,
-		 "subframe_size" : 640,
+		 "ofdm_symbol_per_subframe" : 10,
 		 "fft_size" : 64,
 		 "cp_size" : 16,
-	         "prefix" : 82,
-		 "postfix" : 68,
-		 "beacon_seq" : "gold_ifft",
-	         "beamsweep" : true,
-	         "sample_calibrate" : false,
-		 "beacon_antenna" : 0,
-		 "modulation" : "QPSK",
-	         "pilot_seq" : "lts-half"
+	         "prefix" : 160,
+		 "postfix" : 160,
+	         "beamsweep" : true
 	}
 
 }
