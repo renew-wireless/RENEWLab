@@ -2,6 +2,7 @@
 class Consts {
 public:
     static constexpr size_t kFftSize_80211 = 64;
+    static constexpr size_t kNumMappedSubcarriers_80211 = 52;
     // Define freq-domain STS according to
     // https://standards.ieee.org/standard/802_11a-1999.html
     static constexpr std::complex<float> sts_seq[64] = { { 0, 0 }, { 0, 0 },

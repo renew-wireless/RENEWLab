@@ -9,6 +9,7 @@
 
 #include "include/config.h"
 #include "include/comms-lib.h"
+#include "include/constants.h"
 #include "include/logger.h"
 #include "include/macros.h"
 #include "include/utils.h"
@@ -284,6 +285,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
             cp_size_ = tddConfCl.value("cp_size", 0);
             prefix_ = tddConfCl.value("prefix", 0);
             postfix_ = tddConfCl.value("postfix", 0);
+            symbol_data_subcarrier_num_
+                = tddConfCl.value("ofdm_data_subcarrier_num", fft_size_);
             ofdm_symbol_size_ = fft_size_ + cp_size_;
             subframe_size_ = symbol_per_subframe_ * ofdm_symbol_size_;
             samps_per_symbol_ = subframe_size_ + prefix_ + postfix_;
@@ -377,6 +380,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory)
     if (fft_size_ == 64) {
         pilot_sym_f_ = CommsLib::getSequence(CommsLib::LTS_SEQ_F);
         pilot_sym_ = CommsLib::getSequence(CommsLib::LTS_SEQ);
+        symbol_data_subcarrier_num_ = Consts::kNumMappedSubcarriers_80211;
     } else if (pilot_seq_ == "zadoff-chu") {
         pilot_sym_f_ = CommsLib::getSequence(
             CommsLib::LTE_ZADOFF_CHU_F, symbol_data_subcarrier_num_);
