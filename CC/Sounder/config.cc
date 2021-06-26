@@ -42,10 +42,23 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     ss.str(std::string());
     ss.clear();
 
-    if (tddConf.empty() == true || tddConfCl.empty() == true) {
+    if (bs_only && client_only == true) {
+        MLPD_ERROR("Client-Only and BS-Only can't both be enabled!\n");
+        exit(1);
+    }
+
+    if (tddConf.empty() == true) {
         MLPD_ERROR("Both \"BaseStations\" and \"Clients\" must be present in "
                    "JSON file\n");
         exit(1);
+    } else if (tddConfCl.empty() == true) {
+        reciprocal_calib_ = tddConf.value("reciprocal_calibration", false);
+        if (!reciprocal_calib_) {
+            MLPD_ERROR(
+                "Both \"BaseStations\" and \"Clients\" must be present in "
+                "JSON file\n");
+            exit(1);
+        }
     } else {
         ss << "  BaseStations: " << tddConf << "\n\n";
         ss << "  Clients: " << tddConfCl << "\n" << std::endl;
@@ -53,29 +66,19 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         ss.str(std::string());
         ss.clear();
     }
-    if (bs_only && client_only == true) {
-        MLPD_ERROR("Client-Only and BS-Only can't both be enabled!\n");
-        exit(1);
-    }
     bs_present_ = !client_only;
-    client_present_ = !bs_only;
+    client_present_ = !bs_only && !reciprocal_calib_;
 
     static const int kMaxTxGainBS = 81;
     // common (BaseStation config overrides these)
-    //if (bs_present_ == true) {
     freq_ = tddConf.value("frequency", 2.5e9);
     rate_ = tddConf.value("rate", 5e6);
     nco_ = tddConf.value("nco_frequency", 0.75 * rate_);
-    bw_filter_ = rate_ + 2 * nco_;
-    radio_rf_freq_ = freq_ - nco_;
     symbol_per_subframe_ = tddConf.value("ofdm_symbol_per_subframe", 1);
     fft_size_ = tddConf.value("fft_size", 0);
     cp_size_ = tddConf.value("cp_size", 0);
     prefix_ = tddConf.value("prefix", 0);
     postfix_ = tddConf.value("postfix", 0);
-    ofdm_symbol_size_ = fft_size_ + cp_size_;
-    subframe_size_ = symbol_per_subframe_ * ofdm_symbol_size_;
-    samps_per_symbol_ = subframe_size_ + prefix_ + postfix_;
     symbol_data_subcarrier_num_
         = tddConf.value("ofdm_data_subcarrier_num", fft_size_);
     tx_scale_ = tddConf.value("tx_scale", 0.5);
@@ -206,97 +209,109 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     }
     //}
 
-    MLPD_TRACE("Starting clients -- %zu", num_bs_sdrs_all_);
-
     // Clients
-    assert(!(client_present_ == true && reciprocal_calib_ == true));
-    //if (client_present_ == true) {
-    auto jClSdrs = tddConfCl.value("sdr_id", json::array());
-    // auto jClSdrs = tddConfCl.value("sdr_ip", json::array());
-    num_cl_sdrs_ = jClSdrs.size();
-    cl_sdr_ids_.assign(jClSdrs.begin(), jClSdrs.end());
-    // cl_sdr_ips.assign(jClSdrs.begin(), jClSdrs.end());
-    cl_channel_ = tddConfCl.value("channel", "A");
-    if (cl_channel_ != "A" && cl_channel_ != "B" && cl_channel_ != "AB")
-        throw std::invalid_argument(
-            "error channel config: not any of A/B/AB!\n");
-    cl_sdr_ch_ = (cl_channel_ == "AB") ? 2 : 1;
-    num_cl_antennas_ = num_cl_sdrs_ * cl_sdr_ch_;
-    cl_agc_en_ = tddConfCl.value("agc_en", false);
-    cl_agc_gain_init_ = tddConfCl.value("agc_gain_init", 70); // 0 to 108
-    frame_mode_ = tddConfCl.value("frame_mode", "continuous_resync");
-    hw_framer_ = tddConfCl.value("hw_framer", true);
-    tx_advance_ = tddConfCl.value("tx_advance", 250); // 250
-    ul_data_frame_num_ = tddConfCl.value("ul_data_frame_num", 1);
+    if (reciprocal_calib_ == false) {
+        // read commons from Client json config
+        if (tddConf.find("frequency") == tddConf.end())
+            freq_ = tddConfCl.value("frequency", 2.5e9);
+        if (tddConf.find("rate") == tddConf.end())
+            rate_ = tddConfCl.value("rate", 5e6);
+        if (tddConf.find("nco_frequency") == tddConf.end())
+            nco_ = tddConfCl.value("nco_frequency", 0.75 * rate_);
+        if (tddConf.find("ofdm_symbol_per_subframe") == tddConf.end())
+            symbol_per_subframe_
+                = tddConfCl.value("ofdm_symbol_per_subframe", 1);
+        if (tddConf.find("fft_size") == tddConf.end())
+            fft_size_ = tddConfCl.value("fft_size", 0);
+        if (tddConf.find("cp_size") == tddConf.end())
+            cp_size_ = tddConfCl.value("cp_size", 0);
+        if (tddConf.find("prefix") == tddConf.end())
+            prefix_ = tddConfCl.value("prefix", 0);
+        if (tddConf.find("postfix") == tddConf.end())
+            postfix_ = tddConfCl.value("postfix", 0);
+        if (tddConf.find("ofdm_data_subcarrier_num") == tddConf.end())
+            symbol_data_subcarrier_num_
+                = tddConfCl.value("ofdm_data_subcarrier_num", fft_size_);
+        if (tddConf.find("tx_scale") == tddConf.end())
+            tx_scale_ = tddConfCl.value("tx_scale", 0.5);
+        if (tddConf.find("beacon_seq") == tddConf.end())
+            beacon_seq_ = tddConfCl.value("beacon_seq", "gold_ifft");
+        if (tddConf.find("pilot_seq") == tddConf.end())
+            pilot_seq_ = tddConfCl.value("pilot_seq", "lts");
+        if (tddConf.find("single_gain") == tddConf.end())
+            single_gain_ = tddConfCl.value("single_gain", true);
+        if (tddConf.find("modulation") == tddConf.end())
+            data_mod_ = tddConfCl.value("modulation", "QPSK");
 
-    // Help verify whether gain exceeds max value
-    struct compare {
-        const int key_;
-        compare(int const& i)
-            : key_(i)
-        {
+        auto jClSdrs = tddConfCl.value("sdr_id", json::array());
+        num_cl_sdrs_ = jClSdrs.size();
+        cl_sdr_ids_.assign(jClSdrs.begin(), jClSdrs.end());
+        cl_channel_ = tddConfCl.value("channel", "A");
+        if (cl_channel_ != "A" && cl_channel_ != "B" && cl_channel_ != "AB")
+            throw std::invalid_argument(
+                "error channel config: not any of A/B/AB!\n");
+        cl_sdr_ch_ = (cl_channel_ == "AB") ? 2 : 1;
+        num_cl_antennas_ = num_cl_sdrs_ * cl_sdr_ch_;
+        cl_agc_en_ = tddConfCl.value("agc_en", false);
+        cl_agc_gain_init_ = tddConfCl.value("agc_gain_init", 70); // 0 to 108
+        frame_mode_ = tddConfCl.value("frame_mode", "continuous_resync");
+        hw_framer_ = tddConfCl.value("hw_framer", true);
+        tx_advance_ = tddConfCl.value("tx_advance", 250); // 250
+        ul_data_frame_num_ = tddConfCl.value("ul_data_frame_num", 1);
+
+        // Help verify whether gain exceeds max value
+        struct compare {
+            const int key_;
+            compare(int const& i)
+                : key_(i)
+            {
+            }
+            bool operator()(int const& i) { return (i > key_); }
+        };
+        cl_txgain_vec_.resize(2);
+        cl_rxgain_vec_.resize(2);
+        auto jClTxgainA_vec = tddConfCl.value("txgainA", json::array());
+        cl_txgain_vec_.at(0).assign(
+            jClTxgainA_vec.begin(), jClTxgainA_vec.end());
+        auto jClRxgainA_vec = tddConfCl.value("rxgainA", json::array());
+        cl_rxgain_vec_.at(0).assign(
+            jClRxgainA_vec.begin(), jClRxgainA_vec.end());
+        auto jClTxgainB_vec = tddConfCl.value("txgainB", json::array());
+        cl_txgain_vec_.at(1).assign(
+            jClTxgainB_vec.begin(), jClTxgainB_vec.end());
+        auto jClRxgainB_vec = tddConfCl.value("rxgainB", json::array());
+        cl_rxgain_vec_.at(1).assign(
+            jClRxgainB_vec.begin(), jClRxgainB_vec.end());
+
+        max_tx_gain_ue_ = tddConfCl.value("maxTxGainUE", 81);
+        compare find_guilty(max_tx_gain_ue_);
+        if (std::any_of(cl_txgain_vec_.at(0).begin(),
+                cl_txgain_vec_.at(0).end(), find_guilty)) {
+            std::string msg = "ERROR: UE ChanA - Maximum TX gain value is ";
+            msg += std::to_string(max_tx_gain_ue_);
+            throw std::invalid_argument(msg);
         }
-        bool operator()(int const& i) { return (i > key_); }
-    };
-    cl_txgain_vec_.resize(2);
-    cl_rxgain_vec_.resize(2);
-    auto jClTxgainA_vec = tddConfCl.value("txgainA", json::array());
-    cl_txgain_vec_.at(0).assign(jClTxgainA_vec.begin(), jClTxgainA_vec.end());
-    auto jClRxgainA_vec = tddConfCl.value("rxgainA", json::array());
-    cl_rxgain_vec_.at(0).assign(jClRxgainA_vec.begin(), jClRxgainA_vec.end());
-    auto jClTxgainB_vec = tddConfCl.value("txgainB", json::array());
-    cl_txgain_vec_.at(1).assign(jClTxgainB_vec.begin(), jClTxgainB_vec.end());
-    auto jClRxgainB_vec = tddConfCl.value("rxgainB", json::array());
-    cl_rxgain_vec_.at(1).assign(jClRxgainB_vec.begin(), jClRxgainB_vec.end());
+        if (std::any_of(cl_txgain_vec_.at(1).begin(),
+                cl_txgain_vec_.at(1).end(), find_guilty)) {
+            std::string msg = "ERROR: UE ChanB - Maximum TX gain value is ";
+            msg += std::to_string(max_tx_gain_ue_);
+            throw std::invalid_argument(msg);
+        }
 
-    max_tx_gain_ue_ = tddConfCl.value("maxTxGainUE", 81);
-    compare find_guilty(max_tx_gain_ue_);
-    if (std::any_of(cl_txgain_vec_.at(0).begin(), cl_txgain_vec_.at(0).end(),
-            find_guilty)) {
-        std::string msg = "ERROR: UE ChanA - Maximum TX gain value is ";
-        msg += std::to_string(max_tx_gain_ue_);
-        throw std::invalid_argument(msg);
-    }
-    if (std::any_of(cl_txgain_vec_.at(1).begin(), cl_txgain_vec_.at(1).end(),
-            find_guilty)) {
-        std::string msg = "ERROR: UE ChanB - Maximum TX gain value is ";
-        msg += std::to_string(max_tx_gain_ue_);
-        throw std::invalid_argument(msg);
+        auto jClFrames = tddConfCl.value("frame_schedule", json::array());
+        assert(jClSdrs.size() == jClFrames.size());
+        cl_frames_.assign(jClFrames.begin(), jClFrames.end());
+        cl_pilot_symbols_ = Utils::loadSymbols(cl_frames_, 'P');
+        cl_ul_symbols_ = Utils::loadSymbols(cl_frames_, 'U');
+        cl_dl_symbols_ = Utils::loadSymbols(cl_frames_, 'D');
     }
 
-    auto jClFrames = tddConfCl.value("frame_schedule", json::array());
-    assert(jClSdrs.size() == jClFrames.size());
-    cl_frames_.assign(jClFrames.begin(), jClFrames.end());
-    cl_pilot_symbols_ = Utils::loadSymbols(cl_frames_, 'P');
-    cl_ul_symbols_ = Utils::loadSymbols(cl_frames_, 'U');
-    cl_dl_symbols_ = Utils::loadSymbols(cl_frames_, 'D');
-
-    //// read commons from Client json config
-    //if (bs_present_ == false) {
-    //    freq_ = tddConfCl.value("frequency", 2.5e9);
-    //    rate_ = tddConfCl.value("rate", 5e6);
-    //    nco_ = tddConfCl.value("nco_frequency", 0.75 * rate_);
-    //    bw_filter_ = rate_ + 2 * nco_;
-    //    radio_rf_freq_ = freq_ - nco_;
-    //    symbol_per_subframe_
-    //        = tddConfCl.value("ofdm_symbol_per_subframe", 1);
-    //    fft_size_ = tddConfCl.value("fft_size", 0);
-    //    cp_size_ = tddConfCl.value("cp_size", 0);
-    //    prefix_ = tddConfCl.value("prefix", 0);
-    //    postfix_ = tddConfCl.value("postfix", 0);
-    //    symbol_data_subcarrier_num_
-    //        = tddConfCl.value("ofdm_data_subcarrier_num", fft_size_);
-    //    ofdm_symbol_size_ = fft_size_ + cp_size_;
-    //    subframe_size_ = symbol_per_subframe_ * ofdm_symbol_size_;
-    //    samps_per_symbol_ = subframe_size_ + prefix_ + postfix_;
-    //    tx_scale_ = tddConfCl.value("tx_scale", 0.5);
-    //    beacon_seq_ = tddConfCl.value("beacon_seq", "gold_ifft");
-    //    pilot_seq_ = tddConfCl.value("pilot_seq", "lts");
-    //    symbols_per_frame_ = cl_frames_.at(0).size();
-    //    single_gain_ = tddConfCl.value("single_gain", true);
-    //    data_mod_ = tddConfCl.value("modulation", "QPSK");
-    //}
-    //}
+    bw_filter_ = rate_ + 2 * nco_;
+    radio_rf_freq_ = freq_ - nco_;
+    ofdm_symbol_size_ = fft_size_ + cp_size_;
+    subframe_size_ = symbol_per_subframe_ * ofdm_symbol_size_;
+    samps_per_symbol_ = subframe_size_ + prefix_ + postfix_;
+    assert(reciprocal_calib_ || symbols_per_frame_ == cl_frames_.at(0).size());
 
     ul_data_sym_present_ = (reciprocal_calib_ == false)
         && ((bs_present_ && (ul_symbols_.at(0).empty() == false))
