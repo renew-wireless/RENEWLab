@@ -19,11 +19,14 @@ DEFINE_bool(gen_ul_bits, false,
     "Generate random bits for uplink transmissions, otherwise read from file!");
 DEFINE_string(conf, "files/conf.json", "JSON configuration file name");
 DEFINE_string(storepath, "logs", "Dataset store path");
+DEFINE_bool(bs_only, false, "Run BS only");
+DEFINE_bool(client_only, false, "Run client only");
 
 int main(int argc, char* argv[])
 {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
-    Config config(FLAGS_conf, FLAGS_storepath);
+    Config config(
+        FLAGS_conf, FLAGS_storepath, FLAGS_bs_only, FLAGS_client_only);
     int ret = EXIT_SUCCESS;
     if (FLAGS_gen_ul_bits) {
         DataGenerator dg(&config);
