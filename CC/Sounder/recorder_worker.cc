@@ -396,7 +396,7 @@ herr_t RecorderWorker::initHDF5()
         // Data modulation
         write_attribute(mainGroup, "CL_MODULATION", this->cfg_->data_mod());
 
-        if (this->cfg_->client_present() == true) {
+        if (this->cfg_->reciprocal_calib() == false) {
             // Client antenna polarization
             write_attribute(
                 mainGroup, "CL_CH_PER_RADIO", this->cfg_->cl_sdr_ch());
