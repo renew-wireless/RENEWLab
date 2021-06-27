@@ -652,8 +652,8 @@ def rx_app(filename, user_params, this_plotter):
 
         for idx in range(num_cl):
             # Freq domain TX data (Does not contain cyclic prefix or prefix/postfix)
-            ofdm_data.append(metadata['OFDM_DATA_CL' + str(idx)][idx])
-            ofdm_data_time.append(metadata['OFDM_DATA_TIME_CL' + str(idx)][idx])
+            ofdm_data.append(np.array(metadata['OFDM_DATA_CL' + str(idx)]))
+            ofdm_data_time.append(np.array(metadata['OFDM_DATA_TIME_CL' + str(idx)]))
 
     pilot_dim = pilot_samples.shape
     num_frames = pilot_dim[0]
