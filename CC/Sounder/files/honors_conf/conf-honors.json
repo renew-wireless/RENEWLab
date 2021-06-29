@@ -1,17 +1,17 @@
 {
         "BaseStations" : {
                  "cells" : 1,
-                 "sdr_id" : ["files/anechoic_conf/iris-serials-anechoic.txt"],
-                 "hub_id" : "files/anechoic_conf/hub-serials-anechoic.txt",
+                 "sdr_id" : ["files/honors_conf/iris-serials-honors.txt"],
+                 "hub_id" : "files/honors_conf/hub-serials-honors.txt",
 		 "frequency" : 3.55e9,
                  "channel" : "AB",
-                 "rxgainA" : 65,
-                 "txgainA" : 75,
-                 "rxgainB" : 65,
-                 "txgainB" : 75,
+                 "rxgainA" : 90,
+                 "txgainA" : 81,
+                 "rxgainB" : 90,
+                 "txgainB" : 81,
                  "rate" : 5e6,
                  "frame_schedule" : [
-                    "BGGGGGPPPPGGGGGNGGGG"
+                    "BGGGGGPPGGGGGGGNGGGG"
                  ],
                  "max_frame" : 2000,
                  "ofdm_symbol_per_subframe" : 10,
@@ -19,25 +19,23 @@
                  "cp_size" : 16,
                  "prefix" : 160,
                  "postfix" : 160,
-                 "beamsweep" : false,
+                 "beamsweep" : true,
                  "beacon_antenna" : 0
         },
 
         "Clients" : {
                  "sdr_id" : [
-                     "RF3E000119",
-                     "RF3E000145"
+                     "RF3E000030"
                  ],
 		 "frequency" : 3.55e9,
                  "channel" : "AB",
-                 "rxgainA" : [65, 65],
-                 "txgainA" : [75, 75],
-                 "rxgainB" : [65, 65],
-                 "txgainB" : [75, 75],
+                 "rxgainA" : [90],
+                 "txgainA" : [81],
+                 "rxgainB" : [90],
+                 "txgainB" : [81],
                  "rate" : 5e6,
                  "frame_schedule" : [
-                     "GGGGGGPPGGGGGGGGGGGG",
-                     "GGGGGGGGPPGGGGGGGGGG"
+                     "GGGGGGPPGGGGGGGGGGGG"
                  ],
                  "frame_mode" : "continuous_resync",
                  "ofdm_symbol_per_subframe" : 10,
