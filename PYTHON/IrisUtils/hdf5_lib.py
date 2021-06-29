@@ -386,12 +386,13 @@ class hdf5_lib:
         # (i.e., RE1,IM1,RE2,IM2...REm,IM,)
 
         # Freq-domain Pilot
-        pilot_vec = self.metadata['OFDM_PILOT_F']
-        # some_list[start:stop:step]
-        I = pilot_vec[0::2]
-        Q = pilot_vec[1::2]
-        pilot_complex = I + Q * 1j
-        self.metadata['OFDM_PILOT_F'] = pilot_complex
+        if "OFDM_PILOT_F" in self.metadata.keys():
+            pilot_vec = self.metadata['OFDM_PILOT_F']
+            # some_list[start:stop:step]
+            I = pilot_vec[0::2]
+            Q = pilot_vec[1::2]
+            pilot_complex = I + Q * 1j
+            self.metadata['OFDM_PILOT_F'] = pilot_complex
 
         # Time-domain Pilot
         pilot_vec = self.metadata['OFDM_PILOT']

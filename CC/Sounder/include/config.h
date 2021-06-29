@@ -17,7 +17,7 @@
 
 class Config {
 public:
-    Config(const std::string&, const std::string&);
+    Config(const std::string&, const std::string&, const bool, const bool);
     ~Config();
 
     //Accessors

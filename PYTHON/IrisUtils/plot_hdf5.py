@@ -68,7 +68,14 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     if 'DATA_SUBCARRIER_NUM' in metadata:
         nonzero_sc_size = metadata['DATA_SUBCARRIER_NUM']
     ofdm_pilot = np.array(metadata['OFDM_PILOT'])
-    ofdm_pilot_f = np.array(metadata['OFDM_PILOT_F'])
+    if "OFDM_PILOT_F" in metadata.keys():
+        ofdm_pilot_f = np.array(metadata['OFDM_PILOT_F'])
+    else:
+        if pilot_type == 'zadoff-chu':
+            _, pilot_f = generate_training_seq(preamble_type='zadoff-chu', seq_length=nonzero_sc_size, cp=cp, upsample=1, reps=1)
+        else:
+            _, pilot_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
+        ofdm_pilot_f = pilot_f
     reciprocal_calib = np.array(metadata['RECIPROCAL_CALIB'])
     symbol_length_no_pad = symbol_length - z_padding
     num_pilots_per_sym = ((symbol_length_no_pad) // (cp + fft_size))
