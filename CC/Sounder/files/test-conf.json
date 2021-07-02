@@ -1,0 +1,49 @@
+{
+	"BaseStations" : {
+		 "cells" : 1,
+		 "serialsFile" : "files/test-serials.json",
+		 "frequency" : 3.6e9,
+		 "channel" : "AB",
+		 "rxgainA" : 65,
+		 "txgainA" : 70,
+		 "rxgainB" : 65,
+		 "txgainB" : 70,
+		 "rate" : 5e6,
+		 "frame_schedule" : [
+		     "BGPPGGGGGGGGGGGGGGGG"
+		 ],
+		 "max_frame" : 2000,
+		 "ofdm_symbol_per_subframe" : 10,
+		 "fft_size" : 64,
+		 "cp_size" : 16,
+		 "prefix" : 160,
+		 "postfix" : 160,
+		 "beamsweep" : true,
+		 "beacon_antenna" : 0
+	},
+
+	"Clients" : {
+		 "sdr_id" : [
+		     "RF3E000068"
+		 ],
+		 "frequency" : 3.6e9,
+		 "maxTxGainUE" : 90,
+		 "channel" : "AB",
+		 "rxgainA" : [65],
+		 "txgainA" : [70],
+		 "rxgainB" : [65],
+		 "txgainB" : [70],
+		 "rate" : 5e6,
+		 "frame_schedule" : [
+		     "GGPPGGGGGGGGGGGGGGGG"
+		 ],
+		 "frame_mode" : "continuous_resync",
+		 "ofdm_symbol_per_subframe" : 10,
+		 "fft_size" : 64,
+		 "cp_size" : 16,
+		 "prefix" : 160,
+		 "postfix" : 160,
+		 "tx_advance" : 135,
+		 "hw_framer" : false
+	}
+}

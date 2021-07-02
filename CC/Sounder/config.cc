@@ -85,14 +85,6 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     beacon_seq_ = tddConf.value("beacon_seq", "gold_ifft");
     pilot_seq_ = tddConf.value("pilot_seq", "lts");
     data_mod_ = tddConf.value("modulation", "QPSK");
-
-    // BS
-    if (kUseUHD == false) {
-        hub_file_ = tddConf.value("hub_id", "hub_serials.txt");
-    }
-    auto sdr_id_files = tddConf.value("sdr_id", json::array());
-    num_cells_ = sdr_id_files.size();
-    bs_sdr_file_.assign(sdr_id_files.begin(), sdr_id_files.end());
     bs_channel_ = tddConf.value("channel", "A");
     if ((bs_channel_ != "A") && (bs_channel_ != "B") && (bs_channel_ != "AB")) {
         throw std::invalid_argument(
@@ -132,19 +124,46 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     beacon_ant_ = tddConf.value("beacon_antenna", 0);
     max_frame_ = tddConf.value("max_frame", 0);
 
+    // Load serials file (loads hub, sdr, and rrh serials)
+    std::string serials_str;
+    auto serials_file_ = tddConf.value("serialsFile", "test-serials.json");
+    Utils::loadTDDConfig(serials_file_, serials_str);
+    const auto jSerials = json::parse(serials_str, nullptr, true, true);
+    json serialsConf;
+
+    num_cells_ = tddConf.value("cells", 1);
     MLPD_TRACE("Number cells: %zu\n", num_cells_);
+    hub_ids_.resize(num_cells_);
     bs_sdr_ids_.resize(num_cells_);
     n_bs_sdrs_.resize(num_cells_);
     n_bs_antennas_.resize(num_cells_);
     num_bs_sdrs_all_ = 0;
-    for (size_t i = 0u; i < num_cells_; i++) {
-        Utils::loadDevices(bs_sdr_file_.at(i), bs_sdr_ids_.at(i));
+
+    for (size_t i = 0; i < num_cells_; i++) {
+        std::string cell_str = "Cell" + std::to_string(i+1);
+        ss << jSerials.value(cell_str, serialsConf);
+        serialsConf = json::parse(ss);
+        ss.str(std::string());
+        ss.clear();
+
+        hub_ids_.at(i) = serialsConf.value("hub", "");
+        auto sdr_serials = serialsConf.value("sdr", json::array());
+        bs_sdr_ids_.at(i).assign(sdr_serials.begin(), sdr_serials.end());
         n_bs_sdrs_.at(i) = bs_sdr_ids_.at(i).size();
         n_bs_antennas_.at(i) = bs_channel_.length() * n_bs_sdrs_.at(i);
         num_bs_sdrs_all_ += bs_sdr_ids_.at(i).size();
         MLPD_TRACE("Loading devices - cell %zu, sdrs %zu, antennas: %zu, "
                    "total bs srds: %zu\n",
             i, n_bs_sdrs_.at(i), n_bs_antennas_.at(i), num_bs_sdrs_all_);
+    }
+
+    // Print Topology
+    std::cout << "Topology: " << std::endl;
+    for (size_t i = 0; i < bs_sdr_ids_.size(); i++) {
+        std::cout << "Cell" + std::to_string(i) + " Hub:" <<hub_ids_.at(i) << std::endl;
+        for (size_t j = 0; j < bs_sdr_ids_.at(i).size(); j++) {
+            std::cout << " \t- " << bs_sdr_ids_.at(i).at(j) << std::endl;
+        }
     }
 
     // Array with cummulative sum of SDRs in cells
@@ -154,11 +173,9 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         n_bs_sdrs_agg_.at(i + 1) = n_bs_sdrs_agg_.at(i) + n_bs_sdrs_.at(i);
     }
 
-    if (kUseUHD == false)
-        Utils::loadDevices(hub_file_, hub_ids_);
+    // Reciprocity Calibration
     reciprocal_calib_ = tddConf.value("reciprocal_calibration", false);
     cal_ref_sdr_id_ = tddConf.value("ref_sdr_index", num_bs_sdrs_all_ - 1);
-
     if (reciprocal_calib_ == true) {
         calib_frames_.resize(num_cells_);
         for (size_t c = 0; c < num_cells_; c++) {
