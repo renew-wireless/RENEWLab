@@ -13,13 +13,12 @@
                      "BGPGUGGGGGGGGGGGGGGG"
                  ],
                  "max_frame" : 0,
-                 "ofdm_symbol_per_subframe" : 10,
+                 "ofdm_symbol_per_slot" : 10,
                  "fft_size" : 64,
                  "cp_size" : 16,
                  "prefix" : 160,
                  "postfix" : 160,
                  "beamsweep" : true,
-                 "modulation" : "16QAM",
                  "single_gain" : true
         },
 
@@ -35,10 +34,9 @@
                  "frame_schedule" : [
                      "GGPGUGGGGGGGGGGGGGGG"
                  ],
-                 "frame_mode" : "free_running",
                  "hw_framer" : false,
 	         "tx_advance" : 100,
-                 "ofdm_symbol_per_subframe" : 10,
+                 "ofdm_symbol_per_slot" : 10,
                  "fft_size" : 64,
                  "cp_size" : 16,
                  "prefix" : 160,

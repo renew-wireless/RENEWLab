@@ -13,17 +13,35 @@
 		 "frame_schedule" : [
 		     "GGGGGGGPGGGGGGG"
 		 ],
-		 "frame_mode" : "free_running",
 		 "max_frame" : 4000,
-		 "ofdm_symbol_per_subframe" : 64,
+		 "ofdm_symbol_per_slot" : 64,
 		 "fft_size" : 64,
 		 "cp_size" : 0,
 		 "prefix" : 0,
 		 "postfix" : 0,
-		 "beacon_seq" : "gold_ifft",
 		 "beamsweep" : true,
-		 "beacon_antenna" : 0,
-		 "single_gain" : false
+		 "beacon_antenna" : 0
+	},
+	"Clients" : {
+		 "frequency" : 2.5e9,
+		 "channel" : "A",
+		 "rxgainA" : [45],
+		 "txgainA" : [95],
+		 "rxgainB" : [45],
+		 "txgainB" : [95],
+		 "rate" : 5e6,
+		 "fft_size" : 64,
+		 "ofdm_symbol_per_slot" : 64,
+		 "cp_size" : 0,
+		 "prefix" : 0,
+		 "postfix" : 0,
+		 "frame_schedule" : [
+		     "P"
+		 ],
+		 "frame_mode" : "free_running",
+		 "sdr_id" : [
+		     "RF3E000157"
+		 ],
+		 "hw_framer" : true
 	}
-
 }

@@ -215,30 +215,30 @@ herr_t RecorderWorker::initHDF5()
     MLPD_INFO("Creating output HD5F file: %s\n", this->hdf5_name_.c_str());
 
     // dataset dimension
-    hsize_t IQ = 2 * this->cfg_->samps_per_symbol();
+    hsize_t IQ = 2 * this->cfg_->samps_per_slot();
     DataspaceIndex cdims
         = { 1, 1, 1, 1, IQ }; // pilot chunk size, TODO: optimize size
     this->frame_number_pilot_ = MAX_FRAME_INC;
     // pilots
     DataspaceIndex dims_pilot
         = { this->frame_number_pilot_, this->cfg_->num_cells(),
-              this->cfg_->pilot_syms_per_frame(), this->num_antennas_, IQ };
+              this->cfg_->pilot_slot_per_frame(), this->num_antennas_, IQ };
     DataspaceIndex max_dims_pilot = { H5S_UNLIMITED, this->cfg_->num_cells(),
-        this->cfg_->pilot_syms_per_frame(), this->num_antennas_, IQ };
+        this->cfg_->pilot_slot_per_frame(), this->num_antennas_, IQ };
     // noise
     this->frame_number_noise_ = MAX_FRAME_INC;
     DataspaceIndex dims_noise
         = { this->frame_number_noise_, this->cfg_->num_cells(),
-              this->cfg_->noise_syms_per_frame(), this->num_antennas_, IQ };
+              this->cfg_->noise_slot_per_frame(), this->num_antennas_, IQ };
     DataspaceIndex max_dims_noise = { H5S_UNLIMITED, this->cfg_->num_cells(),
-        this->cfg_->noise_syms_per_frame(), this->num_antennas_, IQ };
+        this->cfg_->noise_slot_per_frame(), this->num_antennas_, IQ };
     // data
     this->frame_number_data_ = MAX_FRAME_INC;
     DataspaceIndex dims_data
         = { this->frame_number_data_, this->cfg_->num_cells(),
-              this->cfg_->ul_syms_per_frame(), this->num_antennas_, IQ };
+              this->cfg_->ul_slot_per_frame(), this->num_antennas_, IQ };
     DataspaceIndex max_dims_data = { H5S_UNLIMITED, this->cfg_->num_cells(),
-        this->cfg_->ul_syms_per_frame(), this->num_antennas_, IQ };
+        this->cfg_->ul_slot_per_frame(), this->num_antennas_, IQ };
 
     try {
         H5::Exception::dontPrint();
@@ -260,7 +260,7 @@ herr_t RecorderWorker::initHDF5()
 
         // Number of samples on each symbol (excluding prefix/postfix)
         write_attribute(
-            mainGroup, "SYMBOL_LEN_NO_PAD", this->cfg_->subframe_size());
+            mainGroup, "SLOT_LEN_NO_PAD", this->cfg_->slot_samp_size());
 
         // Number of samples for prefix (padding)
         write_attribute(mainGroup, "PREFIX_LEN", this->cfg_->prefix());
@@ -269,8 +269,7 @@ herr_t RecorderWorker::initHDF5()
         write_attribute(mainGroup, "POSTFIX_LEN", this->cfg_->postfix());
 
         // Number of samples on each symbol including prefix and postfix
-        write_attribute(
-            mainGroup, "SYMBOL_LEN", this->cfg_->samps_per_symbol());
+        write_attribute(mainGroup, "SLOT_LEN", this->cfg_->samps_per_slot());
 
         // Size of FFT
         write_attribute(mainGroup, "FFT_SIZE", this->cfg_->fft_size());
@@ -356,10 +355,10 @@ herr_t RecorderWorker::initHDF5()
 
         // Number of symbols in a frame
         write_attribute(
-            mainGroup, "BS_FRAME_LEN", this->cfg_->symbols_per_frame());
+            mainGroup, "BS_FRAME_LEN", this->cfg_->slot_per_frame());
 
         // Number of uplink symbols per frame
-        write_attribute(mainGroup, "UL_SYMS", this->cfg_->ul_syms_per_frame());
+        write_attribute(mainGroup, "UL_SLOTS", this->cfg_->ul_slot_per_frame());
 
         // Reciprocal Calibration Mode
         write_attribute(mainGroup, "RECIPROCAL_CALIB",
@@ -379,16 +378,16 @@ herr_t RecorderWorker::initHDF5()
 
         // Time Domain Pilot symbols
         std::vector<double> split_vec_pilot(
-            2 * this->cfg_->pilot_sym().at(0).size());
-        for (size_t i = 0; i < this->cfg_->pilot_sym().at(0).size(); i++) {
-            split_vec_pilot[2 * i + 0] = this->cfg_->pilot_sym().at(0).at(i);
-            split_vec_pilot[2 * i + 1] = this->cfg_->pilot_sym().at(1).at(i);
+            2 * this->cfg_->pilot_sym_t().at(0).size());
+        for (size_t i = 0; i < this->cfg_->pilot_sym_t().at(0).size(); i++) {
+            split_vec_pilot[2 * i + 0] = this->cfg_->pilot_sym_t().at(0).at(i);
+            split_vec_pilot[2 * i + 1] = this->cfg_->pilot_sym_t().at(1).at(i);
         }
         write_attribute(mainGroup, "OFDM_PILOT", split_vec_pilot);
 
         // Number of Pilots
         write_attribute(
-            mainGroup, "PILOT_NUM", this->cfg_->pilot_syms_per_frame());
+            mainGroup, "PILOT_NUM", this->cfg_->pilot_slot_per_frame());
 
         // Number of Client Antennas
         write_attribute(mainGroup, "CL_NUM", this->cfg_->num_cl_antennas());
@@ -439,7 +438,7 @@ herr_t RecorderWorker::initHDF5()
             write_attribute(mainGroup, "CL_SDR_ID", this->cfg_->cl_sdr_ids());
         }
 
-        if (this->cfg_->ul_data_sym_present()) {
+        if (this->cfg_->ul_data_slot_present()) {
             // Data subcarriers
             if (this->cfg_->data_ind().size() > 0)
                 write_attribute(
@@ -472,7 +471,7 @@ herr_t RecorderWorker::initHDF5()
         // ********************* //
 
         this->pilot_prop_.close();
-        if (this->cfg_->noise_syms_per_frame() > 0) {
+        if (this->cfg_->noise_slot_per_frame() > 0) {
             H5::DataSpace noise_dataspace(kDsDim, dims_noise, max_dims_noise);
             this->noise_prop_.setChunk(kDsDim, cdims);
             this->file_->createDataSet("/Data/Noise_Samples",
@@ -480,7 +479,7 @@ herr_t RecorderWorker::initHDF5()
             this->noise_prop_.close();
         }
 
-        if (this->cfg_->ul_syms_per_frame() > 0) {
+        if (this->cfg_->ul_slot_per_frame() > 0) {
             H5::DataSpace data_dataspace(kDsDim, dims_data, max_dims_data);
             this->data_prop_.setChunk(kDsDim, cdims);
             this->file_->createDataSet("/Data/UplinkData",
@@ -524,12 +523,12 @@ void RecorderWorker::openHDF5()
     this->pilot_prop_.copy(this->pilot_dataset_->getCreatePlist());
 
 #if DEBUG_PRINT
-    hsize_t IQ = 2 * this->cfg_->samps_per_symbol();
+    hsize_t IQ = 2 * this->cfg_->samps_per_slot();
     int cndims_pilot = 0;
     int ndims = pilot_filespace.getSimpleExtentNdims();
     DataspaceIndex dims_pilot
         = { this->frame_number_pilot_, this->cfg_->num_cells(),
-              this->cfg_->pilot_syms_per_frame(), this->num_antennas(), IQ };
+              this->cfg_->pilot_slot_per_frame(), this->num_antennas(), IQ };
     if (H5D_CHUNKED == this->pilot_prop_.getLayout())
         cndims_pilot = this->pilot_prop_.getChunk(ndims, dims_pilot);
     using std::cout;
@@ -541,7 +540,7 @@ void RecorderWorker::openHDF5()
 #endif
     pilot_filespace.close();
     // Get Dataset for DATA (If Enabled) and check the shape of it
-    if (this->cfg_->ul_syms_per_frame() > 0) {
+    if (this->cfg_->ul_slot_per_frame() > 0) {
         this->data_dataset_
             = new H5::DataSet(this->file_->openDataSet("/Data/UplinkData"));
 
@@ -559,7 +558,7 @@ void RecorderWorker::openHDF5()
         cout << "dim data chunk = " << cndims_data << std::endl;
         DataspaceIndex dims_data
             = { this->frame_number_data_, this->cfg_->num_cells(),
-                  this->cfg_->ul_syms_per_frame(), this->num_antennas(), IQ };
+                  this->cfg_->ul_slot_per_frame(), this->num_antennas(), IQ };
         cout << "New Data Dataset Dimension " << ndims << ",";
         for (auto i = 0; i < kDsSim - 1; ++i)
             cout << dims_data[i] << ",";
@@ -569,7 +568,7 @@ void RecorderWorker::openHDF5()
     }
 
     // Get Dataset for NOISE (If Enabled) and check the shape of it
-    if (this->cfg_->noise_syms_per_frame() > 0) {
+    if (this->cfg_->noise_slot_per_frame() > 0) {
         this->noise_dataset_
             = new H5::DataSet(this->file_->openDataSet("/Data/Noise_Samples"));
         H5::DataSpace noise_filespace(this->noise_dataset_->getSpace());
@@ -584,7 +583,7 @@ void RecorderWorker::openHDF5()
             cndims_noise = this->noise_prop_.getChunk(ndims, cdims_noise);
         cout << "dim noise chunk = " << cndims_noise << std::endl;
         DataspaceIndex dims_noise = { this->frame_number_noise_,
-            this->cfg_->num_cells(), this->cfg_->noise_syms_per_frame(),
+            this->cfg_->num_cells(), this->cfg_->noise_slot_per_frame(),
             this->antennas_.size(), IQ };
         cout << "New Noise Dataset Dimension " << ndims << ",";
         for (auto i = 0; i < kDsSim - 1; ++i)
@@ -604,14 +603,14 @@ void RecorderWorker::closeHDF5()
             this->hdf5_name_.c_str());
     } else {
         unsigned frame_number = this->max_frame_number_;
-        hsize_t IQ = 2 * this->cfg_->samps_per_symbol();
+        hsize_t IQ = 2 * this->cfg_->samps_per_slot();
 
         assert(this->pilot_dataset_ != nullptr);
         // Resize Pilot Dataset
         this->frame_number_pilot_ = frame_number;
         DataspaceIndex dims_pilot
             = { this->frame_number_pilot_, this->cfg_->num_cells(),
-                  this->cfg_->pilot_syms_per_frame(), this->num_antennas_, IQ };
+                  this->cfg_->pilot_slot_per_frame(), this->num_antennas_, IQ };
         this->pilot_dataset_->extend(dims_pilot);
         this->pilot_prop_.close();
         this->pilot_dataset_->close();
@@ -619,11 +618,11 @@ void RecorderWorker::closeHDF5()
         this->pilot_dataset_ = nullptr;
 
         // Resize Data Dataset (If Needed)
-        if (this->cfg_->ul_syms_per_frame() > 0) {
+        if (this->cfg_->ul_slot_per_frame() > 0) {
             assert(this->data_dataset_ != nullptr);
             this->frame_number_data_ = frame_number;
             DataspaceIndex dims_data = { this->frame_number_data_,
-                this->cfg_->num_cells(), this->cfg_->ul_syms_per_frame(),
+                this->cfg_->num_cells(), this->cfg_->ul_slot_per_frame(),
                 this->num_antennas_, IQ };
             this->data_dataset_->extend(dims_data);
             this->data_prop_.close();
@@ -633,11 +632,11 @@ void RecorderWorker::closeHDF5()
         }
 
         // Resize Noise Dataset (If Needed)
-        if (this->cfg_->noise_syms_per_frame() > 0) {
+        if (this->cfg_->noise_slot_per_frame() > 0) {
             assert(this->noise_dataset_ != nullptr);
             this->frame_number_noise_ = frame_number;
             DataspaceIndex dims_noise = { this->frame_number_noise_,
-                this->cfg_->num_cells(), this->cfg_->noise_syms_per_frame(),
+                this->cfg_->num_cells(), this->cfg_->noise_slot_per_frame(),
                 this->num_antennas_, IQ };
             this->noise_dataset_->extend(dims_noise);
             this->noise_prop_.close();
@@ -678,7 +677,7 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
         pkg->data[2], pkg->data[3], pkg->data[4], pkg->data[5], pkg->data[6],
         pkg->data[7], pkg->data[8]);
 #endif
-    hsize_t IQ = 2 * this->cfg_->samps_per_symbol();
+    hsize_t IQ = 2 * this->cfg_->samps_per_slot();
     if ((this->cfg_->max_frame()) != 0
         && (pkg->frame_id > this->cfg_->max_frame())) {
         closeHDF5();
@@ -714,7 +713,7 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
                     }
                     DataspaceIndex dims_pilot
                         = { this->frame_number_pilot_, this->cfg_->num_cells(),
-                              this->cfg_->pilot_syms_per_frame(),
+                              this->cfg_->pilot_slot_per_frame(),
                               this->num_antennas_, IQ };
                     this->pilot_dataset_->extend(dims_pilot);
 #if DEBUG_PRINT
@@ -749,7 +748,7 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
                                 this->cfg_->max_frame() + 1);
                     DataspaceIndex dims_data
                         = { this->frame_number_data_, this->cfg_->num_cells(),
-                              this->cfg_->ul_syms_per_frame(),
+                              this->cfg_->ul_slot_per_frame(),
                               this->num_antennas_, IQ };
                     this->data_dataset_->extend(dims_data);
 #if DEBUG_PRINT
@@ -759,7 +758,7 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
 #endif
                 }
                 hdfoffset[kDsSymsPerFrame]
-                    = this->cfg_->getUlSFIndex(pkg->frame_id, pkg->symbol_id);
+                    = this->cfg_->getUlSlotIndex(pkg->frame_id, pkg->symbol_id);
                 // Select a hyperslab in extended portion of the dataset
                 H5::DataSpace data_filespace(this->data_dataset_->getSpace());
                 DataspaceIndex count = { 1, 1, 1, 1, IQ };
@@ -783,7 +782,7 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
                                 this->cfg_->max_frame() + 1);
                     DataspaceIndex dims_noise
                         = { this->frame_number_noise_, this->cfg_->num_cells(),
-                              this->cfg_->noise_syms_per_frame(),
+                              this->cfg_->noise_slot_per_frame(),
                               this->num_antennas_, IQ };
                     this->noise_dataset_->extend(dims_noise);
 #if DEBUG_PRINT
@@ -792,7 +791,7 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
                         << this->frame_number_noise_ << " Frames" << std::endl;
 #endif
                 }
-                hdfoffset[kDsSymsPerFrame] = this->cfg_->getNoiseSFIndex(
+                hdfoffset[kDsSymsPerFrame] = this->cfg_->getNoiseSlotIndex(
                     pkg->frame_id, pkg->symbol_id);
                 // Select a hyperslab in extended portion of the dataset
                 H5::DataSpace noise_filespace(this->noise_dataset_->getSpace());
@@ -824,7 +823,7 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
                 pkg->ant_id, IQ);
 
             DataspaceIndex dims_pilot = { this->frame_number_pilot_,
-                this->cfg_->num_cells(), this->cfg_->pilot_syms_per_frame(),
+                this->cfg_->num_cells(), this->cfg_->pilot_slot_per_frame(),
                 this->num_antennas_, IQ };
             int ndims = this->data_dataset_->getSpace().getSimpleExtentNdims();
 

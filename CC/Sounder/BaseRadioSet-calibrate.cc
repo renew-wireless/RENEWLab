@@ -534,7 +534,7 @@ void BaseRadioSet::collectCSI(bool& adjust)
     // Prepend/Append vectors with prefix/postfix number of null samples
     std::vector<std::complex<int16_t>> prefix_vec(_cfg->prefix(), 0);
     std::vector<std::complex<int16_t>> postfix_vec(
-        _cfg->samps_per_symbol() - _cfg->prefix() - seqLen, 0);
+        _cfg->samps_per_slot() - _cfg->prefix() - seqLen, 0);
     pilot_cint16.insert(
         pilot_cint16.begin(), prefix_vec.begin(), prefix_vec.end());
     pilot_cint16.insert(
@@ -559,18 +559,18 @@ void BaseRadioSet::collectCSI(bool& adjust)
     buff.resize(R * R);
     for (int i = 0; i < R; i++) {
         for (int j = 0; j < R; j++) {
-            buff[i * R + j].resize(_cfg->samps_per_symbol());
+            buff[i * R + j].resize(_cfg->samps_per_slot());
         }
     }
 
-    std::vector<std::complex<int16_t>> dummyBuff0(_cfg->samps_per_symbol());
-    std::vector<std::complex<int16_t>> dummyBuff1(_cfg->samps_per_symbol());
+    std::vector<std::complex<int16_t>> dummyBuff0(_cfg->samps_per_slot());
+    std::vector<std::complex<int16_t>> dummyBuff1(_cfg->samps_per_slot());
     std::vector<void*> dummybuffs(2);
     dummybuffs[0] = dummyBuff0.data();
     dummybuffs[1] = dummyBuff1.data();
 
     for (int i = 0; i < R; i++)
-        bsRadios[0][i]->drain_buffers(dummybuffs, _cfg->samps_per_symbol());
+        bsRadios[0][i]->drain_buffers(dummybuffs, _cfg->samps_per_slot());
 
     for (int i = 0; i < R; i++) {
         Radio* bsRadio = bsRadios[0][i];
@@ -588,12 +588,12 @@ void BaseRadioSet::collectCSI(bool& adjust)
         for (int j = 0; j < R; j++) {
             if (j == i) {
                 int ret = bsRadios[0][j]->xmit(
-                    txbuff.data(), _cfg->samps_per_symbol(), 3, txTime);
+                    txbuff.data(), _cfg->samps_per_slot(), 3, txTime);
                 if (ret < 0)
                     std::cout << "bad write" << std::endl;
             } else {
                 int ret = bsRadios[0][j]->activateRecv(
-                    rxTime, _cfg->samps_per_symbol(), 3);
+                    rxTime, _cfg->samps_per_slot(), 3);
                 if (ret < 0)
                     std::cout << "bad activate at node " << j << std::endl;
             }
@@ -610,7 +610,7 @@ void BaseRadioSet::collectCSI(bool& adjust)
             //rxbuff[1] = ant == 2 ? buff[(i*M+j)*ant+1].data() : dummyBuff.data();
             rxbuff[1] = dummyBuff0.data();
             int ret = bsRadios[0][j]->recv(
-                rxbuff.data(), _cfg->samps_per_symbol(), rxTime);
+                rxbuff.data(), _cfg->samps_per_slot(), rxTime);
             if (ret < 0)
                 std::cout << "bad read at node " << j << std::endl;
         }
@@ -631,12 +631,12 @@ void BaseRadioSet::collectCSI(bool& adjust)
             good_csi = false;
 
 #if DEBUG_PLOT
-        std::vector<double> rx_I(_cfg->samps_per_symbol());
+        std::vector<double> rx_I(_cfg->samps_per_slot());
         std::transform(rx.begin(), rx.end(), rx_I.begin(),
             [](std::complex<double> cf) { return cf.real(); });
         plt::figure_size(1200, 780);
         plt::plot(rx_I);
-        plt::xlim(0, _cfg->samps_per_symbol());
+        plt::xlim(0, _cfg->samps_per_slot());
         plt::ylim(-1, 1);
         plt::title("Sample figure");
         plt::legend();
@@ -671,6 +671,6 @@ void BaseRadioSet::collectCSI(bool& adjust)
         bsRadio->deactivateRecv();
         bsRadio->deactivateXmit();
         dev->setGain(SOAPY_SDR_TX, ch, "PAD", _cfg->tx_gain().at(ch)); //[0,30]
-        bsRadio->drain_buffers(dummybuffs, _cfg->samps_per_symbol());
+        bsRadio->drain_buffers(dummybuffs, _cfg->samps_per_slot());
     }
 }

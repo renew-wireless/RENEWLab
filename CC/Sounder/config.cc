@@ -74,7 +74,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     freq_ = tddConf.value("frequency", 2.5e9);
     rate_ = tddConf.value("rate", 5e6);
     nco_ = tddConf.value("nco_frequency", 0.75 * rate_);
-    symbol_per_subframe_ = tddConf.value("ofdm_symbol_per_subframe", 1);
+    symbol_per_slot_ = tddConf.value("ofdm_symbol_per_slot", 1);
     fft_size_ = tddConf.value("fft_size", 0);
     cp_size_ = tddConf.value("cp_size", 0);
     prefix_ = tddConf.value("prefix", 0);
@@ -82,7 +82,6 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     symbol_data_subcarrier_num_
         = tddConf.value("ofdm_data_subcarrier_num", fft_size_);
     tx_scale_ = tddConf.value("tx_scale", 0.5);
-    beacon_seq_ = tddConf.value("beacon_seq", "gold_ifft");
     pilot_seq_ = tddConf.value("pilot_seq", "lts");
     data_mod_ = tddConf.value("modulation", "QPSK");
 
@@ -183,24 +182,24 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                 }
             }
         }
-        symbols_per_frame_ = calib_frames_.at(0).size();
-        pilot_syms_per_frame_ = 2; // up and down reciprocity pilots
-        noise_syms_per_frame_ = 0;
-        ul_syms_per_frame_ = 0;
-        dl_syms_per_frame_ = 0;
+        slot_per_frame_ = calib_frames_.at(0).size();
+        pilot_slot_per_frame_ = 2; // up and down reciprocity pilots
+        noise_slot_per_frame_ = 0;
+        ul_slot_per_frame_ = 0;
+        dl_slot_per_frame_ = 0;
     } else {
         auto jBsFrames = tddConf.value("frame_schedule", json::array());
         frames_.assign(jBsFrames.begin(), jBsFrames.end());
         assert(frames_.size() == num_cells_);
-        pilot_symbols_ = Utils::loadSymbols(frames_, 'P');
-        noise_symbols_ = Utils::loadSymbols(frames_, 'N');
-        ul_symbols_ = Utils::loadSymbols(frames_, 'U');
-        dl_symbols_ = Utils::loadSymbols(frames_, 'D');
-        symbols_per_frame_ = frames_.at(0).size();
-        pilot_syms_per_frame_ = pilot_symbols_.at(0).size();
-        noise_syms_per_frame_ = noise_symbols_.at(0).size();
-        ul_syms_per_frame_ = ul_symbols_.at(0).size();
-        dl_syms_per_frame_ = dl_symbols_.at(0).size();
+        pilot_slots_ = Utils::loadSlots(frames_, 'P');
+        noise_slots_ = Utils::loadSlots(frames_, 'N');
+        ul_slots_ = Utils::loadSlots(frames_, 'U');
+        dl_slots_ = Utils::loadSlots(frames_, 'D');
+        slot_per_frame_ = frames_.at(0).size();
+        pilot_slot_per_frame_ = pilot_slots_.at(0).size();
+        noise_slot_per_frame_ = noise_slots_.at(0).size();
+        ul_slot_per_frame_ = ul_slots_.at(0).size();
+        dl_slot_per_frame_ = dl_slots_.at(0).size();
         // read commons from client json config
         if (client_present_ == false) {
             num_cl_sdrs_ = num_cl_antennas_
@@ -218,9 +217,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
             rate_ = tddConfCl.value("rate", 5e6);
         if (tddConf.find("nco_frequency") == tddConf.end())
             nco_ = tddConfCl.value("nco_frequency", 0.75 * rate_);
-        if (tddConf.find("ofdm_symbol_per_subframe") == tddConf.end())
-            symbol_per_subframe_
-                = tddConfCl.value("ofdm_symbol_per_subframe", 1);
+        if (tddConf.find("ofdm_symbol_per_slot") == tddConf.end())
+            symbol_per_slot_ = tddConfCl.value("ofdm_symbol_per_slot", 1);
         if (tddConf.find("fft_size") == tddConf.end())
             fft_size_ = tddConfCl.value("fft_size", 0);
         if (tddConf.find("cp_size") == tddConf.end())
@@ -234,8 +232,6 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                 = tddConfCl.value("ofdm_data_subcarrier_num", fft_size_);
         if (tddConf.find("tx_scale") == tddConf.end())
             tx_scale_ = tddConfCl.value("tx_scale", 0.5);
-        if (tddConf.find("beacon_seq") == tddConf.end())
-            beacon_seq_ = tddConfCl.value("beacon_seq", "gold_ifft");
         if (tddConf.find("pilot_seq") == tddConf.end())
             pilot_seq_ = tddConfCl.value("pilot_seq", "lts");
         if (tddConf.find("single_gain") == tddConf.end())
@@ -301,35 +297,35 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         auto jClFrames = tddConfCl.value("frame_schedule", json::array());
         assert(jClSdrs.size() == jClFrames.size());
         cl_frames_.assign(jClFrames.begin(), jClFrames.end());
-        cl_pilot_symbols_ = Utils::loadSymbols(cl_frames_, 'P');
-        cl_ul_symbols_ = Utils::loadSymbols(cl_frames_, 'U');
-        cl_dl_symbols_ = Utils::loadSymbols(cl_frames_, 'D');
+        cl_pilot_slots_ = Utils::loadSlots(cl_frames_, 'P');
+        cl_ul_slots_ = Utils::loadSlots(cl_frames_, 'U');
+        cl_dl_slots_ = Utils::loadSlots(cl_frames_, 'D');
     }
 
     bw_filter_ = rate_ + 2 * nco_;
     radio_rf_freq_ = freq_ - nco_;
     ofdm_symbol_size_ = fft_size_ + cp_size_;
-    subframe_size_ = symbol_per_subframe_ * ofdm_symbol_size_;
-    samps_per_symbol_ = subframe_size_ + prefix_ + postfix_;
-    assert(reciprocal_calib_ || symbols_per_frame_ == cl_frames_.at(0).size());
+    slot_samp_size_ = symbol_per_slot_ * ofdm_symbol_size_;
+    samps_per_slot_ = slot_samp_size_ + prefix_ + postfix_;
+    assert(reciprocal_calib_ || slot_per_frame_ == cl_frames_.at(0).size());
 
-    ul_data_sym_present_ = (reciprocal_calib_ == false)
-        && ((bs_present_ && (ul_symbols_.at(0).empty() == false))
-               || (client_present_ && !cl_ul_symbols_.at(0).empty()));
+    ul_data_slot_present_ = (reciprocal_calib_ == false)
+        && ((bs_present_ && (ul_slots_.at(0).empty() == false))
+               || (client_present_ && !cl_ul_slots_.at(0).empty()));
 
     std::vector<std::complex<int16_t>> prefix_zpad(prefix_, 0);
     std::vector<std::complex<int16_t>> postfix_zpad(postfix_, 0);
 
-    // compose Beacon subframe:
+    // compose Beacon slot:
     // STS Sequence (for AGC) + GOLD Sequence (for Sync)
     // 15reps of STS(16) + 2reps of gold_ifft(128)
     srand(time(NULL));
-    const int seqLen = 128;
+    const int seq_len = 128;
     std::vector<std::vector<float>> gold_ifft
         = CommsLib::getSequence(CommsLib::GOLD_IFFT);
     auto gold_ifft_ci16 = Utils::float_to_cint16(gold_ifft);
     gold_cf32_.clear();
-    for (size_t i = 0; i < seqLen; i++) {
+    for (size_t i = 0; i < seq_len; i++) {
         gold_cf32_.push_back(
             std::complex<float>(gold_ifft[0][i], gold_ifft[1][i]));
     }
@@ -354,8 +350,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
     beacon_size_ = beacon_ci16_.size();
 
-    if (samps_per_symbol_ < (beacon_size_ + prefix_ + postfix_)) {
-        std::string msg = "Minimum supported subframe_size is ";
+    if (samps_per_slot_ < (beacon_size_ + prefix_ + postfix_)) {
+        std::string msg = "Minimum supported slot_samp_size is ";
         msg += std::to_string(beacon_size_);
         throw std::invalid_argument(msg);
     }
@@ -364,7 +360,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     coeffs_ = Utils::cint16_to_uint32(gold_ifft_ci16, true, "QI");
 
     std::vector<std::complex<int16_t>> post_beacon_zpad(
-        subframe_size_ - beacon_size_, 0);
+        slot_samp_size_ - beacon_size_, 0);
     beacon_ci16_.insert(
         beacon_ci16_.begin(), prefix_zpad.begin(), prefix_zpad.end());
     beacon_ci16_.insert(
@@ -372,7 +368,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     beacon_ci16_.insert(
         beacon_ci16_.end(), postfix_zpad.begin(), postfix_zpad.end());
 
-    // compose pilot subframe
+    // compose pilot slot
     if (fft_size_ > kMaxSupportedFFTSize) {
         fft_size_ = kMaxSupportedFFTSize;
         std::cout << "Unsupported fft size! Setting fft size to "
@@ -393,12 +389,12 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
     if (fft_size_ == 64) {
         pilot_sym_f_ = CommsLib::getSequence(CommsLib::LTS_SEQ_F);
-        pilot_sym_ = CommsLib::getSequence(CommsLib::LTS_SEQ);
+        pilot_sym_t_ = CommsLib::getSequence(CommsLib::LTS_SEQ);
         symbol_data_subcarrier_num_ = Consts::kNumMappedSubcarriers_80211;
     } else if (pilot_seq_ == "zadoff-chu") {
         pilot_sym_f_ = CommsLib::getSequence(
             CommsLib::LTE_ZADOFF_CHU_F, symbol_data_subcarrier_num_);
-        pilot_sym_ = CommsLib::getSequence(
+        pilot_sym_t_ = CommsLib::getSequence(
             CommsLib::LTE_ZADOFF_CHU, symbol_data_subcarrier_num_);
     } else
         std::cout
@@ -406,13 +402,13 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
             << " is not supported! Choose either LTS (64-fft) or zaddof-chu."
             << std::endl;
 
-    auto iq_ci16 = Utils::float_to_cint16(pilot_sym_);
+    auto iq_ci16 = Utils::float_to_cint16(pilot_sym_t_);
     iq_ci16.insert(iq_ci16.begin(), iq_ci16.end() - cp_size_, iq_ci16.end());
 
     pilot_ci16_.clear();
     pilot_ci16_.insert(
         pilot_ci16_.begin(), prefix_zpad.begin(), prefix_zpad.end());
-    for (size_t i = 0; i < symbol_per_subframe_; i++)
+    for (size_t i = 0; i < symbol_per_slot_; i++)
         pilot_ci16_.insert(pilot_ci16_.end(), iq_ci16.begin(), iq_ci16.end());
     pilot_ci16_.insert(
         pilot_ci16_.end(), postfix_zpad.begin(), postfix_zpad.end());
@@ -453,7 +449,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                 + "x" + std::to_string(ant_num) + ".hdf5";
         } else {
             std::string ul_present_str
-                = (ul_data_sym_present_ ? "uplink-" : "");
+                = (ul_data_slot_present_ ? "uplink-" : "");
             filename = directory + "/trace-" + ul_present_str
                 + std::to_string(1900 + ltm->tm_year) + "-"
                 + std::to_string(1 + ltm->tm_mon) + "-"
@@ -472,7 +468,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     MLPD_INFO("Cores found %u ... \n", num_cores);
     core_alloc_ = num_cores > RX_THREAD_NUM;
     if ((bs_present_ == true)
-        && (pilot_syms_per_frame_ + ul_syms_per_frame_ > 0)) {
+        && (pilot_slot_per_frame_ + ul_slot_per_frame_ > 0)) {
         task_thread_num_ = tddConf.value("task_thread", TASK_THREAD_NUM);
         rx_thread_num_ = (num_cores >= (2 * RX_THREAD_NUM))
             ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_sdrs_all_))
@@ -508,8 +504,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
 void Config::loadULData(const std::string& directory)
 {
-    // compose data subframe
-    if (ul_data_sym_present_) {
+    // compose data slot
+    if (ul_data_slot_present_) {
         std::vector<std::complex<float>> prefix_zpad_t(prefix_, 0);
         std::vector<std::complex<float>> postfix_zpad_t(postfix_, 0);
         txdata_time_dom_.resize(num_cl_antennas_);
@@ -519,8 +515,8 @@ void Config::loadULData(const std::string& directory)
             std::string filename_tag = data_mod_ + "_"
                 + std::to_string(symbol_data_subcarrier_num_) + "_"
                 + std::to_string(fft_size_) + "_"
-                + std::to_string(symbol_per_subframe_) + "_"
-                + std::to_string(cl_ul_symbols_[i].size()) + "_"
+                + std::to_string(symbol_per_slot_) + "_"
+                + std::to_string(cl_ul_slots_[i].size()) + "_"
                 + std::to_string(ul_data_frame_num_) + "_" + cl_channel_ + "_"
                 + std::to_string(i) + ".bin";
 
@@ -548,32 +544,32 @@ void Config::loadULData(const std::string& directory)
             }
 
             // Frame * UL Slots * Channel * Samples
-            for (size_t u = 0; u < cl_ul_symbols_[i].size(); u++) {
+            for (size_t u = 0; u < cl_ul_slots_[i].size(); u++) {
                 for (size_t h = 0; h < cl_sdr_ch_; h++) {
                     size_t ant_i = i * cl_sdr_ch_ + h;
 
                     std::vector<std::complex<float>> data_freq_dom(
-                        fft_size_ * symbol_per_subframe_);
+                        fft_size_ * symbol_per_slot_);
                     size_t read_num
                         = std::fread(data_freq_dom.data(), 2 * sizeof(float),
-                            fft_size_ * symbol_per_subframe_, fp_tx_f);
-                    if (read_num != (fft_size_ * symbol_per_subframe_)) {
+                            fft_size_ * symbol_per_slot_, fp_tx_f);
+                    if (read_num != (fft_size_ * symbol_per_slot_)) {
                         MLPD_WARN(
                             "BAD Read of Uplink Freq-Domain Data: %zu/%zu\n",
-                            read_num, fft_size_ * symbol_per_subframe_);
+                            read_num, fft_size_ * symbol_per_slot_);
                     }
                     txdata_freq_dom_[ant_i].insert(
                         txdata_freq_dom_[ant_i].end(), data_freq_dom.begin(),
                         data_freq_dom.end());
 
                     std::vector<std::complex<float>> data_time_dom(
-                        samps_per_symbol_);
+                        samps_per_slot_);
                     read_num = std::fread(data_time_dom.data(),
-                        2 * sizeof(float), samps_per_symbol_, fp_tx_t);
-                    if (read_num != samps_per_symbol_) {
+                        2 * sizeof(float), samps_per_slot_, fp_tx_t);
+                    if (read_num != samps_per_slot_) {
                         MLPD_WARN(
                             "BAD Read of Uplink Time-Domain Data: %zu/%zu\n",
-                            read_num, samps_per_symbol_);
+                            read_num, samps_per_slot_);
                     }
                     txdata_time_dom_[ant_i].insert(
                         txdata_time_dom_[ant_i].end(), data_time_dom.begin(),
@@ -638,76 +634,74 @@ size_t Config::getTotNumAntennas()
 
 Config::~Config() {}
 
-int Config::getClientId(int frame_id, int symbol_id)
+int Config::getClientId(int frame_id, int slot_id)
 {
     if (reciprocal_calib_)
-        return symbol_id;
+        return slot_id;
     std::vector<size_t>::iterator it;
     int fid = frame_id % frames_.size();
-    it = find(pilot_symbols_.at(fid).begin(), pilot_symbols_.at(fid).end(),
-        symbol_id);
-    if (it != pilot_symbols_.at(fid).end()) {
-        return (it - pilot_symbols_.at(fid).begin());
+    it = find(
+        pilot_slots_.at(fid).begin(), pilot_slots_.at(fid).end(), slot_id);
+    if (it != pilot_slots_.at(fid).end()) {
+        return (it - pilot_slots_.at(fid).begin());
     }
     return -1;
 }
 
-int Config::getNoiseSFIndex(int frame_id, int symbol_id)
-{
-    std::vector<size_t>::iterator it;
-    int fid = frame_id % frames_.size();
-    it = find(noise_symbols_.at(fid).begin(), noise_symbols_.at(fid).end(),
-        symbol_id);
-    if (it != noise_symbols_.at(fid).end())
-        return (it - noise_symbols_.at(fid).begin());
-    return -1;
-}
-
-int Config::getUlSFIndex(int frame_id, int symbol_id)
+int Config::getNoiseSlotIndex(int frame_id, int slot_id)
 {
     std::vector<size_t>::iterator it;
     int fid = frame_id % frames_.size();
     it = find(
-        ul_symbols_.at(fid).begin(), ul_symbols_.at(fid).end(), symbol_id);
-    if (it != ul_symbols_.at(fid).end()) {
-        return (it - ul_symbols_.at(fid).begin());
+        noise_slots_.at(fid).begin(), noise_slots_.at(fid).end(), slot_id);
+    if (it != noise_slots_.at(fid).end())
+        return (it - noise_slots_.at(fid).begin());
+    return -1;
+}
+
+int Config::getUlSlotIndex(int frame_id, int slot_id)
+{
+    std::vector<size_t>::iterator it;
+    int fid = frame_id % frames_.size();
+    it = find(ul_slots_.at(fid).begin(), ul_slots_.at(fid).end(), slot_id);
+    if (it != ul_slots_.at(fid).end()) {
+        return (it - ul_slots_.at(fid).begin());
     }
     return -1;
 }
 
-int Config::getDlSFIndex(int frame_id, int symbol_id)
+int Config::getDlSlotIndex(int frame_id, int slot_id)
 {
     std::vector<size_t>::iterator it;
     int fid = frame_id % frames_.size();
-    it = find(
-        dl_symbols_.at(fid).begin(), dl_symbols_.at(fid).end(), symbol_id);
-    if (it != dl_symbols_.at(fid).end())
-        return (it - dl_symbols_.at(fid).begin());
+    it = find(dl_slots_.at(fid).begin(), dl_slots_.at(fid).end(), slot_id);
+    if (it != dl_slots_.at(fid).end())
+        return (it - dl_slots_.at(fid).begin());
     return -1;
 }
 
-bool Config::isPilot(int frame_id, int symbol_id)
+bool Config::isPilot(int frame_id, int slot_id)
 {
     try {
-        return frames_[frame_id % frames_.size()].at(symbol_id) == 'P';
+        return frames_[frame_id % frames_.size()].at(slot_id) == 'P';
     } catch (const std::out_of_range&) {
         return false;
     }
 }
 
-bool Config::isNoise(int frame_id, int symbol_id)
+bool Config::isNoise(int frame_id, int slot_id)
 {
     try {
-        return frames_[frame_id % frames_.size()].at(symbol_id) == 'N';
+        return frames_[frame_id % frames_.size()].at(slot_id) == 'N';
     } catch (const std::out_of_range&) {
         return false;
     }
 }
 
-bool Config::isData(int frame_id, int symbol_id)
+bool Config::isData(int frame_id, int slot_id)
 {
     try {
-        return frames_[frame_id % frames_.size()].at(symbol_id) == 'U';
+        return frames_[frame_id % frames_.size()].at(slot_id) == 'U';
     } catch (const std::out_of_range&) {
         return false;
     }

@@ -156,8 +156,8 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
     } else {
         //beaconSize + 82 (BS FE delay) + 68 (path delay) + 17 (correlator delay) + 82 (Client FE Delay)
         int clTrigOffset = _cfg->beacon_size() + _cfg->tx_advance();
-        int sf_start = clTrigOffset / _cfg->samps_per_symbol();
-        int sp_start = clTrigOffset % _cfg->samps_per_symbol();
+        int sf_start = clTrigOffset / _cfg->samps_per_slot();
+        int sp_start = clTrigOffset % _cfg->samps_per_slot();
 
         for (size_t i = 0; i < radios.size(); i++) {
             auto dev = radios.at(i)->dev;
@@ -186,7 +186,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
                 tddConf["tdd_enabled"] = true;
                 tddConf["frame_mode"] = _cfg->frame_mode();
                 int max_frame_ = (int)(2.0
-                    / ((_cfg->samps_per_symbol() * _cfg->symbols_per_frame())
+                    / ((_cfg->samps_per_slot() * _cfg->slot_per_frame())
                           / _cfg->rate()));
                 tddConf["max_frame"]
                     = _cfg->frame_mode() == "free_running" ? 0 : max_frame_;
@@ -195,7 +195,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
                     tddConf["dual_pilot"] = true;
                 tddConf["frames"] = json::array();
                 tddConf["frames"].push_back(tddSched);
-                tddConf["symbol_size"] = _cfg->samps_per_symbol();
+                tddConf["symbol_size"] = _cfg->samps_per_slot();
                 std::string tddConfStr = tddConf.dump();
 
                 dev->writeSetting("TDD_CONFIG", tddConfStr);

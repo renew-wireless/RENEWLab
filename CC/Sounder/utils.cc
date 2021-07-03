@@ -110,21 +110,21 @@ std::vector<uint32_t> Utils::cint16_to_uint32(
     return out;
 }
 
-std::vector<std::vector<size_t>> Utils::loadSymbols(
-    const std::vector<std::string>& frames, char sym)
+std::vector<std::vector<size_t>> Utils::loadSlots(
+    const std::vector<std::string>& frames, char s)
 {
-    std::vector<std::vector<size_t>> symId;
+    std::vector<std::vector<size_t>> slotId;
     size_t frameSize = frames.size();
-    symId.resize(frameSize);
+    slotId.resize(frameSize);
     for (size_t f = 0; f < frameSize; f++) {
         std::string fr = frames[f];
         for (size_t g = 0; g < fr.size(); g++) {
-            if (fr[g] == sym) {
-                symId[f].push_back(g);
+            if (fr[g] == s) {
+                slotId[f].push_back(g);
             }
         }
     }
-    return symId;
+    return slotId;
 }
 
 void Utils::loadDevices(

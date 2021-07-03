@@ -26,22 +26,13 @@ public:
     inline size_t num_bs_sdrs_all(void) const { return this->num_bs_sdrs_all_; }
     inline size_t num_cl_sdrs(void) const { return this->num_cl_sdrs_; }
     inline size_t core_alloc(void) const { return this->core_alloc_; }
-    inline int subframe_size(void) const { return this->subframe_size_; }
-    inline size_t samps_per_symbol(void) const
+    inline int slot_samp_size(void) const { return this->slot_samp_size_; }
+    inline size_t samps_per_slot(void) const { return this->samps_per_slot_; }
+    inline size_t slot_per_frame(void) const { return this->slot_per_frame_; }
+    inline size_t symbol_per_slot(void) const { return this->symbol_per_slot_; }
+    inline bool ul_data_slot_present(void) const
     {
-        return this->samps_per_symbol_;
-    }
-    inline size_t symbols_per_frame(void) const
-    {
-        return this->symbols_per_frame_;
-    }
-    inline size_t symbol_per_subframe(void) const
-    {
-        return this->symbol_per_subframe_;
-    }
-    inline bool ul_data_sym_present(void) const
-    {
-        return this->ul_data_sym_present_;
+        return this->ul_data_slot_present_;
     }
     inline size_t num_cells(void) const { return this->num_cells_; }
     inline bool hw_framer(void) const { return this->hw_framer_; }
@@ -71,17 +62,17 @@ public:
     {
         return this->symbol_data_subcarrier_num_;
     }
-    inline size_t pilot_syms_per_frame(void) const
+    inline size_t pilot_slot_per_frame(void) const
     {
-        return this->pilot_syms_per_frame_;
+        return this->pilot_slot_per_frame_;
     }
-    inline size_t noise_syms_per_frame(void) const
+    inline size_t noise_slot_per_frame(void) const
     {
-        return this->noise_syms_per_frame_;
+        return this->noise_slot_per_frame_;
     }
-    inline size_t ul_syms_per_frame(void) const
+    inline size_t ul_slot_per_frame(void) const
     {
-        return this->ul_syms_per_frame_;
+        return this->ul_slot_per_frame_;
     }
     inline double rate(void) const { return this->rate_; }
     inline int tx_advance(void) const { return this->tx_advance_; }
@@ -143,17 +134,17 @@ public:
     {
         return this->cl_frames_;
     }
-    inline const std::vector<std::vector<size_t>>& cl_pilot_symbols(void) const
+    inline const std::vector<std::vector<size_t>>& cl_pilot_slots(void) const
     {
-        return this->cl_pilot_symbols_;
+        return this->cl_pilot_slots_;
     }
-    inline const std::vector<std::vector<size_t>>& cl_ul_symbols(void) const
+    inline const std::vector<std::vector<size_t>>& cl_ul_slots(void) const
     {
-        return this->cl_ul_symbols_;
+        return this->cl_ul_slots_;
     }
-    inline const std::vector<std::vector<size_t>>& cl_dl_symbols(void) const
+    inline const std::vector<std::vector<size_t>>& cl_dl_slots(void) const
     {
-        return this->cl_dl_symbols_;
+        return this->cl_dl_slots_;
     }
     inline const std::vector<std::string>& cl_sdr_ids(void) const
     {
@@ -193,9 +184,9 @@ public:
         return this->beacon_;
     }
 
-    inline std::vector<std::vector<float>>& pilot_sym(void)
+    inline std::vector<std::vector<float>>& pilot_sym_t(void)
     {
-        return this->pilot_sym_;
+        return this->pilot_sym_t_;
     };
     inline std::vector<std::vector<float>>& pilot_sym_f(void)
     {
@@ -263,15 +254,15 @@ public:
 
     inline size_t getPackageDataLength() const
     {
-        return (2 * this->samps_per_symbol_ * sizeof(short));
+        return (2 * this->samps_per_slot_ * sizeof(short));
     }
     size_t getNumAntennas();
     size_t getMaxNumAntennas();
     size_t getTotNumAntennas();
     int getClientId(int, int);
-    int getNoiseSFIndex(int, int);
-    int getUlSFIndex(int, int);
-    int getDlSFIndex(int, int);
+    int getNoiseSlotIndex(int, int);
+    int getUlSlotIndex(int, int);
+    int getDlSlotIndex(int, int);
     bool isPilot(int, int);
     bool isNoise(int, int);
     bool isData(int, int);
@@ -293,20 +284,20 @@ private:
     size_t cp_size_;
     size_t ofdm_symbol_size_;
     size_t symbol_data_subcarrier_num_;
-    size_t symbol_per_subframe_;
-    size_t subframe_size_;
-    size_t samps_per_symbol_;
+    size_t symbol_per_slot_;
+    size_t slot_samp_size_;
+    size_t samps_per_slot_;
     size_t prefix_;
     size_t postfix_;
-    size_t symbols_per_frame_;
-    size_t pilot_syms_per_frame_;
-    size_t noise_syms_per_frame_;
-    size_t ul_syms_per_frame_;
-    size_t dl_syms_per_frame_; // No accessor
+    size_t slot_per_frame_;
+    size_t pilot_slot_per_frame_;
+    size_t noise_slot_per_frame_;
+    size_t ul_slot_per_frame_;
+    size_t dl_slot_per_frame_; // No accessor
     float tx_scale_; // No accessor
     std::string pilot_seq_;
     std::string beacon_seq_;
-    bool ul_data_sym_present_;
+    bool ul_data_slot_present_;
     std::string data_mod_;
 
     // BS features
@@ -333,11 +324,11 @@ private:
     size_t max_frame_;
     size_t ul_data_frame_num_;
     std::vector<std::vector<size_t>>
-        pilot_symbols_; // Accessed through getClientId
-    std::vector<std::vector<size_t>> noise_symbols_;
+        pilot_slots_; // Accessed through getClientId
+    std::vector<std::vector<size_t>> noise_slots_;
     std::vector<std::vector<size_t>>
-        ul_symbols_; // Accessed through getUlSFIndex()
-    std::vector<std::vector<size_t>> dl_symbols_; // No accessor
+        ul_slots_; // Accessed through getUlSFIndex()
+    std::vector<std::vector<size_t>> dl_slots_; // No accessor
     bool single_gain_;
     std::vector<double> tx_gain_;
     std::vector<double> rx_gain_;
@@ -366,16 +357,16 @@ private:
     std::vector<uint32_t> pilot_;
     std::vector<std::complex<float>> pilot_sc_;
     std::vector<size_t> pilot_sc_ind_;
-    std::vector<std::vector<float>> pilot_sym_;
+    std::vector<std::vector<float>> pilot_sym_t_;
     std::vector<std::vector<float>> pilot_sym_f_;
     std::vector<std::vector<std::complex<float>>> tx_data_;
     std::vector<std::vector<std::complex<float>>> txdata_freq_dom_;
     std::vector<std::vector<std::complex<float>>> txdata_time_dom_;
 
     std::vector<std::string> cl_frames_;
-    std::vector<std::vector<size_t>> cl_pilot_symbols_;
-    std::vector<std::vector<size_t>> cl_ul_symbols_;
-    std::vector<std::vector<size_t>> cl_dl_symbols_;
+    std::vector<std::vector<size_t>> cl_pilot_slots_;
+    std::vector<std::vector<size_t>> cl_ul_slots_;
+    std::vector<std::vector<size_t>> cl_dl_slots_;
 
     std::vector<std::vector<double>> cl_txgain_vec_;
     std::vector<std::vector<double>> cl_rxgain_vec_;
