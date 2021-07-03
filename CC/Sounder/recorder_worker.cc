@@ -258,10 +258,6 @@ herr_t RecorderWorker::initHDF5()
         // BW
         write_attribute(mainGroup, "RATE", this->cfg_->rate());
 
-        // Number of samples on each symbol (excluding prefix/postfix)
-        write_attribute(
-            mainGroup, "SLOT_LEN_NO_PAD", this->cfg_->slot_samp_size());
-
         // Number of samples for prefix (padding)
         write_attribute(mainGroup, "PREFIX_LEN", this->cfg_->prefix());
 
@@ -269,7 +265,8 @@ herr_t RecorderWorker::initHDF5()
         write_attribute(mainGroup, "POSTFIX_LEN", this->cfg_->postfix());
 
         // Number of samples on each symbol including prefix and postfix
-        write_attribute(mainGroup, "SLOT_LEN", this->cfg_->samps_per_slot());
+        write_attribute(
+            mainGroup, "SLOT_SAMP_LEN", this->cfg_->samps_per_slot());
 
         // Size of FFT
         write_attribute(mainGroup, "FFT_SIZE", this->cfg_->fft_size());

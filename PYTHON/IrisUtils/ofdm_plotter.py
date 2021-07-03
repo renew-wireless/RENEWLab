@@ -45,7 +45,7 @@ class OFDMplotter:
         self.data_syms = []
         self.user_params = []
         self.metadata = []
-        self.subframe_size = 640
+        self.slot_size = 640
         self.prefix_len = 160
         self.postfix_len = 160
         self.phase_err = np.zeros(10)
@@ -141,10 +141,14 @@ class OFDMplotter:
         self.data_syms = data_syms[0, :]           # tx symbols [numClients, data length]
         self.user_params = user_params
         self.num_sc = int(metadata['FFT_SIZE'])
-        self.subframe_size = int(metadata['SYMBOL_LEN_NO_PAD'])
-        self.pilot_len = int(metadata['SYMBOL_LEN_NO_PAD'])
+        if 'SYMBOL_LEN' in metadata: # to support older datasets
+            slot_samps_with_pad = int(metadata['SYMBOL_LEN'])
+        elif 'SLOT_SAMP_LEN' in metadata:
+            slot_samps_with_pad = int(metadata['SLOT_SAMP_LEN'])
         self.prefix_len = int(metadata['PREFIX_LEN'])
         self.postfix_len = int(metadata['POSTFIX_LEN'])
+        self.slot_size = slot_samps_with_pad - self.prefix_len - self.postfix_len
+        self.pilot_len = self.slot_size
         self.phase_err = phase_error[0]
         self.evm = avg_evm[0]
         self.snr = snr_from_evm[0]
@@ -171,18 +175,18 @@ class OFDMplotter:
         self.line_tx_sig2.set_data(range(len(self.tx_data2)), np.real(self.tx_data2))
 
         # RX
-        subframe_size = self.subframe_size  # 640
+        slot_size = self.slot_size  # 640
         prefix_len = self.prefix_len        # 160
         postfix_len = self.postfix_len      # 160
         self.line_rx_sig.set_data(range(len(self.rx_data)), np.real(self.rx_data))
         if self.num_cl > 1:
             self.line_pilot1_start.set_data(prefix_len * np.ones(100), np.linspace(-0.5, 0.5, num=100))
-            self.line_pilot2_start.set_data((prefix_len + subframe_size + postfix_len + prefix_len) * np.ones(100), np.linspace(-0.5, 0.5, num=100))
-            self.line_payload_start.set_data((prefix_len+subframe_size+postfix_len+prefix_len+subframe_size+postfix_len+prefix_len) * np.ones(100), np.linspace(-0.5, 0.5, num=100))
+            self.line_pilot2_start.set_data((prefix_len + slot_size + postfix_len + prefix_len) * np.ones(100), np.linspace(-0.5, 0.5, num=100))
+            self.line_payload_start.set_data((prefix_len+slot_size+postfix_len+prefix_len+slot_size+postfix_len+prefix_len) * np.ones(100), np.linspace(-0.5, 0.5, num=100))
         else:
             self.line_pilot1_start.set_data(prefix_len * np.ones(100), np.linspace(-0.5, 0.5, num=100))
             self.line_pilot2_start.set_data((np.nan) * np.ones(100),np.linspace(-0.5, 0.5, num=100))
-            self.line_payload_start.set_data(( prefix_len + subframe_size + postfix_len + prefix_len) * np.ones(100), np.linspace(-0.5, 0.5, num=100))
+            self.line_payload_start.set_data(( prefix_len + slot_size + postfix_len + prefix_len) * np.ones(100), np.linspace(-0.5, 0.5, num=100))
 
         # Phase error 1
         self.line_phase_err.set_data(range(len(self.phase_err)), self.phase_err)
