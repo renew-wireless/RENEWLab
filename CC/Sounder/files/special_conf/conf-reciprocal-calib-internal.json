@@ -16,6 +16,6 @@
 		 "prefix" : 160,
 		 "postfix" : 160,
 		 "pilot_seq" : "zadoff-chu",
-		 "reciprocal_calibration" : true
+		 "internal_measurement" : true
 	}
 }

@@ -52,7 +52,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                    "JSON file\n");
         exit(1);
     } else if (tddConfCl.empty() == true) {
-        reciprocal_calib_ = tddConf.value("reciprocal_calibration", false);
+        reciprocal_calib_ = tddConf.value("internal_measurement", false);
         if (!reciprocal_calib_) {
             MLPD_ERROR(
                 "Both \"BaseStations\" and \"Clients\" must be present in "
@@ -251,7 +251,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         cl_agc_en_ = tddConfCl.value("agc_en", false);
         cl_agc_gain_init_ = tddConfCl.value("agc_gain_init", 70); // 0 to 108
         frame_mode_ = tddConfCl.value("frame_mode", "continuous_resync");
-        hw_framer_ = tddConfCl.value("hw_framer", true);
+        hw_framer_ = tddConfCl.value("hw_framer", false);
         tx_advance_ = tddConfCl.value("tx_advance", 250); // 250
         ul_data_frame_num_ = tddConfCl.value("ul_data_frame_num", 1);
 
