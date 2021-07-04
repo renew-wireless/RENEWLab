@@ -133,13 +133,29 @@ void Utils::loadDevices(
     std::string line;
     std::ifstream myfile(filename, std::ifstream::in);
     if (myfile.is_open()) {
+        size_t num_dev = 0;
         while (getline(myfile, line)) {
-            //line.erase( std::remove (line.begin(), line.end(), ' '), line.end());
-            if (line.at(0) == '#')
+            std::string item;
+            bool word_found = false;
+            for (char const& ch : line) {
+                if (!word_found && ch == ' ')
+                    continue;
+                else if (word_found && ch == ' ')
+                    break;
+                else {
+                    word_found = true;
+                    item += ch;
+                }
+            }
+            if (item.empty() || item.at(0) == '#') {
                 continue;
-            data.push_back(line);
-            std::cout << line << '\n';
+            }
+            data.push_back(item);
+            std::cout << item << '\n';
+            num_dev++;
         }
+        std::cout << "Number of valid devices loaded from " << filename << ": "
+                  << num_dev << std::endl;
         myfile.close();
     }
 
