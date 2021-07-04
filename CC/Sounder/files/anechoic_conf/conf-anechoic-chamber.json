@@ -1,6 +1,5 @@
 {
         "BaseStations" : {
-                 "cells" : 1,
                  "sdr_id" : ["files/anechoic_conf/iris-serials-anechoic.txt"],
                  "hub_id" : "files/anechoic_conf/hub-serials-anechoic.txt",
 		 "frequency" : 3.55e9,
@@ -19,7 +18,7 @@
                  "cp_size" : 16,
                  "prefix" : 160,
                  "postfix" : 160,
-                 "beamsweep" : true,
+                 "beamsweep" : false,
                  "beacon_antenna" : 0
         },
 
@@ -28,23 +27,15 @@
                      "RF3E000119",
                      "RF3E000145"
                  ],
-		 "frequency" : 3.55e9,
                  "channel" : "AB",
                  "rxgainA" : [65, 65],
                  "txgainA" : [75, 75],
                  "rxgainB" : [65, 65],
                  "txgainB" : [75, 75],
-                 "rate" : 5e6,
                  "frame_schedule" : [
                      "GGGGGGPPGGGGGGGGGGGG",
                      "GGGGGGGGPPGGGGGGGGGG"
                  ],
-                 "ofdm_symbol_per_slot" : 10,
-                 "fft_size" : 64,
-                 "cp_size" : 16,
-                 "prefix" : 160,
-                 "postfix" : 160,
-                 "tx_advance" : 135,
-                 "hw_framer" : false
+                 "tx_advance" : 135
         }
 }
