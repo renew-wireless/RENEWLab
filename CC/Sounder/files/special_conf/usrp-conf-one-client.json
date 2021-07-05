@@ -1,6 +1,5 @@
 {
         "BaseStations" : {
-                 "cells" : 1,
                  "sdr_id" : ["files/special_conf/usrp-bs-serials.txt"],
                  "frequency" : 2.5e9,
                  "channel" : "A",
@@ -13,36 +12,24 @@
                      "BGPGUGGGGGGGGGGGGGGG"
                  ],
                  "max_frame" : 0,
-                 "ofdm_symbol_per_subframe" : 10,
+                 "ofdm_symbol_per_slot" : 10,
                  "fft_size" : 64,
                  "cp_size" : 16,
                  "prefix" : 160,
                  "postfix" : 160,
-                 "beamsweep" : true,
-                 "modulation" : "16QAM",
-                 "single_gain" : true
+                 "beamsweep" : true
         },
 
         "Clients" : {
-                 "frequency" : 2.5e9,
                  "channel" : "A",
-                 "agc_en" : false,
                  "rxgainA" : [10],
                  "txgainA" : [10],
                  "rxgainB" : [10],
                  "txgainB" : [10],
-                 "rate" : 20e6,
                  "frame_schedule" : [
                      "GGPGUGGGGGGGGGGGGGGG"
                  ],
-                 "frame_mode" : "free_running",
-                 "hw_framer" : false,
 	         "tx_advance" : 100,
-                 "ofdm_symbol_per_subframe" : 10,
-                 "fft_size" : 64,
-                 "cp_size" : 16,
-                 "prefix" : 160,
-                 "postfix" : 160,
                  "modulation" : "16QAM",
                  "sdr_id" : [
                      "10.117.2.2"
