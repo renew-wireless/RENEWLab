@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2020, Rice University 
+ Copyright (c) 2018-2021, Rice University 
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
  Author(s): Rahman Doost-Mohamamdy: doost@rice.edu
  
@@ -13,6 +13,7 @@
 #include "include/data_generator.h"
 #include "include/recorder.h"
 #include "include/signalHandler.hpp"
+#include "include/version_config.h"
 #include <gflags/gflags.h>
 
 DEFINE_bool(gen_ul_bits, false,
@@ -24,6 +25,8 @@ DEFINE_bool(client_only, false, "Run client only");
 
 int main(int argc, char* argv[])
 {
+    gflags::SetVersionString(GetSounderProjectVersion());
+    gflags::SetUsageMessage("sounder Options: -bs_only -client_only -conf -gen_ul_bits -storepath");
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     Config config(
         FLAGS_conf, FLAGS_storepath, FLAGS_bs_only, FLAGS_client_only);
@@ -50,5 +53,6 @@ int main(int argc, char* argv[])
             ret = EXIT_FAILURE;
         }
     }
+    gflags::ShutDownCommandLineFlags();
     return ret;
 }
