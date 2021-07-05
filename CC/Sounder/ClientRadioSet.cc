@@ -187,7 +187,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
                 tddConf["frame_mode"] = _cfg->frame_mode();
                 int max_frame_ = (int)(2.0
                     / ((_cfg->samps_per_slot() * _cfg->slot_per_frame())
-                          / _cfg->rate()));
+                        / _cfg->rate()));
                 tddConf["max_frame"]
                     = _cfg->frame_mode() == "free_running" ? 0 : max_frame_;
                 //std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;

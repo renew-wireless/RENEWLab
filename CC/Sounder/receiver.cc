@@ -43,7 +43,7 @@ Receiver::Receiver(int n_rx_threads, Config* config,
     if (((this->base_radio_set_ != nullptr)
             && (this->base_radio_set_->getRadioNotFound()))
         || ((this->clientRadioSet_ != nullptr)
-               && (this->clientRadioSet_->getRadioNotFound()))) {
+            && (this->clientRadioSet_->getRadioNotFound()))) {
         if (this->base_radio_set_ != nullptr) {
             MLPD_WARN("Invalid Base Radio Setup: %d\n",
                 this->base_radio_set_ == nullptr);

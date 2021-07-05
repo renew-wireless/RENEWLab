@@ -311,7 +311,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
     ul_data_slot_present_ = (reciprocal_calib_ == false)
         && ((bs_present_ && (ul_slots_.at(0).empty() == false))
-               || (client_present_ && !cl_ul_slots_.at(0).empty()));
+            || (client_present_ && !cl_ul_slots_.at(0).empty()));
 
     std::vector<std::complex<int16_t>> prefix_zpad(prefix_, 0);
     std::vector<std::complex<int16_t>> postfix_zpad(postfix_, 0);
@@ -478,7 +478,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         }
         if ((client_present_ == true)
             && (num_cores
-                   < (1 + task_thread_num_ + rx_thread_num_ + num_cl_sdrs_))) {
+                < (1 + task_thread_num_ + rx_thread_num_ + num_cl_sdrs_))) {
             core_alloc_ = false;
         }
     } else {

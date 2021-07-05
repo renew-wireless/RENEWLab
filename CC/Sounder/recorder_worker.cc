@@ -698,7 +698,7 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
                 = { pkg->frame_id, pkg->cell_id, 0, antenna_index, 0 };
             if ((this->cfg_->reciprocal_calib() == true)
                 || (this->cfg_->isPilot(pkg->frame_id, pkg->symbol_id)
-                       == true)) {
+                    == true)) {
                 assert(this->pilot_dataset_ != nullptr);
                 // Are we going to extend the dataset?
                 if (pkg->frame_id >= this->frame_number_pilot_) {

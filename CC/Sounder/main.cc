@@ -26,7 +26,8 @@ DEFINE_bool(client_only, false, "Run client only");
 int main(int argc, char* argv[])
 {
     gflags::SetVersionString(GetSounderProjectVersion());
-    gflags::SetUsageMessage("sounder Options: -bs_only -client_only -conf -gen_ul_bits -storepath");
+    gflags::SetUsageMessage(
+        "sounder Options: -bs_only -client_only -conf -gen_ul_bits -storepath");
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     Config config(
         FLAGS_conf, FLAGS_storepath, FLAGS_bs_only, FLAGS_client_only);

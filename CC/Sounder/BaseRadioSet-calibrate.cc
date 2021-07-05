@@ -271,9 +271,9 @@ static void dciqMinimize(SoapySDR::Device* targetDev, SoapySDR::Device* refDev,
             //try I or Q arm based on iteration
             const auto dcCorr = ((iter % 2) == 0)
                 ? std::complex<double>(
-                      bestDcCorr.real(), double(i) / fixedScale)
+                    bestDcCorr.real(), double(i) / fixedScale)
                 : std::complex<double>(
-                      double(i) / fixedScale, bestDcCorr.imag());
+                    double(i) / fixedScale, bestDcCorr.imag());
             targetDev->setDCOffset(direction, channel, dcCorr);
 
             //measure the efficacy
