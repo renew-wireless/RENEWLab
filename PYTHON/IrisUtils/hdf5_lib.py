@@ -360,12 +360,12 @@ class hdf5_lib:
     def get_metadata(self):
         """
                 -Attributes
-                        {FREQ, RATE, SYMBOL_LEN_NO_PAD, PREFIX_LEN, POSTFIX_LEN, SYMBOL_LEN, FFT_SIZE, CP_LEN,
+                        {FREQ, RATE, PREFIX_LEN, POSTFIX_LEN, SLOT_SAMP_LEN, FFT_SIZE, CP_LEN,
                         BEACON_SEQ_TYPE, PILOT_SEQ_TYPE, BS_HUB_ID, BS_SDR_NUM_PER_CELL, BS_SDR_ID, BS_NUM_CELLS,
                         BS_CH_PER_RADIO, BS_FRAME_SCHED, BS_RX_GAIN_A, BS_TX_GAIN_A, BS_RX_GAIN_B, BS_TX_GAIN_B,
                         BS_BEAMSWEEP, BS_BEACON_ANT, BS_NUM_ANT, BS_FRAME_LEN, CL_NUM, CL_CH_PER_RADIO, CL_AGC_EN,
                         CL_RX_GAIN_A, CL_TX_GAIN_A, CL_RX_GAIN_B, CL_TX_GAIN_B, CL_FRAME_SCHED, CL_SDR_ID,
-                        CL_MODULATION, UL_SYMS}
+                        CL_MODULATION, UL_SLOTS}
         """
 
         # Retrieve attributes, translate into python dictionary
@@ -386,12 +386,13 @@ class hdf5_lib:
         # (i.e., RE1,IM1,RE2,IM2...REm,IM,)
 
         # Freq-domain Pilot
-        pilot_vec = self.metadata['OFDM_PILOT_F']
-        # some_list[start:stop:step]
-        I = pilot_vec[0::2]
-        Q = pilot_vec[1::2]
-        pilot_complex = I + Q * 1j
-        self.metadata['OFDM_PILOT_F'] = pilot_complex
+        if "OFDM_PILOT_F" in self.metadata.keys():
+            pilot_vec = self.metadata['OFDM_PILOT_F']
+            # some_list[start:stop:step]
+            I = pilot_vec[0::2]
+            Q = pilot_vec[1::2]
+            pilot_complex = I + Q * 1j
+            self.metadata['OFDM_PILOT_F'] = pilot_complex
 
         # Time-domain Pilot
         pilot_vec = self.metadata['OFDM_PILOT']
@@ -401,8 +402,11 @@ class hdf5_lib:
         pilot_complex = I + Q * 1j
         self.metadata['OFDM_PILOT'] = pilot_complex
 
-        n_ul_syms = self.metadata['UL_SYMS']
-        if n_ul_syms > 0:
+        if 'UL_SYMS' in self.metadata:
+            n_ul_slots = self.metadata['UL_SYMS']
+        elif 'UL_SLOTS' in self.metadata:
+            n_ul_slots = self.metadata['UL_SLOTS']
+        if n_ul_slots > 0:
             # Phase-Tracking Pilot Subcarrier
             pilot_sc_vals = self.metadata['OFDM_PILOT_SC_VALS']
             pilot_sc_vals_complex = pilot_sc_vals[0::2] + 1j * pilot_sc_vals[1::2]

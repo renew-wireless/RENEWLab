@@ -52,7 +52,10 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     n_frm_end = hdf5.n_frm_end
     n_frm_st = hdf5.n_frm_st
     metadata = hdf5.metadata
-    symbol_length = int(metadata['SYMBOL_LEN'])
+    if 'SYMBOL_LEN' in metadata: # to support older datasets
+        samps_per_slot = int(metadata['SYMBOL_LEN'])
+    elif 'SLOT_SAMP_LEN' in metadata:
+        samps_per_slot = int(metadata['SLOT_SAMP_LEN'])
     num_pilots = int(metadata['PILOT_NUM'])
     num_cl = int(metadata['CL_NUM'])
     prefix_len = int(metadata['PREFIX_LEN'])
@@ -68,11 +71,21 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     if 'DATA_SUBCARRIER_NUM' in metadata:
         nonzero_sc_size = metadata['DATA_SUBCARRIER_NUM']
     ofdm_pilot = np.array(metadata['OFDM_PILOT'])
-    ofdm_pilot_f = np.array(metadata['OFDM_PILOT_F'])
+    if "OFDM_PILOT_F" in metadata.keys():
+        ofdm_pilot_f = np.array(metadata['OFDM_PILOT_F'])
+    else:
+        if pilot_type == 'zadoff-chu':
+            _, pilot_f = generate_training_seq(preamble_type='zadoff-chu', seq_length=nonzero_sc_size, cp=cp, upsample=1, reps=1)
+        else:
+            _, pilot_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
+        ofdm_pilot_f = pilot_f
     reciprocal_calib = np.array(metadata['RECIPROCAL_CALIB'])
-    symbol_length_no_pad = symbol_length - z_padding
-    num_pilots_per_sym = ((symbol_length_no_pad) // (cp + fft_size))
-    ul_sf_num = int(metadata['UL_SYMS'])
+    samps_per_slot_no_pad = samps_per_slot - z_padding
+    symbol_per_slot = ((samps_per_slot_no_pad) // (cp + fft_size))
+    if 'UL_SYMS' in metadata:
+        ul_slot_num = int(metadata['UL_SYMS'])
+    elif 'UL_SLOTS' in metadata:
+        ul_slot_num = int(metadata['UL_SLOTS'])
     n_ue = num_cl
 
     all_bs_nodes = set(range(hdf5.pilot_samples.shape[3]))
@@ -90,7 +103,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     # Verify frame_i does not exceed max number of collected frames
     ref_frame = min(frame_i - n_frm_st, pilot_samples.shape[0])
 
-    print("symbol_length = {}, offset = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}, pilot_rep = {}".format(symbol_length, offset, cp, prefix_len, postfix_len, z_padding, num_pilots_per_sym))
+    print("samps_per_slot = {}, offset = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}, pilot_rep = {}".format(samps_per_slot, offset, cp, prefix_len, postfix_len, z_padding, symbol_per_slot))
 
     # pilot_samples dimensions:
     # ( #frames, #cells, #pilot subframes or cl ant sending pilots, #bs nodes or # bs ant, #samps per frame * 2 for IQ )
@@ -100,7 +113,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     num_bs_ants = pilot_samples.shape[3]
 
     samps_mat = np.reshape(
-            pilot_samples, (num_frames, num_cells, num_cl_tmp, num_bs_ants, symbol_length, 2))
+            pilot_samples, (num_frames, num_cells, num_cl_tmp, num_bs_ants, samps_per_slot, 2))
     samps = (samps_mat[:, :, :, :, :, 0] +
             samps_mat[:, :, :, :, :, 1]*1j)*2**-15
 
@@ -127,7 +140,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
     # For correlation use a fft size of 64
     print("*verify_hdf5(): Calling samps2csi with fft_size = {}, offset = {}, bound = {}, cp = {} *".format(fft_size, offset, z_padding, cp))
-    csi, _ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, symbol_length, fft_size=fft_size,
+    csi, _ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, samps_per_slot, fft_size=fft_size,
                                     offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
 
     cellCSI = csi[:, cell_i, :, :, :, :]
@@ -140,7 +153,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         else:
             print(">>> All Iris nodes are good!")
 
-    if ofdm_sym_i >= num_pilots_per_sym:  # if out of range index, do average
+    if ofdm_sym_i >= symbol_per_slot:  # if out of range index, do average
         userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
     else:
         userCSI = cellCSI[:, :, ofdm_sym_i, :, :]
@@ -188,10 +201,10 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         csi_u = csi
         csi_d = csi
         if up_calib_offset != offset:
-            csi_u,_ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, symbol_length, fft_size=fft_size,
+            csi_u,_ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, samps_per_slot, fft_size=fft_size,
                                           offset=up_calib_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
         if dn_calib_offset != offset:
-            csi_d,_ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, symbol_length, fft_size=fft_size,
+            csi_d,_ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, samps_per_slot, fft_size=fft_size,
                                           offset=dn_calib_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
         calib_corrected_csi = np.zeros(csi_d.shape, dtype='complex64')
         calib_corrected_csi[:, :, 0, :, :, :] = csi_d[:, :, 0, :, :, :]
@@ -264,7 +277,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
             # UL Samps: #Frames, #Cell, #Uplink Symbol, #Antennas, #Samples
             samps_mat = np.reshape(
-                    uplink_samples, (uplink_samples.shape[0], uplink_samples.shape[1], uplink_samples.shape[2], uplink_samples.shape[3], symbol_length, 2))
+                    uplink_samples, (uplink_samples.shape[0], uplink_samples.shape[1], uplink_samples.shape[2], uplink_samples.shape[3], samps_per_slot, 2))
             ul_samps = (samps_mat[:, :, :, :, :, 0] +
                     samps_mat[:, :, :, :, :, 1]*1j)*2**-15
 
@@ -293,9 +306,9 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
                 n_frames = ul_samps.shape[0]
                 ul_syms = np.empty((ul_samps.shape[0], ul_samps.shape[1],
-                               ul_samps.shape[2], num_pilots_per_sym, fft_size), dtype='complex64')
+                               ul_samps.shape[2], symbol_per_slot, fft_size), dtype='complex64')
                 # UL Syms: #Frames, #Uplink SF, #Antennas, #OFDM Symbols, #Samples
-                for i in range(num_pilots_per_sym):
+                for i in range(symbol_per_slot):
                     ul_syms[:, :, :, i, :] = ul_samps[:, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size]
                 # UL Syms: #Frames, #OFDM Symbols, #Uplink SF, #Antennas, #Samples
                 ul_syms = np.transpose(ul_syms, (0, 3, 1, 2, 4))
@@ -325,11 +338,11 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 evm = np.empty((ul_data.shape[0], ul_data.shape[1]), dtype='complex64')
 
                 ul_data_frame_num = int(metadata['UL_DATA_FRAME_NUM'])
-                txdata = np.empty((ul_data_frame_num, num_cl_tmp, ul_sf_num,
-                             num_pilots_per_sym, fft_size), dtype='complex64')
+                txdata = np.empty((ul_data_frame_num, num_cl_tmp, ul_slot_num,
+                             symbol_per_slot, fft_size), dtype='complex64')
                 if ul_data_frame_num > 1:
                     tx_file_names = metadata['TX_FD_DATA_FILENAMES'].astype(str)
-                    read_size = 2 * ul_data_frame_num * ul_sf_num * cl_ch_num * num_pilots_per_sym * fft_size
+                    read_size = 2 * ul_data_frame_num * ul_slot_num * cl_ch_num * symbol_per_slot * fft_size
                     cl = 0
                     for fn in tx_file_names:
                         tx_file_path = hdf5.dirpath + '/' + fn
@@ -339,8 +352,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                             I = np.array(txdata0[0::2])
                             Q = np.array(txdata0[1::2])
                             IQ = I + Q * 1j
-                            txdata[:, cl:cl+cl_ch_num, :, :, :] = np.transpose(np.reshape(IQ, (ul_data_frame_num, ul_sf_num,
-                                cl_ch_num, num_pilots_per_sym, fft_size)), (0, 2, 1, 3, 4))
+                            txdata[:, cl:cl+cl_ch_num, :, :, :] = np.transpose(np.reshape(IQ, (ul_data_frame_num, ul_slot_num,
+                                cl_ch_num, symbol_per_slot, fft_size)), (0, 2, 1, 3, 4))
                         cl = cl + cl_ch_num
                     rep = n_frames // ul_data_frame_num
                     txdata_ext = np.tile(txdata, (rep, 1, 1, 1, 1))
@@ -352,12 +365,12 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                     for f in range(ul_data_frame_num):
                         for i in range(num_cl_tmp):
                             tx_data0 = metadata['OFDM_DATA_CL'+str(i)]
-                            tx_data_mat = np.reshape(tx_data0, (ul_sf_num, num_pilots_per_sym, fft_size))
+                            tx_data_mat = np.reshape(tx_data0, (ul_slot_num, symbol_per_slot, fft_size))
                             txdata[f, i, :, :, :]  = tx_data_mat
                     txdata_ext = np.tile(txdata, (n_frames, 1, 1, 1, 1))
                 txdata_ext = txdata_ext[:, :, :, :, data_sc_ind]
 
-                ul_sym_i = ul_sf_i * num_pilots_per_sym + ofdm_sym_i
+                ul_sym_i = ul_sf_i * symbol_per_slot + ofdm_sym_i
                 fig5, axes5 = plt.subplots(nrows=num_cl_tmp//2, ncols=2, squeeze=False, figsize=(10, 8))
                 fig5.suptitle('Uplink User Constellations (ZF) - Frame %d - Cell %d - UL SF %d' % (ref_frame, cell_i, ul_sym_i))
                 fig6, axes6 = plt.subplots(nrows=1, ncols=1, squeeze=False, figsize=(10, 8))
@@ -409,15 +422,15 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                     for ueIdx in range(n_ue):  # UE
                         for bsAntIdx in range(n_ant):  # BS ANT
 
-                            I = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 0:symbol_length * 2:2] / 2 ** 15
-                            Q = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 1:symbol_length * 2:2] / 2 ** 15
+                            I = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 0:samps_per_slot * 2:2] / 2 ** 15
+                            Q = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 1:samps_per_slot * 2:2] / 2 ** 15
                             IQ = I + (Q * 1j)
                             tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk = pilot_finder(IQ, pilot_type, flip=True,
                                                                                               pilot_seq=ofdm_pilot)
                             # Find percentage of LTS peaks within a symbol
-                            # (e.g., in a 4096-sample pilot symbol, we expect 64, 64-long sequences... assuming no CP)
-                            # seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / num_pilots_per_sym)
-                            seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (peak_map[frameIdx, cellIdx, ueIdx, bsAntIdx] / num_pilots_per_sym)  # use matched filter analysis output
+                            # (e.g., in a 4096-sample pilot slot, we expect 64, 64-long sequences... assuming no CP)
+                            # seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / symbol_per_slot)
+                            seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (peak_map[frameIdx, cellIdx, ueIdx, bsAntIdx] / symbol_per_slot)  # use matched filter analysis output
 
                             # Compute Power of Time Domain Signal
                             rms = np.sqrt(np.mean(IQ * np.conj(IQ)))
@@ -429,8 +442,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                             # Noise
                             if noise_avail:
                                 # noise_samples
-                                In = noise_samples[frameIdx, cellIdx, 0, bsAntIdx, 0:symbol_length * 2:2] / 2 ** 15
-                                Qn = noise_samples[frameIdx, cellIdx, 0, bsAntIdx, 1:symbol_length * 2:2] / 2 ** 15
+                                In = noise_samples[frameIdx, cellIdx, 0, bsAntIdx, 0:samps_per_slot * 2:2] / 2 ** 15
+                                Qn = noise_samples[frameIdx, cellIdx, 0, bsAntIdx, 1:samps_per_slot * 2:2] / 2 ** 15
                                 IQn = In + (Qn * 1j)
                                 # sio.savemat('test_pwr.mat', {'pilot_t': IQn})
 
@@ -603,10 +616,10 @@ def analyze_hdf5(hdf5, frame_i=10, cell_i=0, subcarrier_i=7, offset=-1, zoom=0, 
         print('Trace-based Estimation of performance requires presense of noise samples!')
         print('Noise data not present. Exitting...')
         return
-    symbol_length = int(metadata['SYMBOL_LEN'])
+    samps_per_slot = int(metadata['SLOT_SAMP_LEN'])
     rate = float(metadata['RATE'])
-    symbol_num = int(metadata['BS_FRAME_LEN'])
-    timestep = symbol_length*symbol_num/rate
+    slot_num = int(metadata['BS_FRAME_LEN'])
+    timestep = samps_per_slot*slot_num/rate
     num_cl = int(metadata['CL_NUM'])
     num_pilots = int(metadata['PILOT_NUM'])
     prefix_len = int(metadata['PREFIX_LEN'])
@@ -619,7 +632,7 @@ def analyze_hdf5(hdf5, frame_i=10, cell_i=0, subcarrier_i=7, offset=-1, zoom=0, 
     nonzero_sc_size = metadata['DATA_SUBCARRIER_NUM']
     ofdm_pilot_f = np.array(metadata['OFDM_PILOT_F'])
 
-    num_noise_syms = noise_samples.shape[2]
+    num_noise_slots = noise_samples.shape[2]
     n_frame = pilot_samples.shape[0]
     n_cell = pilot_samples.shape[1]
     n_ue = pilot_samples.shape[2]
@@ -629,11 +642,11 @@ def analyze_hdf5(hdf5, frame_i=10, cell_i=0, subcarrier_i=7, offset=-1, zoom=0, 
     # Returns csi with Frame, Cell, User, pilot repetitions, BS ant, Subcarrier
     # also, iq samples nicely chunked out, same dims, but subcarrier is sample.
     num_cl_tmp = num_pilots
-    csi,_ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, symbol_length, fft_size=fft_size,
+    csi,_ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, samps_per_slot, fft_size=fft_size,
                                 offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
     csi = csi[:, cell_i, :, :, :, :]
 
-    noise,_ = hdf5_lib.samps2csi(noise_samples, num_noise_syms, symbol_length, fft_size=fft_size,
+    noise,_ = hdf5_lib.samps2csi(noise_samples, num_noise_slots, samps_per_slot, fft_size=fft_size,
                                 offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
     noise = noise[:, cell_i, :, :, :, :]
 

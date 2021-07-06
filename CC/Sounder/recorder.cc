@@ -35,7 +35,7 @@ Recorder::Recorder(Config* in_cfg, unsigned int core_start)
         ? cfg_->getTotNumAntennas() / rx_thread_num
         : 1;
     rx_thread_buff_size_
-        = kSampleBufferFrameNum * cfg_->symbols_per_frame() * ant_per_rx_thread;
+        = kSampleBufferFrameNum * cfg_->slot_per_frame() * ant_per_rx_thread;
 
     message_queue_ = moodycamel::ConcurrentQueue<Event_data>(
         rx_thread_buff_size_ * kQueueSize);
