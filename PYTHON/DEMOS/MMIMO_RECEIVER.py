@@ -370,8 +370,14 @@ def demultiplex(samples, bf_weights, user_params, metadata, chan_est, lts_start)
     num_ant = metadata['BS_ANT_NUM_PER_CELL'].astype(int)[0]
     data_cp_len = int(metadata['CP_LEN'])
     fft_size = int(metadata['FFT_SIZE'])
-    num_samps = int(metadata['SYMBOL_LEN_NO_PAD'])
+    if 'SYMBOL_LEN' in metadata: # to support older datasets
+        slot_samps_with_pad = int(metadata['SYMBOL_LEN'])
+    elif 'SLOT_SAMP_LEN' in metadata:
+        slot_samps_with_pad = int(metadata['SLOT_SAMP_LEN'])
     prefix_len = int(metadata['PREFIX_LEN'])
+    postfix_len = int(metadata['POSTFIX_LEN'])
+    z_padding = prefix_len + postfix_len
+    num_samps = slot_samps_with_pad - z_padding
     ofdm_size = fft_size + data_cp_len
     n_ofdm_syms = num_samps//ofdm_size
     fft_offset = user_params[5]
@@ -450,7 +456,14 @@ def demodulate_data(streams, ofdm_obj, user_params, metadata):
     """
     fft_size = int(metadata['FFT_SIZE'])
     data_cp_len = int(metadata['CP_LEN'])
-    num_samps = int(metadata['SYMBOL_LEN_NO_PAD'])
+    if 'SYMBOL_LEN' in metadata: # to support older datasets
+        slot_samps_with_pad = int(metadata['SYMBOL_LEN'])
+    elif 'SLOT_SAMP_LEN' in metadata:
+        slot_samps_with_pad = int(metadata['SLOT_SAMP_LEN'])
+    prefix_len = int(metadata['PREFIX_LEN'])
+    postfix_len = int(metadata['POSTFIX_LEN'])
+    z_padding = prefix_len + postfix_len
+    num_samps = slot_samps_with_pad - z_padding
     num_sc = int(metadata['FFT_SIZE'])
     mod_order_str = metadata['CL_MODULATION'].astype(str)
     data_sc = metadata['OFDM_DATA_SC']
@@ -623,16 +636,20 @@ def rx_app(filename, user_params, this_plotter):
     else:
         cl_present = False
 
-    prefix_len = int(metadata['PREFIX_LEN'])
-    postfix_len = int(metadata['POSTFIX_LEN'])
     pilot_type = metadata['PILOT_SEQ_TYPE'].astype(str)[0]
     num_bs_ant = metadata['BS_ANT_NUM_PER_CELL'].astype(int)[0]
     pilot_samples = samples['PILOT_SAMPS']
     data_samples = samples['UL_DATA']
     num_cells = int(metadata['BS_NUM_CELLS'])
     num_cl = int(metadata['CL_NUM'])
-    sym_len = int(metadata['SYMBOL_LEN'])
-    sym_len_no_pad = int(metadata['SYMBOL_LEN_NO_PAD'])
+    if 'SYMBOL_LEN' in metadata: # to support older datasets
+        slot_samps_with_pad = int(metadata['SYMBOL_LEN'])
+    elif 'SLOT_SAMP_LEN' in metadata:
+        slot_samps_with_pad = int(metadata['SLOT_SAMP_LEN'])
+    prefix_len = int(metadata['PREFIX_LEN'])
+    postfix_len = int(metadata['POSTFIX_LEN'])
+    z_padding = prefix_len + postfix_len
+    num_samps = slot_samps_with_pad - z_padding
     fft_size = int(metadata['FFT_SIZE'])
     cp_len = int(metadata['CP_LEN'])
     ofdm_data_sc = metadata['OFDM_DATA_SC']
@@ -652,8 +669,8 @@ def rx_app(filename, user_params, this_plotter):
 
         for idx in range(num_cl):
             # Freq domain TX data (Does not contain cyclic prefix or prefix/postfix)
-            ofdm_data.append(metadata['OFDM_DATA_CL' + str(idx)][idx])
-            ofdm_data_time.append(metadata['OFDM_DATA_TIME_CL' + str(idx)][idx])
+            ofdm_data.append(np.array(metadata['OFDM_DATA_CL' + str(idx)]))
+            ofdm_data_time.append(np.array(metadata['OFDM_DATA_TIME_CL' + str(idx)]))
 
     pilot_dim = pilot_samples.shape
     num_frames = pilot_dim[0]
@@ -676,19 +693,19 @@ def rx_app(filename, user_params, this_plotter):
     assert pilot_dim[1] == num_cells
     assert pilot_dim[2] == num_cl
     assert pilot_dim[3] == num_bs_ant
-    assert pilot_dim[4] == 2 * sym_len  # No complex values in HDF5, x2 to account for IQ
+    assert pilot_dim[4] == 2 * slot_samps_with_pad  # No complex values in HDF5, x2 to account for IQ
 
     ###########################
     #     Build TX signals    #
     ###########################
     # Process TX freq domain samples (from HDF5). These are the samples generated for transmission and stored in file,
     # not what has been received
-    num_samps_freq_dom = (fft_size+cp_len)*(sym_len_no_pad//(fft_size+cp_len))
+    num_samps_freq_dom = (fft_size+cp_len)*(num_samps//(fft_size+cp_len))
     n_ofdm_syms = num_samps_freq_dom//(fft_size+cp_len)
 
     # Pilots
-    rep = sym_len_no_pad//len(ofdm_pilot_cp)
-    frac = sym_len_no_pad % len(ofdm_pilot_cp)
+    rep = num_samps//len(ofdm_pilot_cp)
+    frac = num_samps % len(ofdm_pilot_cp)
 
     full_pilot = np.concatenate((np.zeros(prefix_len),
                                  np.squeeze(np.matlib.repmat(ofdm_pilot_cp, 1, rep)),
@@ -697,7 +714,7 @@ def rx_app(filename, user_params, this_plotter):
 
     # Note:
     # One pilot per client + overlapping data including prefix etc (for showing purposes)
-    tx_sig = np.zeros((num_cl, (num_cl*sym_len + len(ofdm_data_time[0]))), dtype=complex)
+    tx_sig = np.zeros((num_cl, (num_cl*slot_samps_with_pad + len(ofdm_data_time[0]))), dtype=complex)
 
     if cl_present:
         ofdm_data_mat = []
@@ -730,8 +747,8 @@ def rx_app(filename, user_params, this_plotter):
     ###########################
     #       Update Plots      #
     ###########################
-    fig_len = 3 * (prefix_len + sym_len_no_pad + postfix_len)
-    pilot_len = sym_len_no_pad
+    fig_len = 3 * (prefix_len + num_samps + postfix_len)
+    pilot_len = num_samps
     this_plotter.update_tx_signal_fig(fig_len)
     this_plotter.update_rx_signal_fig(fig_len)
     this_plotter.update_corr_peaks(pilot_len)
@@ -747,9 +764,9 @@ def rx_app(filename, user_params, this_plotter):
         chan_est = np.zeros([num_cells, num_cl, num_bs_ant, num_frames, fft_size], dtype=complex)
         cfo_est = np.zeros([num_cells, num_cl, num_bs_ant, num_frames])
         lts_evm = np.zeros([num_cells, num_cl, num_bs_ant, num_frames])
-        lts_corr = np.zeros([num_cl, num_bs_ant, sym_len+fft_size-1])
+        lts_corr = np.zeros([num_cl, num_bs_ant, slot_samps_with_pad+fft_size-1])
         peak_index = np.zeros([num_cl, num_bs_ant, num_frames])
-        IQ_pilots = np.zeros([num_cells, num_cl, num_bs_ant, sym_len], dtype=complex)
+        IQ_pilots = np.zeros([num_cells, num_cl, num_bs_ant, slot_samps_with_pad], dtype=complex)
         pilot_thresh = np.zeros([num_cl, num_bs_ant])
         lts_start = np.zeros([num_cl, num_bs_ant])
         corr_total = np.zeros([num_frames, num_cl])
@@ -878,7 +895,7 @@ def rx_app(filename, user_params, this_plotter):
                                       rx_data,  # [numBsAnt, symLen]
                                       chan_est_vec,  # [numCl][fft size]
                                       rx_H_est_plot,  # rx_H_est_plot[numCl][fft_size]
-                                      lts_corr[:, ant_plot, :],  # [numCl, numBsAnt, sym_len+fft_size-1]
+                                      lts_corr[:, ant_plot, :],  # [numCl, numBsAnt, slot_samps_with_pad+fft_size-1]
                                       pilot_thresh[:, ant_plot],  # [numCl, numBsAnt]
                                       rxSyms_vec,  # [numCl, num data sc * num ofdm sym]
                                       corr_total,  # [num frames, numCl]
@@ -900,8 +917,8 @@ def rx_app(filename, user_params, this_plotter):
                         # print("FRAME: {} \t Client: {} \t Antenna: {}".format(frameIdx, clIdx, antIdx))
                         # Put I/Q together
                         # Dims pilots: (frames, numCells, numClients, numAntennasAtBS, numSamplesPerSymbol*2)
-                        I = pilot_samples[frameIdx, num_cells - 1, clIdx, antIdx, 0:sym_len * 2:2] / 2 ** 15
-                        Q = pilot_samples[frameIdx, num_cells - 1, clIdx, antIdx, 1:sym_len * 2:2] / 2 ** 15
+                        I = pilot_samples[frameIdx, num_cells - 1, clIdx, antIdx, 0:slot_samps_with_pad * 2:2] / 2 ** 15
+                        Q = pilot_samples[frameIdx, num_cells - 1, clIdx, antIdx, 1:slot_samps_with_pad * 2:2] / 2 ** 15
                         IQ = I + (Q * 1j)
 
                         IQ_pilots[num_cells - 1, clIdx, antIdx, :] = IQ * pilot_scaling   # For 'plotter' use
@@ -932,8 +949,8 @@ def rx_app(filename, user_params, this_plotter):
                 # Get data samples
                 # Dims data: (frames, numCells, ulSymsPerFrame, numAntennasAtBS, numSamplesPerSymbol*2)
                 for ulSymIdx in range(num_ul_syms):
-                    Q = data_samples[frameIdx, num_cells-1, ulSymIdx, :, 0:sym_len*2:2] / 2 ** 15   # 32768
-                    I = data_samples[frameIdx, num_cells-1, ulSymIdx, :, 1:sym_len*2:2] / 2 ** 15   # 32768
+                    Q = data_samples[frameIdx, num_cells-1, ulSymIdx, :, 0:slot_samps_with_pad*2:2] / 2 ** 15   # 32768
+                    I = data_samples[frameIdx, num_cells-1, ulSymIdx, :, 1:slot_samps_with_pad*2:2] / 2 ** 15   # 32768
                     IQ = Q + (I * 1j)   # QI, not IQ
 
                     # Demultiplexing - Separate streams
@@ -1007,7 +1024,7 @@ def rx_app(filename, user_params, this_plotter):
                                           rx_data,                               # [numBsAnt, symLen]
                                           chan_est_vec,                          # [numCl][fft size]
                                           rx_H_est_plot,                         # rx_H_est_plot[numCl][fft_size]
-                                          lts_corr[:, ant_plot, :],              # [numCl, numBsAnt, sym_len+fft_size-1]
+                                          lts_corr[:, ant_plot, :],              # [numCl, numBsAnt, slot_samps_with_pad+fft_size-1]
                                           pilot_thresh[:, ant_plot],             # [numCl, numBsAnt]
                                           rxSyms_vec,                            # [numCl, num data sc * num ofdm sym]
                                           corr_total,                            # [num frames, numCl]

@@ -50,7 +50,7 @@ public:
     static std::vector<uint32_t> cint16_to_uint32(
         const std::vector<std::complex<int16_t>>& in, bool conj,
         const std::string& order);
-    static std::vector<std::vector<size_t>> loadSymbols(
+    static std::vector<std::vector<size_t>> loadSlots(
         const std::vector<std::string>& frames, char sym);
     static void loadDevices(
         const std::string& filename, std::vector<std::string>& data);

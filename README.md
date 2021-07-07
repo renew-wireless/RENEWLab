@@ -2,6 +2,15 @@
 
 [![Build Status](https://falcon.ecg.rice.edu:443/buildStatus/icon?job=github_public_renewlab%2Fmaster)](https://falcon.ecg.rice.edu:443/job/github_public_renewlab/job/master/)
 
+# Contents
+ * [Description](#description)
+ * [Components](#components)
+ * [Collect and Process Channel Datasets](#collect-and-process-channel-datasets)
+ * [Contributing and Support](#contributing-and-support)
+ * [Documentation](#documentation)
+ * [License](#license)
+ * [Acknowledgement](#acknowledgement)
+
 # Description
 RENEWLab is an open-source software toolbox for the [RENEW massive MIMO platform](https://renew-wireless.org). It provides a user interface through a set of APIs. Users can generate, manipulate, transmit, and receive RF signals on the RENEW hardware by calling these APIs. 
 
@@ -12,7 +21,7 @@ RENEWLab is an open-source software toolbox for the [RENEW massive MIMO platform
 The RENEWLab software suite consists of four components. 
 
   1. [Python Development Suite](https://docs.renew-wireless.org/dev-suite/design-flows/python-design-flow/): 
-     It provides a Python-based library which allows users to rapidly program and test the physical layer and the radio layer in real time. It also provides tools for offline data procesing. 
+     It provides a Python-based library which allows users to rapidly program and test the physical layer and the radio layer in real time. It also provides tools for offline data processing. 
 
   2. [MATLAB Development Suite](https://docs.renew-wireless.org/dev-suite/design-flows/matlab-design-flow/): 
      It provides a MATLAB-based library which allows users to rapidly develop physical layer algorithms using the MATLAB toolboxes with a highly simplified interface and to perform OTA tests.
@@ -65,7 +74,7 @@ $ mkdir build
 $ cd build
 $ cmake .. -DCMAKE_BUILD_TYPE=Release -DLOG_LEVEL=info && make -j
 $ cd ../
-```   
+```
 Once compiled successfully, the code can be run as the following.
 
  1. If your JSON file includes uplink data transmission, first generate the files, including a random bits source file, as below:
@@ -90,6 +99,13 @@ Once compiled successfully, the code can be run as the following.
 # Contributing and Support
 
 Want to contribute? Great! Please email support@renew-wireless.org. 
+
+# Documentation
+
+Doxygen documentation generation for RENEWLab can be initiated by running the following command from the repository root directory:
+`doxygen RENEWLab_doxygen.conf`.  
+The latest hosted output is located at [RENEWLab Doxygen](https://renew-wireless.org/renewlab-doxy/html/index.html).  
+Other community resources can be found at the [RENEW Wireless Wiki](https://wiki.renew-wireless.org/)  
 
 # License
 

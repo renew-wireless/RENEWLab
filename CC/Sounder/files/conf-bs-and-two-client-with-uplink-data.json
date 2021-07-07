@@ -1,27 +1,24 @@
 {
         "BaseStations" : {
-                 "cells" : 1,
                  "sdr_id" : ["files/iris-serials.txt"],
                  "hub_id" : "files/hub-serials.txt",
-		 "frequency" : 2.5e9,
+		 "frequency" : 3.6e9,
                  "channel" : "AB",
                  "rxgainA" : 65,
-                 "txgainA" : 87,
+                 "txgainA" : 81,
                  "rxgainB" : 65,
-                 "txgainB" : 87,
+                 "txgainB" : 81,
                  "rate" : 5e6,
                  "frame_schedule" : [
                     "BGGGGGPPPPUGGGGGGGGG"
                  ],
                  "max_frame" : 4000,
-                 "ofdm_symbol_per_subframe" : 10,
+                 "ofdm_symbol_per_slot" : 10,
                  "fft_size" : 64,
                  "cp_size" : 16,
                  "prefix" : 160,
                  "postfix" : 160,
-                 "beamsweep" : true,
-                 "beacon_antenna" : 0,
-		 "modulation" : "16QAM"
+                 "beamsweep" : true
         },
 
         "Clients" : {
@@ -29,25 +26,16 @@
                      "RF3E000030",
                      "RF3E0000xx"
                  ],
-		 "frequency" : 2.5e9,
                  "channel" : "AB",
                  "rxgainA" : [65, 65],
-                 "txgainA" : [87, 87],
+                 "txgainA" : [81, 81],
                  "rxgainB" : [65, 65],
-                 "txgainB" : [87, 87],
-                 "rate" : 5e6,
+                 "txgainB" : [81, 81],
                  "frame_schedule" : [
                      "GDGGGGPPGGUGGGGGGGGG",
                      "GDGGGGGGPPUGGGGGGGGG"
                  ],
-                 "frame_mode" : "continuous_resync",
-                 "ofdm_symbol_per_subframe" : 10,
-                 "fft_size" : 64,
-                 "cp_size" : 16,
-                 "prefix" : 160,
-                 "postfix" : 160,
 		 "modulation" : "16QAM",
-                 "tx_advance" : 135,
-                 "hw_framer" : false
+                 "tx_advance" : 135
         }
 }

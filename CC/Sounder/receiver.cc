@@ -43,7 +43,7 @@ Receiver::Receiver(int n_rx_threads, Config* config,
     if (((this->base_radio_set_ != nullptr)
             && (this->base_radio_set_->getRadioNotFound()))
         || ((this->clientRadioSet_ != nullptr)
-               && (this->clientRadioSet_->getRadioNotFound()))) {
+            && (this->clientRadioSet_->getRadioNotFound()))) {
         if (this->base_radio_set_ != nullptr) {
             MLPD_WARN("Invalid Base Radio Setup: %d\n",
                 this->base_radio_set_ == nullptr);
@@ -214,7 +214,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     // prepare BS beacon in host buffer
     std::vector<void*> beaconbuff(2);
     void* zeroes_memory
-        = calloc(config_->samps_per_symbol(), sizeof(int16_t) * 2);
+        = calloc(config_->samps_per_slot(), sizeof(int16_t) * 2);
 
     if (zeroes_memory == NULL) {
         throw std::runtime_error("Memory allocation error");
@@ -222,8 +222,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
     MLPD_SYMBOL(
         "Process %d -- Loop Rx Allocated memory at: %p, approx size: %lu\n",
-        tid, zeroes_memory,
-        (sizeof(int16_t) * 2) * config_->samps_per_symbol());
+        tid, zeroes_memory, (sizeof(int16_t) * 2) * config_->samps_per_slot());
     beaconbuff.at(0u) = config_->beacon_ci16().data();
     beaconbuff.at(1u) = zeroes_memory;
 
@@ -233,9 +232,9 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     // read rx_offset to align the FPGA time of the BS
     // by performing dummy readStream()
     std::vector<std::complex<int16_t>> samp_buffer0(
-        config_->samps_per_symbol() * config_->symbols_per_frame(), 0);
+        config_->samps_per_slot() * config_->slot_per_frame(), 0);
     std::vector<std::complex<int16_t>> samp_buffer1(
-        config_->samps_per_symbol() * config_->symbols_per_frame(), 0);
+        config_->samps_per_slot() * config_->slot_per_frame(), 0);
     std::vector<void*> samp_buffer(2);
     samp_buffer[0] = samp_buffer0.data();
     if (num_channels == 2)
@@ -258,23 +257,23 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             bs_sync_ret = -1;
             while (bs_sync_ret < 0) {
                 bs_sync_ret = this->base_radio_set_->radioRx(radio_idx, cell,
-                    samp_buffer.data(), config_->samps_per_symbol(), rxTimeBs);
+                    samp_buffer.data(), config_->samps_per_slot(), rxTimeBs);
             }
         }
     }
 
     int cursor = 0;
     size_t frame_id = 0;
-    size_t symbol_id = 0;
+    size_t slot_id = 0;
     size_t ant_id = 0;
     cell = 0;
     MLPD_INFO("Start BS main recv loop in thread %d\n", tid);
     while (config_->running() == true) {
 
-        // Global updates of frame and symbol IDs for USRPs
+        // Global updates of frame and slot IDs for USRPs
         if (kUseUHD == true) {
-            if (symbol_id == config_->symbols_per_frame()) {
-                symbol_id = 0;
+            if (slot_id == config_->slot_per_frame()) {
+                slot_id = 0;
                 frame_id++;
             }
         }
@@ -337,27 +336,27 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 }
 
                 frame_id = (size_t)(frameTime >> 32);
-                symbol_id = (size_t)((frameTime >> 16) & 0xFFFF);
+                slot_id = (size_t)((frameTime >> 16) & 0xFFFF);
                 if (config_->reciprocal_calib()) {
                     if (radio_idx == config_->cal_ref_sdr_id()) {
-                        ant_id = symbol_id < radio_idx * num_channels
-                            ? symbol_id
-                            : symbol_id - num_channels;
-                        symbol_id = 0; // downlink reciprocal pilot
+                        ant_id = slot_id < radio_idx * num_channels
+                            ? slot_id
+                            : slot_id - num_channels;
+                        slot_id = 0; // downlink reciprocal pilot
                     } else {
                         if (radio_idx >= config_->cal_ref_sdr_id())
                             ant_id -= num_channels;
-                        symbol_id = 1; // uplink reciprocal pilot
+                        slot_id = 1; // uplink reciprocal pilot
                     }
                 }
             } else {
-                int rx_len = config_->samps_per_symbol();
+                int rx_len = config_->samps_per_slot();
                 int r;
 
                 // only write received pilot or data into samp
                 // otherwise use samp_buffer as a dummy buffer
-                if (config_->isPilot(frame_id, symbol_id)
-                    || config_->isData(frame_id, symbol_id))
+                if (config_->isPilot(frame_id, slot_id)
+                    || config_->isData(frame_id, slot_id))
                     r = this->base_radio_set_->radioRx(
                         radio_idx, cell, samp, rxTimeBs);
                 else
@@ -376,15 +375,15 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
                 // Schedule next beacon in BEACON_INTERVAL frames
                 // FIXME?? From EACH cell or only one cell?
-                if (symbol_id == 0) {
+                if (slot_id == 0) {
                     txTimeBs = rxTimeBs
-                        + config_->samps_per_symbol()
-                            * config_->symbols_per_frame() * BEACON_INTERVAL;
+                        + config_->samps_per_slot() * config_->slot_per_frame()
+                            * BEACON_INTERVAL;
                     int r_tx = this->base_radio_set_->radioTx(radio_idx, cell,
                         beaconbuff.data(), kStreamEndBurst, txTimeBs);
-                    if (r_tx != (int)config_->samps_per_symbol())
+                    if (r_tx != (int)config_->samps_per_slot())
                         std::cerr << "BAD Transmit(" << r_tx << "/"
-                                  << config_->samps_per_symbol() << ") at Time "
+                                  << config_->samps_per_slot() << ") at Time "
                                   << txTimeBs << ", frame count " << frame_id
                                   << std::endl;
                 }
@@ -392,19 +391,18 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
 #if DEBUG_PRINT
             for (size_t ch = 0; ch < num_packets; ++ch) {
-                printf(
-                    "receive thread %d, frame %zu, symbol %zu, cell %zu, ant "
-                    "%zu samples: %d %d %d %d %d %d %d %d ...\n",
-                    tid, frame_id, symbol_id, cell, ant_id + ch,
-                    pkg[ch]->data[1], pkg[ch]->data[2], pkg[ch]->data[3],
-                    pkg[ch]->data[4], pkg[ch]->data[5], pkg[ch]->data[6],
-                    pkg[ch]->data[7], pkg[ch]->data[8]);
+                printf("receive thread %d, frame %zu, slot %zu, cell %zu, ant "
+                       "%zu samples: %d %d %d %d %d %d %d %d ...\n",
+                    tid, frame_id, slot_id, cell, ant_id + ch, pkg[ch]->data[1],
+                    pkg[ch]->data[2], pkg[ch]->data[3], pkg[ch]->data[4],
+                    pkg[ch]->data[5], pkg[ch]->data[6], pkg[ch]->data[7],
+                    pkg[ch]->data[8]);
             }
 #endif
 
             for (size_t ch = 0; ch < num_packets; ++ch) {
-                // new (pkg[ch]) Package(frame_id, symbol_id, 0, ant_id + ch);
-                new (pkg[ch]) Package(frame_id, symbol_id, cell, ant_id + ch);
+                // new (pkg[ch]) Package(frame_id, slot_id, 0, ant_id + ch);
+                new (pkg[ch]) Package(frame_id, slot_id, cell, ant_id + ch);
                 // push kEventRxSymbol event into the queue
                 Event_data package_message;
                 package_message.event_type = kEventRxSymbol;
@@ -422,9 +420,9 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             }
         }
 
-        // for UHD device update symbol_id on host
+        // for UHD device update slot_id on host
         if (kUseUHD == true) {
-            symbol_id++;
+            slot_id++;
         }
     }
     MLPD_SYMBOL(
@@ -447,17 +445,17 @@ void* Receiver::clientTxRx_launch(void* in_context)
 
 void Receiver::clientTxRx(int tid)
 {
-    int txSyms = config_->cl_ul_symbols().at(tid).size();
-    int rxSyms = config_->cl_dl_symbols().at(tid).size();
-    int txStartSym = config_->cl_ul_symbols().at(tid).empty()
+    int tx_slots = config_->cl_ul_slots().at(tid).size();
+    int rxSyms = config_->cl_dl_slots().at(tid).size();
+    int txStartSym = config_->cl_ul_slots().at(tid).empty()
         ? 0
-        : config_->cl_ul_symbols().at(tid).at(0);
+        : config_->cl_ul_slots().at(tid).at(0);
 
-    double frameTime = config_->samps_per_symbol()
+    double frameTime = config_->samps_per_slot()
         * config_->cl_frames().at(0).size() * 1e3
         / config_->rate(); // miliseconds
     unsigned txFrameDelta = (unsigned)(std::ceil(TIME_DELTA / frameTime));
-    int NUM_SAMPS = config_->samps_per_symbol();
+    int NUM_SAMPS = config_->samps_per_slot();
 
     if (config_->core_alloc() == true) {
         int core
@@ -478,12 +476,12 @@ void Receiver::clientTxRx(int tid)
     rxbuff[1] = buffs.data();
 
     std::vector<void*> txbuff(2);
-    if (txSyms > 0) {
+    if (tx_slots > 0) {
         size_t txIndex = tid * config_->cl_sdr_ch();
         txbuff[0] = config_->txdata_time_dom().at(txIndex).data();
         if (config_->cl_sdr_ch() == 2)
             txbuff[1] = config_->txdata_time_dom().at(txIndex + 1).data();
-        std::cout << txSyms << " uplink symbols will be sent per frame..."
+        std::cout << tx_slots << " uplink slots will be sent per frame..."
                   << std::endl;
     }
 
@@ -527,7 +525,7 @@ void Receiver::clientTxRx(int tid)
             txTime += ((long long)txFrameDelta << 32);
             txTime += ((long long)txStartSym << 16);
             //printf("rxTime %llx, txTime %llx \n", firstRxTime, txTime);
-            for (int i = 0; i < txSyms; i++) {
+            for (int i = 0; i < tx_slots; i++) {
                 int r = clientRadioSet_->radioTx(
                     tid, txbuff.data(), NUM_SAMPS, 1, txTime);
                 if (r == NUM_SAMPS) {
@@ -554,7 +552,7 @@ void Receiver::clientSyncTxRx(int tid)
     }
 
     size_t frameTimeLen
-        = config_->samps_per_symbol() * config_->cl_frames().at(0).size();
+        = config_->samps_per_slot() * config_->cl_frames().at(0).size();
     size_t txFrameDelta
         = std::ceil(TIME_DELTA / (1e3 * frameTimeLen / config_->rate()));
     size_t txTimeDelta = txFrameDelta * frameTimeLen;
@@ -562,9 +560,8 @@ void Receiver::clientSyncTxRx(int tid)
     MLPD_INFO("Scheduling TX: %zu Frames (%lf ms) in the future!\n",
         txFrameDelta, ((1e3 * txTimeDelta) / config_->rate()));
 
-    int NUM_SAMPS = config_->samps_per_symbol();
-    int SYNC_NUM_SAMPS
-        = config_->samps_per_symbol() * config_->symbols_per_frame();
+    int NUM_SAMPS = config_->samps_per_slot();
+    int SYNC_NUM_SAMPS = config_->samps_per_slot() * config_->slot_per_frame();
 
     std::vector<std::complex<float>> syncbuff0(SYNC_NUM_SAMPS, 0);
     std::vector<std::complex<float>> syncbuff1(SYNC_NUM_SAMPS, 0);
@@ -596,22 +593,22 @@ void Receiver::clientSyncTxRx(int tid)
     std::vector<void*> txbuff(2);
     for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
         txbuff.at(ch)
-            = std::calloc(config_->samps_per_symbol(), sizeof(float) * 2);
+            = std::calloc(config_->samps_per_slot(), sizeof(float) * 2);
     }
-    size_t slot_byte_size = config_->samps_per_symbol() * sizeof(float) * 2;
-    size_t txSyms = config_->cl_ul_symbols().at(tid).size();
-    if (txSyms > 0) {
+    size_t slot_byte_size = config_->samps_per_slot() * sizeof(float) * 2;
+    size_t tx_slots = config_->cl_ul_slots().at(tid).size();
+    if (tx_slots > 0) {
         size_t txIndex = tid * config_->cl_sdr_ch();
         for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
             std::memcpy(txbuff.at(ch),
                 config_->txdata_time_dom().at(txIndex + ch).data(),
                 slot_byte_size);
         }
-        MLPD_INFO("%zu uplink symbols will be sent per frame...\n", txSyms);
+        MLPD_INFO("%zu uplink slots will be sent per frame...\n", tx_slots);
     }
 
     FILE* fp = nullptr;
-    if (config_->ul_data_sym_present() == true) {
+    if (config_->ul_data_slot_present() == true) {
         std::printf("Opening UL time-domain data for radio %d to %s\n", tid,
             config_->tx_td_data_files().at(tid).c_str());
         fp = std::fopen(config_->tx_td_data_files().at(tid).c_str(), "rb");
@@ -688,7 +685,7 @@ void Receiver::clientSyncTxRx(int tid)
     int flagsTxUlData;
 
     while (config_->running() == true) {
-        for (size_t sf = 0; sf < config_->symbols_per_frame(); sf++) {
+        for (size_t sf = 0; sf < config_->slot_per_frame(); sf++) {
             int rx_len = (sf == 0) ? (NUM_SAMPS + rx_offset) : NUM_SAMPS;
             assert((rx_len > 0) && (rx_len < SYNC_NUM_SAMPS));
             int r = clientRadioSet_->radioRx(
@@ -701,7 +698,7 @@ void Receiver::clientSyncTxRx(int tid)
                 MLPD_WARN("BAD Receive(%d/%d) at Time %lld, frame count %zu\n",
                     r, rx_len, rxTime, frame_cnt);
             }
-            // schedule all TX subframes
+            // schedule all TX slot
             if (sf == 0) {
                 // resync every X=1000 frames:
                 // TODO: X should be a function of sample rate and max CFO
@@ -749,7 +746,7 @@ void Receiver::clientSyncTxRx(int tid)
 
                 // config_->tx_advance() needs calibration based on SDR model and sampling rate
                 txTime = rxTime + txTimeDelta
-                    + config_->cl_pilot_symbols().at(tid).at(0) * NUM_SAMPS
+                    + config_->cl_pilot_slots().at(tid).at(0) * NUM_SAMPS
                     - config_->tx_advance();
 
                 r = clientRadioSet_->radioTx(
@@ -759,7 +756,7 @@ void Receiver::clientSyncTxRx(int tid)
                 }
                 if (config_->cl_sdr_ch() == 2) {
                     txTime = rxTime + txTimeDelta
-                        + config_->cl_pilot_symbols().at(tid).at(1) * NUM_SAMPS
+                        + config_->cl_pilot_slots().at(tid).at(1) * NUM_SAMPS
                         - config_->tx_advance();
 
                     r = clientRadioSet_->radioTx(tid, pilotbuffB.data(),
@@ -768,21 +765,21 @@ void Receiver::clientSyncTxRx(int tid)
                         MLPD_WARN("BAD Write: %d/%d\n", r, NUM_SAMPS);
                     }
                 }
-                if (config_->ul_data_sym_present() == true) {
-                    for (size_t s = 0; s < txSyms; s++) {
+                if (config_->ul_data_slot_present() == true) {
+                    for (size_t s = 0; s < tx_slots; s++) {
                         txTime = rxTime + txTimeDelta
-                            + config_->cl_ul_symbols().at(tid).at(s) * NUM_SAMPS
+                            + config_->cl_ul_slots().at(tid).at(s) * NUM_SAMPS
                             - config_->tx_advance();
                         for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
                             size_t read_num
                                 = std::fread(txbuff.at(ch), 2 * sizeof(float),
-                                    config_->samps_per_symbol(), fp);
-                            if (read_num != config_->samps_per_symbol()) {
+                                    config_->samps_per_slot(), fp);
+                            if (read_num != config_->samps_per_slot()) {
                                 MLPD_WARN("BAD Uplink Data Read: %zu/%zu\n",
-                                    read_num, config_->samps_per_symbol());
+                                    read_num, config_->samps_per_slot());
                             }
                         }
-                        if (kUseUHD && s < (txSyms - 1))
+                        if (kUseUHD && s < (tx_slots - 1))
                             flagsTxUlData = 1; // HAS_TIME
                         else
                             flagsTxUlData = 2; // HAS_TIME & END_BURST, fixme
@@ -794,12 +791,12 @@ void Receiver::clientSyncTxRx(int tid)
                     } // end for
                     if (frame_cnt % config_->ul_data_frame_num() == 0)
                         std::fseek(fp, 0, SEEK_SET);
-                } // end if config_->ul_data_sym_present()
+                } // end if config_->ul_data_slot_present()
             } // end if sf == 0
         } // end for
         frame_cnt++;
     } // end while
-    if (config_->ul_data_sym_present() == true || fp != nullptr) {
+    if (config_->ul_data_slot_present() == true || fp != nullptr) {
         std::fclose(fp);
     }
 

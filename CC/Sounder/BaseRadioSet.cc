@@ -233,7 +233,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         tddConf["tdd_enabled"] = true;
         tddConf["frame_mode"] = "free_running";
         tddConf["max_frame"] = _cfg->max_frame();
-        tddConf["symbol_size"] = _cfg->samps_per_symbol();
+        tddConf["symbol_size"] = _cfg->samps_per_slot();
 
         // write TDD schedule and beacons to FPFA buffers only for Iris
         for (size_t c = 0; c < _cfg->num_cells(); c++) {
@@ -514,7 +514,7 @@ void BaseRadioSet::radioTx(const void* const* buffs)
     for (size_t c = 0; c < _cfg->num_cells(); c++) {
         for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
             bsRadios.at(c).at(i)->xmit(
-                buffs, _cfg->samps_per_symbol(), 0, frameTime);
+                buffs, _cfg->samps_per_slot(), 0, frameTime);
         }
     }
 }
@@ -526,12 +526,12 @@ int BaseRadioSet::radioTx(size_t radio_id, size_t cell_id,
     // for UHD device xmit from host using frameTimeNs
     if (!kUseUHD) {
         w = bsRadios.at(cell_id).at(radio_id)->xmit(
-            buffs, _cfg->samps_per_symbol(), flags, frameTime);
+            buffs, _cfg->samps_per_slot(), flags, frameTime);
     } else {
         long long frameTimeNs
             = SoapySDR::ticksToTimeNs(frameTime, _cfg->rate());
         w = bsRadios.at(cell_id).at(radio_id)->xmit(
-            buffs, _cfg->samps_per_symbol(), flags, frameTimeNs);
+            buffs, _cfg->samps_per_slot(), flags, frameTimeNs);
     }
 #if DEBUG_RADIO
     size_t chanMask;
@@ -551,8 +551,7 @@ void BaseRadioSet::radioRx(void* const* buffs)
     for (size_t c = 0; c < _cfg->num_cells(); c++) {
         for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
             void* const* buff = buffs + (i * 2);
-            bsRadios.at(c).at(i)->recv(
-                buff, _cfg->samps_per_symbol(), frameTime);
+            bsRadios.at(c).at(i)->recv(buff, _cfg->samps_per_slot(), frameTime);
         }
     }
 }
@@ -561,7 +560,7 @@ int BaseRadioSet::radioRx(
     size_t radio_id, size_t cell_id, void* const* buffs, long long& frameTime)
 {
     return this->radioRx(
-        radio_id, cell_id, buffs, _cfg->samps_per_symbol(), frameTime);
+        radio_id, cell_id, buffs, _cfg->samps_per_slot(), frameTime);
 }
 
 int BaseRadioSet::radioRx(size_t radio_id, size_t cell_id, void* const* buffs,

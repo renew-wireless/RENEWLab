@@ -1,9 +1,13 @@
 cmake_minimum_required(VERSION 3.10)
-project(Sounder)
+#Allow project version
+cmake_policy(SET CMP0048 NEW)
+project(Sounder VERSION 1.0.1)
 
 if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 7.0)
   set(GCC_COVERAGE_COMPILE_FLAGS "-faligned-new")
 endif()
+
+configure_file(${CMAKE_SOURCE_DIR}/include/version_config.h.in ${CMAKE_SOURCE_DIR}/include/version_config.h)
 
 option(FORCE_BUILD_PATH "Hardcode the build directory path to be 'build/'" ON)
 if(FORCE_BUILD_PATH)

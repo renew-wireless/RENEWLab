@@ -15,8 +15,8 @@ void DataGenerator::GenerateData(const std::string& directory)
         std::string filename_tag = cfg_->data_mod() + "_"
             + std::to_string(cfg_->symbol_data_subcarrier_num()) + "_"
             + std::to_string(cfg_->fft_size()) + "_"
-            + std::to_string(cfg_->symbol_per_subframe()) + "_"
-            + std::to_string(cfg_->cl_ul_symbols()[i].size()) + "_"
+            + std::to_string(cfg_->symbol_per_slot()) + "_"
+            + std::to_string(cfg_->cl_ul_slots()[i].size()) + "_"
             + std::to_string(cfg_->ul_data_frame_num()) + "_"
             + cfg_->cl_channel() + "_" + std::to_string(i) + ".bin";
 
@@ -37,13 +37,13 @@ void DataGenerator::GenerateData(const std::string& directory)
         FILE* fp_tx_t = std::fopen(filename_ul_data_t.c_str(), "wb");
         // Frame * UL Slots * Channel * Samples
         for (size_t f = 0; f < cfg_->ul_data_frame_num(); f++) {
-            for (size_t u = 0; u < cfg_->cl_ul_symbols()[i].size(); u++) {
+            for (size_t u = 0; u < cfg_->cl_ul_slots()[i].size(); u++) {
                 for (size_t h = 0; h < cfg_->cl_sdr_ch(); h++) {
                     std::vector<std::complex<float>> data_time_dom;
                     std::vector<std::complex<float>> data_freq_dom;
                     data_time_dom.insert(data_time_dom.begin(),
                         prefix_zpad_t.begin(), prefix_zpad_t.end());
-                    for (size_t s = 0; s < cfg_->symbol_per_subframe(); s++) {
+                    for (size_t s = 0; s < cfg_->symbol_per_slot(); s++) {
                         std::vector<uint8_t> data_bits;
                         for (size_t c = 0; c < cfg_->data_ind().size(); c++) {
                             data_bits.push_back((uint8_t)(rand() % mod_order));
@@ -77,9 +77,9 @@ void DataGenerator::GenerateData(const std::string& directory)
                     data_time_dom.insert(data_time_dom.end(),
                         postfix_zpad_t.begin(), postfix_zpad_t.end());
                     std::fwrite(data_freq_dom.data(),
-                        cfg_->fft_size() * cfg_->symbol_per_subframe(),
+                        cfg_->fft_size() * cfg_->symbol_per_slot(),
                         sizeof(float) * 2, fp_tx_f);
-                    std::fwrite(data_time_dom.data(), cfg_->samps_per_symbol(),
+                    std::fwrite(data_time_dom.data(), cfg_->samps_per_slot(),
                         sizeof(float) * 2, fp_tx_t);
                 }
             }
