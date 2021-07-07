@@ -221,7 +221,7 @@ def main():
     (options, args) = parser.parse_args()
 
     if options.freq == 0:
-        print("[ERROR] Please provide Tx Freq (Hz). POWDER users must set to 2.5e9")
+        print("[ERROR] Please provide RF Freq (Hz). POWDER users must set to CBRS band. e.g. --freq=3.6e9")
         exit(0)
 
     if options.gain > 81:

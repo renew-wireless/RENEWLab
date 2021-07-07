@@ -353,7 +353,7 @@ def main():
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Calibration reference antenna", default=0)
     parser.add_option("--ampl", type="float", dest="ampl", help="Pilot amplitude scaling coefficient", default=0.5)
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
-    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=3.6e9)
+    parser.add_option("--freq", type="float", dest="freq", help="Optional Tx freq (Hz)", default=0.0)
     parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB) w/CBRS 3.6GHz [0:81], 2.5GHZ [0:81]", default=30.0)
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB) w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]", default=30.0)
     parser.add_option("--cp", action="store_true", dest="cyc_prefix", help="adds cyclic prefix to tx symbols", default=True)
@@ -364,6 +364,10 @@ def main():
     parser.add_option("--both-channels", action="store_true", dest="both_channels", help="transmit from both channels",default=False)
     parser.add_option("--plot-samps", action="store_true", dest="plotter", help="plots all rx signals",default=False)
     (options, args) = parser.parse_args()
+
+    if options.freq == 0:
+        print("[ERROR] Please provide RF Freq (Hz). POWDER users must set to CBRS band. e.g. --freq=3.6e9")
+        exit(0)
 
     if options.txgain > 81:
         print("[ERROR] Gain should be between 0 and 81")
