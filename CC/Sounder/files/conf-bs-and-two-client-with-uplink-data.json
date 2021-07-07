@@ -2,7 +2,7 @@
         "BaseStations" : {
                  "sdr_id" : ["files/iris-serials.txt"],
                  "hub_id" : "files/hub-serials.txt",
-		 "frequency" : 2.5e9,
+		 "frequency" : 3.6e9,
                  "channel" : "AB",
                  "rxgainA" : 65,
                  "txgainA" : 81,

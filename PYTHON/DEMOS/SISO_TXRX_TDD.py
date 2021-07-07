@@ -233,16 +233,16 @@ def main():
     parser.add_option("--numSamps", type="int", dest="numSamps", help="Num samples to receive", default=512)
     parser.add_option("--prefix-pad", type="int", dest="prefix_length", help="prefix padding length for beacon and pilot", default=82)
     parser.add_option("--postfix-pad", type="int", dest="postfix_length", help="postfix padding length for beacon and pilot", default=68)
+    (options, args) = parser.parse_args()
 
     if options.freq == 0:
-        print("[ERROR] Please provide RF Freq (Hz). POWDER users must set to 2.5e9")
+        print("[ERROR] Please provide RF Freq (Hz). POWDER users must set to CBRS band. e.g. --freq=3.6e9")
         exit(0)
 
     if options.txgain > 81:
         print("[ERROR] TX gain should be between 0 and 81")
         exit(0)
 
-    (options, args) = parser.parse_args()
     siso_tdd_burst(
         serial1=options.serial1,
         serial2=options.serial2,
