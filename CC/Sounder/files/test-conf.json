@@ -1,17 +1,18 @@
 {
 	"BaseStations" : {
 		 "cells" : 1,
-		 "serialsFile" : "files/test-serials.json",
+		 "serialsFile" : "files/topology.json",
 		 "frequency" : 3.6e9,
 		 "channel" : "AB",
-		 "rxgainA" : 65,
-		 "txgainA" : 70,
-		 "rxgainB" : 65,
-		 "txgainB" : 70,
+		 "rxgainA" : 70,
+		 "txgainA" : 81,
+		 "rxgainB" : 70,
+		 "txgainB" : 81,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "BGPPGGGGGGGGGGGGGGGG"
+		     "BGPPGGGGGGGNGGGGGGGG"
 		 ],
+		 "calib_node" : "RF3E000295",
 		 "max_frame" : 2000,
 		 "ofdm_symbol_per_subframe" : 10,
 		 "fft_size" : 64,
@@ -29,10 +30,10 @@
 		 "frequency" : 3.6e9,
 		 "maxTxGainUE" : 90,
 		 "channel" : "AB",
-		 "rxgainA" : [65],
-		 "txgainA" : [70],
-		 "rxgainB" : [65],
-		 "txgainB" : [70],
+		 "rxgainA" : [70],
+		 "txgainA" : [90],
+		 "rxgainB" : [70],
+		 "txgainB" : [90],
 		 "rate" : 5e6,
 		 "frame_schedule" : [
 		     "GGPPGGGGGGGGGGGGGGGG"

@@ -119,6 +119,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     cal_tx_gain_.shrink_to_fit();
 
     sample_cal_en_ = tddConf.value("sample_calibrate", false);
+    cal_node_ = tddConf.value("calib_node", "");
     imbalance_cal_en_ = tddConf.value("imbalance_calibrate", false);
     beam_sweep_ = tddConf.value("beamsweep", false);
     beacon_ant_ = tddConf.value("beacon_antenna", 0);
@@ -126,7 +127,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
     // Load serials file (loads hub, sdr, and rrh serials)
     std::string serials_str;
-    auto serials_file_ = tddConf.value("serialsFile", "test-serials.json");
+    auto serials_file_ = tddConf.value("serialsFile", "./files/topology.json");
     Utils::loadTDDConfig(serials_file_, serials_str);
     const auto jSerials = json::parse(serials_str, nullptr, true, true);
     json serialsConf;
@@ -140,8 +141,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     num_bs_sdrs_all_ = 0;
 
     for (size_t i = 0; i < num_cells_; i++) {
-        std::string cell_str = "Cell" + std::to_string(i+1);
-        ss << jSerials.value(cell_str, serialsConf);
+        std::string cell_str = "Cell" + std::to_string(i);
+        ss << jSerials[0].value(cell_str, serialsConf);
         serialsConf = json::parse(ss);
         ss.str(std::string());
         ss.clear();
@@ -149,6 +150,14 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         hub_ids_.at(i) = serialsConf.value("hub", "");
         auto sdr_serials = serialsConf.value("sdr", json::array());
         bs_sdr_ids_.at(i).assign(sdr_serials.begin(), sdr_serials.end());
+
+        // Remove cal node
+        auto iterCal = std::find(bs_sdr_ids_.at(i).begin(), bs_sdr_ids_.at(i).end(), cal_node_);
+        if (iterCal != bs_sdr_ids_.at(i).end()) {
+            bs_sdr_ids_.at(i).erase(iterCal);
+            std::cout << "Removed BS Calibration Node: " << cal_node_ << std::endl;
+        }
+
         n_bs_sdrs_.at(i) = bs_sdr_ids_.at(i).size();
         n_bs_antennas_.at(i) = bs_channel_.length() * n_bs_sdrs_.at(i);
         num_bs_sdrs_all_ += bs_sdr_ids_.at(i).size();

@@ -14,6 +14,7 @@
 #include <atomic>
 #include <complex.h>
 #include <vector>
+#include <algorithm>
 
 class Config {
 public:
@@ -342,6 +343,7 @@ private:
     std::vector<double> tx_gain_;
     std::vector<double> rx_gain_;
     std::vector<double> cal_tx_gain_;
+    std::string cal_node_;
     bool sample_cal_en_;
     bool imbalance_cal_en_;
     std::string trace_file_;
