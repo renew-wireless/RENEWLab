@@ -1,7 +1,6 @@
 {
 	"BaseStations" : {
-		 "sdr_id" : ["files/renew-iris-serials1.txt"],
-		 "hub_id" : "files/renew-hub-serials1.txt",
+		 "serialsFile" : "files/topology.json",
 		 "frequency" : 3.6e9,
 		 "channel" : "A",
 		 "rxgainA" : 61,

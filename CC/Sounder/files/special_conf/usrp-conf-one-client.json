@@ -1,6 +1,6 @@
 {
         "BaseStations" : {
-                 "sdr_id" : ["files/special_conf/usrp-bs-serials.txt"],
+                 "serialsFile" : "files/special_conf/topology.json",
                  "frequency" : 2.5e9,
                  "channel" : "A",
                  "rxgainA" : 10,
