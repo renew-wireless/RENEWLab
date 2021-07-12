@@ -11,6 +11,7 @@
                  "frame_schedule" : [
                     "BGGGGGPPPPUGGGGGGGGG"
                  ],
+                 "calib_node" : "RF3E000295",
                  "max_frame" : 4000,
                  "ofdm_symbol_per_slot" : 10,
                  "fft_size" : 64,
