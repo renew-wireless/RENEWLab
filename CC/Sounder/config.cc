@@ -139,6 +139,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     n_bs_antennas_.resize(num_cells_);
     num_bs_sdrs_all_ = 0;
 
+    reciprocal_calib_ = tddConf.value("internal_measurement", false);
     for (size_t i = 0; i < num_cells_; i++) {
         std::string cell_str = "Cell" + std::to_string(i);
         ss << jSerials[0].value(cell_str, serialsConf);
@@ -150,11 +151,13 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         auto sdr_serials = serialsConf.value("sdr", json::array());
         bs_sdr_ids_.at(i).assign(sdr_serials.begin(), sdr_serials.end());
 
-        // Remove cal node
-        auto iterCal = std::find(bs_sdr_ids_.at(i).begin(), bs_sdr_ids_.at(i).end(), cal_node_);
-        if (iterCal != bs_sdr_ids_.at(i).end()) {
-            bs_sdr_ids_.at(i).erase(iterCal);
-            std::cout << "Removed BS Calibration Node: " << cal_node_ << std::endl;
+        // Remove cal node if not doing reciprocal calibration
+        if (!reciprocal_calib_) {
+            auto iterCal = std::find(bs_sdr_ids_.at(i).begin(), bs_sdr_ids_.at(i).end(), cal_node_);
+            if (iterCal != bs_sdr_ids_.at(i).end()) {
+                bs_sdr_ids_.at(i).erase(iterCal);
+                std::cout << "Removed BS Calibration Node: " << cal_node_ << std::endl;
+            }
         }
 
         n_bs_sdrs_.at(i) = bs_sdr_ids_.at(i).size();
@@ -182,15 +185,14 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     }
 
     // Reciprocity Calibration
-    reciprocal_calib_ = tddConf.value("reciprocal_calibration", false);
-    cal_ref_sdr_id_ = tddConf.value("ref_sdr_index", num_bs_sdrs_all_ - 1);
     if (reciprocal_calib_ == true) {
         calib_frames_.resize(num_cells_);
         for (size_t c = 0; c < num_cells_; c++) {
+            cal_ref_sdr_id_ = tddConf.value("ref_sdr_index", n_bs_sdrs_[c] - 1);
             calib_frames_[c].resize(n_bs_sdrs_[c]);
             size_t num_channels = bs_channel_.size();
             size_t frame_length
-                = num_channels * n_bs_sdrs_[c] - (num_channels - 1);
+                = num_channels * n_bs_sdrs_[c]; // - (num_channels - 1);
             calib_frames_[c][cal_ref_sdr_id_] = std::string(frame_length, 'G');
             calib_frames_[c][cal_ref_sdr_id_].replace(
                 num_channels * cal_ref_sdr_id_, 1, "P");
@@ -207,6 +209,10 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                         num_channels * cal_ref_sdr_id_, 1, "R");
                 }
             }
+#if DEBUG_PRINT
+            for (auto i = calib_frames_[c].begin(); i != calib_frames_[c].end(); ++i)
+                std::cout << *i << ' ' << std::endl;
+#endif
         }
         slot_per_frame_ = calib_frames_.at(0).size();
         pilot_slot_per_frame_ = 2; // up and down reciprocity pilots
