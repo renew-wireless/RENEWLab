@@ -190,7 +190,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
     size_t num_radios = config_->num_bs_sdrs_all(); //config_->n_bs_sdrs()[0]
     std::vector<size_t> radio_ids_in_thread;
-    if (config_->reciprocal_calib()) {
+    if (0) { //(config_->reciprocal_calib()) {                                              // OBCH
         if (tid == 0)
             radio_ids_in_thread.push_back(config_->cal_ref_sdr_id());
         else
@@ -292,11 +292,12 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             }
 
             size_t radio_idx = it - config_->n_bs_sdrs_agg().at(cell);
-            size_t num_packets = config_->reciprocal_calib()
-                    && radio_idx == config_->cal_ref_sdr_id()
-                ? 1
-                : num_channels; // receive only on one channel at the ref antenna
+            //size_t num_packets = config_->reciprocal_calib()                              // OBCH
+            //        && radio_idx == config_->cal_ref_sdr_id()
+            //    ? 1
+            //    : num_channels; // receive only on one channel at the ref antenna
 
+            size_t num_packets = num_channels;                                              // OBCH
             // Set buffer status(es) to full; fail if full already
             for (size_t ch = 0; ch < num_packets; ++ch) {
                 int bit = 1 << (cursor + ch) % sizeof(std::atomic_int);
@@ -311,6 +312,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 // Reserved until marked empty by consumer
             }
 
+            // FIXME: TODO: OBCH [HHHHHHHH EEEEEEEE RRRRRRRRR EEEEEEEE !!!!!!!!!!!!!]
             // Receive data into buffers
             size_t packageLength
                 = sizeof(Package) + config_->getPackageDataLength();
@@ -337,8 +339,9 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
                 frame_id = (size_t)(frameTime >> 32);
                 slot_id = (size_t)((frameTime >> 16) & 0xFFFF);
+
                 if (config_->reciprocal_calib()) {
-                    if (radio_idx == config_->cal_ref_sdr_id()) {
+                    if (0) { //(radio_idx == config_->cal_ref_sdr_id()) {           // OBCH   ??????????????
                         ant_id = slot_id < radio_idx * num_channels
                             ? slot_id
                             : slot_id - num_channels;

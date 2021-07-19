@@ -187,7 +187,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     }
 
     // Reciprocity Calibration
-    size_t gi_mult = 2;
+    size_t gi_mult = 3;
     if (reciprocal_calib_ == true) {
         calib_frames_.resize(num_cells_);
         for (size_t c = 0; c < num_cells_; c++) {
@@ -214,13 +214,14 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                     }
                 }
             }
-#if DEBUG_PRINT
+//#if DEBUG_PRINT
             for (auto i = calib_frames_[c].begin(); i != calib_frames_[c].end(); ++i)
                 std::cout << *i << ' ' << std::endl;
-#endif
+//#endif
         }
         slot_per_frame_ = calib_frames_.at(0).size();
-        pilot_slot_per_frame_ = 2; // up and down reciprocity pilots
+        pilot_slot_per_frame_ = 2 * n_bs_sdrs_[0]; // OBCH two pilots per board up/down... xxup and down reciprocity pilots
+        std::cout << "slots per frame: " << slot_per_frame_ << " pilot_slots_per_frame: " << pilot_slot_per_frame_ << std::endl;
         noise_slot_per_frame_ = 0;
         ul_slot_per_frame_ = 0;
         dl_slot_per_frame_ = 0;
@@ -642,9 +643,9 @@ size_t Config::getMaxNumAntennas()
             if (max_num_sdr < this->n_bs_sdrs_.at(i)) {
                 max_num_sdr = this->n_bs_sdrs_.at(i);
             }
-            if (reciprocal_calib_ == true) {
-                max_num_sdr--; // exclude the ref sdr
-            }
+            //if (reciprocal_calib_ == true) {                              // OBCH
+            //    max_num_sdr--; // exclude the ref sdr
+            //}
         }
         ret = (max_num_sdr * bs_channel_.length());
     }
@@ -661,8 +662,8 @@ size_t Config::getTotNumAntennas()
         size_t totNumSdr = 0;
         for (size_t i = 0; i < num_cells_; i++) {
             totNumSdr += n_bs_sdrs_.at(i);
-            if (reciprocal_calib_ == true)
-                totNumSdr--;
+            //if (reciprocal_calib_ == true)                                // OBCH
+            //    totNumSdr--;
         }
         ret = totNumSdr * bs_channel_.length();
     }
