@@ -126,10 +126,10 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
     // Load serials file (loads hub, sdr, and rrh serials)
     std::string serials_str;
-    auto serials_file_ = tddConf.value("serialsFile", "./files/topology.json");
+    auto serials_file_ = tddConf.value("serials_file", "./files/topology.json");
     Utils::loadTDDConfig(serials_file_, serials_str);
-    const auto jSerials = json::parse(serials_str, nullptr, true, true);
-    json serialsConf;
+    const auto j_serials = json::parse(serials_str, nullptr, true, true);
+    json serials_conf;
 
     num_cells_ = tddConf.value("cells", 1);
     MLPD_TRACE("Number cells: %zu\n", num_cells_);
@@ -142,20 +142,20 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     reciprocal_calib_ = tddConf.value("internal_measurement", false);
     for (size_t i = 0; i < num_cells_; i++) {
         std::string cell_str = "Cell" + std::to_string(i);
-        ss << jSerials[0].value(cell_str, serialsConf);
-        serialsConf = json::parse(ss);
+        ss << j_serials[0].value(cell_str, serials_conf);
+        serials_conf = json::parse(ss);
         ss.str(std::string());
         ss.clear();
 
-        hub_ids_.at(i) = serialsConf.value("hub", "");
-        auto sdr_serials = serialsConf.value("sdr", json::array());
+        hub_ids_.at(i) = serials_conf.value("hub", "");
+        auto sdr_serials = serials_conf.value("sdr", json::array());
         bs_sdr_ids_.at(i).assign(sdr_serials.begin(), sdr_serials.end());
 
         // Remove cal node if not doing reciprocal calibration
         if (!reciprocal_calib_) {
-            auto iterCal = std::find(bs_sdr_ids_.at(i).begin(), bs_sdr_ids_.at(i).end(), cal_node_);
-            if (iterCal != bs_sdr_ids_.at(i).end()) {
-                bs_sdr_ids_.at(i).erase(iterCal);
+            auto iter_cal = std::find(bs_sdr_ids_.at(i).begin(), bs_sdr_ids_.at(i).end(), cal_node_);
+            if (iter_cal != bs_sdr_ids_.at(i).end()) {
+                bs_sdr_ids_.at(i).erase(iter_cal);
                 std::cout << "Removed BS Calibration Node: " << cal_node_ << std::endl;
             }
         }

@@ -1,6 +1,6 @@
 {
         "BaseStations" : {
-                "serialsFile" : "files/topology.json",
+                "serials_file" : "files/topology.json",
                  "frequency" : 3.6e9,
                  "rate" : 5e6,
                  "channel" : "AB",
