@@ -36,6 +36,7 @@ public:
         return this->ul_data_slot_present_;
     }
     inline size_t num_cells(void) const { return this->num_cells_; }
+    inline size_t guard_mult(void) const { return this->guard_mult_; }
     inline bool hw_framer(void) const { return this->hw_framer_; }
     inline int prefix(void) const { return this->prefix_; }
     inline int postfix(void) const { return this->postfix_; }
@@ -272,6 +273,7 @@ public:
     bool isPilot(int, int);
     bool isNoise(int, int);
     bool isData(int, int);
+    bool isRx(int, int);
     unsigned getCoreCount();
     void loadULData(const std::string&);
 
@@ -308,6 +310,7 @@ private:
 
     // BS features
     size_t num_cells_;
+    size_t guard_mult_;
     std::vector<std::string> bs_sdr_file_; // No accessor
     std::string hub_file_; // No accessor
     std::string ref_sdr;

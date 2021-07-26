@@ -341,7 +341,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 slot_id = (size_t)((frameTime >> 16) & 0xFFFF);
 
                 if (config_->reciprocal_calib()) {
-                    if (0) { //(radio_idx == config_->cal_ref_sdr_id()) {           // OBCH   ??????????????
+                    /*
+                    if (radio_idx == config_->cal_ref_sdr_id()) {
                         ant_id = slot_id < radio_idx * num_channels
                             ? slot_id
                             : slot_id - num_channels;
@@ -350,7 +351,11 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                         if (radio_idx >= config_->cal_ref_sdr_id())
                             ant_id -= num_channels;
                         slot_id = 1; // uplink reciprocal pilot
-                    }
+                    }*/
+                    //slot_id  = slot_id - slot_id config_->guard_mult();
+                    bool is_valid = config_->isRx(frame_id, slot_id || config_->isPilot(frame_id, slot_id));
+                    std::cout << "Frame ID: " << frame_id << " Ant ID: " << ant_id
+                    << " Slot ID: " << slot_id << " isValid? "  << is_valid << std::endl;
                 }
             } else {
                 int rx_len = config_->samps_per_slot();
@@ -404,8 +409,10 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 #endif
 
             for (size_t ch = 0; ch < num_packets; ++ch) {
+                /*
                 // new (pkg[ch]) Package(frame_id, slot_id, 0, ant_id + ch);
                 new (pkg[ch]) Package(frame_id, slot_id, cell, ant_id + ch);
+                */
                 // push kEventRxSymbol event into the queue
                 Event_data package_message;
                 package_message.event_type = kEventRxSymbol;

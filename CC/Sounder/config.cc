@@ -187,7 +187,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     }
 
     // Reciprocity Calibration
-    size_t gi_mult = 3;
+    guard_mult_ = 3;
     if (reciprocal_calib_ == true) {
         calib_frames_.resize(num_cells_);
         for (size_t c = 0; c < num_cells_; c++) {
@@ -195,7 +195,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
             calib_frames_[c].resize(n_bs_sdrs_[c]);
             size_t num_channels = bs_channel_.size();
             size_t frame_length
-                = num_channels * n_bs_sdrs_[c] * gi_mult;
+                = num_channels * n_bs_sdrs_[c] * guard_mult_;
 
             for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
                 calib_frames_[c][i] = std::string(frame_length, 'G');
@@ -203,13 +203,13 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
             for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
                 for (size_t ch = 0; ch < num_channels; ch++) {
                         calib_frames_[c][i].replace(
-                            gi_mult * i * num_channels + ch, 1, "P");
+                            guard_mult_ * i * num_channels + ch, 1, "P");
                 }
                 for (size_t k = 0; k < n_bs_sdrs_[c]; k++) {
                     if (i != k) {
                         for (size_t ch = 0; ch < num_channels; ch++) {
                             calib_frames_[c][k].replace(
-                                gi_mult * i * num_channels + ch, 1, "R");
+                                guard_mult_ * i * num_channels + ch, 1, "R");
                         }
                     }
                 }
@@ -740,6 +740,16 @@ bool Config::isData(int frame_id, int slot_id)
 {
     try {
         return frames_[frame_id % frames_.size()].at(slot_id) == 'U';
+    } catch (const std::out_of_range&) {
+        return false;
+    }
+}
+
+bool Config::isRx(int frame_id, int slot_id)
+{
+    // Generic RX (assuming cell == 0)
+    try {
+        return calib_frames_[0][frame_id % calib_frames_[0].size()].at(slot_id) == 'R';
     } catch (const std::out_of_range&) {
         return false;
     }
