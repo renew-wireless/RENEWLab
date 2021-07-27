@@ -153,7 +153,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
         // Append calibration node
         if (reciprocal_calib_) {
-            calib_ids_.at(i) = serials_conf.value("calib", "");
+            calib_ids_.at(i) = serials_conf.value("reference node", "");
             if (calib_ids_.at(i).empty()) {
                 MLPD_ERROR("No calibration node ID found in topology file!\n");
                 exit(1);
