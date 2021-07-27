@@ -118,7 +118,6 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     cal_tx_gain_.shrink_to_fit();
 
     sample_cal_en_ = tddConf.value("sample_calibrate", false);
-    cal_node_ = tddConf.value("calib_node", "");
     imbalance_cal_en_ = tddConf.value("imbalance_calibrate", false);
     beam_sweep_ = tddConf.value("beamsweep", false);
     beacon_ant_ = tddConf.value("beacon_antenna", 0);
@@ -135,6 +134,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     MLPD_TRACE("Number cells: %zu\n", num_cells_);
     hub_ids_.resize(num_cells_);
     bs_sdr_ids_.resize(num_cells_);
+    calib_ids_.resize(num_cells_);
     n_bs_sdrs_.resize(num_cells_);
     n_bs_antennas_.resize(num_cells_);
     num_bs_sdrs_all_ = 0;
@@ -151,13 +151,15 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         auto sdr_serials = serials_conf.value("sdr", json::array());
         bs_sdr_ids_.at(i).assign(sdr_serials.begin(), sdr_serials.end());
 
-        // Remove cal node if not doing reciprocal calibration
-        if (!reciprocal_calib_) {
-            auto iter_cal = std::find(bs_sdr_ids_.at(i).begin(), bs_sdr_ids_.at(i).end(), cal_node_);
-            if (iter_cal != bs_sdr_ids_.at(i).end()) {
-                bs_sdr_ids_.at(i).erase(iter_cal);
-                std::cout << "Removed BS Calibration Node: " << cal_node_ << std::endl;
+        // Append calibration node
+        if (reciprocal_calib_) {
+            calib_ids_.at(i) = serials_conf.value("calib", "");
+            if (calib_ids_.at(i).empty()) {
+                MLPD_ERROR("No calibration node ID found in topology file!\n");
+                exit(1);
             }
+            std::cout << "Calibration Node: " << calib_ids_.at(i) << std::endl;
+            bs_sdr_ids_.at(i).push_back(calib_ids_.at(i));
         }
 
         n_bs_sdrs_.at(i) = bs_sdr_ids_.at(i).size();
@@ -188,7 +190,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     if (reciprocal_calib_ == true) {
         calib_frames_.resize(num_cells_);
         for (size_t c = 0; c < num_cells_; c++) {
-            cal_ref_sdr_id_ = tddConf.value("ref_sdr_index", n_bs_sdrs_[c] - 1);
+            cal_ref_sdr_id_ = n_bs_sdrs_[c] - 1;
             calib_frames_[c].resize(n_bs_sdrs_[c]);
             size_t num_channels = bs_channel_.size();
             size_t frame_length
