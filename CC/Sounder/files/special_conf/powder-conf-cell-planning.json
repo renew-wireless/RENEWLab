@@ -1,7 +1,6 @@
 {
 	"BaseStations" : {
-		 "sdr_id" : ["files/bs145.txt", "files/bs166.txt", "files/bs030.txt", "files/bs179.txt"],
-		 "hub_id" : "files/cell-planning-hub-serials.txt",
+		 "serials_file" : "files/topology.json",
 		 "frequency" : 2.5e9,
 		 "channel" : "AB",
 		 "rxgainA" : 70,

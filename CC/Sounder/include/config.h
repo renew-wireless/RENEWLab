@@ -14,6 +14,7 @@
 #include <atomic>
 #include <complex.h>
 #include <vector>
+#include <algorithm>
 
 class Config {
 public:
@@ -229,6 +230,11 @@ public:
         return this->hub_ids_;
     }
 
+    inline const std::vector<std::string>& calib_ids(void) const
+    {
+        return this->calib_ids_;
+    }
+
     inline const std::vector<double>& tx_gain(void) const
     {
         return this->tx_gain_;
@@ -307,6 +313,7 @@ private:
     std::string ref_sdr;
     std::vector<std::vector<std::string>> bs_sdr_ids_;
     std::vector<std::string> hub_ids_;
+    std::vector<std::string> calib_ids_;
     std::vector<std::complex<float>> gold_cf32_;
     std::vector<uint32_t> beacon_;
     std::vector<std::complex<int16_t>> beacon_ci16_;
