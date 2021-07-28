@@ -187,7 +187,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     }
 
     // Reciprocity Calibration
-    guard_mult_ = 3;
+    guard_mult_ = 5;
     if (reciprocal_calib_ == true) {
         calib_frames_.resize(num_cells_);
         for (size_t c = 0; c < num_cells_; c++) {
@@ -220,8 +220,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 //#endif
         }
         slot_per_frame_ = calib_frames_.at(0).size();
-        pilot_slot_per_frame_ = 2 * n_bs_sdrs_[0]; // OBCH two pilots per board up/down... xxup and down reciprocity pilots
-        std::cout << "slots per frame: " << slot_per_frame_ << " pilot_slots_per_frame: " << pilot_slot_per_frame_ << std::endl;
+        pilot_slot_per_frame_ = 2 * n_bs_sdrs_[0]; // Two pilots per board up/down...
         noise_slot_per_frame_ = 0;
         ul_slot_per_frame_ = 0;
         dl_slot_per_frame_ = 0;
@@ -749,7 +748,7 @@ bool Config::isRx(int frame_id, int slot_id)
 {
     // Generic RX (assuming cell == 0)
     try {
-        return calib_frames_[0][frame_id % calib_frames_[0].size()].at(slot_id) == 'R';
+        return calib_frames_[0][frame_id % calib_frames_[0].size()].at(slot_id) == 'R' || calib_frames_[0][frame_id % calib_frames_[0].size()].at(slot_id) == 'P';
     } catch (const std::out_of_range&) {
         return false;
     }
