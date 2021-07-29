@@ -228,7 +228,11 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 #endif
         }
         slot_per_frame_ = calib_frames_.at(0).size();
-        pilot_slot_per_frame_ = 2 * n_bs_sdrs_[0]; // Two pilots per board up/down...
+        if (ref_node_enable_ == true) {
+            pilot_slot_per_frame_ = 2; // Two pilots (up/down)
+        } else {
+            pilot_slot_per_frame_ = 2 * n_bs_sdrs_[0]; // Two pilots per board (up/down)
+        }
         noise_slot_per_frame_ = 0;
         ul_slot_per_frame_ = 0;
         dl_slot_per_frame_ = 0;
