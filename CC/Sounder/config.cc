@@ -52,8 +52,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                    "JSON file\n");
         exit(1);
     } else if (tddConfCl.empty() == true) {
-        reciprocal_calib_ = tddConf.value("internal_measurement", false);
-        if (!reciprocal_calib_) {
+        internal_measurement_ = tddConf.value("internal_measurement", false);
+        if (!internal_measurement_) {
             MLPD_ERROR(
                 "Both \"BaseStations\" and \"Clients\" must be present in "
                 "JSON file\n");
@@ -67,7 +67,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         ss.clear();
     }
     bs_present_ = !client_only;
-    client_present_ = !bs_only && !reciprocal_calib_;
+    client_present_ = !bs_only && !internal_measurement_;
 
     static const int kMaxTxGainBS = 81;
     // common (BaseStation config overrides these)
@@ -139,7 +139,16 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     n_bs_antennas_.resize(num_cells_);
     num_bs_sdrs_all_ = 0;
 
-    reciprocal_calib_ = tddConf.value("internal_measurement", false);
+    /* Used for internal measurements. If internal_measurement is enabled,
+       the default is to use a reference node for reciprocity calibration.
+       Users have the option of "disabling" the reference node to get a full
+       matrix (send pilot from all base station boards and receive on all
+       base station boards). The guard interval multiplier extends the number
+       of G's in a schedule (between pilots).
+     */
+    internal_measurement_ = tddConf.value("internal_measurement", false);
+    ref_node_enable_ = tddConf.value("reference_node_enable", true);
+    guard_mult_ = tddConf.value("meas_guard_interval_mult", 1);
     for (size_t i = 0; i < num_cells_; i++) {
         std::string cell_str = "Cell" + std::to_string(i);
         ss << j_serials[0].value(cell_str, serials_conf);
@@ -152,7 +161,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         bs_sdr_ids_.at(i).assign(sdr_serials.begin(), sdr_serials.end());
 
         // Append calibration node
-        if (reciprocal_calib_) {
+        if (internal_measurement_ && ref_node_enable_) {
             calib_ids_.at(i) = serials_conf.value("reference node", "");
             if (calib_ids_.at(i).empty()) {
                 MLPD_ERROR("No calibration node ID found in topology file!\n");
@@ -186,9 +195,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         n_bs_sdrs_agg_.at(i + 1) = n_bs_sdrs_agg_.at(i) + n_bs_sdrs_.at(i);
     }
 
-    // Reciprocity Calibration
-    guard_mult_ = 5;
-    if (reciprocal_calib_ == true) {
+    // Schedule for internal measurements
+    if (internal_measurement_ == true) {
         calib_frames_.resize(num_cells_);
         for (size_t c = 0; c < num_cells_; c++) {
             cal_ref_sdr_id_ = n_bs_sdrs_[c] - 1;
@@ -214,10 +222,10 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                     }
                 }
             }
-//#if DEBUG_PRINT
+#if DEBUG_PRINT
             for (auto i = calib_frames_[c].begin(); i != calib_frames_[c].end(); ++i)
                 std::cout << *i << ' ' << std::endl;
-//#endif
+#endif
         }
         slot_per_frame_ = calib_frames_.at(0).size();
         pilot_slot_per_frame_ = 2 * n_bs_sdrs_[0]; // Two pilots per board up/down...
@@ -246,7 +254,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     //}
 
     // Clients
-    if (reciprocal_calib_ == false) {
+    if (internal_measurement_ == false) {
         // read commons from Client json config
         if (tddConf.find("frequency") == tddConf.end())
             freq_ = tddConfCl.value("frequency", 2.5e9);
@@ -344,9 +352,9 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     ofdm_symbol_size_ = fft_size_ + cp_size_;
     slot_samp_size_ = symbol_per_slot_ * ofdm_symbol_size_;
     samps_per_slot_ = slot_samp_size_ + prefix_ + postfix_;
-    assert(reciprocal_calib_ || slot_per_frame_ == cl_frames_.at(0).size());
+    assert(internal_measurement_ || slot_per_frame_ == cl_frames_.at(0).size());
 
-    ul_data_slot_present_ = (reciprocal_calib_ == false)
+    ul_data_slot_present_ = (internal_measurement_ == false)
         && ((bs_present_ && (ul_slots_.at(0).empty() == false))
             || (client_present_ && !cl_ul_slots_.at(0).empty()));
 
@@ -475,8 +483,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         int cell_num = num_cells_;
         size_t ant_num = getTotNumAntennas();
         std::string filename;
-        if (reciprocal_calib_) {
-            filename = directory + "/trace-reciprocal-calib-"
+        if (internal_measurement_) {
+            filename = directory + "/trace-internal-meas-"
                 + std::to_string(1900 + ltm->tm_year) + "-"
                 + std::to_string(1 + ltm->tm_mon) + "-"
                 + std::to_string(ltm->tm_mday) + "-"
@@ -510,7 +518,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         rx_thread_num_ = (num_cores >= (2 * RX_THREAD_NUM))
             ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_sdrs_all_))
             : 1;
-        if (reciprocal_calib_ == true) {
+        if (internal_measurement_ == true) {        // OBCH how many threads if reading from all boards???
             rx_thread_num_ = 2;
         }
         if ((client_present_ == true)
@@ -642,9 +650,9 @@ size_t Config::getMaxNumAntennas()
             if (max_num_sdr < this->n_bs_sdrs_.at(i)) {
                 max_num_sdr = this->n_bs_sdrs_.at(i);
             }
-            //if (reciprocal_calib_ == true) {                              // OBCH
-            //    max_num_sdr--; // exclude the ref sdr
-            //}
+            if (internal_measurement_ == true && ref_node_enable_ == true) {
+                max_num_sdr--; // exclude the ref sdr
+            }
         }
         ret = (max_num_sdr * bs_channel_.length());
     }
@@ -661,8 +669,8 @@ size_t Config::getTotNumAntennas()
         size_t totNumSdr = 0;
         for (size_t i = 0; i < num_cells_; i++) {
             totNumSdr += n_bs_sdrs_.at(i);
-            //if (reciprocal_calib_ == true)                                // OBCH
-            //    totNumSdr--;
+            if (internal_measurement_ == true && ref_node_enable_ == true)
+                totNumSdr--;
         }
         ret = totNumSdr * bs_channel_.length();
     }
@@ -673,7 +681,7 @@ Config::~Config() {}
 
 int Config::getClientId(int frame_id, int slot_id)
 {
-    if (reciprocal_calib_)
+    if (internal_measurement_)
         return slot_id;
     std::vector<size_t>::iterator it;
     int fid = frame_id % frames_.size();

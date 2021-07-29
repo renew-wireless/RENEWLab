@@ -358,8 +358,12 @@ herr_t RecorderWorker::initHDF5()
         write_attribute(mainGroup, "UL_SLOTS", this->cfg_->ul_slot_per_frame());
 
         // Reciprocal Calibration Mode
-        write_attribute(mainGroup, "RECIPROCAL_CALIB",
-            this->cfg_->reciprocal_calib() ? 1 : 0);
+        bool reciprocity_cal = this->cfg_->internal_measurement() && this->cfg_->ref_node_enable();
+        write_attribute(mainGroup, "RECIPROCAL_CALIB", reciprocity_cal ? 1 : 0);
+
+        // All combinations of TX/RX boards in the base station
+        bool full_matrix_meas = this->cfg_->internal_measurement() && !this->cfg_->ref_node_enable();
+        write_attribute(mainGroup, "FULL_MATRIX_MEAS", full_matrix_meas ? 1 : 0);
 
         // ******* Clients ******** //
         // Freq. Domain Pilot symbols
@@ -392,7 +396,7 @@ herr_t RecorderWorker::initHDF5()
         // Data modulation
         write_attribute(mainGroup, "CL_MODULATION", this->cfg_->data_mod());
 
-        if (this->cfg_->reciprocal_calib() == false) {
+        if (this->cfg_->internal_measurement() == false) {
             // Client antenna polarization
             write_attribute(
                 mainGroup, "CL_CH_PER_RADIO", this->cfg_->cl_sdr_ch());
@@ -696,7 +700,7 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
             uint32_t antenna_index = pkg->ant_id - this->antenna_offset_;
             DataspaceIndex hdfoffset
                 = { pkg->frame_id, pkg->cell_id, 0, antenna_index, 0 };
-            if ((this->cfg_->reciprocal_calib() == true)
+            if ((this->cfg_->internal_measurement() == true)
                 || (this->cfg_->isPilot(pkg->frame_id, pkg->symbol_id)
                     == true)) {
                 assert(this->pilot_dataset_ != nullptr);

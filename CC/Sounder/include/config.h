@@ -110,7 +110,8 @@ public:
     {
         return this->n_bs_sdrs_agg_;
     }
-    inline bool reciprocal_calib(void) const { return this->reciprocal_calib_; }
+    inline bool internal_measurement(void) const { return this->internal_measurement_; }
+    inline bool ref_node_enable(void) const { return this->ref_node_enable_; }
     inline size_t cal_ref_sdr_id(void) const { return this->cal_ref_sdr_id_; }
     inline const std::vector<std::vector<std::string>>& calib_frames(void) const
     {
@@ -347,7 +348,8 @@ private:
     bool imbalance_cal_en_;
     std::string trace_file_;
     std::vector<std::vector<std::string>> calib_frames_;
-    bool reciprocal_calib_;
+    bool internal_measurement_;
+    bool ref_node_enable_;
     size_t cal_ref_sdr_id_;
 
     // Clients features

@@ -238,7 +238,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         // write TDD schedule and beacons to FPFA buffers only for Iris
         for (size_t c = 0; c < _cfg->num_cells(); c++) {
             if (!kUseUHD) {
-                if (_cfg->reciprocal_calib()) {
+                if (_cfg->internal_measurement()) {
                     for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
                         tddConf["frames"] = json::array();
                         tddConf["frames"].push_back(
