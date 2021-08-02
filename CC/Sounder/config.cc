@@ -524,8 +524,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         rx_thread_num_ = (num_cores >= (2 * RX_THREAD_NUM))
             ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_sdrs_all_))
             : 1;
-        if (internal_measurement_
-            == true) { // OBCH how many threads if reading from all boards???
+        if (internal_measurement_ == true && ref_node_enable_ == true) {
             rx_thread_num_ = 2;
         }
         if ((client_present_ == true)

@@ -190,8 +190,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
     size_t num_radios = config_->num_bs_sdrs_all(); //config_->n_bs_sdrs()[0]
     std::vector<size_t> radio_ids_in_thread;
-    if (config_->internal_measurement()
-        && config_->ref_node_enable()) { // OBCH - Does this make sense??
+    if (config_->internal_measurement() && config_->ref_node_enable()) {
         if (tid == 0)
             radio_ids_in_thread.push_back(config_->cal_ref_sdr_id());
         else
