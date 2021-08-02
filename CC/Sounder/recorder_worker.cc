@@ -358,12 +358,15 @@ herr_t RecorderWorker::initHDF5()
         write_attribute(mainGroup, "UL_SLOTS", this->cfg_->ul_slot_per_frame());
 
         // Reciprocal Calibration Mode
-        bool reciprocity_cal = this->cfg_->internal_measurement() && this->cfg_->ref_node_enable();
+        bool reciprocity_cal = this->cfg_->internal_measurement()
+            && this->cfg_->ref_node_enable();
         write_attribute(mainGroup, "RECIPROCAL_CALIB", reciprocity_cal ? 1 : 0);
 
         // All combinations of TX/RX boards in the base station
-        bool full_matrix_meas = this->cfg_->internal_measurement() && !this->cfg_->ref_node_enable();
-        write_attribute(mainGroup, "FULL_MATRIX_MEAS", full_matrix_meas ? 1 : 0);
+        bool full_matrix_meas = this->cfg_->internal_measurement()
+            && !this->cfg_->ref_node_enable();
+        write_attribute(
+            mainGroup, "FULL_MATRIX_MEAS", full_matrix_meas ? 1 : 0);
 
         // ******* Clients ******** //
         // Freq. Domain Pilot symbols
@@ -702,7 +705,7 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
                 = { pkg->frame_id, pkg->cell_id, 0, antenna_index, 0 };
             if ((this->cfg_->internal_measurement() == true)
                 || (this->cfg_->isPilot(pkg->frame_id, pkg->symbol_id)
-                    == true)) {
+                       == true)) {
                 assert(this->pilot_dataset_ != nullptr);
                 // Are we going to extend the dataset?
                 if (pkg->frame_id >= this->frame_number_pilot_) {

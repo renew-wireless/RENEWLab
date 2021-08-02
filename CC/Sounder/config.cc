@@ -182,7 +182,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     // Print Topology
     std::cout << "Topology: " << std::endl;
     for (size_t i = 0; i < bs_sdr_ids_.size(); i++) {
-        std::cout << "Cell" + std::to_string(i) + " Hub:" <<hub_ids_.at(i) << std::endl;
+        std::cout << "Cell" + std::to_string(i) + " Hub:" << hub_ids_.at(i)
+                  << std::endl;
         for (size_t j = 0; j < bs_sdr_ids_.at(i).size(); j++) {
             std::cout << " \t- " << bs_sdr_ids_.at(i).at(j) << std::endl;
         }
@@ -198,20 +199,19 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     // Schedule for internal measurements
     if (internal_measurement_ == true) {
         calib_frames_.resize(num_cells_);
+        size_t num_channels = bs_channel_.size();
         for (size_t c = 0; c < num_cells_; c++) {
             cal_ref_sdr_id_ = n_bs_sdrs_[c] - 1;
             calib_frames_[c].resize(n_bs_sdrs_[c]);
-            size_t num_channels = bs_channel_.size();
-            size_t frame_length
-                = num_channels * n_bs_sdrs_[c] * guard_mult_;
+            size_t frame_length = num_channels * n_bs_sdrs_[c] * guard_mult_;
 
             for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
                 calib_frames_[c][i] = std::string(frame_length, 'G');
             }
             for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
                 for (size_t ch = 0; ch < num_channels; ch++) {
-                        calib_frames_[c][i].replace(
-                            guard_mult_ * i * num_channels + ch, 1, "P");
+                    calib_frames_[c][i].replace(
+                        guard_mult_ * i * num_channels + ch, 1, "P");
                 }
                 for (size_t k = 0; k < n_bs_sdrs_[c]; k++) {
                     if (i != k) {
@@ -223,7 +223,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                 }
             }
 #if DEBUG_PRINT
-            for (auto i = calib_frames_[c].begin(); i != calib_frames_[c].end(); ++i)
+            for (auto i = calib_frames_[c].begin(); i != calib_frames_[c].end();
+                 ++i)
                 std::cout << *i << ' ' << std::endl;
 #endif
         }
@@ -231,7 +232,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         if (ref_node_enable_ == true) {
             pilot_slot_per_frame_ = 2; // Two pilots (up/down)
         } else {
-            pilot_slot_per_frame_ = 2 * n_bs_sdrs_[0]; // Two pilots per board (up/down)
+            pilot_slot_per_frame_ = num_channels
+                * n_bs_sdrs_[0]; // Two pilots per board (up/down)
         }
         noise_slot_per_frame_ = 0;
         ul_slot_per_frame_ = 0;
@@ -360,7 +362,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
     ul_data_slot_present_ = (internal_measurement_ == false)
         && ((bs_present_ && (ul_slots_.at(0).empty() == false))
-            || (client_present_ && !cl_ul_slots_.at(0).empty()));
+               || (client_present_ && !cl_ul_slots_.at(0).empty()));
 
     std::vector<std::complex<int16_t>> prefix_zpad(prefix_, 0);
     std::vector<std::complex<int16_t>> postfix_zpad(postfix_, 0);
@@ -522,12 +524,13 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         rx_thread_num_ = (num_cores >= (2 * RX_THREAD_NUM))
             ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_sdrs_all_))
             : 1;
-        if (internal_measurement_ == true) {        // OBCH how many threads if reading from all boards???
+        if (internal_measurement_
+            == true) { // OBCH how many threads if reading from all boards???
             rx_thread_num_ = 2;
         }
         if ((client_present_ == true)
             && (num_cores
-                < (1 + task_thread_num_ + rx_thread_num_ + num_cl_sdrs_))) {
+                   < (1 + task_thread_num_ + rx_thread_num_ + num_cl_sdrs_))) {
             core_alloc_ = false;
         }
     } else {
@@ -760,7 +763,10 @@ bool Config::isRx(int frame_id, int slot_id)
 {
     // Generic RX (assuming cell == 0)
     try {
-        return calib_frames_[0][frame_id % calib_frames_[0].size()].at(slot_id) == 'R' || calib_frames_[0][frame_id % calib_frames_[0].size()].at(slot_id) == 'P';
+        return calib_frames_[0][frame_id % calib_frames_[0].size()].at(slot_id)
+            == 'R'
+            || calib_frames_[0][frame_id % calib_frames_[0].size()].at(slot_id)
+            == 'P';
     } catch (const std::out_of_range&) {
         return false;
     }
