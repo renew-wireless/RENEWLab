@@ -36,6 +36,7 @@ public:
         return this->ul_data_slot_present_;
     }
     inline size_t num_cells(void) const { return this->num_cells_; }
+    inline size_t guard_mult(void) const { return this->guard_mult_; }
     inline bool hw_framer(void) const { return this->hw_framer_; }
     inline int prefix(void) const { return this->prefix_; }
     inline int postfix(void) const { return this->postfix_; }
@@ -109,7 +110,8 @@ public:
     {
         return this->n_bs_sdrs_agg_;
     }
-    inline bool reciprocal_calib(void) const { return this->reciprocal_calib_; }
+    inline bool internal_measurement(void) const { return this->internal_measurement_; }
+    inline bool ref_node_enable(void) const { return this->ref_node_enable_; }
     inline size_t cal_ref_sdr_id(void) const { return this->cal_ref_sdr_id_; }
     inline const std::vector<std::vector<std::string>>& calib_frames(void) const
     {
@@ -308,6 +310,7 @@ private:
 
     // BS features
     size_t num_cells_;
+    size_t guard_mult_;
     std::vector<std::string> bs_sdr_file_; // No accessor
     std::string hub_file_; // No accessor
     std::string ref_sdr;
@@ -344,7 +347,8 @@ private:
     bool imbalance_cal_en_;
     std::string trace_file_;
     std::vector<std::vector<std::string>> calib_frames_;
-    bool reciprocal_calib_;
+    bool internal_measurement_;
+    bool ref_node_enable_;
     size_t cal_ref_sdr_id_;
 
     // Clients features

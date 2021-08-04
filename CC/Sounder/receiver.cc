@@ -43,7 +43,7 @@ Receiver::Receiver(int n_rx_threads, Config* config,
     if (((this->base_radio_set_ != nullptr)
             && (this->base_radio_set_->getRadioNotFound()))
         || ((this->clientRadioSet_ != nullptr)
-            && (this->clientRadioSet_->getRadioNotFound()))) {
+               && (this->clientRadioSet_->getRadioNotFound()))) {
         if (this->base_radio_set_ != nullptr) {
             MLPD_WARN("Invalid Base Radio Setup: %d\n",
                 this->base_radio_set_ == nullptr);
@@ -168,7 +168,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     }
 
     // Use mutex to sychronize data receiving across threads
-    if (config_->reciprocal_calib()
+    if (config_->internal_measurement()
         || ((config_->num_cl_sdrs() > 0) && (config_->num_bs_sdrs_all() > 0))) {
         pthread_mutex_lock(&mutex);
         MLPD_INFO("Recv Thread %d: waiting for release\n", tid);
@@ -190,7 +190,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
     size_t num_radios = config_->num_bs_sdrs_all(); //config_->n_bs_sdrs()[0]
     std::vector<size_t> radio_ids_in_thread;
-    if (config_->reciprocal_calib()) {
+    if (config_->internal_measurement() && config_->ref_node_enable()) {
         if (tid == 0)
             radio_ids_in_thread.push_back(config_->cal_ref_sdr_id());
         else
@@ -292,8 +292,10 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             }
 
             size_t radio_idx = it - config_->n_bs_sdrs_agg().at(cell);
-            size_t num_packets = config_->reciprocal_calib()
+
+            size_t num_packets = config_->internal_measurement()
                     && radio_idx == config_->cal_ref_sdr_id()
+                    && config_->ref_node_enable()
                 ? 1
                 : num_channels; // receive only on one channel at the ref antenna
 
@@ -337,7 +339,9 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
                 frame_id = (size_t)(frameTime >> 32);
                 slot_id = (size_t)((frameTime >> 16) & 0xFFFF);
-                if (config_->reciprocal_calib()) {
+
+                if (config_->internal_measurement()
+                    && config_->ref_node_enable()) {
                     if (radio_idx == config_->cal_ref_sdr_id()) {
                         ant_id = slot_id < radio_idx * num_channels
                             ? slot_id
@@ -348,6 +352,12 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                             ant_id -= num_channels;
                         slot_id = 1; // uplink reciprocal pilot
                     }
+                } else if (config_->internal_measurement()
+                    && !config_->ref_node_enable()) {
+                    // Mapping (compress schedule to eliminate Gs)
+                    size_t adv
+                        = int(slot_id / (config_->guard_mult() * num_channels));
+                    slot_id = slot_id - ((config_->guard_mult() - 1) * 2 * adv);
                 }
             } else {
                 int rx_len = config_->samps_per_slot();
