@@ -758,19 +758,6 @@ bool Config::isData(int frame_id, int slot_id)
     }
 }
 
-bool Config::isRx(int frame_id, int slot_id)
-{
-    // Generic RX (assuming cell == 0)
-    try {
-        return calib_frames_[0][frame_id % calib_frames_[0].size()].at(slot_id)
-            == 'R'
-            || calib_frames_[0][frame_id % calib_frames_[0].size()].at(slot_id)
-            == 'P';
-    } catch (const std::out_of_range&) {
-        return false;
-    }
-}
-
 unsigned Config::getCoreCount()
 {
     unsigned n_cores = std::thread::hardware_concurrency();

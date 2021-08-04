@@ -274,7 +274,6 @@ public:
     bool isPilot(int, int);
     bool isNoise(int, int);
     bool isData(int, int);
-    bool isRx(int, int);
     unsigned getCoreCount();
     void loadULData(const std::string&);
 
