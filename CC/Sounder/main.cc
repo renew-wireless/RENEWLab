@@ -15,6 +15,7 @@
 #include "include/signalHandler.hpp"
 #include "include/version_config.h"
 #include <gflags/gflags.h>
+#include <unistd.h>
 
 DEFINE_bool(gen_ul_bits, false,
     "Generate random bits for uplink transmissions, otherwise read from file!");
@@ -36,22 +37,36 @@ int main(int argc, char* argv[])
         DataGenerator dg(&config);
         dg.GenerateData(FLAGS_storepath);
     } else {
-        try {
-            SignalHandler signalHandler;
+        int cnt = 0;
+        int maxTry = 2;
+        while (true) {
+            try {
+                SignalHandler signalHandler;
 
-            // Register signal handler to handle kill signal
-            signalHandler.setupSignalHandlers();
-            config.loadULData(FLAGS_storepath);
-            Sounder::Recorder dr(&config);
-            dr.do_it();
-            ret = EXIT_SUCCESS;
-        } catch (SignalException& e) {
-            std::cerr << "SignalException: " << e.what() << std::endl;
-            ret = EXIT_FAILURE;
-        } catch (const std::exception& exc) {
-            std::cerr << "Program terminated Exception: " << exc.what()
-                      << std::endl;
-            ret = EXIT_FAILURE;
+                // Register signal handler to handle kill signal
+                signalHandler.setupSignalHandlers();
+                config.loadULData(FLAGS_storepath);
+                Sounder::Recorder dr(&config);
+                dr.do_it();
+                ret = EXIT_SUCCESS;
+                break;
+            } catch (SignalException& e) {
+                std::cerr << "SignalException: " << e.what() << std::endl;
+                ret = EXIT_FAILURE;
+                break;
+            } catch (const std::exception& exc) {
+                // Discovery usually fails on the first run, re-try
+                if (++cnt >= maxTry) {
+                    std::cerr
+                        << "Re-try exceeded... Program terminated Exception: "
+                        << exc.what() << std::endl;
+                    ret = EXIT_FAILURE;
+                    break;
+                }
+                std::cout << "Exception: " << exc.what() << " Re-Try!"
+                          << std::endl;
+                usleep(1e6);
+            }
         }
     }
     gflags::ShutDownCommandLineFlags();
