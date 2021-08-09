@@ -203,21 +203,44 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         for (size_t c = 0; c < num_cells_; c++) {
             cal_ref_sdr_id_ = n_bs_sdrs_[c] - 1;
             calib_frames_[c].resize(n_bs_sdrs_[c]);
-            size_t frame_length = num_channels * n_bs_sdrs_[c] * guard_mult_;
 
-            for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
-                calib_frames_[c][i] = std::string(frame_length, 'G');
-            }
-            for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
-                for (size_t ch = 0; ch < num_channels; ch++) {
-                    calib_frames_[c][i].replace(
-                        guard_mult_ * i * num_channels + ch, 1, "P");
-                }
-                for (size_t k = 0; k < n_bs_sdrs_[c]; k++) {
-                    if (i != k) {
+            // For measurements with single reference node
+            if (ref_node_enable_) {
+                size_t frame_length
+                    = num_channels * n_bs_sdrs_[c] - (num_channels - 1);
+                calib_frames_[c][cal_ref_sdr_id_] = std::string(frame_length, 'G');
+                calib_frames_[c][cal_ref_sdr_id_].replace(
+                    num_channels * cal_ref_sdr_id_, 1, "P");
+                for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
+                    if (i != cal_ref_sdr_id_) {
+                        calib_frames_[c][i] = std::string(frame_length, 'G');
                         for (size_t ch = 0; ch < num_channels; ch++) {
-                            calib_frames_[c][k].replace(
-                                guard_mult_ * i * num_channels + ch, 1, "R");
+                            calib_frames_[c][i].replace(
+                                i * num_channels + ch, 1, "P");
+                            calib_frames_[c][cal_ref_sdr_id_].replace(
+                                num_channels * i + ch, 1, "R");
+                        }
+                        calib_frames_[c][i].replace(
+                            num_channels * cal_ref_sdr_id_, 1, "R");
+                    }
+                }
+            } else {
+                // For full matrix measurements (all bs nodes transmit and receive)
+                size_t frame_length = num_channels * n_bs_sdrs_[c] * guard_mult_;
+                for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
+                    calib_frames_[c][i] = std::string(frame_length, 'G');
+                }
+                for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
+                    for (size_t ch = 0; ch < num_channels; ch++) {
+                        calib_frames_[c][i].replace(
+                            guard_mult_ * i * num_channels + ch, 1, "P");
+                    }
+                    for (size_t k = 0; k < n_bs_sdrs_[c]; k++) {
+                        if (i != k) {
+                            for (size_t ch = 0; ch < num_channels; ch++) {
+                                calib_frames_[c][k].replace(
+                                    guard_mult_ * i * num_channels + ch, 1, "R");
+                            }
                         }
                     }
                 }
