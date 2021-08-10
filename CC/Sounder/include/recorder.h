@@ -14,13 +14,13 @@
 #include "receiver.h"
 #include "recorder_thread.h"
 
+
 namespace Sounder {
 
-class RetryableError : public std::exception {
-    virtual const char* what() const throw()
-    {
-        return "XX Receiver could not be setup correctly!";
-    }
+class RetryableError : public std::runtime_error {
+    public:
+    RetryableError() : std::runtime_error("Receiver could not be setup correctly!") { }
+    RetryableError(const std::string& _message) : std::runtime_error(_message) { }
 };
 
 class Recorder {

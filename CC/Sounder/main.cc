@@ -50,12 +50,12 @@ int main(int argc, char* argv[])
                 dr.do_it();
                 ret = EXIT_SUCCESS;
 
-            } catch (SignalException& e) {
+            } catch (const SignalException& e) {
                 std::cerr << "SignalException: " << e.what() << std::endl;
                 ret = EXIT_FAILURE;
                 break;
 
-            } catch (RetryableError& rex) {
+            } catch (const Sounder::RetryableError& rex) {
                 // Discovery usually fails on the first run, re-try
                 std::cout << "Exception: " << rex.what() << " Re-Try!" << std::endl;
                 usleep(1e6);
@@ -64,7 +64,6 @@ int main(int argc, char* argv[])
                 std::cerr << "Re-try exceeded... Program terminated Exception: " << exc.what() << std::endl;
                 ret = EXIT_FAILURE;
                 break;
-
             }
         }
     }
