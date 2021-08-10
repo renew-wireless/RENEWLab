@@ -57,11 +57,13 @@ int main(int argc, char* argv[])
 
             } catch (const Sounder::RetryableError& rex) {
                 // Discovery usually fails on the first run, re-try
-                std::cout << "Exception: " << rex.what() << " Re-Try!" << std::endl;
+                std::cout << "Exception: " << rex.what() << " Re-Try!"
+                          << std::endl;
                 usleep(1e6);
 
             } catch (const std::exception& exc) {
-                std::cerr << "Re-try exceeded... Program terminated Exception: " << exc.what() << std::endl;
+                std::cerr << "Re-try exceeded... Program terminated Exception: "
+                          << exc.what() << std::endl;
                 ret = EXIT_FAILURE;
                 break;
             }
