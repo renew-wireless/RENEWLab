@@ -32,14 +32,14 @@ int main(int argc, char* argv[])
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     Config config(
         FLAGS_conf, FLAGS_storepath, FLAGS_bs_only, FLAGS_client_only);
-    int ret = EXIT_SUCCESS;
+    int ret = EXIT_FAILURE;
     if (FLAGS_gen_ul_bits) {
         DataGenerator dg(&config);
         dg.GenerateData(FLAGS_storepath);
     } else {
         int cnt = 0;
         int maxTry = 2;
-        while (true) {
+        while (cnt++ < maxTry && ret == EXIT_FAILURE) {
             try {
                 SignalHandler signalHandler;
 
@@ -49,23 +49,22 @@ int main(int argc, char* argv[])
                 Sounder::Recorder dr(&config);
                 dr.do_it();
                 ret = EXIT_SUCCESS;
-                break;
+
             } catch (SignalException& e) {
                 std::cerr << "SignalException: " << e.what() << std::endl;
                 ret = EXIT_FAILURE;
                 break;
-            } catch (const std::exception& exc) {
+
+            } catch (RetryableError& rex) {
                 // Discovery usually fails on the first run, re-try
-                if (++cnt >= maxTry) {
-                    std::cerr
-                        << "Re-try exceeded... Program terminated Exception: "
-                        << exc.what() << std::endl;
-                    ret = EXIT_FAILURE;
-                    break;
-                }
-                std::cout << "Exception: " << exc.what() << " Re-Try!"
-                          << std::endl;
+                std::cout << "Exception: " << rex.what() << " Re-Try!" << std::endl;
                 usleep(1e6);
+
+            } catch (const std::exception& exc) {
+                std::cerr << "Re-try exceeded... Program terminated Exception: " << exc.what() << std::endl;
+                ret = EXIT_FAILURE;
+                break;
+
             }
         }
     }

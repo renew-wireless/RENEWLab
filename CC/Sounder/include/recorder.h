@@ -15,6 +15,14 @@
 #include "recorder_thread.h"
 
 namespace Sounder {
+
+class RetryableError : public std::exception {
+    virtual const char* what() const throw()
+    {
+        return "XX Receiver could not be setup correctly!";
+    }
+};
+
 class Recorder {
 public:
     Recorder(Config* in_cfg, unsigned int core_start = 0u);

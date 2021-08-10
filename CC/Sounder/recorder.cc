@@ -63,7 +63,8 @@ Recorder::Recorder(Config* in_cfg, unsigned int core_start)
     } catch (std::exception& e) {
         std::cout << e.what() << '\n';
         gc();
-        throw runtime_error("Error Setting up the Receiver");
+        // throw runtime_error("Error Setting up the Receiver");
+        throw RetryableError("Error Setting up the Receiver");
     }
 }
 
