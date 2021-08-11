@@ -16,18 +16,6 @@
 
 namespace Sounder {
 
-class RetryableError : public std::runtime_error {
-public:
-    RetryableError()
-        : std::runtime_error("Receiver could not be setup correctly!")
-    {
-    }
-    RetryableError(const std::string& _message)
-        : std::runtime_error(_message)
-    {
-    }
-};
-
 class Recorder {
 public:
     Recorder(Config* in_cfg, unsigned int core_start = 0u);

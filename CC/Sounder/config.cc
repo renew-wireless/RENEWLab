@@ -122,15 +122,11 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     beam_sweep_ = tddConf.value("beamsweep", false);
     beacon_ant_ = tddConf.value("beacon_antenna", 0);
     max_frame_ = tddConf.value("max_frame", 0);
-
-    // Load serials file (loads hub, sdr, and rrh serials)
-    std::string serials_str;
-    auto serials_file_ = tddConf.value("serials_file", "./files/topology.json");
-    Utils::loadTDDConfig(serials_file_, serials_str);
-    const auto j_serials = json::parse(serials_str, nullptr, true, true);
-    json serials_conf;
-
     num_cells_ = tddConf.value("cells", 1);
+
+    if (!bs_present_)
+        num_cells_ = 0;
+
     MLPD_TRACE("Number cells: %zu\n", num_cells_);
     hub_ids_.resize(num_cells_);
     bs_sdr_ids_.resize(num_cells_);
@@ -150,6 +146,13 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     ref_node_enable_ = tddConf.value("reference_node_enable", true);
     guard_mult_ = tddConf.value("meas_guard_interval_mult", 1);
     for (size_t i = 0; i < num_cells_; i++) {
+
+        // Load serials file (loads hub, sdr, and rrh serials)
+        std::string serials_str;
+        auto serials_file_ = tddConf.value("serials_file", "./files/topology.json");
+        Utils::loadTDDConfig(serials_file_, serials_str);
+        const auto j_serials = json::parse(serials_str, nullptr, true, true);
+        json serials_conf;
         std::string cell_str = "Cell" + std::to_string(i);
         ss << j_serials[0].value(cell_str, serials_conf);
         serials_conf = json::parse(ss);

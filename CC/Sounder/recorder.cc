@@ -60,10 +60,10 @@ Recorder::Recorder(Config* in_cfg, unsigned int core_start)
     // Receiver object will be used for both BS and clients
     try {
         receiver_.reset(new Receiver(rx_thread_num, cfg_, &message_queue_));
-    } catch (std::exception& e) {
-        std::cout << e.what() << '\n';
+    } catch (ReceiverException& re) {
+        std::cout << re.what() << '\n';
         gc();
-        throw RetryableError();
+        throw ReceiverException("Radios Not Found. Will attempt a retry...");
     }
 }
 
