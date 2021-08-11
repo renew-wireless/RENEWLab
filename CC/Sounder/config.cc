@@ -149,7 +149,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
         // Load serials file (loads hub, sdr, and rrh serials)
         std::string serials_str;
-        auto serials_file_ = tddConf.value("serials_file", "./files/topology.json");
+        auto serials_file_
+            = tddConf.value("serials_file", "./files/topology.json");
         Utils::loadTDDConfig(serials_file_, serials_str);
         const auto j_serials = json::parse(serials_str, nullptr, true, true);
         json serials_conf;

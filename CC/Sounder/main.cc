@@ -60,11 +60,12 @@ int main(int argc, char* argv[])
                 // Discovery usually fails on the first run, re-try
                 std::cout << "Exception: " << rex.what() << " Re-Try Now!"
                           << std::endl;
-                std::this_thread::sleep_for (std::chrono::seconds(1));
+                std::this_thread::sleep_for(std::chrono::seconds(1));
 
             } catch (const std::exception& exc) {
-                std::cerr << "Exception Encountered... Program terminated due to "
-                          << exc.what() << std::endl;
+                std::cerr
+                    << "Exception Encountered... Program terminated due to "
+                    << exc.what() << std::endl;
                 ret = EXIT_FAILURE;
                 break;
             }
