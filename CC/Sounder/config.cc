@@ -128,7 +128,6 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         num_cells_ = 0;
 
     MLPD_TRACE("Number cells: %zu\n", num_cells_);
-    hub_ids_.resize(num_cells_);
     bs_sdr_ids_.resize(num_cells_);
     calib_ids_.resize(num_cells_);
     n_bs_sdrs_.resize(num_cells_);
@@ -155,12 +154,14 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         const auto j_serials = json::parse(serials_str, nullptr, true, true);
         json serials_conf;
         std::string cell_str = "Cell" + std::to_string(i);
-        ss << j_serials[0].value(cell_str, serials_conf);
+        ss << j_serials[i].value(cell_str, serials_conf);
         serials_conf = json::parse(ss);
         ss.str(std::string());
         ss.clear();
 
-        hub_ids_.at(i) = serials_conf.value("hub", "");
+        auto hub_serial = serials_conf.value("hub", "");
+        if (hub_serial != "")
+            hub_ids_.push_back(hub_serial);
         auto sdr_serials = serials_conf.value("sdr", json::array());
         bs_sdr_ids_.at(i).assign(sdr_serials.begin(), sdr_serials.end());
 
@@ -186,7 +187,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     // Print Topology
     std::cout << "Topology: " << std::endl;
     for (size_t i = 0; i < bs_sdr_ids_.size(); i++) {
-        std::cout << "Cell" + std::to_string(i) + " Hub:" << hub_ids_.at(i)
+        std::cout << "Cell" + std::to_string(i) + " Hub:"
+                  << (hub_ids_.empty() == false ? hub_ids_.at(i) : "")
                   << std::endl;
         for (size_t j = 0; j < bs_sdr_ids_.at(i).size(); j++) {
             std::cout << " \t- " << bs_sdr_ids_.at(i).at(j) << std::endl;
