@@ -94,10 +94,12 @@ public:
     void clientTxRx(int tid);
     void clientSyncTxRx(int tid);
 
-    void CFOEstimation(const int sync_index, const std::vector<std::complex<float>>& beacon_buff);
-    void CFOCorrection(bool downlink, std::vector<std::complex<float>>& samples_vec);
-    double GetCFO(){ return cfo_; };
-    
+    void CFOEstimation(const int sync_index,
+        const std::vector<std::complex<float>>& beacon_buff);
+    void CFOCorrection(
+        bool downlink, std::vector<std::complex<float>>& samples_vec);
+    double GetCFO() { return cfo_; };
+
 private:
     Config* config_;
     ClientRadioSet* clientRadioSet_;
@@ -105,6 +107,7 @@ private:
 
     int thread_num_;
     double cfo_;
+    size_t frame_cnt_cfo_;
     // pointer of message_queue_
     moodycamel::ConcurrentQueue<Event_data>* message_queue_;
 };
