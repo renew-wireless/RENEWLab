@@ -122,17 +122,12 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     beam_sweep_ = tddConf.value("beamsweep", false);
     beacon_ant_ = tddConf.value("beacon_antenna", 0);
     max_frame_ = tddConf.value("max_frame", 0);
-
-    // Load serials file (loads hub, sdr, and rrh serials)
-    std::string serials_str;
-    auto serials_file_ = tddConf.value("serials_file", "./files/topology.json");
-    Utils::loadTDDConfig(serials_file_, serials_str);
-    const auto j_serials = json::parse(serials_str, nullptr, true, true);
-    json serials_conf;
-
     num_cells_ = tddConf.value("cells", 1);
+
+    if (!bs_present_)
+        num_cells_ = 0;
+
     MLPD_TRACE("Number cells: %zu\n", num_cells_);
-    hub_ids_.resize(num_cells_);
     bs_sdr_ids_.resize(num_cells_);
     calib_ids_.resize(num_cells_);
     n_bs_sdrs_.resize(num_cells_);
@@ -150,13 +145,23 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     ref_node_enable_ = tddConf.value("reference_node_enable", true);
     guard_mult_ = tddConf.value("meas_guard_interval_mult", 1);
     for (size_t i = 0; i < num_cells_; i++) {
+
+        // Load serials file (loads hub, sdr, and rrh serials)
+        std::string serials_str;
+        auto serials_file_
+            = tddConf.value("serials_file", "./files/topology.json");
+        Utils::loadTDDConfig(serials_file_, serials_str);
+        const auto j_serials = json::parse(serials_str, nullptr, true, true);
+        json serials_conf;
         std::string cell_str = "Cell" + std::to_string(i);
-        ss << j_serials[0].value(cell_str, serials_conf);
+        ss << j_serials[i].value(cell_str, serials_conf);
         serials_conf = json::parse(ss);
         ss.str(std::string());
         ss.clear();
 
-        hub_ids_.at(i) = serials_conf.value("hub", "");
+        auto hub_serial = serials_conf.value("hub", "");
+        if (hub_serial != "")
+            hub_ids_.push_back(hub_serial);
         auto sdr_serials = serials_conf.value("sdr", json::array());
         bs_sdr_ids_.at(i).assign(sdr_serials.begin(), sdr_serials.end());
 
@@ -182,7 +187,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     // Print Topology
     std::cout << "Topology: " << std::endl;
     for (size_t i = 0; i < bs_sdr_ids_.size(); i++) {
-        std::cout << "Cell" + std::to_string(i) + " Hub:" << hub_ids_.at(i)
+        std::cout << "Cell" + std::to_string(i) + " Hub:"
+                  << (hub_ids_.empty() == false ? hub_ids_.at(i) : "")
                   << std::endl;
         for (size_t j = 0; j < bs_sdr_ids_.at(i).size(); j++) {
             std::cout << " \t- " << bs_sdr_ids_.at(i).at(j) << std::endl;
@@ -203,21 +209,47 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         for (size_t c = 0; c < num_cells_; c++) {
             cal_ref_sdr_id_ = n_bs_sdrs_[c] - 1;
             calib_frames_[c].resize(n_bs_sdrs_[c]);
-            size_t frame_length = num_channels * n_bs_sdrs_[c] * guard_mult_;
 
-            for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
-                calib_frames_[c][i] = std::string(frame_length, 'G');
-            }
-            for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
-                for (size_t ch = 0; ch < num_channels; ch++) {
-                    calib_frames_[c][i].replace(
-                        guard_mult_ * i * num_channels + ch, 1, "P");
-                }
-                for (size_t k = 0; k < n_bs_sdrs_[c]; k++) {
-                    if (i != k) {
+            // For measurements with single reference node
+            if (ref_node_enable_) {
+                size_t frame_length
+                    = num_channels * n_bs_sdrs_[c] - (num_channels - 1);
+                calib_frames_[c][cal_ref_sdr_id_]
+                    = std::string(frame_length, 'G');
+                calib_frames_[c][cal_ref_sdr_id_].replace(
+                    num_channels * cal_ref_sdr_id_, 1, "P");
+                for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
+                    if (i != cal_ref_sdr_id_) {
+                        calib_frames_[c][i] = std::string(frame_length, 'G');
                         for (size_t ch = 0; ch < num_channels; ch++) {
-                            calib_frames_[c][k].replace(
-                                guard_mult_ * i * num_channels + ch, 1, "R");
+                            calib_frames_[c][i].replace(
+                                i * num_channels + ch, 1, "P");
+                            calib_frames_[c][cal_ref_sdr_id_].replace(
+                                num_channels * i + ch, 1, "R");
+                        }
+                        calib_frames_[c][i].replace(
+                            num_channels * cal_ref_sdr_id_, 1, "R");
+                    }
+                }
+            } else {
+                // For full matrix measurements (all bs nodes transmit and receive)
+                size_t frame_length
+                    = num_channels * n_bs_sdrs_[c] * guard_mult_;
+                for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
+                    calib_frames_[c][i] = std::string(frame_length, 'G');
+                }
+                for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
+                    for (size_t ch = 0; ch < num_channels; ch++) {
+                        calib_frames_[c][i].replace(
+                            guard_mult_ * i * num_channels + ch, 1, "P");
+                    }
+                    for (size_t k = 0; k < n_bs_sdrs_[c]; k++) {
+                        if (i != k) {
+                            for (size_t ch = 0; ch < num_channels; ch++) {
+                                calib_frames_[c][k].replace(
+                                    guard_mult_ * i * num_channels + ch, 1,
+                                    "R");
+                            }
                         }
                     }
                 }

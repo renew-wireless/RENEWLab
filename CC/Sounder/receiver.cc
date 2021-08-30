@@ -33,10 +33,16 @@ Receiver::Receiver(int n_rx_threads, Config* config,
 
     MLPD_TRACE("Receiver Construction - CL present: %d, BS Present: %d\n",
         config_->client_present(), config_->bs_present());
-    this->clientRadioSet_
-        = config_->client_present() ? new ClientRadioSet(config_) : nullptr;
-    this->base_radio_set_
-        = config_->bs_present() ? new BaseRadioSet(config_) : nullptr;
+
+    try {
+        this->clientRadioSet_
+            = config_->client_present() ? new ClientRadioSet(config_) : nullptr;
+        this->base_radio_set_
+            = config_->bs_present() ? new BaseRadioSet(config_) : nullptr;
+    } catch (std::exception& e) {
+        throw ReceiverException("Invalid Radio Setup");
+    }
+
     MLPD_TRACE("Receiver Construction -- number radios %zu\n",
         config_->num_bs_sdrs_all());
 
@@ -56,7 +62,7 @@ Receiver::Receiver(int n_rx_threads, Config* config,
             this->clientRadioSet_->radioStop();
             delete this->clientRadioSet_;
         }
-        throw ReceiverException();
+        throw ReceiverException("Invalid Radio Setup");
     }
     MLPD_TRACE("Construction complete\n");
 }

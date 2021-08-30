@@ -27,10 +27,15 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-class ReceiverException : public std::exception {
-    virtual const char* what() const throw()
+class ReceiverException : public std::runtime_error {
+public:
+    ReceiverException()
+        : std::runtime_error("Receiver could not be setup correctly!")
     {
-        return "Receiver could not be setup correctly!";
+    }
+    explicit ReceiverException(const std::string& message)
+        : std::runtime_error(message)
+    {
     }
 };
 

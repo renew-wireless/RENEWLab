@@ -15,6 +15,7 @@
 #include "recorder_thread.h"
 
 namespace Sounder {
+
 class Recorder {
 public:
     Recorder(Config* in_cfg, unsigned int core_start = 0u);
