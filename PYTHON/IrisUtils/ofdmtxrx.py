@@ -285,7 +285,7 @@ class ofdmTxRx:
         # Compute CFO
         tmp = np.unwrap(np.angle(lts_2 * np.conjugate(lts_1)))
         coarse_cfo_est = np.mean(tmp)
-        coarse_cfo_est = coarse_cfo_est / (2 * np.pi * 64)
+        coarse_cfo_est = coarse_cfo_est / (2 * np.pi)  # * 64) # OBCH
         return coarse_cfo_est
 
     def sfo_correction(self, rxSig_freq_eq, pilot_sc, pilots_matrix, n_ofdm_syms):

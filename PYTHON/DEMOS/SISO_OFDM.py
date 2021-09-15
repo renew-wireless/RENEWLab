@@ -213,7 +213,7 @@ def find_optimal_gain(sdrTx, sdrRx):
     print("IDXtx: {}, IDXrx: {}, TXG: {} RXG: {}".format(nextValTX, nextValRX, txgain, rxgain))
 
 
-def animate(i, num_samps_rd, rxStream, sdr, sdrTx, ofdm_params, tx_struct, ota, ofdm_obj, agc_en, infoTx):
+def animate(i, num_samps_rd, rxStream, sdr, sdrTx, ofdm_params, tx_struct, ota, ofdm_obj, agc_en, infoTx, rate):
     global FIG_LEN, pkt_count, ax6
 
     pkt_count = pkt_count + 1
@@ -322,10 +322,12 @@ def animate(i, num_samps_rd, rxStream, sdr, sdrTx, ofdm_params, tx_struct, ota, 
     # Apply CFO Correction
     if APPLY_CFO_CORR:
         coarse_cfo_est = ofdm_obj.cfo_correction(rxSignal, lts_start, lts_syms_len, fft_offset)
+        cfo_hz = coarse_cfo_est * rate
+        print("CFO (hz): {}".format(cfo_hz))
     else:
         coarse_cfo_est = 0
 
-    correction_vec = np.exp(-1j * 2 * np.pi * coarse_cfo_est * np.array(range(0, len(rxSignal))))
+    correction_vec = np.exp(-1j * 2 * np.pi * (coarse_cfo_est / 64) * np.array(range(0, len(rxSignal))))
     rxSignal_cfo = rxSignal * correction_vec
 
     # Channel estimation
@@ -549,7 +551,7 @@ def txrx_app(args, rate, ampl, ant, txgain, rxgain, freq, bbfreq, serialTx, seri
     # Start animation
     anim = MyFuncAnimation(fig, animate,
                                    init_func=init,
-                                   fargs=(num_samps_rd, rxStream, sdrRx, sdrTx, ofdm_params, tx_struct, ota, ofdm_obj, agc_en, infoTx),
+                                   fargs=(num_samps_rd, rxStream, sdrRx, sdrTx, ofdm_params, tx_struct, ota, ofdm_obj, agc_en, infoTx, rate),
                                    frames=100,
                                    interval=100,
                                    blit=True)
@@ -565,9 +567,9 @@ def main():
     parser.add_option("--rate", type="float", dest="rate", help="Tx and Rx sample rate", default=5e6)
     parser.add_option("--ampl", type="float", dest="ampl", help="Tx digital amplitude scale", default=1)
     parser.add_option("--ant", type="string", dest="ant", help="Optional Tx antenna", default="A")
-    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=80.0)  # See documentation at top of file for info on gain range
-    parser.add_option("--rxgain", type="float", dest="rxgain", help="Rx gain (dB)", default=75.0)  # See documentation at top of file for info on gain range
-    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=0)
+    parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=70.0)  # See documentation at top of file for info on gain range
+    parser.add_option("--rxgain", type="float", dest="rxgain", help="Rx gain (dB)", default=50.0)  # See documentation at top of file for info on gain range
+    parser.add_option("--freq", type="float", dest="freq", help="Tx RF freq (Hz)", default=3.597e9)
     parser.add_option("--bbfreq", type="float", dest="bbfreq", help="Lime chip Baseband frequency (Hz)", default=0)
     parser.add_option("--nOFDMsym", type="int", dest="nOFDMsym", help="Number of OFDM symbols", default=20)
     parser.add_option("--ltsCpLen", type="int", dest="ltsCpLen", help="Length of Cyclic Prefix - LTS", default=32)
@@ -575,8 +577,8 @@ def main():
     parser.add_option("--nSC", type="int", dest="nSC", help="# of subcarriers. Only supports 64 sc at the moment", default=64)
     parser.add_option("--fftOfset", type="int", dest="fftOffset", help="FFT Offset: # of CP samples for FFT", default=6)
     parser.add_option("--modOrder", type="int", dest="modOrder", help="Modulation Order 2=BPSK/4=QPSK/16=16QAM/64=64QAM", default=16)
-    parser.add_option("--serialTx", type="string", dest="serialTx", help="Serial # of TX device", default="RF3E000143")
-    parser.add_option("--serialRx", type="string", dest="serialRx", help="Serial # of RX device", default="RF3E000030")
+    parser.add_option("--serialTx", type="string", dest="serialTx", help="Serial # of TX device", default="RF3E000295")
+    parser.add_option("--serialRx", type="string", dest="serialRx", help="Serial # of RX device", default="RF3E000208")
     parser.add_option("--nSampsRead", type="int", dest="nSampsRead", help="# Samples to read", default=FIG_LEN)
     parser.add_option("--mode", type="string", dest="mode", help="Simulation vs Over-the-Air (i.e., SIM/OTA)", default="OTA")
     parser.add_option("--agc_en", action="store_true", dest="agc_en", help="Flag to enable AGC", default=False)  # Currently under testing

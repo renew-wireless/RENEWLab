@@ -3,17 +3,17 @@
 		 "cells" : 1,
 		 "sdr_id" : ["files/iris-serials.txt"],
 		 "hub_id" : "files/hub-serials.txt",
-		 "frequency" : 2.5e9,
+		 "frequency" : 3.6e9,
 		 "channel" : "AB",
 		 "rxgainA" : 65,
-		 "txgainA" : 87,
+		 "txgainA" : 60,
 		 "rxgainB" : 65,
-		 "txgainB" : 87,
+		 "txgainB" : 60,
 		 "rate" : 5e6,
 		 "frame_schedule" : [
-		     "BGPPGGGGGGGGGGGGGGGG"
+		     "BGPPGGGGGGGNGGGGGGGG"
 		 ],
-		 "max_frame" : 4000,
+		 "max_frame" : 2000,
 		 "ofdm_symbol_per_subframe" : 10,
 		 "fft_size" : 64,
 		 "cp_size" : 16,
@@ -25,14 +25,14 @@
 
 	"Clients" : {
 		 "sdr_id" : [
-		     "RF3E000030"
+		     "RF3E000392"
 		 ],
-		 "frequency" : 2.5e9,
+		 "frequency" : 3.6e9,
 		 "channel" : "AB",
 		 "rxgainA" : [65],
-		 "txgainA" : [87],
+		 "txgainA" : [60],
 		 "rxgainB" : [65],
-		 "txgainB" : [87],
+		 "txgainB" : [60],
 		 "rate" : 5e6,
 		 "frame_schedule" : [
 		     "GGPPGGGGGGGGGGGGGGGG"
@@ -43,6 +43,7 @@
 		 "cp_size" : 16,
 		 "prefix" : 160,
 		 "postfix" : 160,
+		 "cfo_correction_en" : true,
 		 "tx_advance" : 135,
 		 "hw_framer" : false
 	}

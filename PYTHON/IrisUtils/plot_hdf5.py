@@ -29,6 +29,8 @@ from channel_analysis import *
 import hdf5_lib
 from hdf5_lib import *
 import matplotlib
+from scipy import stats
+import scipy.stats as st
 #matplotlib.use("Agg")
 
 def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
@@ -323,6 +325,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 # UL DATA: #Frames, #User, # Frame DATA SCs
                 # ul_data = np.reshape(ul_data, (ul_data.shape[0], ul_data.shape[1], ul_data.shape[2] * ul_data.shape[3]))
                 evm = np.empty((ul_data.shape[0], ul_data.shape[1]), dtype='complex64')
+                evm_hist = np.empty((ul_data.shape[0], ul_data.shape[1]))
 
                 ul_data_frame_num = int(metadata['UL_DATA_FRAME_NUM'])
                 txdata = np.empty((ul_data_frame_num, num_cl_tmp, ul_sf_num,
@@ -378,8 +381,24 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                         evm[f, 2 * i + 1] = 100 * np.linalg.norm(ul_data[f, 2 * i + 1, ul_sym_i, :] - txdata_ext[f, 2 * i + 1, ul_sf_i, ofdm_sym_i, :], 2) / ul_data.shape[3]
                     axes6[0, 0].plot(range(ul_data.shape[0]), evm[:, 2 * i], label='User %d'%(2 * i))
                     axes6[0, 0].plot(range(ul_data.shape[0]), evm[:, 2 * i + 1], label='User %d'%(2 * i + 1))
+
                 axes6[0, 0].legend(loc='upper right', frameon=False)
 
+                # EVM w/confidence interval
+                ci = 0.95
+                evm_re = np.real(evm)
+                evm_avg = np.mean(evm_re, axis=0)
+                evm_shape = evm_re.shape
+                ci_arr = []
+                evm_range = []
+                for i in range(evm_shape[1]):
+                    ci_tmp = st.t.interval(alpha=0.95, df=len(evm_re[:,i])-1, loc=np.mean(evm_re[:,i]), scale=st.sem(evm_re[:,i]))
+                    np.append(ci_arr, ci_tmp)
+                    evm_range.append(evm_avg[i] - ci_tmp)
+                fig7, axes7 = plt.subplots(1,1)
+                fig7.suptitle('Uplink EVM Avg. Per User (95% CI)')
+                axes7.bar(range(evm_shape[1]), evm_avg, yerr=evm_range, alpha=0.2, align='center')
+                #plt.show()
 
         if deep_inspect:
             filter_pilots_start = time.time()
@@ -399,6 +418,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             n_ue = pilot_samples.shape[2]
             n_ant = pilot_samples.shape[3]
             seq_found = np.zeros((n_frame, n_cell, n_ue, n_ant))
+            cfo_vec = np.zeros((n_frame, n_cell, n_ue, n_ant))
 
             td_pwr_dbm_noise = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
             td_pwr_dbm_signal = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
@@ -424,6 +444,25 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                             td_pwr_lin = np.real(rms) ** 2
                             td_pwr_dbm_s = 10 * np.log10(td_pwr_lin / 1e-3)
                             td_pwr_dbm_signal[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_s
+
+                            # Calculate CFO
+                            seqLenWithCP = len(ofdm_pilot) + cp
+                            if best_pk and best_pk >= (2 * seqLenWithCP)+10: # + prefix_len:
+                                finit = best_pk - 2 * seqLenWithCP
+                                s1 = IQ[finit: finit + seqLenWithCP]
+                                s2 = IQ[finit + seqLenWithCP: finit + 2 * seqLenWithCP]
+                                try:
+                                    phase_vec = np.unwrap(np.angle(s2 * np.conjugate(s1)))
+                                    avg_phase = np.mean(phase_vec)
+                                except:
+                                    avg_phase = np.nan
+
+                                cfo = avg_phase / (2 * np.pi * len(s1))
+                                cfo_hz = cfo * rate
+                                cfo_vec[frameIdx, cellIdx, ueIdx, bsAntIdx] = cfo_hz
+                                # print("CFO (kHz): {}".format(cfo_khz))
+                            else:
+                                cfo_vec[frameIdx, cellIdx, ueIdx, bsAntIdx] = np.nan
 
                             # Compute SNR
                             # Noise
@@ -539,6 +578,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, 100, 11), orientation='horizontal')
             cbar.ax.set_xticklabels(['0%', '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'])
 
+            plt.figure(111)
+            plt.plot(cfo_vec[:, 0, 0, 0])
             #fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
             #c = []
             #fig.suptitle('Frame Map')

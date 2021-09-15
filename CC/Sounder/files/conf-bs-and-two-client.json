@@ -6,9 +6,9 @@
 		 "frequency" : 2.5e9,
                  "channel" : "AB",
                  "rxgainA" : 65,
-                 "txgainA" : 87,
+                 "txgainA" : 81,
                  "rxgainB" : 65,
-                 "txgainB" : 87,
+                 "txgainB" : 81,
                  "rate" : 5e6,
                  "frame_schedule" : [
                     "BGGGGGPPPPGGGGGGGGGG"
@@ -31,9 +31,9 @@
 		 "frequency" : 2.5e9,
                  "channel" : "AB",
                  "rxgainA" : [65, 65],
-                 "txgainA" : [87, 87],
+                 "txgainA" : [81, 81],
                  "rxgainB" : [65, 65],
-                 "txgainB" : [87, 87],
+                 "txgainB" : [81, 81],
                  "rate" : 5e6,
                  "frame_schedule" : [
                      "GGGGGGPPGGGGGGGGGGGG",

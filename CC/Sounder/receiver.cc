@@ -691,6 +691,7 @@ void Receiver::clientSyncTxRx(int tid)
 
     // Resets after every trigger
     frame_cnt_cfo_ = 0;
+    std::cout << "OBCH - RESET CFO FRAME CNT " << std::endl;
 
     // for UHD device, the first pilot should not have an END_BURST flag
     int flags = (((kUseUHD == true) && (config_->cl_sdr_ch() == 2))) ? 1 : 2;
@@ -712,9 +713,11 @@ void Receiver::clientSyncTxRx(int tid)
             }
             // schedule all TX subframes
             if (sf == 0) {
-                // resync every X=1000 frames:
+                // resync every X=resync_cnt frames:
                 // TODO: X should be a function of sample rate and max CFO
-                if (((frame_cnt / 1000) > 0) && ((frame_cnt % 1000) == 0)) {
+                size_t resync_cnt = 1000; // 1000
+                if (((frame_cnt / resync_cnt) > 0)
+                    && ((frame_cnt % resync_cnt) == 0)) {
                     resync = resync_enable;
                     MLPD_TRACE("Enable resyncing at frame %zu\n", frame_cnt);
                 }
@@ -746,6 +749,8 @@ void Receiver::clientSyncTxRx(int tid)
                         if (config_->cfo_correction_en()) {
                             CFOEstimation(sync_index, radio_rx_data);
                             frame_cnt_cfo_ = 0;
+                            std::cout << "OBCH - RESET CFO FRAME CNT "
+                                      << std::endl;
                         }
                     } else {
                         resync_retry_cnt++;
@@ -764,7 +769,7 @@ void Receiver::clientSyncTxRx(int tid)
                 }
 
                 // OBCH - fixme Apply CFO Correction (pre-distortion) to uplink pilots
-                if (config_->cfo_correction_en()) {
+                if (config_->cfo_correction_en() && frame_cnt_cfo_ >= 500) {
                     std::vector<std::complex<float>> pilot_cf32_local(
                         config_->pilot_cf32());
                     bool is_downlink = false;
@@ -817,6 +822,7 @@ void Receiver::clientSyncTxRx(int tid)
                             flagsTxUlData = 2; // HAS_TIME & END_BURST, fixme
 
                         // OBCH Apply CFO correction to uplink data
+                        // FIXME - Breaks when we have a U in the schedule... FIND OUT WHY
                         if (config_->cfo_correction_en()) {
                             bool is_downlink = false;
                             size_t txIndex = tid * config_->cl_sdr_ch();
@@ -894,8 +900,8 @@ void Receiver::CFOEstimation(
     float average = accumulate(phase_uwrap.begin(), phase_uwrap.end(), 0.0)
         / phase_uwrap.size();
     cfo_ = average / (2 * M_PI); // * config_->beacon_longsym_len());
-    //double cfo_est_khz = cfo_ * config_->rate() * 1e-3;
-    //printf("XXXXX  CFO Estimate2: %f kHz  XXXXX \n", cfo_est_khz);
+    double cfo_est_khz = cfo_ * config_->rate() * 1e-3;
+    printf("XXXXX  CFO Estimate2: %f kHz  XXXXX \n", cfo_est_khz);
 }
 
 void Receiver::CFOCorrection(
@@ -906,17 +912,18 @@ void Receiver::CFOCorrection(
 
     size_t cfo_samp_offset = frame_cnt_cfo_ * config_->symbols_per_frame()
         * config_->samps_per_symbol();
-
+    /*
     std::cout << "CFO OFFSET: " << cfo_samp_offset
               << " FRAME CNT CFO: " << frame_cnt_cfo_
               << " SYMS PER FRAME: " << config_->symbols_per_frame()
               << " SAMPS PER SYMBOL: " << config_->samps_per_symbol()
               << std::endl;
-
+    */
     double cfo = is_downlink ? cfo_ : -1 * cfo_;
     for (size_t idx = 0; idx < samps.size(); idx++) {
         //double tmp = 2 * M_PI * cfo * (idx + cfo_samp_offset);
-        double tmp = 2 * M_PI * cfo * idx / config_->beacon_longsym_len();
+        double tmp = 2 * M_PI * cfo * (idx + cfo_samp_offset)
+            / config_->beacon_longsym_len();
         std::complex<double> cfo_tmp = exp(tmp * -i);
         samps[idx] *= (std::complex<float>)cfo_tmp;
     }
