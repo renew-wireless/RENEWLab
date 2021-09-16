@@ -36,12 +36,12 @@ if ~isloaded
 end
 
 % Params:
-N_BS_NODE               = 4;             % Number of SDRs (Matlab scripts only using antenna A)
+N_BS_NODE               = 8;             % Number of SDRs (Matlab scripts only using antenna A)
 N_UE                    = 2;
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 SIM_MOD                 = 0;
 DEBUG                   = 0;
-PLOT                    = 1;
+PLOT                    = 0;
 if SIM_MOD
     chan_type               = "rayleigh"; % Will use only Rayleigh for simulation
     sim_SNR_db              = 15;
@@ -51,14 +51,14 @@ if SIM_MOD
 
 else 
     %Iris params:
-    TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
+    TX_SCALE                = 0.25;         % Scale for Tx waveform ([0:1])
     chan_type               = "iris";
-    USE_HUB                 = 0;
+    USE_HUB                 = 1;
     TX_FRQ                  = 3.6e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = 70;
-    TX_GN_ue                = 70;
-    RX_GN                   = 60;
+    TX_GN                   = 80;
+    TX_GN_ue                = 80;
+    RX_GN                   = 65;
     SMPL_RT                 = 5e6;
     N_FRM                   = 10;
     bs_ids                   = string.empty();
@@ -70,15 +70,15 @@ else
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
 
-        bs_ids = ["RF3E000300", "RF3E000510", "RF3E000171", "RF3E000105"];
+        bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716"];
 
-        hub_id = "FH4A000001";
+        hub_id = "FH4B000021";
 
     else
-        bs_ids = ["RF3E000300", "RF3E000510", "RF3E000533", "RF3E000484"];
+        bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716"];
     end
 
-    ue_ids= ["RF3E000392", "RF3E000241"];
+    ue_ids= ["RF3E000119", "RF3E000145"];
 
     N_BS_NODE               = length(bs_ids);           % Number of nodes/antennas at the BS
     N_UE                    = length(ue_ids);           % Number of UE nodes
@@ -395,11 +395,10 @@ syms_eq_pc = syms_eq_pc.';
 rx_data = demod_sym(syms_eq_pc ,MOD_ORDER);
 
 %% Plot results
-
 cf = 0;
 fst_clr = [0, 0.4470, 0.7410];
 sec_clr = [0.8500, 0.3250, 0.0980];
-
+if PLOT
 % Rx signal
 cf = cf + 1;
 figure(cf); clf;
@@ -417,7 +416,7 @@ for sp = 1:N_BS_NODE
     title(sprintf('BS antenna %d Rx Waveform (Q)', sp));
 end 
 
-%if PLOT
+
 %Tx signal
 cf = cf + 1;
 figure(cf); clf;
@@ -454,7 +453,6 @@ tb = annotation('textbox', [0 0.87 1 0.1], ...
     'HorizontalAlignment', 'center');
 tb.FontWeight = 'bold';
 
-if PLOT
 %% Constellations
 cf = cf+ 1;
 figure(cf); clf;
@@ -512,7 +510,6 @@ axis([min(bw_span) max(bw_span) 0 max(channel_condition_db)+1])
 grid on;
 title('Channel Condition (dB)')
 xlabel('Baseband Frequency (MHz)')
-
 end
 
 %% EVM & SNR
@@ -521,6 +518,7 @@ bit_errs = length(find(dec2bin(bitxor(tx_data(:), rx_data(:)),8) == '1'));
 evm_mat = double.empty();
 aevms = zeros(N_UE,1);
 snr_mat = zeros(N_UE,1);
+
 
 cf = cf + 1;
 figure(cf); clf;
@@ -552,7 +550,7 @@ for sp = 1:N_UE
     
 end
 
-
+if PLOT
 for sp=1:N_UE
    subplot(2,N_UE,N_UE+sp);
    imagesc(1:N_OFDM_SYM, (SC_IND_DATA - N_SC/2), 100*fftshift( reshape(evm_mat(:,sp), [], N_OFDM_SYM), 1));
@@ -569,7 +567,7 @@ for sp=1:N_UE
     h = colorbar;
     set(get(h,'title'),'string','EVM (%)'); 
 end
-
+end
 fprintf('\n MIMO Results:\n');
 fprintf('Num Bytes:   %d\n', N_UE*N_DATA_SYMS * log2(MOD_ORDER) / 8);
 fprintf('Sym Errors:  %d (of %d total symbols)\n', sym_errs, N_UE * N_DATA_SYMS);
