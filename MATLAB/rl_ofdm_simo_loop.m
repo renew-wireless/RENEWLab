@@ -168,9 +168,9 @@ else
     bs_sched = ["BGGGGGRG"];           % BS schedule
     ue_sched = ["GGGGGGPG"];          % UE schedule
 
-    rxfreq = 2.5e9;
-    txfreq = 2.5e9;
-    txgain = limit_gain(80);  % WARNING: Do not remove function!
+    rxfreq = 3.6e9;
+    txfreq = 3.6e9;
+    txgain = 80;
     rxgain = 60;
     rate = 5e6;
 

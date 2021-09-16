@@ -750,9 +750,9 @@ void Receiver::clientSyncTxRx(int tid)
                 }
                 if ((resync == true) && (resync_retry_cnt > resync_retry_max)) {
 
-                    MLPD_ERROR("Exceeded resync retry limit (%zu) for client "
-                               "%d reached after %zu resync successes at "
-                               "frame: %zu.  Stopping!\n",
+                    MLPD_WARN("Exceeded resync retry limit (%zu) for client "
+                              "%d reached after %zu resync successes at "
+                              "frame: %zu.  Stopping!\n",
                         resync_retry_max, tid, resync_success, frame_cnt);
                     resync = false;
                     resync_retry_cnt = 0;

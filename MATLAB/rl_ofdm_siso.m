@@ -62,9 +62,9 @@ fprintf("Channel type: %s \n",chan_type);
 %Iris params:
 N_BS_NODE 		= 1;
 N_UE 			= 1;
-TX_FRQ                  = 2.5e9;
+TX_FRQ                  = 3.6e9;
 RX_FRQ                  = TX_FRQ;
-TX_GN                   = limit_gain(42);  % WARNING - Do not remove function!
+TX_GN                   = 42;
 RX_GN                   = 20;
 SMPL_RT                 = 5e6;
 N_FRM                   = 10;

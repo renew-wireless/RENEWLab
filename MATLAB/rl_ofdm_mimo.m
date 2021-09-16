@@ -36,8 +36,8 @@ if ~isloaded
 end
 
 % Params:
-N_BS_NODE               = 8;
-N_UE                    = 4;
+N_BS_NODE               = 4;             % Number of SDRs (Matlab scripts only using antenna A)
+N_UE                    = 2;
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 SIM_MOD                 = 0;
 DEBUG                   = 0;
@@ -51,14 +51,14 @@ if SIM_MOD
 
 else 
     %Iris params:
-    TX_SCALE                = 0.5;         % Scale for Tx waveform ([0:1])
+    TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
     chan_type               = "iris";
     USE_HUB                 = 0;
-    TX_FRQ                  = 2.5e9;
+    TX_FRQ                  = 3.6e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = limit_gain(42);  % WARNING - Do not remove function!
-    TX_GN_ue                = limit_gain(42);  % WARNING - Do not remove function!
-    RX_GN                   = 20;
+    TX_GN                   = 70;
+    TX_GN_ue                = 70;
+    RX_GN                   = 60;
     SMPL_RT                 = 5e6;
     N_FRM                   = 10;
     bs_ids                   = string.empty();
@@ -70,20 +70,15 @@ else
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
 
-        bs_ids = ["RF3E000134", "RF3E000191", "RF3E000171", "RF3E000105",...
-            "RF3E000053", "RF3E000177", "RF3E000192", "RF3E000117",...
-            "RF3E000183", "RF3E000152", "RF3E000123", "RF3E000178", "RF3E000113", "RF3E000176", "RF3E000132", "RF3E000108", ...
-            "RF3E000143", "RF3E000160", "RF3E000025", "RF3E000034",...
-            "RF3E000189", "RF3E000024", "RF3E000139", "RF3E000032", "RF3E000154", "RF3E000182", "RF3E000038", "RF3E000137", ...
-            "RF3E000103", "RF3E000180", "RF3E000181", "RF3E000188"];
+        bs_ids = ["RF3E000300", "RF3E000510", "RF3E000171", "RF3E000105"];
 
         hub_id = "FH4A000001";
 
     else
-        bs_ids = ["RF3E000189", "RF3E000024", "RF3E000139", "RF3E000032", "RF3E000154", "RF3E000182", "RF3E000038", "RF3E000137"];
+        bs_ids = ["RF3E000300", "RF3E000510", "RF3E000533", "RF3E000484"];
     end
 
-    ue_ids= ["RF3E000060", "RF3E000157"];
+    ue_ids= ["RF3E000392", "RF3E000241"];
 
     N_BS_NODE               = length(bs_ids);           % Number of nodes/antennas at the BS
     N_UE                    = length(ue_ids);           % Number of UE nodes
@@ -422,7 +417,7 @@ for sp = 1:N_BS_NODE
     title(sprintf('BS antenna %d Rx Waveform (Q)', sp));
 end 
 
-if PLOT
+%if PLOT
 %Tx signal
 cf = cf + 1;
 figure(cf); clf;
@@ -459,6 +454,7 @@ tb = annotation('textbox', [0 0.87 1 0.1], ...
     'HorizontalAlignment', 'center');
 tb.FontWeight = 'bold';
 
+if PLOT
 %% Constellations
 cf = cf+ 1;
 figure(cf); clf;
