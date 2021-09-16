@@ -41,7 +41,7 @@ N_UE                    = 2;
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 SIM_MOD                 = 0;
 DEBUG                   = 0;
-PLOT                    = 0;
+PLOT                    = 1;
 if SIM_MOD
     chan_type               = "rayleigh"; % Will use only Rayleigh for simulation
     sim_SNR_db              = 15;
@@ -51,14 +51,14 @@ if SIM_MOD
 
 else 
     %Iris params:
-    TX_SCALE                = 0.25;         % Scale for Tx waveform ([0:1])
+    TX_SCALE                = 0.75;         % Scale for Tx waveform ([0:1])
     chan_type               = "iris";
     USE_HUB                 = 1;
     TX_FRQ                  = 3.6e9;
     RX_FRQ                  = TX_FRQ;
     TX_GN                   = 80;
     TX_GN_ue                = 80;
-    RX_GN                   = 65;
+    RX_GN                   = 75;
     SMPL_RT                 = 5e6;
     N_FRM                   = 10;
     bs_ids                   = string.empty();
