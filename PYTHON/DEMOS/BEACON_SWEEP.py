@@ -175,7 +175,7 @@ def main():
     parser.add_option("--hub", type="string", dest="hub", help="serial number of the hub device", default="")
     parser.add_option("--serials", type="string", dest="serials", help="serial numbers of the devices", default="RF3E000143,RF3E000160,RF3E000025,RF3E000034")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
-    parser.add_option("--freq", type="float", dest="freq", help="Tx freq (Hz). POWDER users must set to 2.5e9", default=0)
+    parser.add_option("--freq", type="float", dest="freq", help="Tx freq (Hz). POWDER users must set to 3.6e9", default=0)
     parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=80.0)
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB)", default=70.0)
 
@@ -188,7 +188,7 @@ def main():
     (options, args) = parser.parse_args()
  
     if options.freq == 0:
-        print("[ERROR] Please provide RF Freq (Hz). POWDER users must set to 2.5e9. i.e. --freq=2.5e9")
+        print("[ERROR] Please provide RF Freq (Hz). POWDER users must set to 3.6e9. i.e. --freq=3.6e9")
         exit(0)
 
     if options.txgain > 81:

@@ -121,14 +121,14 @@ class Iris_py:
                         else:
                                 self.sdr.setBandwidth(SOAPY_SDR_TX, chan, 2.5*sample_rate)
                         if tx_gain is not None:
-                                self.sdr.setGain(SOAPY_SDR_TX, chan, 'PAD', min(tx_gain, 42.0))
+                                self.sdr.setGain(SOAPY_SDR_TX, chan, min(tx_gain, 81.0))
                         if tx_freq is not None:
                                 self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'RF', tx_freq - .75*sample_rate)
                                 self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'BB', .75*sample_rate)
 
                         #print("Set TX frequency to %f" % self.sdr.getFrequency(SOAPY_SDR_TX, chan))
                         #self.sdr.setAntenna(SOAPY_SDR_TX, chan, "TRX")
-                        self.sdr.setGain(SOAPY_SDR_TX, chan, 'ATTN', -6)
+                        #self.sdr.setGain(SOAPY_SDR_TX, chan, 'ATTN', -6)
 
                         #Rx:
                         if sample_rate is not None:
@@ -148,13 +148,7 @@ class Iris_py:
                         if self.agc_en:
                                 self.sdr.setGain(SOAPY_SDR_RX, chan, 100)  # high gain value
                         else:
-                                self.sdr.setGain(SOAPY_SDR_RX, chan, 'LNA', min(rx_gain, 30))  # [0,30]
-                        if rx_freq < 3e9:
-                                self.sdr.setGain(SOAPY_SDR_RX, chan, "ATTN", -12)
-                                self.sdr.setGain(SOAPY_SDR_RX, chan, 'LNA2', 17)  # [0|17]
-                        else:
-                                self.sdr.setGain(SOAPY_SDR_RX, chan, "ATTN", 0)  # [-18,-12,-6,0]
-                                self.sdr.setGain(SOAPY_SDR_RX, chan, 'LNA2', 14)  # [0|14]
+                                self.sdr.setGain(SOAPY_SDR_RX, chan, rx_gain)
 
                         self.sdr.setDCOffsetMode(SOAPY_SDR_RX, chan, True)
 

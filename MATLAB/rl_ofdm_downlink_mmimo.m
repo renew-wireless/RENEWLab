@@ -1,7 +1,8 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %	Author(s): Rahman Doost-Mohamamdy: doost@rice.edu
-%
+%   DISCLAIMER: THIS IS AN EXPERIMENTAL DOWNLINK mMIMO
+%   SCRIPT. IT IS IN PROGRESS SO IT IS NOT FULLY FUNCTIONAL.
 %---------------------------------------------------------------------
 % Original code copyright Mango Communications, Inc.
 % Distributed under the WARP License http://warpproject.org/license
@@ -26,8 +27,8 @@ USE_HUB                 = 1;
 WIRED_UE                 = 1;
 TX_FRQ                  = 3.6e9;    
 RX_FRQ                  = TX_FRQ;
-TX_GN                   = limit_gain(30);  % WARNING: Do not remove function!
-RX_GN                   = 20;
+TX_GN                   = 75;
+RX_GN                   = 60;
 SMPL_RT                 = 5e6;  
 N_FRM                   = 1;
 bs_ids = string.empty();

@@ -1,6 +1,6 @@
 # RENEWLab
 
-[![Build Status](https://falcon.ecg.rice.edu:443/buildStatus/icon?job=github_public_renewlab%2Fdevelop)](https://falcon.ecg.rice.edu:443/job/github_public_renewlab/job/develop/)
+[![Build Status](https://falcon.ecg.rice.edu:443/buildStatus/icon?job=github_public_renewlab%2Fbugfix-patchPOWDER)](https://falcon.ecg.rice.edu:443/job/github_public_renewlab/job/bugfix-patchPOWDER/)
 
 # Contents
  * [Description](#description)
