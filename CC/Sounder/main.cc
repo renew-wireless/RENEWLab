@@ -29,29 +29,46 @@ int main(int argc, char* argv[])
     gflags::SetUsageMessage(
         "sounder Options: -bs_only -client_only -conf -gen_ul_bits -storepath");
     gflags::ParseCommandLineFlags(&argc, &argv, true);
-    Config config(
+    auto config = std::make_unique<Config>(
         FLAGS_conf, FLAGS_storepath, FLAGS_bs_only, FLAGS_client_only);
-    int ret = EXIT_SUCCESS;
+    int ret = EXIT_FAILURE;
     if (FLAGS_gen_ul_bits) {
-        DataGenerator dg(&config);
-        dg.GenerateData(FLAGS_storepath);
+        auto dg = std::make_unique<DataGenerator>(config.get());
+        dg->GenerateData(FLAGS_storepath);
     } else {
-        try {
-            SignalHandler signalHandler;
 
-            // Register signal handler to handle kill signal
-            signalHandler.setupSignalHandlers();
-            config.loadULData(FLAGS_storepath);
-            Sounder::Recorder dr(&config);
-            dr.do_it();
-            ret = EXIT_SUCCESS;
-        } catch (SignalException& e) {
-            std::cerr << "SignalException: " << e.what() << std::endl;
-            ret = EXIT_FAILURE;
-        } catch (const std::exception& exc) {
-            std::cerr << "Program terminated Exception: " << exc.what()
-                      << std::endl;
-            ret = EXIT_FAILURE;
+        int cnt = 0;
+        int maxTry = 2;
+
+        // Register signal handler to handle kill signal
+        SignalHandler signalHandler;
+        signalHandler.setupSignalHandlers();
+
+        while (cnt++ < maxTry && ret == EXIT_FAILURE) {
+            try {
+                config->loadULData(FLAGS_storepath);
+                auto dr = std::make_unique<Sounder::Recorder>(config.get());
+                dr->do_it();
+                ret = EXIT_SUCCESS;
+
+            } catch (const SignalException& e) {
+                std::cerr << "SignalException: " << e.what() << std::endl;
+                ret = EXIT_FAILURE;
+                break;
+
+            } catch (ReceiverException& rex) {
+                // Discovery usually fails on the first run, re-try
+                std::cout << "Exception: " << rex.what() << " Re-Try Now!"
+                          << std::endl;
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+
+            } catch (const std::exception& exc) {
+                std::cerr
+                    << "Exception Encountered... Program terminated due to "
+                    << exc.what() << std::endl;
+                ret = EXIT_FAILURE;
+                break;
+            }
         }
     }
     gflags::ShutDownCommandLineFlags();

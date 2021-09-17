@@ -81,8 +81,11 @@ Once compiled successfully, the code can be run as the following.
      ```sh
      $ ./build/sounder -conf PATH_TO_JSON_CONFIG_FILE -gen_ul_bits
      ```   
- 2. Next, to start collecting data for channel measurement run the Sounder software as below:
+ 2. Next, to start collecting channel measurement data, run the hardware discovery tool Pyfaros to create a file containing the serials of the boards to be used, and run the Sounder software as follows:
      ```sh
+     $ cd ./files/
+     $ python3 -m pyfaros.discover --json-out
+     $ cd ../
      $ ./build/sounder -conf PATH_TO_JSON_CONFIG_FILE
      ```   
  3. To store the dataset and bits source files in a specific directory use the `-storepath` switch:

@@ -1,38 +1,37 @@
 {
 	"BaseStations" : {
-		 "sdr_id" : ["files/iris-serials.txt"],
-		 "hub_id" : "files/hub-serials.txt",
-		 "frequency" : 3.6e9,
-		 "channel" : "AB",
-		 "rxgainA" : 65,
-		 "txgainA" : 81,
-		 "rxgainB" : 65,
-		 "txgainB" : 81,
-		 "rate" : 5e6,
-		 "frame_schedule" : [
-		     "BGPPGGGGGGGGGGGGGGGG"
-		 ],
-		 "max_frame" : 4000,
-		 "ofdm_symbol_per_slot" : 10,
-		 "fft_size" : 64,
-		 "cp_size" : 16,
-		 "prefix" : 160,
-		 "postfix" : 160,
-		 "beamsweep" : true
+		"serials_file" : "files/topology.json",
+		"frequency" : 3.6e9,
+		"rate" : 5e6,
+		"channel" : "AB",
+		"rxgainA" : 65,
+		"txgainA" : 81,
+		"rxgainB" : 65,
+		"txgainB" : 81,
+		"frame_schedule" : [
+			"BGPPGGGGGGGGGGGGGGGG"
+		],
+		"max_frame" : 4000,
+		"ofdm_symbol_per_slot" : 10,
+		"fft_size" : 64,
+		"cp_size" : 16,
+		"prefix" : 160,
+		"postfix" : 160,
+		"beamsweep" : true
 	},
 
 	"Clients" : {
-		 "sdr_id" : [
-		     "RF3E000030"
-		 ],
-		 "channel" : "AB",
-		 "rxgainA" : [65],
-		 "txgainA" : [81],
-		 "rxgainB" : [65],
-		 "txgainB" : [81],
-		 "frame_schedule" : [
-		     "GGPPGGGGGGGGGGGGGGGG"
-		 ],
-		 "tx_advance" : 135
+		"sdr_id" : [
+			"RF3E000030"
+		],
+		"channel" : "AB",
+		"rxgainA" : [65],
+		"txgainA" : [81],
+		"rxgainB" : [65],
+		"txgainB" : [81],
+		"frame_schedule" : [
+			"GGPPGGGGGGGGGGGGGGGG"
+		],
+		"tx_advance" : 135
 	}
 }
