@@ -24,7 +24,7 @@ WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 
 %Iris params:
 USE_HUB                 = 0;
-TX_FRQ                  = 3.6e9;    
+TX_FRQ                  = 2.5e9;    
 RX_FRQ                  = TX_FRQ;
 TX_GN                   = 70;
 RX_GN                   = 50;
@@ -70,7 +70,7 @@ else
     hub_id = [];
 end
 
-bs_ids = ["RF3E000208", "RF3E000636", "RF3E000632", "RF3E000568", "RF3E000558", "RF3E000633", "RF3E000566", "RF3E000635"];
+bs_ids = ["RF3E000183", "RF3E000152", "RF3E000123", "RF3E000178", "RF3E000113", "RF3E000176", "RF3E000132", "RF3E000108"];
 
 bs_sched = ["PGRG", "RGPG"];  % All BS schedule, Ref Schedule
 N_BS_NODE = length(bs_ids);

@@ -418,8 +418,8 @@ def signal_handler(rate, numSyms, use_trig, signal, frame):
 #########################################
 def main():
     parser = OptionParser()
-    parser.add_option("--bsnode", type="string", dest="bsnode", help="serial number of the master (base station node) device", default="")
-    parser.add_option("--clnode", type="string", dest="clnode", help="serial number of the slave (client node) device", default="")
+    parser.add_option("--bsnode", type="string", dest="bsnode", help="serial number of the master (base station node) device", default="RF3E000103")
+    parser.add_option("--clnode", type="string", dest="clnode", help="serial number of the slave (client node) device", default="RF3E000157")
     parser.add_option("--hub", type="string", dest="hub", help="Hub node", default="")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--txgain", type="float", dest="txgain", help="Tx gain (dB)", default=80.0)  # Check top of file for info on gain range
