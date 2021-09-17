@@ -52,7 +52,7 @@ if SIM_MOD
 else
     nt                      = 1;
     nsnr                    = 1;
-    TX_SCALE                = 0.5;         % Scale for Tx waveform ([0:1])
+    TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
     chan_type               = "iris";
 end
 ber_SIM = zeros(nt,nsnr);           % BER
@@ -62,10 +62,10 @@ fprintf("Channel type: %s \n",chan_type);
 %Iris params:
 N_BS_NODE 		= 1;
 N_UE 			= 1;
-TX_FRQ                  = 2.5e9;
+TX_FRQ                  = 3.6e9;
 RX_FRQ                  = TX_FRQ;
-TX_GN                   = limit_gain(42);  % WARNING - Do not remove function!
-RX_GN                   = 20;
+TX_GN                   = 75;
+RX_GN                   = 65;
 SMPL_RT                 = 5e6;
 N_FRM                   = 10;
 
@@ -191,8 +191,8 @@ else
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
  % Create two Iris node objects:
-    bs_ids = ["RF3E000189"];
-    ue_ids = ["RF3E000157"];
+    bs_ids = ["RF3E000246"];
+    ue_ids = ["RF3E000119"];
     
     bs_sched = ["BGGGGGRG"];           % BS schedule
     ue_sched = ["GGGGGGPG"];               % UE schedule

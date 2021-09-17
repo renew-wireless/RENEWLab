@@ -40,7 +40,7 @@ end
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_MOD                 = 0;
-PLOT                    = 1;
+PLOT                    = 0;
 
 if SIM_MOD
     chan_type               = "awgn";
@@ -62,11 +62,11 @@ else
 
     
     %Iris params:
-    USE_HUB                 = 0;
-    TX_FRQ                  = 2.5e9;
+    USE_HUB                 = 1;
+    TX_FRQ                  = 3.6e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = limit_gain(42);  % WARNING - Do not remove function!
-    RX_GN                   = 20;
+    TX_GN                   = 80;
+    RX_GN                   = 65;
     SMPL_RT                 = 5e6;  
     N_FRM                   = 10;
     bs_ids = string.empty();
@@ -196,21 +196,16 @@ else
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
         
-        bs_ids = ["RF3E000134", "RF3E000191", "RF3E000171", "RF3E000105",...
-            "RF3E000053", "RF3E000177", "RF3E000192", "RF3E000117",...
-            "RF3E000183", "RF3E000152", "RF3E000123", "RF3E000178", "RF3E000113", "RF3E000176", "RF3E000132", "RF3E000108", ...
-            "RF3E000143", "RF3E000160", "RF3E000025", "RF3E000034",...
-            "RF3E000189", "RF3E000024", "RF3E000139", "RF3E000032", "RF3E000154", "RF3E000182", "RF3E000038", "RF3E000137", ...
-            "RF3E000103", "RF3E000180", "RF3E000181", "RF3E000188"];
+        bs_ids = ["RF3E000387", "RF3E000389", "RF3E000206", "RF3E000211", "RF3E000256", "RF3E000383", "RF3E000304", "RF3E000303"];
         
-        hub_id = "FH4A000001";
+        hub_id = "FH4B000021";
         
     else
-        bs_ids = ["RF3E000189", "RF3E000024", "RF3E000139", "RF3E000032", "RF3E000154", "RF3E000182", "RF3E000038", "RF3E000137"];
+        bs_ids = ["RF3E000387", "RF3E000389", "RF3E000206", "RF3E000211", "RF3E000256", "RF3E000383", "RF3E000304", "RF3E000303"];
 
     end
     
-    ue_ids= ["RF3E000157"];
+    ue_ids= ["RF3E000119"];
 
     N_BS_NODE = length(bs_ids);
     N_UE = length(ue_ids);
