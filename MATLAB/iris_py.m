@@ -5,7 +5,7 @@
 %
 %---------------------------------------------------------------------
 % Copyright (c) 2018-2019, Rice University
-% RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+% RENEW OPEN SOURCE LICENSE: http://renew-wirseless.org/license
 % ---------------------------------------------------------------------
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -161,7 +161,10 @@ classdef iris_py < handle
         end
         
         % Read n_frame x n_samp data
-        function [data, len] = sdrrx(obj, n_samp)
+        function [data, len] = sdrrx(obj, n_samp, choose_best_frame)
+            if ~obj.is_bs
+                fprintf('sdrrx: Wrong function call on UE!');
+            end
             data_raw = zeros(obj.n_sdrs, obj.n_frame * n_samp);  % Change this to max frame!
             
             for jf=1:obj.n_frame
@@ -181,10 +184,29 @@ classdef iris_py < handle
                         1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(rcv_data) ) ) );
                 end
             end
-            data = obj.get_best_frame(data_raw.', n_samp);
+            if ~exist('choose_best_frame', 'var')
+                data = obj.get_best_frame(data_raw.', n_samp);
+            elseif choose_best_frame == 0
+                data = data_raw.';
+            end
             len = length(data);
         end
-        
+
+        % Read n_frame x n_samp data
+        function [data, len] = uesdrrx(obj, n_samp)
+            if obj.is_bs
+                fprintf('uesdrrx: Wrong function call on BS!');
+            end
+            data_raw = zeros(obj.n_sdrs, n_samp);  % Change this to max frame!
+
+            for ipy = 1:obj.n_sdrs
+                rcv_data = obj.py_obj_array{ipy}.recv_stream_tdd();
+                data_raw(ipy, :) = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(rcv_data) ) ) ) + ...
+                    1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(rcv_data) ) ) );
+            end
+            data = data_raw.';
+            len = length(data);
+        end
         
         function sdr_close(obj)
             for ipy = 1:obj.n_sdrs
@@ -221,15 +243,15 @@ classdef iris_py < handle
             % Assume peak in the first 500 samples
             lts_corr_frm = reshape(lts_corr_sum, [], obj.n_frame);
             
-            if obj.n_sdrs == 1 && length(lts_corr_frm >= 300)
+            if obj.n_sdrs == 1 && length(lts_corr_frm) >= 300
                 lts_corr_frm = lts_corr_frm(1:300,:);
-            elseif (obj.n_sdrs > 1) && length(lts_corr_frm >= 420)
+            elseif (obj.n_sdrs > 1) && length(lts_corr_frm) >= 420
                 lts_corr_frm = lts_corr_frm(1:420,:);
             end
             save my_data.mat lts_corr_dr lts_corr_frm
             
             % Avg corr value per frame
-            frm_avg_corr = sum(lts_corr_frm,1)./obj.n_sdrs
+            frm_avg_corr = sum(lts_corr_frm,1)./obj.n_sdrs;
             % Take index of maximum corr. value
             [max_corr, m_idx] = max(frm_avg_corr);
            
