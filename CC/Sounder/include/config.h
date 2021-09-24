@@ -11,10 +11,10 @@
 #ifndef CONFIG_HEADER
 #define CONFIG_HEADER
 
+#include <algorithm>
 #include <atomic>
 #include <complex.h>
 #include <vector>
-#include <algorithm>
 
 class Config {
 public:
@@ -76,6 +76,10 @@ public:
     {
         return this->ul_slot_per_frame_;
     }
+    inline size_t dl_slot_per_frame(void) const
+    {
+        return this->dl_slot_per_frame_;
+    }
     inline double rate(void) const { return this->rate_; }
     inline int tx_advance(void) const { return this->tx_advance_; }
     inline size_t cl_sdr_ch(void) const { return this->cl_sdr_ch_; }
@@ -110,7 +114,10 @@ public:
     {
         return this->n_bs_sdrs_agg_;
     }
-    inline bool internal_measurement(void) const { return this->internal_measurement_; }
+    inline bool internal_measurement(void) const
+    {
+        return this->internal_measurement_;
+    }
     inline bool ref_node_enable(void) const { return this->ref_node_enable_; }
     inline size_t cal_ref_sdr_id(void) const { return this->cal_ref_sdr_id_; }
     inline const std::vector<std::vector<std::string>>& calib_frames(void) const
@@ -273,7 +280,8 @@ public:
     int getDlSlotIndex(int, int);
     bool isPilot(int, int);
     bool isNoise(int, int);
-    bool isData(int, int);
+    bool isUlData(int, int);
+    bool isDlData(int, int);
     unsigned getCoreCount();
     void loadULData(const std::string&);
 

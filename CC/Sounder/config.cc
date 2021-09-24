@@ -781,10 +781,19 @@ bool Config::isNoise(int frame_id, int slot_id)
     }
 }
 
-bool Config::isData(int frame_id, int slot_id)
+bool Config::isUlData(int frame_id, int slot_id)
 {
     try {
         return frames_[frame_id % frames_.size()].at(slot_id) == 'U';
+    } catch (const std::out_of_range&) {
+        return false;
+    }
+}
+
+bool Config::isDlData(int frame_id, int slot_id)
+{
+    try {
+        return frames_[frame_id % frames_.size()].at(slot_id) == 'D';
     } catch (const std::out_of_range&) {
         return false;
     }

@@ -29,7 +29,8 @@ RecorderWorker::RecorderWorker(
     file_ = nullptr;
     pilot_dataset_ = nullptr;
     noise_dataset_ = nullptr;
-    data_dataset_ = nullptr;
+    ul_dataset_ = nullptr;
+    dl_dataset_ = nullptr;
     antenna_offset_ = antenna_offset;
     num_antennas_ = num_antennas;
 }
@@ -54,11 +55,18 @@ void RecorderWorker::gc(void)
         this->noise_dataset_ = nullptr;
     }
 
-    if (this->data_dataset_ != nullptr) {
-        MLPD_TRACE("Data dataset exists during garbage collection\n");
-        this->data_dataset_->close();
-        delete this->data_dataset_;
-        this->data_dataset_ = nullptr;
+    if (this->ul_dataset_ != nullptr) {
+        MLPD_TRACE("UL dataset exists during garbage collection\n");
+        this->ul_dataset_->close();
+        delete this->ul_dataset_;
+        this->ul_dataset_ = nullptr;
+    }
+
+    if (this->dl_dataset_ != nullptr) {
+        MLPD_TRACE("DL dataset exists during garbage collection\n");
+        this->dl_dataset_->close();
+        delete this->dl_dataset_;
+        this->dl_dataset_ = nullptr;
     }
 
     if (this->file_ != nullptr) {
@@ -232,13 +240,21 @@ herr_t RecorderWorker::initHDF5()
               this->cfg_->noise_slot_per_frame(), this->num_antennas_, IQ };
     DataspaceIndex max_dims_noise = { H5S_UNLIMITED, this->cfg_->num_cells(),
         this->cfg_->noise_slot_per_frame(), this->num_antennas_, IQ };
-    // data
-    this->frame_number_data_ = MAX_FRAME_INC;
-    DataspaceIndex dims_data
-        = { this->frame_number_data_, this->cfg_->num_cells(),
+    // UL data
+    this->frame_number_ul_data_ = MAX_FRAME_INC;
+    DataspaceIndex dims_ul_data
+        = { this->frame_number_ul_data_, this->cfg_->num_cells(),
               this->cfg_->ul_slot_per_frame(), this->num_antennas_, IQ };
-    DataspaceIndex max_dims_data = { H5S_UNLIMITED, this->cfg_->num_cells(),
+    DataspaceIndex max_dims_ul_data = { H5S_UNLIMITED, this->cfg_->num_cells(),
         this->cfg_->ul_slot_per_frame(), this->num_antennas_, IQ };
+
+    // DL
+    this->frame_number_dl_data_ = MAX_FRAME_INC;
+    DataspaceIndex dims_dl_data = { this->frame_number_dl_data_,
+        this->cfg_->num_cells(), this->cfg_->dl_slot_per_frame(),
+        this->cfg_->num_cl_antennas(), IQ };
+    DataspaceIndex max_dims_dl_data = { H5S_UNLIMITED, this->cfg_->num_cells(),
+        this->cfg_->dl_slot_per_frame(), this->cfg_->num_cl_antennas(), IQ };
 
     try {
         H5::Exception::dontPrint();
@@ -484,11 +500,21 @@ herr_t RecorderWorker::initHDF5()
         }
 
         if (this->cfg_->ul_slot_per_frame() > 0) {
-            H5::DataSpace data_dataspace(kDsDim, dims_data, max_dims_data);
-            this->data_prop_.setChunk(kDsDim, cdims);
+            H5::DataSpace data_dataspace(
+                kDsDim, dims_ul_data, max_dims_ul_data);
+            this->ul_data_prop_.setChunk(kDsDim, cdims);
             this->file_->createDataSet("/Data/UplinkData",
-                H5::PredType::STD_I16BE, data_dataspace, this->data_prop_);
-            this->data_prop_.close();
+                H5::PredType::STD_I16BE, data_dataspace, this->ul_data_prop_);
+            this->ul_data_prop_.close();
+        }
+
+        if (this->cfg_->dl_slot_per_frame() > 0) {
+            H5::DataSpace data_dataspace(
+                kDsDim, dims_dl_data, max_dims_dl_data);
+            this->dl_data_prop_.setChunk(kDsDim, cdims);
+            this->file_->createDataSet("/Data/DownlinkData",
+                H5::PredType::STD_I16BE, data_dataspace, this->dl_data_prop_);
+            this->dl_data_prop_.close();
         }
         this->file_->close();
     }
@@ -543,32 +569,60 @@ void RecorderWorker::openHDF5()
     cout << dims_pilot[kDsSim - 1] << "]" << std::endl;
 #endif
     pilot_filespace.close();
-    // Get Dataset for DATA (If Enabled) and check the shape of it
+    // Get Dataset for UL DATA (If Enabled) and check the shape of it
     if (this->cfg_->ul_slot_per_frame() > 0) {
-        this->data_dataset_
+        this->ul_dataset_
             = new H5::DataSet(this->file_->openDataSet("/Data/UplinkData"));
 
-        H5::DataSpace data_filespace(this->data_dataset_->getSpace());
-        this->data_prop_.copy(this->data_dataset_->getCreatePlist());
+        H5::DataSpace ul_data_filespace(this->ul_dataset_->getSpace());
+        this->ul_data_prop_.copy(this->ul_dataset_->getCreatePlist());
 
 #if DEBUG_PRINT
-        int ndims = data_filespace.getSimpleExtentNdims();
-        // status_n = data_filespace.getSimpleExtentDims(dims_data);
-        int cndims_data = 0;
-        DataspaceIndex cdims_data
+        int ndims = ul_data_filespace.getSimpleExtentNdims();
+        // status_n = ul_data_filespace.getSimpleExtentDims(dims_ul_data);
+        int cndims_ul_data = 0;
+        DataspaceIndex cdims_ul_data
             = { 1, 1, 1, 1, IQ }; // data chunk size, TODO: optimize size
-        if (H5D_CHUNKED == this->data_prop_.getLayout())
-            cndims_data = this->data_prop_.getChunk(ndims, cdims_data);
-        cout << "dim data chunk = " << cndims_data << std::endl;
-        DataspaceIndex dims_data
-            = { this->frame_number_data_, this->cfg_->num_cells(),
+        if (H5D_CHUNKED == this->ul_data_prop_.getLayout())
+            cndims_ul_data = this->ul_data_prop_.getChunk(ndims, cdims_ul_data);
+        cout << "dim UL data chunk = " << cndims_ul_data << std::endl;
+        DataspaceIndex dims_ul_data
+            = { this->frame_number_ul_data_, this->cfg_->num_cells(),
                   this->cfg_->ul_slot_per_frame(), this->num_antennas(), IQ };
-        cout << "New Data Dataset Dimension " << ndims << ",";
+        cout << "New UL Data Dataset Dimension " << ndims << ",";
         for (auto i = 0; i < kDsSim - 1; ++i)
-            cout << dims_data[i] << ",";
-        cout << dims_data[kDsSim - 1] << std::endl;
+            cout << dims_ul_data[i] << ",";
+        cout << dims_ul_data[kDsSim - 1] << std::endl;
 #endif
-        data_filespace.close();
+        ul_data_filespace.close();
+    }
+
+    // Get Dataset for DL DATA (If Enabled) and check the shape of it
+    if (this->cfg_->dl_slot_per_frame() > 0) {
+        this->dl_dataset_
+            = new H5::DataSet(this->file_->openDataSet("/Data/DownlinkData"));
+
+        H5::DataSpace dl_data_filespace(this->dl_dataset_->getSpace());
+        this->dl_data_prop_.copy(this->dl_dataset_->getCreatePlist());
+
+#if DEBUG_PRINT
+        int ndims = dl_data_filespace.getSimpleExtentNdims();
+        // status_n = ul_data_filespace.getSimpleExtentDims(dims_ul_data);
+        int cndims_dl_data = 0;
+        DataspaceIndex cdims_dl_data
+            = { 1, 1, 1, 1, IQ }; // data chunk size, TODO: optimize size
+        if (H5D_CHUNKED == this->dl_data_prop_.getLayout())
+            cndims_dl_data = this->dl_data_prop_.getChunk(ndims, cdims_ul_data);
+        cout << "dim DL data chunk = " << cndims_dl_data << std::endl;
+        DataspaceIndex dims_dl_data
+            = { this->frame_number_dl_data_, this->cfg_->num_cells(),
+                  this->cfg_->dl_slot_per_frame(), this->num_antennas(), IQ };
+        cout << "New DL Data Dataset Dimension " << ndims << ",";
+        for (auto i = 0; i < kDsSim - 1; ++i)
+            cout << dims_dl_data[i] << ",";
+        cout << dims_dl_data[kDsSim - 1] << std::endl;
+#endif
+        dl_data_filespace.close();
     }
 
     // Get Dataset for NOISE (If Enabled) and check the shape of it
@@ -621,18 +675,32 @@ void RecorderWorker::closeHDF5()
         delete this->pilot_dataset_;
         this->pilot_dataset_ = nullptr;
 
-        // Resize Data Dataset (If Needed)
+        // Resize UL Data Dataset (If Needed)
         if (this->cfg_->ul_slot_per_frame() > 0) {
-            assert(this->data_dataset_ != nullptr);
-            this->frame_number_data_ = frame_number;
-            DataspaceIndex dims_data = { this->frame_number_data_,
+            assert(this->ul_dataset_ != nullptr);
+            this->frame_number_ul_data_ = frame_number;
+            DataspaceIndex dims_ul_data = { this->frame_number_ul_data_,
                 this->cfg_->num_cells(), this->cfg_->ul_slot_per_frame(),
                 this->num_antennas_, IQ };
-            this->data_dataset_->extend(dims_data);
-            this->data_prop_.close();
-            this->data_dataset_->close();
-            delete this->data_dataset_;
-            this->data_dataset_ = nullptr;
+            this->ul_dataset_->extend(dims_ul_data);
+            this->ul_data_prop_.close();
+            this->ul_dataset_->close();
+            delete this->ul_dataset_;
+            this->ul_dataset_ = nullptr;
+        }
+
+        // Resize DL Data Dataset (If Needed)
+        if (this->cfg_->dl_slot_per_frame() > 0) {
+            assert(this->dl_dataset_ != nullptr);
+            this->frame_number_dl_data_ = frame_number;
+            DataspaceIndex dims_dl_data = { this->frame_number_dl_data_,
+                this->cfg_->num_cells(), this->cfg_->dl_slot_per_frame(),
+                this->num_antennas_, IQ };
+            this->dl_dataset_->extend(dims_dl_data);
+            this->dl_data_prop_.close();
+            this->dl_dataset_->close();
+            delete this->dl_dataset_;
+            this->dl_dataset_ = nullptr;
         }
 
         // Resize Noise Dataset (If Needed)
@@ -740,39 +808,75 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
                     H5::PredType::NATIVE_INT16, pilot_memspace,
                     pilot_filespace);
                 pilot_filespace.close();
-            } else if (this->cfg_->isData(pkg->frame_id, pkg->symbol_id)
+            } else if (this->cfg_->isUlData(pkg->frame_id, pkg->symbol_id)
                 == true) {
-                assert(this->data_dataset_ != nullptr);
+                assert(this->ul_dataset_ != nullptr);
                 // Are we going to extend the dataset?
-                if (pkg->frame_id >= this->frame_number_data_) {
-                    this->frame_number_data_ += kConfigDataExtentStep;
+                if (pkg->frame_id >= this->frame_number_ul_data_) {
+                    this->frame_number_ul_data_ += kConfigDataExtentStep;
                     if (this->cfg_->max_frame() != 0)
-                        this->frame_number_data_
-                            = std::min(this->frame_number_data_,
+                        this->frame_number_ul_data_
+                            = std::min(this->frame_number_ul_data_,
                                 this->cfg_->max_frame() + 1);
-                    DataspaceIndex dims_data
-                        = { this->frame_number_data_, this->cfg_->num_cells(),
-                              this->cfg_->ul_slot_per_frame(),
-                              this->num_antennas_, IQ };
-                    this->data_dataset_->extend(dims_data);
+                    DataspaceIndex dims_ul_data = { this->frame_number_ul_data_,
+                        this->cfg_->num_cells(),
+                        this->cfg_->ul_slot_per_frame(), this->num_antennas_,
+                        IQ };
+                    this->ul_dataset_->extend(dims_ul_data);
 #if DEBUG_PRINT
-                    std::cout
-                        << "FrameId " << pkg->frame_id << ", (Data) Extent to "
-                        << this->frame_number_data_ << " Frames" << std::endl;
+                    std::cout << "FrameId " << pkg->frame_id
+                              << ", (UlData) Extent to "
+                              << this->frame_number_ul_data_ << " Frames"
+                              << std::endl;
 #endif
                 }
                 hdfoffset[kDsSymsPerFrame]
                     = this->cfg_->getUlSlotIndex(pkg->frame_id, pkg->symbol_id);
                 // Select a hyperslab in extended portion of the dataset
-                H5::DataSpace data_filespace(this->data_dataset_->getSpace());
+                H5::DataSpace ul_data_filespace(this->ul_dataset_->getSpace());
                 DataspaceIndex count = { 1, 1, 1, 1, IQ };
-                data_filespace.selectHyperslab(
+                ul_data_filespace.selectHyperslab(
                     H5S_SELECT_SET, count, hdfoffset);
                 // define memory space
                 H5::DataSpace data_memspace(kDsDim, count, NULL);
-                this->data_dataset_->write(pkg->data,
-                    H5::PredType::NATIVE_INT16, data_memspace, data_filespace);
-                data_filespace.close();
+                this->ul_dataset_->write(pkg->data, H5::PredType::NATIVE_INT16,
+                    data_memspace, ul_data_filespace);
+                ul_data_filespace.close();
+
+            } else if (this->cfg_->isDlData(pkg->frame_id, pkg->symbol_id)
+                == true) {
+                assert(this->dl_dataset_ != nullptr);
+                // Are we going to extend the dataset?
+                if (pkg->frame_id >= this->frame_number_dl_data_) {
+                    this->frame_number_dl_data_ += kConfigDataExtentStep;
+                    if (this->cfg_->max_frame() != 0)
+                        this->frame_number_dl_data_
+                            = std::min(this->frame_number_dl_data_,
+                                this->cfg_->max_frame() + 1);
+                    DataspaceIndex dims_dl_data = { this->frame_number_dl_data_,
+                        this->cfg_->num_cells(),
+                        this->cfg_->dl_slot_per_frame(),
+                        this->cfg_->num_cl_antennas(), IQ };
+                    this->dl_dataset_->extend(dims_dl_data);
+#if DEBUG_PRINT
+                    std::cout << "FrameId " << pkg->frame_id
+                              << ", (DlData) Extent to "
+                              << this->frame_number_dl_data_ << " Frames"
+                              << std::endl;
+#endif
+                }
+                hdfoffset[kDsSymsPerFrame]
+                    = this->cfg_->getDlSlotIndex(pkg->frame_id, pkg->symbol_id);
+                // Select a hyperslab in extended portion of the dataset
+                H5::DataSpace dl_data_filespace(this->dl_dataset_->getSpace());
+                DataspaceIndex count = { 1, 1, 1, 1, IQ };
+                dl_data_filespace.selectHyperslab(
+                    H5S_SELECT_SET, count, hdfoffset);
+                // define memory space
+                H5::DataSpace data_memspace(kDsDim, count, NULL);
+                this->dl_dataset_->write(pkg->data, H5::PredType::NATIVE_INT16,
+                    data_memspace, dl_data_filespace);
+                dl_data_filespace.close();
 
             } else if (this->cfg_->isNoise(pkg->frame_id, pkg->symbol_id)
                 == true) {
@@ -829,7 +933,7 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
             DataspaceIndex dims_pilot = { this->frame_number_pilot_,
                 this->cfg_->num_cells(), this->cfg_->pilot_slot_per_frame(),
                 this->num_antennas_, IQ };
-            int ndims = this->data_dataset_->getSpace().getSimpleExtentNdims();
+            int ndims = this->ul_dataset_->getSpace().getSimpleExtentNdims();
 
             std::stringstream ss;
             ss.str(std::string());

@@ -333,7 +333,6 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             assert(this->base_radio_set_ != NULL);
             ant_id = radio_idx * num_channels;
 
-            // Schedule BS beacons to be sent from host for USRPs
             if (kUseUHD == false) {
                 long long frameTime;
                 if (this->base_radio_set_->radioRx(
@@ -372,7 +371,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 // only write received pilot or data into samp
                 // otherwise use samp_buffer as a dummy buffer
                 if (config_->isPilot(frame_id, slot_id)
-                    || config_->isData(frame_id, slot_id))
+                    || config_->isUlData(frame_id, slot_id))
                     r = this->base_radio_set_->radioRx(
                         radio_idx, cell, samp, rxTimeBs);
                 else
