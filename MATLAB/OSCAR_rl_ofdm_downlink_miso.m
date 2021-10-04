@@ -1,14 +1,19 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%   DISCLAIMER: THIS IS AN EXPERIMENTAL DOWNLINK mMIMO
-%   SCRIPT. IT IS IN PROGRESS SO IT IS NOT FULLY FUNCTIONAL.
+%   Downlink Single-User massive MIMO script.
+%   Script does the following:
+%   1) Reciprocity calibration
+%   2) Implicit sounding: Uplink pilot transmission
+%   3) Downlink beamforming (use beamweights computed in step2)
+%   4) Compute stats and plot
+%
 %---------------------------------------------------------------------
 % Original code copyright Mango Communications, Inc.
 % Distributed under the WARP License http://warpproject.org/license
 % Copyright (c) 2018-2019, Rice University
 % RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
 % ---------------------------------------------------------------------
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 clear
 close all;
 
@@ -17,49 +22,51 @@ if ~isloaded
     pyversion /usr/bin/python
     py.print() %weird bug where py isn't loaded in an external script
 end
-%py.importlib.import_module('iris_py')
+py.importlib.import_module('iris_py')
 
 % Params:
-WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
+WRITE_PNG_FILES    = 0;                                      % Enable writing plots to PNG
 
 %Iris params:
 USE_HUB                 = 1;
-WIRED_UE                 = 0;
-TX_FRQ                  = 3.6e9;    
-RX_FRQ                  = TX_FRQ;
-TX_GN                   = 80;
-RX_GN                   = 65;
-SMPL_RT                 = 5e6;  
-N_FRM                   = 1;
-bs_ids = string.empty();
-bs_sched = string.empty();
-ue_sched = string.empty();
+WIRED_UE                = 0;
+TX_FRQ                    = 3.6e9;    
+RX_FRQ                    = TX_FRQ;
+TX_GN                      = 80;
+RX_GN                      = 65;
+SMPL_RT                   = 5e6;  
+N_FRM                      = 1;
+bs_ids                       = string.empty();
+bs_sched                  = string.empty();
+ue_sched                  = string.empty();
 
 % Waveform params
-TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
+TX_SCALE                = 1;                                      % Scale for Tx waveform ([0:1])
 
 % OFDM params
-SC_IND_PILOTS           = [8 22 44 58];                           % Pilot subcarrier indices
-SC_IND_DATA             = [2:7 9:21 23:27 39:43 45:57 59:64];     % Data subcarrier indices
-SC_IND_DATA_PILOT       = [2:27 39:64]';
-N_SC                    = 64;                                      % Number of subcarriers
-CP_LEN                  = 16;                                     % Cyclic prefix length
-N_SYM_SAMP              = N_SC + CP_LEN;            % Number of samples that will go over the air
-N_SAMP                  = 4096;                                % N_ZPAD_PRE + data_len + N_ZPAD_POST;
-N_ZPAD_PRE              = 160;                               % Zero-padding prefix for Iris
-N_ZPAD_POST             = 160;                              % Zero-padding postfix for Iris
-N_OFDM_SYMS              = floor((N_SAMP - N_ZPAD_PRE - N_ZPAD_POST) / N_SYM_SAMP);  % Number of OFDM symbols for burst, it needs to be less than 47
-N_PILOTS_SYMS           = 2;
-N_DATA_SYMS             = (N_OFDM_SYMS - N_PILOTS_SYMS);       % Number of data symbols (one per data-bearing subcarrier per OFDM symbol)
+SC_IND_PILOTS         = [8 22 44 58];                    % Pilot subcarrier indices
+SC_IND_DATA           = [2:7 9:21 23:27 39:43 45:57 59:64];     % Data subcarrier indices
+SC_IND_DATA_PILOT = [2:27 39:64]';
+N_SC                       = 64;                                    % Number of subcarriers
+CP_LEN                    = 16;                                    % Cyclic prefix length
+N_SYM_SAMP           = N_SC + CP_LEN;                % Number of samples that will go over the air
+N_SAMP                   = 4096;                               % N_ZPAD_PRE + data_len + N_ZPAD_POST;
+N_ZPAD_PRE            = 160;                                 % Zero-padding prefix for Iris
+N_ZPAD_POST          = 160;                                 % Zero-padding postfix for Iris
+N_OFDM_SYMS         = floor((N_SAMP - N_ZPAD_PRE - N_ZPAD_POST) / N_SYM_SAMP);  % Number of OFDM symbols for burst, it needs to be less than 47
+N_PILOTS_SYMS        = 2;
+N_DATA_SYMS          = (N_OFDM_SYMS - N_PILOTS_SYMS);       % Number of data symbols (one per data-bearing subcarrier per OFDM symbol)
 N_DATA_SC               = N_DATA_SYMS * length(SC_IND_DATA);
-MOD_ORDER               = 4;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
+MOD_ORDER             = 4;                                    % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
 
-% Rx processing params
-FFT_OFFSET                    = 16;          % Number of CP samples to use in FFT (on average)
-RECIP_PLOT = 0;
-PILOT_PLOT = 1;
-DOWNLINK_PLOT = 1;
-AUTO_OFFSET = 1;
+% Rx processing params         
+RECIP_PLOT              = 0;
+PILOT_PLOT              = 1;
+DOWNLINK_PLOT      = 1;
+AUTO_OFFSET          = 1;
+
+timing_offset            = 8;
+FFT_OFFSET            = 0;                                      % Number of CP samples to use in FFT (on average)
 
 %% Define the preamble
 % LTS for fine CFO and channel estimation
@@ -67,7 +74,7 @@ lts_f = [0 1 -1 -1 1 1 -1 1 -1 1 -1 -1 -1 -1 -1 1 1 -1 -1 1 -1 1 -1 1 1 1 1 0 0 
     1 1 -1 -1 1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1];
 lts_t = ifft(lts_f, 64); %time domain
 lts = [lts_t(49:64) lts_t];
-lts_lcp = [lts_t(33:64) lts_t lts_t];
+lts_lcp = [lts_t(33:64) lts_t lts_t]; % 2.5 LTS
 
 %% Init Iris nodes
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -83,7 +90,9 @@ else
     hub_id = [];
 end
 
-bs_ids = ["RF3E000300", "RF3E000510", "RF3E000484", "RF3E000460", "RF3E000496", "RF3E000476", "RF3E000537", "RF3E000089"]; % also try chain 2
+% Last node in list is calibration node!
+%bs_ids = ["RF3E000300", "RF3E000510", "RF3E000484", "RF3E000460", "RF3E000496", "RF3E000476", "RF3E000537", "RF3E000089"];
+bs_ids = ["RF3E000347", "RF3E000564", "RF3E000569", "RF3E000639", "RF3E000605", "RF3E000600", "RF3E000611", "RF3E000089"];
 ue_ids= ["RF3E000241"];
 
 beacon_node = 0; % set 0 to make all nodes send beacon
@@ -195,9 +204,6 @@ node_bs.sdr_setupbeacon();   % Burn beacon to the BS RAM
 node_ue.sdr_configgainctrl();
 node_ue.sdrrxsetup();
 
-% Set number of data (e.g., pilot) repetitions
-node_bs.set_datareps(DATA_REP);
-node_ue.set_datareps(UE_DATA_REP);
 
 %% Step 1: Reciprocity Calibration
 recip_postfix_len = N_SAMP - data_len - N_ZPAD_PRE;
@@ -233,7 +239,6 @@ if AUTO_OFFSET
     end
 end
 
-
 % recip_rx = zeros(N_BS_NODE, data_len);
 rx_fft = zeros(N_BS, N_SC);
 rx_fft_ref = zeros(N_BS, N_SC);
@@ -259,6 +264,7 @@ for sid = 1:N_BS
     cal_mat(nid, :) = (rx_fft_ref(sid, :) / DATA_REP) ./ (rx_fft(sid, :) / DATA_REP);
 end
 
+
 %% Step 2: Uplink Pilot Collection and Channel Estimation
 node_bs.sdr_set_n_frame(100);
 schedule = bs_ul_sched;
@@ -278,6 +284,7 @@ node_ue.sdrtx_single(tx_signal, 1);       % Burn data to the UE RAM
 if ~WIRED_UE
     node_ue.sdr_setcorr();              % activate correlator
 end
+
 [rx_vec_pilot_all, data_len_all] = node_bs.sdrrx(N_SAMP, 0); % read data
 
 pilot_rep = 1;
@@ -288,16 +295,15 @@ if ~WIRED_UE
     node_ue.sdr_unsetcorr();              % activate correlator
 end
 
-if 1  %AUTO_OFFSET
+if AUTO_OFFSET
     for ibs =1:N_BS_NODE
-        
         lts_corr = abs(conv(conj(fliplr(lts_t)), sign(rx_vec_pilot(ibs, :))));
         lts_peaks = find(lts_corr > 0.8*max(lts_corr));
         [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
         [lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts));  % use size of lts+cp (80)
         % Stop if no valid correlation peak was found
         if(isempty(lts_second_peak_index))
-            fprintf('No LTS Correlation Peaks Found!\n');
+            fprintf('UPLINK PILOT COLLECTION: No LTS Correlation Peaks Found!\n');
             break;
         end
         offset = lts_peaks(lts_second_peak_index(1)) - (2*length(lts));  % Get sSecond peak
@@ -310,8 +316,8 @@ if 1  %AUTO_OFFSET
         %%In case of bad correlatons:
         %pilot_data_start(ibs) = max_idx + 1 - ue_pilot_len;
         if pilot_data_start(ibs) < 0
-           display('bad receive!');
-           break;
+           display('Uplink Pilots: Bad receive! Exit Now!');
+           return;
         end
     end
 end
@@ -330,10 +336,8 @@ for ibs =1:N_BS_NODE
 end
 
 
-
-
-
-%% Step 3: Downlink CSI Calculation and Zeroforcing
+%% Step 3: Downlink Transmission
+% CSI Calculation and Zeroforcing
 downlink_pilot_csi = zeros(N_BS_NODE, N_SC);
 ifft_in_mat = zeros(N_BS_NODE, N_SC, N_OFDM_SYMS);
 for isc =1:N_SC
@@ -344,8 +348,7 @@ for isc =1:N_SC
     end
 end
 
-%% IFFT
-%Perform the IFFT
+% IFFT
 tx_payload_mat = zeros(N_BS_NODE, N_SYM_SAMP, N_DATA_SYMS);
 tx_pilot_mat = zeros(N_BS_NODE, length(lts_t)*2.5);
 for ibs = 1:N_BS_NODE
@@ -379,7 +382,6 @@ node_ue.set_tddconfig(WIRED_UE, ue_dl_sched);
 
 % Write beamformed signal to all antennas
 donwlink_postfix_len = N_SAMP - N_ZPAD_PRE - N_OFDM_SYMS * N_SYM_SAMP;
-
 for i=1:N_BS_NODE
     tx_signal = [zeros(1, N_ZPAD_PRE) tx_payload_vec(i, :) zeros(1, donwlink_postfix_len)];
     tx_vec_iris = TX_SCALE .* tx_signal ./ max(abs(tx_signal));
@@ -389,28 +391,22 @@ end
 if ~WIRED_UE
     node_ue.sdr_setcorr();              % activate correlator
 end
-    
+
 % Transmit beamformed signal from all antennas and receive at UEs
-N_DL_FRM = 10;
-rx_vec_dl = zeros(N_UE_NODE, N_SAMP, N_DL_FRM);
-for i=1:N_DL_FRM
+bad_pilot = true;
+bad_cnt = 0;
+bad_cnt_max = 1000;
+while bad_pilot
+    rx_vec_dl = zeros(N_UE_NODE, N_SAMP);
     node_ue.sdr_activate_rx();   % activate reading stream
     node_bs.sdrtrigger();
     [rx_dl, ~] = node_ue.uesdrrx(N_SAMP); % read data
-    rx_vec_dl(:, :, i) = rx_dl.';
-end
-
-if ~WIRED_UE
-    node_ue.sdr_unsetcorr();              % activate correlator
-end
-node_bs.sdr_close();
-node_ue.sdr_close();
-
-rx_vec_downlink = zeros(N_UE_NODE, N_SAMP);
-for i=1:N_DL_FRM
+    rx_vec_dl(:, :) = rx_dl.';
+    rx_vec_downlink = zeros(N_UE_NODE, N_SAMP);
+    
     all_ue_rx = 0;
     for j=1:N_UE_NODE
-        if (sum(abs(rx_vec_dl(j,:,i))) > 0) % successful receive
+        if (sum(abs(rx_vec_dl(j,:))) > 0) % successful receive
             all_ue_rx = all_ue_rx + 1;
             fprintf('Downlink Beacon Successful at UE %d \n', j);
         else
@@ -418,36 +414,12 @@ for i=1:N_DL_FRM
         end
     end
     if (all_ue_rx == N_UE_NODE)
-        rx_vec_downlink = rx_vec_dl(:, :, i);
-        break
+        rx_vec_downlink = rx_vec_dl(:, :);
     end
-end
 
-%% HERE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-%% Process downlink receive signal
-rahman = false;
-if AUTO_OFFSET
-    %tx_vec_iris = [zeros(1, N_ZPAD_PRE) tx_payload_vec(1, :) zeros(1, donwlink_postfix_len)];
-    %figure; plot(abs(tx_vec_iris));
-        
-    %if rahman
-        lts_rep_dl = repmat(lts_t, 1, N_PILOTS_SYMS);
-        unos = ones(size(lts_rep_dl));
-        v0 = filter(fliplr(conj(lts_rep_dl)), a, rx_vec_downlink);  
-        v1 = filter(unos, a, abs(rx_vec_downlink) .^ 2);
-        m_filt = (abs(v0) .^ 2) ./ v1; % normalized correlation
-        [~, max_idx_dl] = max(abs(m_filt));
-        %% In case of bad correlatons:
-        dl_data_start = max_idx_dl + 1; %max_idx_dl + 1 - N_PILOTS_SYMS * length(lts);
-        fprintf('XXX RAHMAN PEAK AT: %d \n', max_idx_dl);
-        if dl_data_start < 0
-           disp('bad dl data!');
-        end
-
-    %else
-        % HERE!!!! OSCAR!!!!!!!!!
+    % Process downlink receive signal
+    if AUTO_OFFSET  
+        % Correlation
         %lts_rep_dl = repmat(lts_t, 1, N_PILOTS_SYMS);  % tx_vec_iris
         lts_corr = abs(conv(conj(fliplr(lts_t)), sign(rx_vec_downlink)));
         %figure; plot(lts_corr);
@@ -456,26 +428,52 @@ if AUTO_OFFSET
         [lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts_t));  % use size of lts_t
         % Stop if no valid correlation peak was found
         if(isempty(lts_second_peak_index))
-            fprintf('No LTS Correlation Peaks Found!\n');
-            return;
+            bad_cnt = bad_cnt+ 1;
+            fprintf('DOWNLINK TRAINING: No LTS Correlation Peaks Found! Count: %d \n', bad_cnt);
+            if bad_cnt == 1000
+                fprintf('Bad correlation exceeded max number of tries (%d). Exit now! \n', bad_cnt_max);
+                return;
+            end
+        else
+            offset = lts_peaks(lts_second_peak_index(1)) + 1;
+            dl_data_start = offset;
+            dl_pilot_start = offset-(2.5*length(lts_t));
+            fprintf('CORR. PEAK AT: %d, PILOT STARTS AT: %d \n', offset-1, dl_pilot_start);
+            stop = 1;
+            bad_pilot = false;
         end
-        offset = lts_peaks(lts_second_peak_index(1)) + 1;
-        dl_data_start = offset;
-        dl_pilot_start = offset-(2.5*length(lts_t));
-        fprintf('XXX OSCAR PEAK AT: %d \n', offset-1);
-        stop = 1;
-        %  HERE !!! END !!!
-    %end
-
+        
+        % Another correlation method (similar performance to code above)...
+        if 0 
+            lts_rep_dl = repmat(lts_t, 1, N_PILOTS_SYMS);
+            unos = ones(size(lts_rep_dl));
+            v0 = filter(fliplr(conj(lts_rep_dl)), a, rx_vec_downlink);  
+            v1 = filter(unos, a, abs(rx_vec_downlink) .^ 2);
+            m_filt = (abs(v0) .^ 2) ./ v1; % normalized correlation
+            [~, max_idx_dl] = max(abs(m_filt));
+            %% In case of bad correlatons:
+            dl_data_start = max_idx_dl + 1; %max_idx_dl + 1 - N_PILOTS_SYMS * length(lts);
+            fprintf('CORR. ALT. PEAK AT: %d \n', max_idx_dl);
+            if dl_data_start < 0
+               disp('bad dl data!');
+            end
+        end        
+    end
 end
 
-timing_offset = 8;
-cp_offset = 0;
+% Deactivate correlator and cleanup
+if ~WIRED_UE
+    node_ue.sdr_unsetcorr();              
+end
+node_bs.sdr_close();
+node_ue.sdr_close();
 
+
+%% Step 4: Process Received Data (Downlink)
 % Pilots
 rx_dl_pilot_vec = rx_vec_downlink(1, dl_pilot_start - timing_offset: dl_pilot_start + 2*length(lts) - 1 - timing_offset);
-rx_lts1 = rx_dl_pilot_vec(-64  + -cp_offset + [97:160]);
-rx_lts2 = rx_dl_pilot_vec(-cp_offset + [97:160]);
+rx_lts1 = rx_dl_pilot_vec(-64  + -FFT_OFFSET + [97:160]);
+rx_lts2 = rx_dl_pilot_vec(-FFT_OFFSET + [97:160]);
 rx_lts1_f = fft(rx_lts1);
 rx_lts2_f = fft(rx_lts2);
 rx_H_est = (lts_f).* (rx_lts1_f + rx_lts2_f) / 2;
@@ -487,7 +485,7 @@ end_idx = min(4096, dl_data_start + N_RX_DATA_SYMS * N_SYM_SAMP - 1);
 rx_dl_data_vec = rx_vec_downlink(1, dl_data_start - timing_offset: end_idx - timing_offset);
 rx_dl_data_mat = reshape(rx_dl_data_vec, N_SYM_SAMP, N_RX_DATA_SYMS );
 if(CP_LEN > 0)
-    rx_dl_data_mat = rx_dl_data_mat(CP_LEN+1-cp_offset:end-cp_offset, :);
+    rx_dl_data_mat = rx_dl_data_mat(CP_LEN+1-FFT_OFFSET:end-FFT_OFFSET, :);
 end
 rx_dl_f_mat = fft(rx_dl_data_mat, N_SC, 1);
 N_RX_DATA_OFDM_SYMS = N_RX_DATA_SYMS;
@@ -511,7 +509,8 @@ end
 dl_syms_eq_pc_mat = dl_syms_eq_mat.* pilot_dl_phase_corr;
 payload_dl_syms_mat = dl_syms_eq_pc_mat(SC_IND_DATA, :);
 
-%% Demodulate
+
+%% Step 5: Demodulate and Print Stats
 rx_syms = reshape(payload_dl_syms_mat, 1, N_DATA_SC);
 
 rx_data = demod_sym(rx_syms ,MOD_ORDER);
@@ -532,9 +531,9 @@ fprintf('Sym Errors:  \t %d (of %d total symbols)\n', sym_errs, N_DATA_SC);
 fprintf('Bit Errors: \t %d (of %d total bits)\n', bit_errs, N_DATA_SC * log2(MOD_ORDER));
 fprintf('EVM: \t %f, SNR: %f \n', aevms, snr);
 
-%% Plotting
-cf = 0;
 
+%% Step 6: Plotting
+cf = 0;
 % Reciprocal Calibration Vectors Plots
 if RECIP_PLOT
     cf = cf + 1;
@@ -632,5 +631,4 @@ if DOWNLINK_PLOT
     if (myAxis(2)-myAxis(1)) < 5
         caxis([myAxis(1), myAxis(1)+5])
     end
-
 end
