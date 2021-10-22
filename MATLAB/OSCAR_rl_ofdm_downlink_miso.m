@@ -85,15 +85,16 @@ lts_lcp = [lts_t(33:64) lts_t lts_t]; % 2.5 LTS
 % nodes.
 
 if USE_HUB
-    hub_id = "FH4B000019";
+    hub_id = "FH4B000021";
 else
     hub_id = [];
 end
 
 % Last node in list is calibration node!
 %bs_ids = ["RF3E000300", "RF3E000510", "RF3E000484", "RF3E000460", "RF3E000496", "RF3E000476", "RF3E000537", "RF3E000089"];
-bs_ids = ["RF3E000347", "RF3E000564", "RF3E000569", "RF3E000639", "RF3E000605", "RF3E000600", "RF3E000611", "RF3E000089"];
-ue_ids= ["RF3E000241"];
+bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716", ...
+    "RF3E000674", "RF3E000704", "RF3E000676", "RF3E000668", "RF3E000157"];
+ue_ids= ["RF3E000145"];
 
 beacon_node = 0; % set 0 to make all nodes send beacon
 
@@ -111,7 +112,7 @@ ue_dl_sched = "GGRG";
 N_BS_NODE = length(bs_ids);
 N_UE_NODE = 1;
 
-REF_ANT = 8; %ceil(N_BS_NODE/2);
+REF_ANT = N_BS_NODE; %8; %ceil(N_BS_NODE/2);
 bs_index = 1:N_BS_NODE;
 bs_index(REF_ANT) = [];
 
@@ -304,7 +305,7 @@ if AUTO_OFFSET
         % Stop if no valid correlation peak was found
         if(isempty(lts_second_peak_index))
             fprintf('UPLINK PILOT COLLECTION: No LTS Correlation Peaks Found!\n');
-            break;
+            return;
         end
         offset = lts_peaks(lts_second_peak_index(1)) - (2*length(lts));  % Get sSecond peak
         pilot_data_start(ibs) = offset;

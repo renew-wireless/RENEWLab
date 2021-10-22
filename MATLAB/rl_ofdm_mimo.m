@@ -41,7 +41,7 @@ N_UE                    = 2;
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 SIM_MOD                 = 0;
 DEBUG                   = 0;
-PLOT                    = 1;
+PLOT                    = 0;
 if SIM_MOD
     chan_type               = "rayleigh"; % Will use only Rayleigh for simulation
     sim_SNR_db              = 15;
@@ -51,10 +51,10 @@ if SIM_MOD
 
 else 
     %Iris params:
-    TX_SCALE                = 0.75;         % Scale for Tx waveform ([0:1])
+    TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
     chan_type               = "iris";
     USE_HUB                 = 1;
-    TX_FRQ                  = 3.6e9;
+    TX_FRQ                  = 3.55e9;
     RX_FRQ                  = TX_FRQ;
     TX_GN                   = 80;
     TX_GN_ue                = 80;
@@ -550,7 +550,6 @@ for sp = 1:N_UE
     
 end
 
-if PLOT
 for sp=1:N_UE
    subplot(2,N_UE,N_UE+sp);
    imagesc(1:N_OFDM_SYM, (SC_IND_DATA - N_SC/2), 100*fftshift( reshape(evm_mat(:,sp), [], N_OFDM_SYM), 1));
@@ -566,7 +565,6 @@ for sp=1:N_UE
     title(sprintf('Stream from UE %d', sp));
     h = colorbar;
     set(get(h,'title'),'string','EVM (%)'); 
-end
 end
 fprintf('\n MIMO Results:\n');
 fprintf('Num Bytes:   %d\n', N_UE*N_DATA_SYMS * log2(MOD_ORDER) / 8);

@@ -65,7 +65,7 @@ N_UE 			= 1;
 TX_FRQ                  = 3.6e9;
 RX_FRQ                  = TX_FRQ;
 TX_GN                   = 75;
-RX_GN                   = 65;
+RX_GN                   = 70;
 SMPL_RT                 = 5e6;
 N_FRM                   = 10;
 
