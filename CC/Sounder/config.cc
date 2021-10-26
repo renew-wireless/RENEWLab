@@ -550,39 +550,45 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     unsigned num_cores = this->getCoreCount();
     MLPD_INFO("Cores found %u ... \n", num_cores);
     core_alloc_ = num_cores > RX_THREAD_NUM;
-    if ((bs_present_ == true)
-        && (pilot_slot_per_frame_ + ul_slot_per_frame_ > 0)) {
+    if (((bs_present_ == true)
+            && (pilot_slot_per_frame_ + ul_slot_per_frame_ > 0))
+        || (client_present_ == true && dl_slot_per_frame_ > 0)) {
         task_thread_num_ = tddConf.value("task_thread", TASK_THREAD_NUM);
-        rx_thread_num_ = (num_cores >= (2 * RX_THREAD_NUM))
+        bs_rx_thread_num_ = (num_cores >= (2 * RX_THREAD_NUM))
             ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_sdrs_all_))
             : 1;
         if (internal_measurement_ == true && ref_node_enable_ == true) {
-            rx_thread_num_ = 2;
-        }
-        if ((client_present_ == true)
-            && (num_cores
-                   < (1 + task_thread_num_ + rx_thread_num_ + num_cl_sdrs_))) {
-            core_alloc_ = false;
+            bs_rx_thread_num_ = 2;
         }
     } else {
-        rx_thread_num_ = 0;
+        bs_rx_thread_num_ = 0;
         task_thread_num_ = 0;
-        if (client_present_ && num_cores <= 1 + num_cl_sdrs_)
-            core_alloc_ = false;
-    }
-    if ((bs_present_ == true) && (core_alloc_ == true)) {
-        MLPD_INFO(
-            "Allocating %d cores to receive threads ... \n", rx_thread_num_);
-        MLPD_INFO(
-            "Allocating %d cores to record threads ... \n", task_thread_num_);
     }
 
-    if ((client_present_ == true) && (core_alloc_ == true)) {
-        MLPD_INFO(
-            "Allocating %zu cores to client threads ... \n", num_cl_sdrs_);
+    if (client_present_ == true) {
+        cl_rx_thread_num_ = num_cl_sdrs_;
+    } else {
+        cl_rx_thread_num_ = 0;
     }
-    running_.store(true);
+    if (num_cores
+        < (1 + task_thread_num_ + bs_rx_thread_num_ + cl_rx_thread_num_)) {
+        core_alloc_ = false;
+    }
+
+    if (core_alloc_ == true) {
+        if (bs_present_ == true) {
+            MLPD_INFO("Allocating %d cores to receive threads ... \n",
+                bs_rx_thread_num_);
+            MLPD_INFO("Allocating %d cores to record threads ... \n",
+                task_thread_num_);
+        }
+        if (client_present_ == true) {
+            MLPD_INFO(
+                "Allocating %zu cores to client threads ... \n", num_cl_sdrs_);
+        }
+    }
     MLPD_INFO("Configuration file was successfully parsed!\n");
+    running_.store(true);
 }
 
 void Config::loadULData(const std::string& directory)

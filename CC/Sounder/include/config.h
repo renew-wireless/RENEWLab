@@ -225,9 +225,13 @@ public:
         return this->gold_cf32_;
     }
 
-    inline unsigned int rx_thread_num(void) const
+    inline unsigned int cl_rx_thread_num(void) const
     {
-        return this->rx_thread_num_;
+        return this->cl_rx_thread_num_;
+    }
+    inline unsigned int bs_rx_thread_num(void) const
+    {
+        return this->bs_rx_thread_num_;
     }
     inline unsigned int task_thread_num(void) const
     {
@@ -394,7 +398,8 @@ private:
 
     std::atomic<bool> running_;
     bool core_alloc_;
-    unsigned int rx_thread_num_;
+    unsigned int bs_rx_thread_num_;
+    unsigned int cl_rx_thread_num_;
     unsigned int task_thread_num_;
 };
 

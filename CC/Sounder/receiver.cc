@@ -81,20 +81,23 @@ Receiver::~Receiver()
     }
 }
 
-std::vector<pthread_t> Receiver::startClientThreads()
+std::vector<pthread_t> Receiver::startClientThreads(
+    SampleBuffer* rx_buffer, unsigned in_core_id)
 {
     std::vector<pthread_t> client_threads;
     if (config_->client_present() == true) {
-        client_threads.resize(config_->num_cl_sdrs());
-        for (unsigned int i = 0; i < config_->num_cl_sdrs(); i++) {
+        client_threads.resize(config_->cl_rx_thread_num());
+        for (unsigned int i = 0; i < config_->cl_rx_thread_num(); i++) {
             pthread_t cl_thread_;
             // record the thread id
-            dev_profile* profile = new dev_profile;
-            profile->tid = i;
-            profile->ptr = this;
+            ReceiverContext* context = new ReceiverContext;
+            context->ptr = this;
+            context->core_id = in_core_id;
+            context->tid = i;
+            context->buffer = rx_buffer;
             // start socket thread
             if (pthread_create(
-                    &cl_thread_, NULL, Receiver::clientTxRx_launch, profile)
+                    &cl_thread_, NULL, Receiver::clientTxRx_launch, context)
                 != 0) {
                 MLPD_ERROR("Socket client thread create failed in start client "
                            "threads");
@@ -447,14 +450,16 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
 void* Receiver::clientTxRx_launch(void* in_context)
 {
-    dev_profile* context = (dev_profile*)in_context;
-    Receiver* receiver = context->ptr;
-    int tid = context->tid;
+    ReceiverContext* context = (ReceiverContext*)in_context;
+    auto me = context->ptr;
+    auto tid = context->tid;
+    auto core_id = context->core_id;
+    auto buffer = context->buffer;
     delete context;
-    if (receiver->config_->hw_framer())
-        receiver->clientTxRx(tid);
+    if (me->config_->hw_framer())
+        me->clientTxRx(tid);
     else
-        receiver->clientSyncTxRx(tid);
+        me->clientSyncTxRx(tid, core_id, buffer);
     return 0;
 }
 
@@ -473,8 +478,8 @@ void Receiver::clientTxRx(int tid)
     int NUM_SAMPS = config_->samps_per_slot();
 
     if (config_->core_alloc() == true) {
-        int core
-            = tid + 1 + config_->rx_thread_num() + config_->task_thread_num();
+        int core = tid + 1 + config_->bs_rx_thread_num()
+            + config_->task_thread_num();
         MLPD_INFO("Pinning client TxRx thread %d to core %d\n", tid, core);
         if (pin_to_core(core) != 0) {
             MLPD_ERROR(
@@ -551,11 +556,10 @@ void Receiver::clientTxRx(int tid)
     } // end while config_->running() == true)
 }
 
-void Receiver::clientSyncTxRx(int tid)
+void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
 {
     if (config_->core_alloc() == true) {
-        int core
-            = tid + 1 + config_->rx_thread_num() + config_->task_thread_num();
+        int core = tid + core_id;
 
         MLPD_INFO("Pinning client synctxrx thread %d to core %d\n", tid, core);
         if (pin_to_core(core) != 0) {
@@ -629,6 +633,19 @@ void Receiver::clientSyncTxRx(int tid)
         fp = std::fopen(config_->tx_td_data_files().at(tid).c_str(), "rb");
     }
 
+    // use token to speed up
+    moodycamel::ProducerToken local_ptok(*message_queue_);
+
+    size_t packageLength = sizeof(Package) + config_->getPackageDataLength();
+    int buffer_chunk_size = rx_buffer[0].buffer.size() / packageLength;
+    size_t ant_id = tid * config_->cl_sdr_ch();
+
+    // handle two channels at each radio
+    // this is assuming buffer_chunk_size is at least 2
+    std::atomic_int* pkg_buf_inuse
+        = rx_buffer[tid + config_->bs_rx_thread_num()].pkg_buf_inuse;
+    char* buffer = rx_buffer[tid + config_->bs_rx_thread_num()].buffer.data();
+
     long long rxTime(0);
     long long txTime(0);
     int sync_index(-1);
@@ -688,11 +705,13 @@ void Receiver::clientSyncTxRx(int tid)
 
     // Main client read/write loop.
     size_t frame_cnt = 0;
+    size_t rx_slot = 0;
     bool resync = false;
     bool resync_enable = (config_->frame_mode() == "continuous_resync");
     size_t resync_retry_cnt(0);
     size_t resync_retry_max(100);
     size_t resync_success(0);
+    int r = 0;
     rx_offset = 0;
 
     // for UHD device, the first pilot should not have an END_BURST flag
@@ -700,21 +719,72 @@ void Receiver::clientSyncTxRx(int tid)
     int flagsTxUlData;
 
     while (config_->running() == true) {
-        for (size_t sf = 0; sf < config_->slot_per_frame(); sf++) {
-            int rx_len = (sf == 0) ? (NUM_SAMPS + rx_offset) : NUM_SAMPS;
+        for (size_t slot_id = 0; slot_id < config_->slot_per_frame();
+             slot_id++) {
+            int rx_len = (slot_id == 0) ? (NUM_SAMPS + rx_offset) : NUM_SAMPS;
             assert((rx_len > 0) && (rx_len < SYNC_NUM_SAMPS));
-            int r = clientRadioSet_->radioRx(
-                tid, syncrxbuff.data(), rx_len, rxTime);
-            if (r < 0) {
-                config_->running(false);
-                break;
+            if (config_->isDlData(frame_cnt, slot_id)) {
+                // Set buffer status(es) to full; fail if full already
+                for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
+                    int bit = 1 << (rx_slot + ch) % sizeof(std::atomic_int);
+                    int offs = (rx_slot + ch) / sizeof(std::atomic_int);
+                    int old = std::atomic_fetch_or(
+                        &pkg_buf_inuse[offs], bit); // now full
+                    // if buffer was full, exit
+                    if ((old & bit) != 0) {
+                        MLPD_ERROR("thread %d buffer full\n", tid);
+                        throw std::runtime_error("Thread %d buffer full\n");
+                    }
+                    // Reserved until marked empty by consumer
+                }
+
+                // Receive data into buffers
+                Package* pkg[config_->cl_sdr_ch()];
+                void* samp[config_->cl_sdr_ch()];
+                for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
+                    pkg[ch]
+                        = (Package*)(buffer + (rx_slot + ch) * packageLength);
+                    samp[ch] = pkg[ch]->data;
+                }
+
+                if ((r = this->clientRadioSet_->radioRx(
+                         tid, samp, rx_len, rxTime))
+                    < 0) {
+                    config_->running(false);
+                    break;
+                }
+                for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
+                    new (pkg[ch]) Package(frame_cnt, slot_id, 0, ant_id + ch);
+                    // push kEventRxSymbol event into the queue
+                    Event_data package_message;
+                    package_message.event_type = kEventRxSymbol;
+                    package_message.ant_id = ant_id + ch;
+                    // data records the position of this packet in the buffer & tid of this socket
+                    // (so that task thread could know which buffer it should visit)
+                    package_message.data = rx_slot + tid * buffer_chunk_size;
+                    if (message_queue_->enqueue(local_ptok, package_message)
+                        == false) {
+                        MLPD_ERROR("socket message enqueue failed\n");
+                        throw std::runtime_error(
+                            "socket message enqueue failed");
+                    }
+                    rx_slot++;
+                    rx_slot %= buffer_chunk_size;
+                }
+            } else {
+                r = clientRadioSet_->radioRx(
+                    tid, syncrxbuff.data(), rx_len, rxTime);
+                if (r < 0) {
+                    config_->running(false);
+                    break;
+                }
             }
             if (r != rx_len) {
                 MLPD_WARN("BAD Receive(%d/%d) at Time %lld, frame count %zu\n",
                     r, rx_len, rxTime, frame_cnt);
             }
             // schedule all TX slot
-            if (sf == 0) {
+            if (slot_id == 0) {
                 // resync every X=1000 frames:
                 // TODO: X should be a function of sample rate and max CFO
                 if (((frame_cnt / 1000) > 0) && ((frame_cnt % 1000) == 0)) {
@@ -807,7 +877,7 @@ void Receiver::clientSyncTxRx(int tid)
                     if (frame_cnt % config_->ul_data_frame_num() == 0)
                         std::fseek(fp, 0, SEEK_SET);
                 } // end if config_->ul_data_slot_present()
-            } // end if sf == 0
+            } // end if slot_id == 0
         } // end for
         frame_cnt++;
     } // end while

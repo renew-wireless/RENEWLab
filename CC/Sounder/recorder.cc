@@ -30,9 +30,10 @@ Recorder::Recorder(Config* in_cfg, unsigned int core_start)
     , kRecorderCore(kMainDispatchCore + 1)
     , kRecvCore(kRecorderCore + in_cfg->task_thread_num())
 {
-    size_t rx_thread_num = cfg_->rx_thread_num();
-    size_t ant_per_rx_thread = cfg_->bs_present() && rx_thread_num > 0
-        ? cfg_->getTotNumAntennas() / rx_thread_num
+    size_t bs_rx_thread_num = cfg_->bs_rx_thread_num();
+    size_t cl_rx_thread_num = cfg_->cl_rx_thread_num();
+    size_t ant_per_rx_thread = cfg_->bs_present() && bs_rx_thread_num > 0
+        ? cfg_->getTotNumAntennas() / bs_rx_thread_num
         : 1;
     rx_thread_buff_size_
         = kSampleBufferFrameNum * cfg_->slot_per_frame() * ant_per_rx_thread;
@@ -42,15 +43,16 @@ Recorder::Recorder(Config* in_cfg, unsigned int core_start)
 
     MLPD_TRACE("Recorder construction: rx threads: %zu, recorder threads: %u, "
                "chunk size: %zu\n",
-        rx_thread_num, cfg_->task_thread_num(), rx_thread_buff_size_);
+        bs_rx_thread_num, cfg_->task_thread_num(), rx_thread_buff_size_);
 
-    if (rx_thread_num > 0) {
+    size_t total_rx_thread_num = bs_rx_thread_num + cl_rx_thread_num;
+    if (total_rx_thread_num > 0) {
         // initialize rx buffers
-        rx_buffer_ = new SampleBuffer[rx_thread_num];
+        rx_buffer_ = new SampleBuffer[total_rx_thread_num];
         size_t intsize = sizeof(std::atomic_int);
         size_t arraysize = (rx_thread_buff_size_ + intsize - 1) / intsize;
         size_t packageLength = sizeof(Package) + cfg_->getPackageDataLength();
-        for (size_t i = 0; i < rx_thread_num; i++) {
+        for (size_t i = 0; i < total_rx_thread_num; i++) {
             rx_buffer_[i].buffer.resize(rx_thread_buff_size_ * packageLength);
             rx_buffer_[i].pkg_buf_inuse = new std::atomic_int[arraysize];
             std::fill_n(rx_buffer_[i].pkg_buf_inuse, arraysize, 0);
@@ -59,7 +61,7 @@ Recorder::Recorder(Config* in_cfg, unsigned int core_start)
 
     // Receiver object will be used for both BS and clients
     try {
-        receiver_.reset(new Receiver(rx_thread_num, cfg_, &message_queue_));
+        receiver_.reset(new Receiver(bs_rx_thread_num, cfg_, &message_queue_));
     } catch (ReceiverException& re) {
         std::cout << re.what() << '\n';
         gc();
@@ -71,8 +73,8 @@ void Recorder::gc(void)
 {
     MLPD_TRACE("Garbage collect\n");
     this->receiver_.reset();
-    if (this->cfg_->rx_thread_num() > 0) {
-        for (size_t i = 0; i < this->cfg_->rx_thread_num(); i++) {
+    if (this->cfg_->bs_rx_thread_num() > 0) {
+        for (size_t i = 0; i < this->cfg_->bs_rx_thread_num(); i++) {
             delete[] this->rx_buffer_[i].pkg_buf_inuse;
         }
         delete[] this->rx_buffer_;
@@ -84,7 +86,9 @@ Recorder::~Recorder() { this->gc(); }
 void Recorder::do_it()
 {
     size_t recorder_threads = this->cfg_->task_thread_num();
-    size_t total_antennas = cfg_->getTotNumAntennas();
+    size_t total_antennas = cfg_->getTotNumAntennas() + cfg_->num_cl_antennas();
+    size_t total_rx_thread_num
+        = cfg_->bs_rx_thread_num() + cfg_->cl_rx_thread_num();
     size_t thread_antennas = 0;
     std::vector<pthread_t> recv_threads;
 
@@ -97,10 +101,11 @@ void Recorder::do_it()
     }
 
     if (this->cfg_->client_present() == true) {
-        auto client_threads = this->receiver_->startClientThreads();
+        auto client_threads = this->receiver_->startClientThreads(
+            this->rx_buffer_, kRecvCore + cfg_->bs_rx_thread_num());
     }
 
-    if (this->cfg_->rx_thread_num() > 0) {
+    if (total_rx_thread_num > 0) {
 
         thread_antennas = (total_antennas / recorder_threads);
         // If antennas are left, distribute them over the threads. This may assign antennas that don't

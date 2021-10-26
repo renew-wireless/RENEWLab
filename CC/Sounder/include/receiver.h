@@ -78,11 +78,6 @@ public:
         int tid;
     };
 
-    struct dev_profile {
-        int tid;
-        Receiver* ptr;
-    };
-
 public:
     Receiver(int n_rx_threads, Config* config,
         moodycamel::ConcurrentQueue<Event_data>* in_queue);
@@ -91,13 +86,14 @@ public:
     std::vector<pthread_t> startRecvThreads(
         SampleBuffer* rx_buffer, unsigned in_core_id = 0);
     void completeRecvThreads(const std::vector<pthread_t>& recv_thread);
-    std::vector<pthread_t> startClientThreads();
+    std::vector<pthread_t> startClientThreads(
+        SampleBuffer* rx_buffer, unsigned in_core_id = 0);
     void go();
     static void* loopRecv_launch(void* in_context);
     void loopRecv(int tid, int core_id, SampleBuffer* rx_buffer);
     static void* clientTxRx_launch(void* in_context);
     void clientTxRx(int tid);
-    void clientSyncTxRx(int tid);
+    void clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer);
 
 private:
     Config* config_;
