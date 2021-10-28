@@ -273,7 +273,8 @@ public:
         return this->cal_tx_gain_;
     }
 
-    inline std::vector<std::vector<std::complex<float>>>& txdata_time_dom(void)
+    inline std::vector<std::vector<std::complex<int16_t>>>& txdata_time_dom(
+        void)
     {
         return this->txdata_time_dom_;
     }
@@ -407,7 +408,7 @@ private:
     std::vector<std::vector<float>> pilot_sym_f_;
     std::vector<std::vector<std::complex<float>>> tx_data_;
     std::vector<std::vector<std::complex<float>>> txdata_freq_dom_;
-    std::vector<std::vector<std::complex<float>>> txdata_time_dom_;
+    std::vector<std::vector<std::complex<int16_t>>> txdata_time_dom_;
 
     std::vector<std::string> cl_frames_;
     std::vector<std::vector<size_t>> cl_pilot_slots_;

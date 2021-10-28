@@ -1,5 +1,6 @@
 #include "include/data_generator.h"
 #include "include/comms-lib.h"
+#include "include/utils.h"
 
 void DataGenerator::GenerateData(const std::string& directory)
 {
@@ -39,8 +40,8 @@ void DataGenerator::GenerateData(const std::string& directory)
         for (size_t f = 0; f < cfg_->ul_data_frame_num(); f++) {
             for (size_t u = 0; u < cfg_->cl_ul_slots()[i].size(); u++) {
                 for (size_t h = 0; h < cfg_->cl_sdr_ch(); h++) {
-                    std::vector<std::complex<float>> data_time_dom;
                     std::vector<std::complex<float>> data_freq_dom;
+                    std::vector<std::complex<float>> data_time_dom;
                     data_time_dom.insert(data_time_dom.begin(),
                         prefix_zpad_t.begin(), prefix_zpad_t.end());
                     for (size_t s = 0; s < cfg_->symbol_per_slot(); s++) {
@@ -76,11 +77,13 @@ void DataGenerator::GenerateData(const std::string& directory)
                     }
                     data_time_dom.insert(data_time_dom.end(),
                         postfix_zpad_t.begin(), postfix_zpad_t.end());
+                    auto data_time_dom_ci16
+                        = Utils::cfloat_to_cint16(data_time_dom);
                     std::fwrite(data_freq_dom.data(),
                         cfg_->fft_size() * cfg_->symbol_per_slot(),
                         sizeof(float) * 2, fp_tx_f);
-                    std::fwrite(data_time_dom.data(), cfg_->samps_per_slot(),
-                        sizeof(float) * 2, fp_tx_t);
+                    std::fwrite(data_time_dom_ci16.data(),
+                        cfg_->samps_per_slot(), sizeof(int16_t) * 2, fp_tx_t);
                 }
             }
         }

@@ -49,12 +49,27 @@ std::vector<size_t> Utils::strToChannels(const std::string& channel)
     return (channels);
 }
 
+std::vector<std::complex<int16_t>> Utils::cfloat_to_cint16(
+    const std::vector<std::complex<float>>& in)
+{
+    size_t len = in.size();
+    std::vector<std::complex<int16_t>> out(len, 0);
+    for (size_t i = 0; i < len; i++)
+        out.at(i) = std::complex<int16_t>((int16_t)(in.at(i).real() * 32768),
+            (int16_t)(in.at(i).imag() * 32768));
+    return out;
+}
+
 std::vector<std::complex<int16_t>> Utils::float_to_cint16(
     const std::vector<std::vector<float>>& in)
 {
-    int len = in[0].size();
-    std::vector<std::complex<int16_t>> out(len, 0);
-    for (int i = 0; i < len; i++)
+    std::vector<std::complex<int16_t>> out;
+    // check if input format is valid
+    if (in.size() != 2 && in[0].size() != in[1].size())
+        return out;
+    size_t len = in[0].size();
+    out.resize(len, 0);
+    for (size_t i = 0; i < len; i++)
         out[i] = std::complex<int16_t>(
             (int16_t)(in[0][i] * 32768), (int16_t)(in[1][i] * 32768));
     return out;

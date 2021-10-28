@@ -131,6 +131,22 @@ static void write_attribute(
 }
 
 static void write_attribute(H5::Group& g, const char name[],
+    const std::vector<std::complex<int16_t>>& val)
+{
+    size_t size = val.size();
+    hsize_t dims[] = { 2 * size };
+    H5::DataSpace attr_ds = H5::DataSpace(1, dims);
+    H5::Attribute att
+        = g.createAttribute(name, H5::PredType::STD_I16BE, attr_ds);
+    short val_pair[2 * size];
+    for (size_t j = 0; j < size; j++) {
+        val_pair[2 * j + 0] = std::real(val[j]);
+        val_pair[2 * j + 1] = std::imag(val[j]);
+    }
+    att.write(H5::PredType::STD_I16BE, &val_pair[0]);
+}
+
+static void write_attribute(H5::Group& g, const char name[],
     const std::vector<std::complex<float>>& val)
 {
     size_t size = val.size();

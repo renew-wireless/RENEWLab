@@ -489,7 +489,7 @@ void Receiver::clientTxRx(int tid)
         }
     }
 
-    std::vector<std::complex<float>> buffs(NUM_SAMPS, 0);
+    std::vector<std::complex<int16_t>> buffs(NUM_SAMPS, 0);
     std::vector<void*> rxbuff(2);
     rxbuff[0] = buffs.data();
     rxbuff[1] = buffs.data();
@@ -793,59 +793,59 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
             config_->running(false);
             break;
         }
-        slot_id++;
+        // schedule all TX slot
+        // config_->tx_advance() needs calibration based on SDR model and sampling rate
+        txTime = rxTime + txTimeDelta
+            + config_->cl_pilot_slots().at(tid).at(0) * NUM_SAMPS
+            - config_->tx_advance();
 
-        for (; slot_id < config_->slot_per_frame(); slot_id++) {
-            // schedule all TX slot
-            // config_->tx_advance() needs calibration based on SDR model and sampling rate
+        r = clientRadioSet_->radioTx(
+            tid, pilotbuffA.data(), NUM_SAMPS, flags, txTime);
+        if (r < NUM_SAMPS) {
+            MLPD_WARN("BAD Write: %d/%d\n", r, NUM_SAMPS);
+        }
+        if (config_->cl_sdr_ch() == 2) {
             txTime = rxTime + txTimeDelta
-                + config_->cl_pilot_slots().at(tid).at(0) * NUM_SAMPS
+                + config_->cl_pilot_slots().at(tid).at(1) * NUM_SAMPS
                 - config_->tx_advance();
 
             r = clientRadioSet_->radioTx(
-                tid, pilotbuffA.data(), NUM_SAMPS, flags, txTime);
+                tid, pilotbuffB.data(), NUM_SAMPS, kStreamEndBurst, txTime);
             if (r < NUM_SAMPS) {
                 MLPD_WARN("BAD Write: %d/%d\n", r, NUM_SAMPS);
             }
-            if (config_->cl_sdr_ch() == 2) {
+        }
+        if (config_->ul_data_slot_present() == true) {
+            for (size_t s = 0; s < tx_slots; s++) {
                 txTime = rxTime + txTimeDelta
-                    + config_->cl_pilot_slots().at(tid).at(1) * NUM_SAMPS
+                    + config_->cl_ul_slots().at(tid).at(s) * NUM_SAMPS
                     - config_->tx_advance();
-
+                for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
+                    size_t read_num = std::fread(txbuff.at(ch),
+                        2 * sizeof(int16_t), config_->samps_per_slot(), fp);
+                    if (read_num != config_->samps_per_slot()) {
+                        MLPD_WARN("BAD Uplink Data Read: %zu/%zu\n", read_num,
+                            config_->samps_per_slot());
+                    }
+                }
+                if (kUseUHD && s < (tx_slots - 1))
+                    flagsTxUlData = kStreamContinuous; // HAS_TIME
+                else
+                    flagsTxUlData
+                        = kStreamEndBurst; // HAS_TIME & END_BURST, fixme
                 r = clientRadioSet_->radioTx(
-                    tid, pilotbuffB.data(), NUM_SAMPS, kStreamEndBurst, txTime);
+                    tid, txbuff.data(), NUM_SAMPS, flagsTxUlData, txTime);
                 if (r < NUM_SAMPS) {
                     MLPD_WARN("BAD Write: %d/%d\n", r, NUM_SAMPS);
                 }
-            }
-            if (config_->ul_data_slot_present() == true) {
-                for (size_t s = 0; s < tx_slots; s++) {
-                    txTime = rxTime + txTimeDelta
-                        + config_->cl_ul_slots().at(tid).at(s) * NUM_SAMPS
-                        - config_->tx_advance();
-                    for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
-                        size_t read_num = std::fread(txbuff.at(ch),
-                            2 * sizeof(int16_t), config_->samps_per_slot(), fp);
-                        if (read_num != config_->samps_per_slot()) {
-                            MLPD_WARN("BAD Uplink Data Read: %zu/%zu\n",
-                                read_num, config_->samps_per_slot());
-                        }
-                    }
-                    if (kUseUHD && s < (tx_slots - 1))
-                        flagsTxUlData = kStreamContinuous; // HAS_TIME
-                    else
-                        flagsTxUlData
-                            = kStreamEndBurst; // HAS_TIME & END_BURST, fixme
-                    r = clientRadioSet_->radioTx(
-                        tid, txbuff.data(), NUM_SAMPS, flagsTxUlData, txTime);
-                    if (r < NUM_SAMPS) {
-                        MLPD_WARN("BAD Write: %d/%d\n", r, NUM_SAMPS);
-                    }
-                } // end for
-                if (frame_id % config_->ul_data_frame_num() == 0)
-                    std::fseek(fp, 0, SEEK_SET);
-            } // end if config_->ul_data_slot_present()
+            } // end for
+            if (frame_id % config_->ul_data_frame_num() == 0)
+                std::fseek(fp, 0, SEEK_SET);
+        } // end if config_->ul_data_slot_present()
 
+        slot_id++;
+
+        for (; slot_id < config_->slot_per_frame(); slot_id++) {
             if (config_->isDlData(frame_id, slot_id)) {
                 // Set buffer status(es) to full; fail if full already
                 for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {

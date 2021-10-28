@@ -41,6 +41,8 @@ public:
     static std::vector<size_t> strToChannels(const std::string& channel);
     static std::vector<std::complex<float>> cint16_to_cfloat(
         const std::vector<std::complex<int16_t>>& in);
+    static std::vector<std::complex<int16_t>> cfloat_to_cint16(
+        const std::vector<std::complex<float>>& in);
     static std::vector<std::complex<int16_t>> float_to_cint16(
         const std::vector<std::vector<float>>& in);
     // static std::vector<std::complex<float>> doubletocfloat(
