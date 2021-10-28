@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2019, Rice University 
+ Copyright (c) 2018-2021, Rice University
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
  
 ----------------------------------------------------------
@@ -163,7 +163,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
             auto dev = radios.at(i)->dev;
 
             // hw_frame is only for Iris
-            if (_cfg->hw_framer()) {
+            if (_cfg->hw_framer() == true) {
                 std::string corrConfString
                     = "{\"corr_enabled\":true,\"corr_threshold\":"
                     + std::to_string(1) + "}";
@@ -187,7 +187,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
                 tddConf["frame_mode"] = _cfg->frame_mode();
                 int max_frame_ = (int)(2.0
                     / ((_cfg->samps_per_slot() * _cfg->slot_per_frame())
-                        / _cfg->rate()));
+                          / _cfg->rate()));
                 tddConf["max_frame"]
                     = _cfg->frame_mode() == "free_running" ? 0 : max_frame_;
                 //std::cout << "max_frames for client " << i << " is " << max_frame_ << std::endl;
@@ -270,7 +270,7 @@ void ClientRadioSet::init(ClientRadioContext* context)
     }
     try {
         radios.at(i) = nullptr;
-        radios.at(i) = new Radio(args, SOAPY_SDR_CF32, channels, _cfg->rate());
+        radios.at(i) = new Radio(args, SOAPY_SDR_CS16, channels, _cfg->rate());
     } catch (std::runtime_error& err) {
         has_runtime_error = true;
 

@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2019, Rice University 
+ Copyright (c) 2018-2021, Rice University
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
  
 ---------------------------------------------------------------------
@@ -124,15 +124,13 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     max_frame_ = tddConf.value("max_frame", 0);
     num_cells_ = tddConf.value("cells", 1);
 
-    if (!bs_present_)
-        num_cells_ = 0;
-
     MLPD_TRACE("Number cells: %zu\n", num_cells_);
     bs_sdr_ids_.resize(num_cells_);
     calib_ids_.resize(num_cells_);
     n_bs_sdrs_.resize(num_cells_);
     n_bs_antennas_.resize(num_cells_);
     num_bs_sdrs_all_ = 0;
+    num_bs_antennas_all_ = 0;
 
     /* Used for internal measurements. If internal_measurement is enabled,
        the default is to use a reference node for reciprocity calibration.
@@ -166,7 +164,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         bs_sdr_ids_.at(i).assign(sdr_serials.begin(), sdr_serials.end());
 
         // Append calibration node
-        if (internal_measurement_ && ref_node_enable_) {
+        if (internal_measurement_ == true && ref_node_enable_ == true) {
             calib_ids_.at(i) = serials_conf.value("reference node", "");
             if (calib_ids_.at(i).empty()) {
                 MLPD_ERROR("No calibration node ID found in topology file!\n");
@@ -178,7 +176,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
         n_bs_sdrs_.at(i) = bs_sdr_ids_.at(i).size();
         n_bs_antennas_.at(i) = bs_channel_.length() * n_bs_sdrs_.at(i);
-        num_bs_sdrs_all_ += bs_sdr_ids_.at(i).size();
+        num_bs_sdrs_all_ += n_bs_sdrs_.at(i);
+        num_bs_antennas_all_ += n_bs_antennas_.at(i);
         MLPD_TRACE("Loading devices - cell %zu, sdrs %zu, antennas: %zu, "
                    "total bs srds: %zu\n",
             i, n_bs_sdrs_.at(i), n_bs_antennas_.at(i), num_bs_sdrs_all_);
@@ -393,8 +392,13 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     assert(internal_measurement_ || slot_per_frame_ == cl_frames_.at(0).size());
 
     ul_data_slot_present_ = (internal_measurement_ == false)
-        && ((bs_present_ && (ul_slots_.at(0).empty() == false))
-               || (client_present_ && !cl_ul_slots_.at(0).empty()));
+        && ((bs_present_ == true && (ul_slots_.at(0).empty() == false))
+               || (client_present_ == true
+                      && cl_ul_slots_.at(0).empty() == false));
+
+    dl_data_slot_present_ = ((bs_present_ == true
+                                 && (dl_slots_.at(0).empty() == false))
+        || (client_present_ == true && cl_dl_slots_.at(0).empty() == false));
 
     std::vector<std::complex<int16_t>> prefix_zpad(prefix_, 0);
     std::vector<std::complex<int16_t>> postfix_zpad(postfix_, 0);
@@ -514,12 +518,13 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         = CommsLib::getPilotScValue(fft_size_, symbol_data_subcarrier_num_);
     pilot_sc_ind_
         = CommsLib::getPilotScIndex(fft_size_, symbol_data_subcarrier_num_);
-    if (bs_present_ == true) {
+
+    bool recording
+        = pilot_slot_per_frame_ + ul_slot_per_frame_ + dl_slot_per_frame_ > 0;
+    if (recording == true) {
         // set trace file path
         time_t now = time(0);
         tm* ltm = localtime(&now);
-        int cell_num = num_cells_;
-        size_t ant_num = getTotNumAntennas();
         std::string filename;
         if (internal_measurement_) {
             filename = directory + "/trace-internal-meas-"
@@ -528,32 +533,33 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                 + std::to_string(ltm->tm_mday) + "-"
                 + std::to_string(ltm->tm_hour) + "-"
                 + std::to_string(ltm->tm_min) + "-"
-                + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num)
-                + "x" + std::to_string(ant_num) + ".hdf5";
+                + std::to_string(ltm->tm_sec) + "_" + std::to_string(num_cells_)
+                + "x" + std::to_string(num_bs_antennas_all_) + ".hdf5";
         } else {
             std::string ul_present_str
                 = (ul_data_slot_present_ ? "uplink-" : "");
-            filename = directory + "/trace-" + ul_present_str
+            std::string dl_present_str
+                = (dl_data_slot_present_ ? "downlink-" : "");
+            filename = directory + "/trace-" + ul_present_str + dl_present_str
                 + std::to_string(1900 + ltm->tm_year) + "-"
                 + std::to_string(1 + ltm->tm_mon) + "-"
                 + std::to_string(ltm->tm_mday) + "-"
                 + std::to_string(ltm->tm_hour) + "-"
                 + std::to_string(ltm->tm_min) + "-"
-                + std::to_string(ltm->tm_sec) + "_" + std::to_string(cell_num)
-                + "x" + std::to_string(ant_num) + "x"
+                + std::to_string(ltm->tm_sec) + "_" + std::to_string(num_cells_)
+                + "x" + std::to_string(num_bs_antennas_all_) + "x"
                 + std::to_string(num_cl_antennas_) + ".hdf5";
         }
         trace_file_ = tddConf.value("trace_file", filename);
+        task_thread_num_ = tddConf.value("task_thread", TASK_THREAD_NUM);
+    } else {
+        task_thread_num_ = 0;
     }
 
     // Multi-threading settings
     unsigned num_cores = this->getCoreCount();
     MLPD_INFO("Cores found %u ... \n", num_cores);
-    core_alloc_ = num_cores > RX_THREAD_NUM;
-    if (((bs_present_ == true)
-            && (pilot_slot_per_frame_ + ul_slot_per_frame_ > 0))
-        || (client_present_ == true && dl_slot_per_frame_ > 0)) {
-        task_thread_num_ = tddConf.value("task_thread", TASK_THREAD_NUM);
+    if (bs_present_ == true && pilot_slot_per_frame_ + ul_slot_per_frame_ > 0) {
         bs_rx_thread_num_ = (num_cores >= (2 * RX_THREAD_NUM))
             ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_sdrs_all_))
             : 1;
@@ -562,18 +568,16 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         }
     } else {
         bs_rx_thread_num_ = 0;
-        task_thread_num_ = 0;
     }
 
-    if (client_present_ == true) {
+    if (client_present_ == true && dl_slot_per_frame_ > 0) {
         cl_rx_thread_num_ = num_cl_sdrs_;
     } else {
         cl_rx_thread_num_ = 0;
     }
-    if (num_cores
-        < (1 + task_thread_num_ + bs_rx_thread_num_ + cl_rx_thread_num_)) {
-        core_alloc_ = false;
-    }
+
+    core_alloc_ = num_cores
+        >= (1 + task_thread_num_ + bs_rx_thread_num_ + num_cl_sdrs_);
 
     if (core_alloc_ == true) {
         if (bs_present_ == true) {
@@ -587,7 +591,15 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                 "Allocating %zu cores to client threads ... \n", num_cl_sdrs_);
         }
     }
-    MLPD_INFO("Configuration file was successfully parsed!\n");
+    std::printf(
+        "Config: %zu BS antennas, %zu UE antennas, %zu pilot symbols per "
+        "frame,\n\t%zu uplink data symbols per frame, %zu downlink data "
+        "symbols per frame,\n\t%zu OFDM subcarriers (%zu data subcarriers), "
+        "modulation %s, frame time %.3f usec \n",
+        num_bs_sdrs_all_, num_cl_antennas_, pilot_slot_per_frame_,
+        ul_slot_per_frame_, dl_slot_per_frame_, fft_size_,
+        symbol_data_subcarrier_num_, data_mod_.c_str(),
+        this->getFrameDurationSec() * 1e6);
     running_.store(true);
 }
 
@@ -643,8 +655,8 @@ void Config::loadULData(const std::string& directory)
                         = std::fread(data_freq_dom.data(), 2 * sizeof(float),
                             fft_size_ * symbol_per_slot_, fp_tx_f);
                     if (read_num != (fft_size_ * symbol_per_slot_)) {
-                        MLPD_WARN(
-                            "BAD Read of Uplink Freq-Domain Data: %zu/%zu\n",
+                        MLPD_WARN("BAD Read of Uplink Freq-Domain Data: "
+                                  "%zu/%zu\n",
                             read_num, fft_size_ * symbol_per_slot_);
                     }
                     txdata_freq_dom_[ant_i].insert(
@@ -656,8 +668,8 @@ void Config::loadULData(const std::string& directory)
                     read_num = std::fread(data_time_dom.data(),
                         2 * sizeof(float), samps_per_slot_, fp_tx_t);
                     if (read_num != samps_per_slot_) {
-                        MLPD_WARN(
-                            "BAD Read of Uplink Time-Domain Data: %zu/%zu\n",
+                        MLPD_WARN("BAD Read of Uplink Time-Domain Data: "
+                                  "%zu/%zu\n",
                             read_num, samps_per_slot_);
                     }
                     txdata_time_dom_[ant_i].insert(
@@ -703,20 +715,45 @@ size_t Config::getMaxNumAntennas()
     return ret;
 }
 
+size_t Config::getNumBsSdrs()
+{
+    size_t sdr_num;
+    /* Total number of Sdrs across cells */
+    if (this->bs_present_ == false) {
+        sdr_num = 1;
+    } else {
+        for (size_t i = 0; i < num_cells_; i++) {
+            sdr_num += n_bs_sdrs_.at(i);
+            if (internal_measurement_ == true && ref_node_enable_ == true)
+                sdr_num--;
+        }
+    }
+    return sdr_num;
+}
+
 size_t Config::getTotNumAntennas()
 {
     size_t ret;
-    /* Total number of antennas across cells */
     if (this->bs_present_ == false) {
-        ret = 1;
+        ret = 0;
     } else {
-        size_t totNumSdr = 0;
-        for (size_t i = 0; i < num_cells_; i++) {
-            totNumSdr += n_bs_sdrs_.at(i);
-            if (internal_measurement_ == true && ref_node_enable_ == true)
-                totNumSdr--;
+        ret = this->getNumBsSdrs() * bs_channel_.length();
+    }
+    return ret;
+}
+
+size_t Config::getNumRecordedSdrs()
+{
+    size_t ret = 0;
+    /* Total number of antennas across cells */
+    if (this->bs_present_ == true) {
+        ret += getNumBsSdrs();
+    }
+    if (this->client_present_ == true && dl_slot_per_frame_ > 0) {
+        for (size_t i = 0; i < cl_dl_slots_.size(); i++) {
+            if (cl_dl_slots_.at(i).size() > 0)
+                ret++;
         }
-        ret = totNumSdr * bs_channel_.length();
     }
     return ret;
 }

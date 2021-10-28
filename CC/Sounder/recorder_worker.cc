@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2020, Rice University 
+ Copyright (c) 2018-2021, Rice University
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
 
 ----------------------------------------------------------------------
@@ -261,12 +261,14 @@ herr_t RecorderWorker::initHDF5()
 
         this->file_ = new H5::H5File(this->hdf5_name_, H5F_ACC_TRUNC);
         auto mainGroup = this->file_->createGroup("/Data");
-        this->pilot_prop_.setChunk(kDsDim, cdims);
-
-        H5::DataSpace pilot_dataspace(kDsDim, dims_pilot, max_dims_pilot);
-        this->file_->createDataSet("/Data/Pilot_Samples",
-            H5::PredType::STD_I16BE, pilot_dataspace, this->pilot_prop_);
-
+        if (this->cfg_->bs_rx_thread_num() == true
+            && this->cfg_->pilot_slot_per_frame() > 0) {
+            H5::DataSpace pilot_dataspace(kDsDim, dims_pilot, max_dims_pilot);
+            this->pilot_prop_.setChunk(kDsDim, cdims);
+            this->file_->createDataSet("/Data/Pilot_Samples",
+                H5::PredType::STD_I16BE, pilot_dataspace, this->pilot_prop_);
+            this->pilot_prop_.close();
+        }
         // ******* COMMON ******** //
         // TX/RX Frequencyfile
         write_attribute(mainGroup, "FREQ", this->cfg_->freq());
@@ -499,7 +501,8 @@ herr_t RecorderWorker::initHDF5()
             this->noise_prop_.close();
         }
 
-        if (this->cfg_->ul_slot_per_frame() > 0) {
+        if (this->cfg_->bs_rx_thread_num() == true
+            && this->cfg_->ul_slot_per_frame() > 0) {
             H5::DataSpace data_dataspace(
                 kDsDim, dims_ul_data, max_dims_ul_data);
             this->ul_data_prop_.setChunk(kDsDim, cdims);
@@ -508,7 +511,8 @@ herr_t RecorderWorker::initHDF5()
             this->ul_data_prop_.close();
         }
 
-        if (this->cfg_->dl_slot_per_frame() > 0) {
+        if (this->cfg_->cl_rx_thread_num() == true
+            && this->cfg_->dl_slot_per_frame() > 0) {
             H5::DataSpace data_dataspace(
                 kDsDim, dims_dl_data, max_dims_dl_data);
             this->dl_data_prop_.setChunk(kDsDim, cdims);
@@ -543,34 +547,38 @@ void RecorderWorker::openHDF5()
 {
     MLPD_TRACE("Open HDF5 file: %s\n", this->hdf5_name_.c_str());
     this->file_->openFile(this->hdf5_name_, H5F_ACC_RDWR);
-    assert(this->pilot_dataset_ == nullptr);
-    // Get Dataset for pilot and check the shape of it
-    this->pilot_dataset_
-        = new H5::DataSet(this->file_->openDataSet("/Data/Pilot_Samples"));
+    if (this->cfg_->bs_rx_thread_num() == true
+        && this->cfg_->pilot_slot_per_frame() > 0) {
+        assert(this->pilot_dataset_ == nullptr);
+        // Get Dataset for pilot and check the shape of it
+        this->pilot_dataset_
+            = new H5::DataSet(this->file_->openDataSet("/Data/Pilot_Samples"));
 
-    // Get the dataset's dataspace and creation property list.
-    H5::DataSpace pilot_filespace(this->pilot_dataset_->getSpace());
-    this->pilot_prop_.copy(this->pilot_dataset_->getCreatePlist());
+        // Get the dataset's dataspace and creation property list.
+        H5::DataSpace pilot_filespace(this->pilot_dataset_->getSpace());
+        this->pilot_prop_.copy(this->pilot_dataset_->getCreatePlist());
 
 #if DEBUG_PRINT
-    hsize_t IQ = 2 * this->cfg_->samps_per_slot();
-    int cndims_pilot = 0;
-    int ndims = pilot_filespace.getSimpleExtentNdims();
-    DataspaceIndex dims_pilot
-        = { this->frame_number_pilot_, this->cfg_->num_cells(),
-              this->cfg_->pilot_slot_per_frame(), this->num_antennas(), IQ };
-    if (H5D_CHUNKED == this->pilot_prop_.getLayout())
-        cndims_pilot = this->pilot_prop_.getChunk(ndims, dims_pilot);
-    using std::cout;
-    cout << "dim pilot chunk = " << cndims_pilot << std::endl;
-    cout << "New Pilot Dataset Dimension: [";
-    for (auto i = 0; i < kDsSim - 1; ++i)
-        cout << dims_pilot[i] << ",";
-    cout << dims_pilot[kDsSim - 1] << "]" << std::endl;
+        hsize_t IQ = 2 * this->cfg_->samps_per_slot();
+        int cndims_pilot = 0;
+        int ndims = pilot_filespace.getSimpleExtentNdims();
+        DataspaceIndex dims_pilot = { this->frame_number_pilot_,
+            this->cfg_->num_cells(), this->cfg_->pilot_slot_per_frame(),
+            this->num_antennas(), IQ };
+        if (H5D_CHUNKED == this->pilot_prop_.getLayout())
+            cndims_pilot = this->pilot_prop_.getChunk(ndims, dims_pilot);
+        using std::cout;
+        cout << "dim pilot chunk = " << cndims_pilot << std::endl;
+        cout << "New Pilot Dataset Dimension: [";
+        for (auto i = 0; i < kDsSim - 1; ++i)
+            cout << dims_pilot[i] << ",";
+        cout << dims_pilot[kDsSim - 1] << "]" << std::endl;
 #endif
-    pilot_filespace.close();
+        pilot_filespace.close();
+    }
     // Get Dataset for UL DATA (If Enabled) and check the shape of it
-    if (this->cfg_->ul_slot_per_frame() > 0) {
+    if (this->cfg_->bs_rx_thread_num() == true
+        && this->cfg_->ul_slot_per_frame() > 0) {
         this->ul_dataset_
             = new H5::DataSet(this->file_->openDataSet("/Data/UplinkData"));
 
@@ -598,7 +606,8 @@ void RecorderWorker::openHDF5()
     }
 
     // Get Dataset for DL DATA (If Enabled) and check the shape of it
-    if (this->cfg_->dl_slot_per_frame() > 0) {
+    if (this->cfg_->cl_rx_thread_num() == true
+        && this->cfg_->dl_slot_per_frame() > 0) {
         this->dl_dataset_
             = new H5::DataSet(this->file_->openDataSet("/Data/DownlinkData"));
 
@@ -663,20 +672,24 @@ void RecorderWorker::closeHDF5()
         unsigned frame_number = this->max_frame_number_;
         hsize_t IQ = 2 * this->cfg_->samps_per_slot();
 
-        assert(this->pilot_dataset_ != nullptr);
         // Resize Pilot Dataset
-        this->frame_number_pilot_ = frame_number;
-        DataspaceIndex dims_pilot
-            = { this->frame_number_pilot_, this->cfg_->num_cells(),
-                  this->cfg_->pilot_slot_per_frame(), this->num_antennas_, IQ };
-        this->pilot_dataset_->extend(dims_pilot);
-        this->pilot_prop_.close();
-        this->pilot_dataset_->close();
-        delete this->pilot_dataset_;
-        this->pilot_dataset_ = nullptr;
+        if (this->cfg_->bs_rx_thread_num() == true
+            && this->cfg_->pilot_slot_per_frame() > 0) {
+            assert(this->pilot_dataset_ != nullptr);
+            this->frame_number_pilot_ = frame_number;
+            DataspaceIndex dims_pilot = { this->frame_number_pilot_,
+                this->cfg_->num_cells(), this->cfg_->pilot_slot_per_frame(),
+                this->num_antennas_, IQ };
+            this->pilot_dataset_->extend(dims_pilot);
+            this->pilot_prop_.close();
+            this->pilot_dataset_->close();
+            delete this->pilot_dataset_;
+            this->pilot_dataset_ = nullptr;
+        }
 
-        // Resize UL Data Dataset (If Needed)
-        if (this->cfg_->ul_slot_per_frame() > 0) {
+        // Resize UL Data Dataset
+        if (this->cfg_->bs_rx_thread_num() == true
+            && this->cfg_->ul_slot_per_frame() > 0) {
             assert(this->ul_dataset_ != nullptr);
             this->frame_number_ul_data_ = frame_number;
             DataspaceIndex dims_ul_data = { this->frame_number_ul_data_,
@@ -689,8 +702,9 @@ void RecorderWorker::closeHDF5()
             this->ul_dataset_ = nullptr;
         }
 
-        // Resize DL Data Dataset (If Needed)
-        if (this->cfg_->dl_slot_per_frame() > 0) {
+        // Resize DL Data Dataset
+        if (this->cfg_->cl_rx_thread_num() == true
+            && this->cfg_->dl_slot_per_frame() > 0) {
             assert(this->dl_dataset_ != nullptr);
             this->frame_number_dl_data_ = frame_number;
             DataspaceIndex dims_dl_data = { this->frame_number_dl_data_,
@@ -703,7 +717,7 @@ void RecorderWorker::closeHDF5()
             this->dl_dataset_ = nullptr;
         }
 
-        // Resize Noise Dataset (If Needed)
+        // Resize Noise Dataset
         if (this->cfg_->noise_slot_per_frame() > 0) {
             assert(this->noise_dataset_ != nullptr);
             this->frame_number_noise_ = frame_number;
@@ -743,7 +757,8 @@ herr_t RecorderWorker::record(int tid, Package* pkg)
     //MLPD_TRACE( "Tid: %d -- frame_id %u, antenna: %u\n", tid, pkg->frame_id, pkg->ant_id);
 
 #if DEBUG_PRINT
-    printf("record            frame %d, symbol %d, cell %d, ant %d samples: %d "
+    printf("record            frame %d, symbol %d, cell %d, ant %d "
+           "samples: %d "
            "%d %d %d %d %d %d %d ....\n",
         pkg->frame_id, pkg->symbol_id, pkg->cell_id, pkg->ant_id, pkg->data[1],
         pkg->data[2], pkg->data[3], pkg->data[4], pkg->data[5], pkg->data[6],

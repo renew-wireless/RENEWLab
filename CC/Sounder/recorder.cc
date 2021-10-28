@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2020, Rice University 
+ Copyright (c) 2018-2021, Rice University 
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
 
 ----------------------------------------------------------------------
@@ -32,20 +32,20 @@ Recorder::Recorder(Config* in_cfg, unsigned int core_start)
 {
     size_t bs_rx_thread_num = cfg_->bs_rx_thread_num();
     size_t cl_rx_thread_num = cfg_->cl_rx_thread_num();
-    size_t ant_per_rx_thread = cfg_->bs_present() && bs_rx_thread_num > 0
-        ? cfg_->getTotNumAntennas() / bs_rx_thread_num
+    size_t total_rx_thread_num = bs_rx_thread_num + cl_rx_thread_num;
+    size_t sdr_per_rx_thread = total_rx_thread_num > 0
+        ? cfg_->getNumRecordedSdrs() / total_rx_thread_num
         : 1;
     rx_thread_buff_size_
-        = kSampleBufferFrameNum * cfg_->slot_per_frame() * ant_per_rx_thread;
+        = kSampleBufferFrameNum * cfg_->slot_per_frame() * sdr_per_rx_thread;
 
     message_queue_ = moodycamel::ConcurrentQueue<Event_data>(
         rx_thread_buff_size_ * kQueueSize);
 
     MLPD_TRACE("Recorder construction: rx threads: %zu, recorder threads: %u, "
                "chunk size: %zu\n",
-        bs_rx_thread_num, cfg_->task_thread_num(), rx_thread_buff_size_);
+        total_rx_thread_num, cfg_->task_thread_num(), rx_thread_buff_size_);
 
-    size_t total_rx_thread_num = bs_rx_thread_num + cl_rx_thread_num;
     if (total_rx_thread_num > 0) {
         // initialize rx buffers
         rx_buffer_ = new SampleBuffer[total_rx_thread_num];
@@ -61,7 +61,7 @@ Recorder::Recorder(Config* in_cfg, unsigned int core_start)
 
     // Receiver object will be used for both BS and clients
     try {
-        receiver_.reset(new Receiver(bs_rx_thread_num, cfg_, &message_queue_));
+        receiver_.reset(new Receiver(cfg_, &message_queue_));
     } catch (ReceiverException& re) {
         std::cout << re.what() << '\n';
         gc();
@@ -86,7 +86,7 @@ Recorder::~Recorder() { this->gc(); }
 void Recorder::do_it()
 {
     size_t recorder_threads = this->cfg_->task_thread_num();
-    size_t total_antennas = cfg_->getTotNumAntennas() + cfg_->num_cl_antennas();
+    size_t total_antennas = cfg_->getNumRecordedSdrs();
     size_t total_rx_thread_num
         = cfg_->bs_rx_thread_num() + cfg_->cl_rx_thread_num();
     size_t thread_antennas = 0;
@@ -131,10 +131,11 @@ void Recorder::do_it()
             new_recorder->Start();
             this->recorders_.push_back(new_recorder);
         }
-
-        // create socket buffer and socket threads
-        recv_threads
-            = this->receiver_->startRecvThreads(this->rx_buffer_, kRecvCore);
+        if (cfg_->bs_rx_thread_num() > 0) {
+            // create socket buffer and socket threads
+            recv_threads = this->receiver_->startRecvThreads(
+                this->rx_buffer_, cfg_->bs_rx_thread_num(), kRecvCore);
+        }
     } else
         this->receiver_->go(); // only beamsweeping
 

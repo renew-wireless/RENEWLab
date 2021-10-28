@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2019, Rice University 
+ Copyright (c) 2018-2021, Rice University
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
  Author(s): Rahman Doost-Mohamamdy: doost@rice.edu
  
@@ -25,6 +25,10 @@ public:
     inline bool bs_present(void) const { return this->bs_present_; }
     inline bool client_present(void) const { return this->client_present_; }
     inline size_t num_bs_sdrs_all(void) const { return this->num_bs_sdrs_all_; }
+    inline size_t num_bs_antennas_all(void) const
+    {
+        return this->num_bs_antennas_all_;
+    }
     inline size_t num_cl_sdrs(void) const { return this->num_cl_sdrs_; }
     inline size_t core_alloc(void) const { return this->core_alloc_; }
     inline int slot_samp_size(void) const { return this->slot_samp_size_; }
@@ -34,6 +38,10 @@ public:
     inline bool ul_data_slot_present(void) const
     {
         return this->ul_data_slot_present_;
+    }
+    inline bool dl_data_slot_present(void) const
+    {
+        return this->dl_data_slot_present_;
     }
     inline size_t num_cells(void) const { return this->num_cells_; }
     inline size_t guard_mult(void) const { return this->guard_mult_; }
@@ -134,6 +142,10 @@ public:
     {
         return this->tx_data_;
     };
+    inline std::vector<std::complex<int16_t>>& pilot_ci16(void)
+    {
+        return this->pilot_ci16_;
+    }
     inline std::vector<std::complex<float>>& pilot_cf32(void)
     {
         return this->pilot_cf32_;
@@ -275,9 +287,18 @@ public:
     {
         return (2 * this->samps_per_slot_ * sizeof(short));
     }
+
+    /// Return the frame duration in seconds
+    inline double getFrameDurationSec() const
+    {
+        return ((this->symbol_per_slot_ * this->samps_per_slot_) / this->rate_);
+    }
+
     size_t getNumAntennas();
     size_t getMaxNumAntennas();
+    size_t getNumBsSdrs();
     size_t getTotNumAntennas();
+    size_t getNumRecordedSdrs();
     int getClientId(int, int);
     int getNoiseSlotIndex(int, int);
     int getUlSlotIndex(int, int);
@@ -318,6 +339,7 @@ private:
     std::string pilot_seq_;
     std::string beacon_seq_;
     bool ul_data_slot_present_;
+    bool dl_data_slot_present_;
     std::string data_mod_;
 
     // BS features
@@ -339,6 +361,7 @@ private:
     std::vector<size_t> n_bs_antennas_; //No accessor
     std::vector<size_t> n_bs_sdrs_agg_;
     size_t num_bs_sdrs_all_;
+    size_t num_bs_antennas_all_;
     std::string bs_channel_;
     std::vector<std::string> frames_;
     std::string frame_mode_;

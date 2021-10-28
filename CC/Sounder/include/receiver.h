@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2019, Rice University 
+ Copyright (c) 2018-2021, Rice University
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
  
 ----------------------------------------------------------
@@ -74,17 +74,16 @@ public:
     struct ReceiverContext {
         Receiver* ptr;
         SampleBuffer* buffer;
-        int core_id;
-        int tid;
+        size_t core_id;
+        size_t tid;
     };
 
 public:
-    Receiver(int n_rx_threads, Config* config,
-        moodycamel::ConcurrentQueue<Event_data>* in_queue);
+    Receiver(Config* config, moodycamel::ConcurrentQueue<Event_data>* in_queue);
     ~Receiver();
 
     std::vector<pthread_t> startRecvThreads(
-        SampleBuffer* rx_buffer, unsigned in_core_id = 0);
+        SampleBuffer* rx_buffer, size_t n_rx_threads, unsigned in_core_id = 0);
     void completeRecvThreads(const std::vector<pthread_t>& recv_thread);
     std::vector<pthread_t> startClientThreads(
         SampleBuffer* rx_buffer, unsigned in_core_id = 0);
@@ -100,7 +99,7 @@ private:
     ClientRadioSet* clientRadioSet_;
     BaseRadioSet* base_radio_set_;
 
-    int thread_num_;
+    size_t thread_num_;
     // pointer of message_queue_
     moodycamel::ConcurrentQueue<Event_data>* message_queue_;
 };
