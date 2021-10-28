@@ -88,113 +88,131 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         ul_slot_num = int(metadata['UL_SLOTS'])
     n_ue = num_cl
 
-    all_bs_nodes = set(range(hdf5.pilot_samples.shape[3]))
-    plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
-    pilot_samples = hdf5.pilot_samples[:, :, :, plot_bs_nodes, :]
+    all_bs_nodes = []
+    plot_bs_nodes = []
+    num_frames = 0
+    pilot_data_avail = len(hdf5.pilot_samples) > 0
+    if pilot_data_avail:
+        all_bs_nodes = set(range(hdf5.pilot_samples.shape[3]))
+        plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
+        pilot_samples = hdf5.pilot_samples[:, :, :, plot_bs_nodes, :]
+
+        frm_plt = min(frame_i, pilot_samples.shape[0] + n_frm_st)
+        # Verify frame_i does not exceed max number of collected frames
+        ref_frame = min(frame_i - n_frm_st, pilot_samples.shape[0])
+
     ul_data_avail = len(hdf5.uplink_samples) > 0
     if ul_data_avail:
         uplink_samples = hdf5.uplink_samples[:, :, :, plot_bs_nodes, :]
     noise_avail = len(hdf5.noise_samples) > 0
     if noise_avail:
         noise_samples = hdf5.noise_samples[:, :, :, plot_bs_nodes, :]
+    dl_data_avail = len(hdf5.downlink_samples) > 0
+    if dl_data_avail:
+        if not pilot_data_avail:
+            all_bs_nodes = set(range(hdf5.downlink_samples.shape[3]))
+            plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
+        downlink_samples = hdf5.downlink_samples[:, :, :, plot_bs_nodes, :]
+        if not pilot_data_avail:
+            frm_plt = min(frame_i, downlink_samples.shape[0] + n_frm_st)
+            # Verify frame_i does not exceed max number of collected frames
+            ref_frame = min(frame_i - n_frm_st, downlink_samples.shape[0])
 
-    frm_plt = min(frame_i, pilot_samples.shape[0] + n_frm_st)
 
-    # Verify frame_i does not exceed max number of collected frames
-    ref_frame = min(frame_i - n_frm_st, pilot_samples.shape[0])
+    if pilot_data_avail:
 
-    print("samps_per_slot = {}, offset = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}, pilot_rep = {}".format(samps_per_slot, offset, cp, prefix_len, postfix_len, z_padding, symbol_per_slot))
+        print("samps_per_slot = {}, offset = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}, pilot_rep = {}".format(samps_per_slot, offset, cp, prefix_len, postfix_len, z_padding, symbol_per_slot))
 
-    # pilot_samples dimensions:
-    # ( #frames, #cells, #pilot subframes or cl ant sending pilots, #bs nodes or # bs ant, #samps per frame * 2 for IQ )
-    num_cl_tmp = num_pilots  # number of UEs to plot data for
-    num_frames = pilot_samples.shape[0]
-    num_cells = pilot_samples.shape[1]
-    num_bs_ants = pilot_samples.shape[3]
+        # pilot_samples dimensions:
+        # ( #frames, #cells, #pilot subframes or cl ant sending pilots, #bs nodes or # bs ant, #samps per frame * 2 for IQ )
+        num_cl_tmp = num_pilots  # number of UEs to plot data for
+        num_frames = pilot_samples.shape[0]
+        num_cells = pilot_samples.shape[1]
+        num_bs_ants = pilot_samples.shape[3]
 
-    samps_mat = np.reshape(
-            pilot_samples, (num_frames, num_cells, num_cl_tmp, num_bs_ants, samps_per_slot, 2))
-    samps = (samps_mat[:, :, :, :, :, 0] +
-            samps_mat[:, :, :, :, :, 1]*1j)*2**-15
+        samps_mat = np.reshape(
+                pilot_samples, (num_frames, num_cells, num_cl_tmp, num_bs_ants, samps_per_slot, 2))
+        samps = (samps_mat[:, :, :, :, :, 0] +
+                samps_mat[:, :, :, :, :, 1]*1j)*2**-15
 
-    # Correlation (Debug plot useful for checking sync)
-    good_ants = []
-    insp_ants = [] # antennas to be inspected
-    if ant_i > num_bs_ants - 1:
-        insp_ants = range(samps.shape[3])
-    else:
-        insp_ants = [ant_i]
-    for i in insp_ants:
-        amps = np.mean(np.abs(samps[:, 0, user_i, i, :]), axis=1)
-        pilot_frames = [i for i in range(len(amps)) if amps[i] > thresh]
-        if len(pilot_frames) > 0:
-            good_ants = good_ants + [i]
+        # Correlation (Debug plot useful for checking sync)
+        good_ants = []
+        insp_ants = [] # antennas to be inspected
+        if ant_i > num_bs_ants - 1:
+            insp_ants = range(samps.shape[3])
         else:
-            print("no valid frames where found in antenna %d. Decision threshold (average pilot amplitude) was %f" % (i, thresh))
-    if len(good_ants) == 0:
-        print("no valid frames found in data belonging to user %d. Exitting ..." % user_i)
-        return 
+            insp_ants = [ant_i]
+        for i in insp_ants:
+            amps = np.mean(np.abs(samps[:, 0, user_i, i, :]), axis=1)
+            pilot_frames = [i for i in range(len(amps)) if amps[i] > thresh]
+            if len(pilot_frames) > 0:
+                good_ants = good_ants + [i]
+            else:
+                print("no valid frames where found in antenna %d. Decision threshold (average pilot amplitude) was %f" % (i, thresh))
+        if len(good_ants) == 0:
+            print("no valid frames found in data belonging to user %d. Exitting ..." % user_i)
+            return 
 
-    # Compute CSI from IQ samples
-    # Samps: #Frames, #Cell, #Users, #Antennas, #Samples
-    # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
-    # For correlation use a fft size of 64
-    print("*verify_hdf5(): Calling samps2csi with fft_size = {}, offset = {}, bound = {}, cp = {} *".format(fft_size, offset, z_padding, cp))
-    csi, _ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, samps_per_slot, fft_size=fft_size,
-                                    offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
+        # Compute CSI from IQ samples
+        # Samps: #Frames, #Cell, #Users, #Antennas, #Samples
+        # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
+        # For correlation use a fft size of 64
+        print("*verify_hdf5(): Calling samps2csi with fft_size = {}, offset = {}, bound = {}, cp = {} *".format(fft_size, offset, z_padding, cp))
+        csi, _ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, samps_per_slot, fft_size=fft_size,
+                                        offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
 
-    cellCSI = csi[:, cell_i, :, :, :, :]
-    if corr_thresh > 0.0: 
-        bad_nodes = find_bad_nodes(cellCSI, corr_thresh=corr_thresh,
-                                   user=user_i)
-        if bad_nodes:
-            print(">>> Warning! List of bad nodes (1-based): {bad_nodes}".
-                  format(bad_nodes=bad_nodes))
+        cellCSI = csi[:, cell_i, :, :, :, :]
+        if corr_thresh > 0.0: 
+            bad_nodes = find_bad_nodes(cellCSI, corr_thresh=corr_thresh,
+                                       user=user_i)
+            if bad_nodes:
+                print(">>> Warning! List of bad nodes (1-based): {bad_nodes}".
+                      format(bad_nodes=bad_nodes))
+            else:
+                print(">>> All Iris nodes are good!")
+
+        if ofdm_sym_i >= symbol_per_slot:  # if out of range index, do average
+            userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
         else:
-            print(">>> All Iris nodes are good!")
+            userCSI = cellCSI[:, :, ofdm_sym_i, :, :]
+        corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2) ) )
 
-    if ofdm_sym_i >= symbol_per_slot:  # if out of range index, do average
-        userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
-    else:
-        userCSI = cellCSI[:, :, ofdm_sym_i, :, :]
-    corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2) ) )
+        # Plotter
+        # Plot pilots
+        for i in insp_ants:
+            fig1, axes1 = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
+            axes1[0, 0].set_title('Pilots IQ - Cell %d - Antenna %d - User %d'%(cell_i, i, user_i))
+            # Samps Dimensions: (Frame, Cell, User, Pilot Rep, Antenna, Sample)
+            axes1[0, 0].set_ylabel('Frame %d (IQ)' %( (ref_frame + n_frm_st)) )
+            axes1[0, 0].plot(np.real(samps[ref_frame, cell_i, user_i, i, :]))
+            axes1[0, 0].plot(np.imag(samps[ref_frame, cell_i, user_i, i, :]))
 
-    # Plotter
-    # Plot pilots
-    for i in insp_ants:
-        fig1, axes1 = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
-        axes1[0, 0].set_title('Pilots IQ - Cell %d - Antenna %d - User %d'%(cell_i, i, user_i))
-        # Samps Dimensions: (Frame, Cell, User, Pilot Rep, Antenna, Sample)
-        axes1[0, 0].set_ylabel('Frame %d (IQ)' %( (ref_frame + n_frm_st)) )
-        axes1[0, 0].plot(np.real(samps[ref_frame, cell_i, user_i, i, :]))
-        axes1[0, 0].plot(np.imag(samps[ref_frame, cell_i, user_i, i, :]))
+            axes1[1, 0].set_ylabel('All Frames (I)')
+            axes1[1, 0].plot(np.real(samps[:, cell_i, user_i, i, :]).flatten())
+            axes1[1, 0].plot(np.imag(samps[:, cell_i, user_i, i, :]).flatten())
 
-        axes1[1, 0].set_ylabel('All Frames (I)')
-        axes1[1, 0].plot(np.real(samps[:, cell_i, user_i, i, :]).flatten())
-        axes1[1, 0].plot(np.imag(samps[:, cell_i, user_i, i, :]).flatten())
+        fig2, axes2 = plt.subplots(nrows=3, ncols=1, squeeze=False, figsize=(10, 8))
+        axes2[0, 0].set_title('Pilot CSI Stats Across Frames- Cell %d - User %d - Subcarrier %d' % (cell_i, user_i, subcarrier_i))
+        axes2[0, 0].set_ylabel('Magnitude')
+        for i in range(csi.shape[4]):
+            axes2[0, 0].plot(np.abs(userCSI[:, user_i, i, subcarrier_i]).flatten(), label="ant %d" % plot_bs_nodes[i])
+        axes2[0, 0].legend(loc='lower right', frameon=False)
+        axes2[0, 0].set_xlabel('Frame')
 
-    fig2, axes2 = plt.subplots(nrows=3, ncols=1, squeeze=False, figsize=(10, 8))
-    axes2[0, 0].set_title('Pilot CSI Stats Across Frames- Cell %d - User %d - Subcarrier %d' % (cell_i, user_i, subcarrier_i))
-    axes2[0, 0].set_ylabel('Magnitude')
-    for i in range(csi.shape[4]):
-        axes2[0, 0].plot(np.abs(userCSI[:, user_i, i, subcarrier_i]).flatten(), label="ant %d" % plot_bs_nodes[i])
-    axes2[0, 0].legend(loc='lower right', frameon=False)
-    axes2[0, 0].set_xlabel('Frame')
+        axes2[1, 0].set_ylabel('Phase')
+        for i in range(csi.shape[4]):
+            axes2[1, 0].plot(np.angle(userCSI[:, user_i, i, subcarrier_i]).flatten(), label="ant %d" % plot_bs_nodes[i])
+        axes2[1, 0].legend(loc='lower right', frameon=False)
+        axes2[1, 0].set_ylim(-np.pi, np.pi)
+        axes2[1, 0].set_xlabel('Frame')
 
-    axes2[1, 0].set_ylabel('Phase')
-    for i in range(csi.shape[4]):
-        axes2[1, 0].plot(np.angle(userCSI[:, user_i, i, subcarrier_i]).flatten(), label="ant %d" % plot_bs_nodes[i])
-    axes2[1, 0].legend(loc='lower right', frameon=False)
-    axes2[1, 0].set_ylim(-np.pi, np.pi)
-    axes2[1, 0].set_xlabel('Frame')
-
-    axes2[2, 0].set_ylabel('Correlation with Frame %d' % ref_frame)
-    axes2[2, 0].set_ylim([0, 1.1])
-    axes2[2, 0].set_title('Cell %d offset %d' % (0, offset))
-    for u in range(num_cl_tmp):
-        axes2[2, 0].plot(corr_total[pilot_frames, u], label="user %d"%u)
-    axes2[2, 0].legend(loc='lower right', frameon=False)
-    axes2[2, 0].set_xlabel('Frame')
+        axes2[2, 0].set_ylabel('Correlation with Frame %d' % ref_frame)
+        axes2[2, 0].set_ylim([0, 1.1])
+        axes2[2, 0].set_title('Cell %d offset %d' % (0, offset))
+        for u in range(num_cl_tmp):
+            axes2[2, 0].plot(corr_total[pilot_frames, u], label="user %d"%u)
+        axes2[2, 0].legend(loc='lower right', frameon=False)
+        axes2[2, 0].set_xlabel('Frame')
 
     if reciprocal_calib:
         # frame, downlink(0)-uplink(1), antennas, subcarrier
@@ -268,336 +286,354 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         axes4[3, 0].set_xlabel('Subcarrier')
         axes4[3, 0].set_ylim(-np.pi, np.pi)
         axes4[3, 0].legend(loc='lower right', frameon=False)
-        plt.show()
 
-    else:
-        # Plot UL data symbols
-        if ul_data_avail > 0:
-            fig4, axes4 = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
+    # Plot UL data symbols
+    if ul_data_avail > 0:
+        fig4, axes4 = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
 
-            # UL Samps: #Frames, #Cell, #Uplink Symbol, #Antennas, #Samples
-            samps_mat = np.reshape(
-                    uplink_samples, (uplink_samples.shape[0], uplink_samples.shape[1], uplink_samples.shape[2], uplink_samples.shape[3], samps_per_slot, 2))
-            ul_samps = (samps_mat[:, :, :, :, :, 0] +
-                    samps_mat[:, :, :, :, :, 1]*1j)*2**-15
+        # UL Samps: #Frames, #Cell, #Uplink Symbol, #Antennas, #Samples
+        samps_mat = np.reshape(
+                uplink_samples, (uplink_samples.shape[0], uplink_samples.shape[1], uplink_samples.shape[2], uplink_samples.shape[3], samps_per_slot, 2))
+        ul_samps = (samps_mat[:, :, :, :, :, 0] +
+                samps_mat[:, :, :, :, :, 1]*1j)*2**-15
 
 
-            axes4[0, 0].set_title('Uplink Data IQ - Cell %d - Antenna %d - Symbol %d' % (cell_i, ant_i, ul_sf_i))
-            axes4[0, 0].set_ylabel('Frame %d (IQ)' % ref_frame)
-            axes4[0, 0].plot(np.real(ul_samps[ref_frame, cell_i, ul_sf_i, ant_i, :]))
-            axes4[0, 0].plot(np.imag(ul_samps[ref_frame, cell_i, ul_sf_i, ant_i, :]))
+        axes4[0, 0].set_title('Uplink Data IQ - Cell %d - Antenna %d - Symbol %d' % (cell_i, ant_i, ul_sf_i))
+        axes4[0, 0].set_ylabel('Frame %d (IQ)' % ref_frame)
+        axes4[0, 0].plot(np.real(ul_samps[ref_frame, cell_i, ul_sf_i, ant_i, :]))
+        axes4[0, 0].plot(np.imag(ul_samps[ref_frame, cell_i, ul_sf_i, ant_i, :]))
 
-            axes4[1, 0].set_ylabel('All Frames (IQ)')
-            axes4[1, 0].plot(np.real(ul_samps[:, cell_i, ul_sf_i, ant_i, :]).flatten())
-            axes4[1, 0].plot(np.imag(ul_samps[:, cell_i, ul_sf_i, ant_i, :]).flatten())
+        axes4[1, 0].set_ylabel('All Frames (IQ)')
+        axes4[1, 0].plot(np.real(ul_samps[:, cell_i, ul_sf_i, ant_i, :]).flatten())
+        axes4[1, 0].plot(np.imag(ul_samps[:, cell_i, ul_sf_i, ant_i, :]).flatten())
 
-            if demodulate:
-                cl_ch_num = int(metadata['CL_CH_PER_RADIO'])
-                data_sc_ind = np.array(metadata['OFDM_DATA_SC'])
-                pilot_sc_ind = np.array(metadata['OFDM_PILOT_SC'])
-                pilot_sc_val = np.array(metadata['OFDM_PILOT_SC_VALS'])
-                zero_sc_ind = np.setdiff1d(range(fft_size), data_sc_ind)
-                zero_sc_ind = np.setdiff1d(zero_sc_ind, pilot_sc_ind)
-                nonzero_sc_ind = np.setdiff1d(range(fft_size), zero_sc_ind)
-
-
-                # UL Samps: #Frames, #Uplink SF, #Antennas, #Samples
-                ul_samps = ul_samps[:, cell_i, :, :, :]
-
-                n_frames = ul_samps.shape[0]
-                ul_syms = np.empty((ul_samps.shape[0], ul_samps.shape[1],
-                               ul_samps.shape[2], symbol_per_slot, fft_size), dtype='complex64')
-                # UL Syms: #Frames, #Uplink SF, #Antennas, #OFDM Symbols, #Samples
-                for i in range(symbol_per_slot):
-                    ul_syms[:, :, :, i, :] = ul_samps[:, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size]
-                # UL Syms: #Frames, #OFDM Symbols, #Uplink SF, #Antennas, #Samples
-                ul_syms = np.transpose(ul_syms, (0, 3, 1, 2, 4))
-                # UL Syms: #Frames, # Frame All OFDM Symbols, #Antennas, #Samples
-                num_ul_sym = ul_syms.shape[1] * ul_syms.shape[2]
-                ul_syms = np.reshape(ul_syms, (ul_syms.shape[0], num_ul_sym, ul_syms.shape[3], ul_syms.shape[4]))
-                ul_syms_f = np.fft.fft(ul_syms, fft_size, 3)
-                ul_syms_f = np.delete(ul_syms_f, zero_sc_ind, 3)
-                # UL DEMULT: #Frames, # Frame OFDM Symbols, #User, #Sample (DATA + PILOT SCs)
-                ul_demult = demult(userCSI, ul_syms_f)
-                dims = ul_demult.shape
-                ul_demult_exp = np.empty((dims[0], dims[1], dims[2], fft_size), dtype='complex64')
-                ul_demult_exp[:, :, :, nonzero_sc_ind] = ul_demult
-                # Phase offset tracking and correction
-                phase_corr = ul_demult_exp[:, :, :, pilot_sc_ind] * np.conj(pilot_sc_val)
-                phase_err = np.angle(np.mean(phase_corr, 3))
-                phase_comp = np.exp(-1j*phase_err)
-                ul_data = ul_demult_exp[:, :, :, data_sc_ind]
-                phase_comp_exp = np.empty(ul_data.shape, dtype='complex64')
-                for i in range(len(data_sc_ind)):
-                    phase_comp_exp[:, :, :, i] = phase_comp
-                ul_data = np.multiply(ul_data, phase_comp_exp)
-                # UL DATA: #Frames, #User, # Frame OFDM Symbols, #DATA SCs
-                ul_data = np.transpose(ul_data, (0, 2, 1, 3))
-                # UL DATA: #Frames, #User, # Frame DATA SCs
-                # ul_data = np.reshape(ul_data, (ul_data.shape[0], ul_data.shape[1], ul_data.shape[2] * ul_data.shape[3]))
-                evm = np.empty((ul_data.shape[0], ul_data.shape[1]), dtype='complex64')
-
-                ul_data_frame_num = int(metadata['UL_DATA_FRAME_NUM'])
-                txdata = np.empty((ul_data_frame_num, num_cl_tmp, ul_slot_num,
-                             symbol_per_slot, fft_size), dtype='complex64')
-                if ul_data_frame_num > 1:
-                    tx_file_names = metadata['TX_FD_DATA_FILENAMES'].astype(str)
-                    read_size = 2 * ul_data_frame_num * ul_slot_num * cl_ch_num * symbol_per_slot * fft_size
-                    cl = 0
-                    for fn in tx_file_names:
-                        tx_file_path = hdf5.dirpath + '/' + fn
-                        print('Opening source TX data file %s'%tx_file_path)
-                        with open(tx_file_path, mode='rb') as f:
-                            txdata0 = list(struct.unpack('f'*read_size, f.read(4*read_size)))
-                            I = np.array(txdata0[0::2])
-                            Q = np.array(txdata0[1::2])
-                            IQ = I + Q * 1j
-                            txdata[:, cl:cl+cl_ch_num, :, :, :] = np.transpose(np.reshape(IQ, (ul_data_frame_num, ul_slot_num,
-                                cl_ch_num, symbol_per_slot, fft_size)), (0, 2, 1, 3, 4))
-                        cl = cl + cl_ch_num
-                    rep = n_frames // ul_data_frame_num
-                    txdata_ext = np.tile(txdata, (rep, 1, 1, 1, 1))
-                    frac_fr = n_frames % ul_data_frame_num
-                    if frac_fr > 0:
-                        frac = txdata[frac_fr:, :, :, :, :]
-                        txdata_ext = np.concatenate((txdata_ext, frac), axis=0)
-                else:
-                    for f in range(ul_data_frame_num):
-                        for i in range(num_cl_tmp):
-                            tx_data0 = metadata['OFDM_DATA_CL'+str(i)]
-                            tx_data_mat = np.reshape(tx_data0, (ul_slot_num, symbol_per_slot, fft_size))
-                            txdata[f, i, :, :, :]  = tx_data_mat
-                    txdata_ext = np.tile(txdata, (n_frames, 1, 1, 1, 1))
-                txdata_ext = txdata_ext[:, :, :, :, data_sc_ind]
-
-                ul_sym_i = ul_sf_i * symbol_per_slot + ofdm_sym_i
-                fig5, axes5 = plt.subplots(nrows=num_cl_tmp//2, ncols=2, squeeze=False, figsize=(10, 8))
-                fig5.suptitle('Uplink User Constellations (ZF) - Frame %d - Cell %d - UL SF %d' % (ref_frame, cell_i, ul_sym_i))
-                fig6, axes6 = plt.subplots(nrows=1, ncols=1, squeeze=False, figsize=(10, 8))
-                fig6.suptitle('Uplink EVM - Cell %d - UL SF %d' % (cell_i, ul_sym_i))
-                axes6[0, 0].set_ylabel('EVM (%)')
-                axes6[0, 0].set_xlabel('Frame Number')
-                for i in range(num_cl_tmp//2):
-                    axes5[i, 0].set_title('User %d'%(2 * i))
-                    axes5[i, 0].scatter(np.real(ul_data[ref_frame, i * 2, ul_sym_i, :]), np.imag(ul_data[ref_frame, i * 2, ul_sym_i, :]))
-                    axes5[i, 0].scatter(np.real(txdata_ext[ref_frame, i * 2, ul_sf_i, ofdm_sym_i, :]), np.imag(txdata_ext[ref_frame, i * 2, ul_sf_i, ofdm_sym_i, :]))
-
-                    axes5[i, 1].set_title('User %d'%(2 * i + 1))
-                    axes5[i, 1].scatter(np.real(ul_data[ref_frame, i * 2 + 1, ul_sym_i, :]), np.imag(ul_data[ref_frame, i * 2 + 1, ul_sym_i, :]))
-                    axes5[i, 1].scatter(np.real(txdata_ext[ref_frame, i * 2 + 1, ul_sf_i, ofdm_sym_i, :]), np.imag(txdata_ext[ref_frame, i * 2 + 1, ul_sf_i, ofdm_sym_i, :]))
-
-                    for f in range(ul_data.shape[0]):
-                        evm[f, 2 * i] = 100 * np.linalg.norm(ul_data[f, 2 * i, ul_sym_i, :] - txdata_ext[f, 2 * i, ul_sf_i, ofdm_sym_i, :], 2) / ul_data.shape[3]
-                        evm[f, 2 * i + 1] = 100 * np.linalg.norm(ul_data[f, 2 * i + 1, ul_sym_i, :] - txdata_ext[f, 2 * i + 1, ul_sf_i, ofdm_sym_i, :], 2) / ul_data.shape[3]
-                    axes6[0, 0].plot(range(ul_data.shape[0]), evm[:, 2 * i], label='User %d'%(2 * i))
-                    axes6[0, 0].plot(range(ul_data.shape[0]), evm[:, 2 * i + 1], label='User %d'%(2 * i + 1))
-                axes6[0, 0].legend(loc='upper right', frameon=False)
+        if demodulate:
+            cl_ch_num = int(metadata['CL_CH_PER_RADIO'])
+            data_sc_ind = np.array(metadata['OFDM_DATA_SC'])
+            pilot_sc_ind = np.array(metadata['OFDM_PILOT_SC'])
+            pilot_sc_val = np.array(metadata['OFDM_PILOT_SC_VALS'])
+            zero_sc_ind = np.setdiff1d(range(fft_size), data_sc_ind)
+            zero_sc_ind = np.setdiff1d(zero_sc_ind, pilot_sc_ind)
+            nonzero_sc_ind = np.setdiff1d(range(fft_size), zero_sc_ind)
 
 
-        if deep_inspect:
-            filter_pilots_start = time.time()
-            match_filt, seq_num, seq_len, cmpx_pilots, seq_orig = hdf5_lib.filter_pilots(samps, z_padding, fft_size, cp, pilot_type, nonzero_sc_size)
-            filter_pilots_end = time.time()
+            # UL Samps: #Frames, #Uplink SF, #Antennas, #Samples
+            ul_samps = ul_samps[:, cell_i, :, :, :]
 
-            frame_sanity_start = time.time()
-            match_filt_clr, frame_map, f_st, peak_map = hdf5_lib.frame_sanity(match_filt, seq_num, seq_len, n_frm_st, frm_plt, plt_ant=ant_i, cp = cp)
-            frame_sanity_end = time.time()
-            print(">>>> filter_pilots time: %f \n" % ( filter_pilots_end - filter_pilots_start) )
-            print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
+            n_frames = ul_samps.shape[0]
+            ul_syms = np.empty((ul_samps.shape[0], ul_samps.shape[1],
+                           ul_samps.shape[2], symbol_per_slot, fft_size), dtype='complex64')
+            # UL Syms: #Frames, #Uplink SF, #Antennas, #OFDM Symbols, #Samples
+            for i in range(symbol_per_slot):
+                ul_syms[:, :, :, i, :] = ul_samps[:, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size]
+            # UL Syms: #Frames, #OFDM Symbols, #Uplink SF, #Antennas, #Samples
+            ul_syms = np.transpose(ul_syms, (0, 3, 1, 2, 4))
+            # UL Syms: #Frames, # Frame All OFDM Symbols, #Antennas, #Samples
+            num_ul_sym = ul_syms.shape[1] * ul_syms.shape[2]
+            ul_syms = np.reshape(ul_syms, (ul_syms.shape[0], num_ul_sym, ul_syms.shape[3], ul_syms.shape[4]))
+            ul_syms_f = np.fft.fft(ul_syms, fft_size, 3)
+            ul_syms_f = np.delete(ul_syms_f, zero_sc_ind, 3)
+            # UL DEMULT: #Frames, # Frame OFDM Symbols, #User, #Sample (DATA + PILOT SCs)
+            ul_demult = demult(userCSI, ul_syms_f)
+            dims = ul_demult.shape
+            ul_demult_exp = np.empty((dims[0], dims[1], dims[2], fft_size), dtype='complex64')
+            ul_demult_exp[:, :, :, nonzero_sc_ind] = ul_demult
+            # Phase offset tracking and correction
+            phase_corr = ul_demult_exp[:, :, :, pilot_sc_ind] * np.conj(pilot_sc_val)
+            phase_err = np.angle(np.mean(phase_corr, 3))
+            phase_comp = np.exp(-1j*phase_err)
+            ul_data = ul_demult_exp[:, :, :, data_sc_ind]
+            phase_comp_exp = np.empty(ul_data.shape, dtype='complex64')
+            for i in range(len(data_sc_ind)):
+                phase_comp_exp[:, :, :, i] = phase_comp
+            ul_data = np.multiply(ul_data, phase_comp_exp)
+            # UL DATA: #Frames, #User, # Frame OFDM Symbols, #DATA SCs
+            ul_data = np.transpose(ul_data, (0, 2, 1, 3))
+            # UL DATA: #Frames, #User, # Frame DATA SCs
+            # ul_data = np.reshape(ul_data, (ul_data.shape[0], ul_data.shape[1], ul_data.shape[2] * ul_data.shape[3]))
+            evm = np.empty((ul_data.shape[0], ul_data.shape[1]), dtype='complex64')
 
-            # Find LTS peaks across frame
-            snr_start = time.time()
-            n_frame = pilot_samples.shape[0]
-            n_cell = pilot_samples.shape[1]
-            n_ue = pilot_samples.shape[2]
-            n_ant = pilot_samples.shape[3]
-            seq_found = np.zeros((n_frame, n_cell, n_ue, n_ant))
+            ul_data_frame_num = int(metadata['UL_DATA_FRAME_NUM'])
+            txdata = np.empty((ul_data_frame_num, num_cl_tmp, ul_slot_num,
+                         symbol_per_slot, fft_size), dtype='complex64')
+            if ul_data_frame_num > 1:
+                tx_file_names = metadata['TX_FD_DATA_FILENAMES'].astype(str)
+                read_size = 2 * ul_data_frame_num * ul_slot_num * cl_ch_num * symbol_per_slot * fft_size
+                cl = 0
+                for fn in tx_file_names:
+                    tx_file_path = hdf5.dirpath + '/' + fn
+                    print('Opening source TX data file %s'%tx_file_path)
+                    with open(tx_file_path, mode='rb') as f:
+                        txdata0 = list(struct.unpack('f'*read_size, f.read(4*read_size)))
+                        I = np.array(txdata0[0::2])
+                        Q = np.array(txdata0[1::2])
+                        IQ = I + Q * 1j
+                        txdata[:, cl:cl+cl_ch_num, :, :, :] = np.transpose(np.reshape(IQ, (ul_data_frame_num, ul_slot_num,
+                            cl_ch_num, symbol_per_slot, fft_size)), (0, 2, 1, 3, 4))
+                    cl = cl + cl_ch_num
+                rep = n_frames // ul_data_frame_num
+                txdata_ext = np.tile(txdata, (rep, 1, 1, 1, 1))
+                frac_fr = n_frames % ul_data_frame_num
+                if frac_fr > 0:
+                    frac = txdata[frac_fr:, :, :, :, :]
+                    txdata_ext = np.concatenate((txdata_ext, frac), axis=0)
+            else:
+                for f in range(ul_data_frame_num):
+                    for i in range(num_cl_tmp):
+                        tx_data0 = metadata['OFDM_DATA_CL'+str(i)]
+                        tx_data_mat = np.reshape(tx_data0, (ul_slot_num, symbol_per_slot, fft_size))
+                        txdata[f, i, :, :, :]  = tx_data_mat
+                txdata_ext = np.tile(txdata, (n_frames, 1, 1, 1, 1))
+            txdata_ext = txdata_ext[:, :, :, :, data_sc_ind]
 
-            td_pwr_dbm_noise = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
-            td_pwr_dbm_signal = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
-            snr = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
+            ul_sym_i = ul_sf_i * symbol_per_slot + ofdm_sym_i
+            fig5, axes5 = plt.subplots(nrows=num_cl_tmp//2, ncols=2, squeeze=False, figsize=(10, 8))
+            fig5.suptitle('Uplink User Constellations (ZF) - Frame %d - Cell %d - UL SF %d' % (ref_frame, cell_i, ul_sym_i))
+            fig6, axes6 = plt.subplots(nrows=1, ncols=1, squeeze=False, figsize=(10, 8))
+            fig6.suptitle('Uplink EVM - Cell %d - UL SF %d' % (cell_i, ul_sym_i))
+            axes6[0, 0].set_ylabel('EVM (%)')
+            axes6[0, 0].set_xlabel('Frame Number')
+            for i in range(num_cl_tmp//2):
+                axes5[i, 0].set_title('User %d'%(2 * i))
+                axes5[i, 0].scatter(np.real(ul_data[ref_frame, i * 2, ul_sym_i, :]), np.imag(ul_data[ref_frame, i * 2, ul_sym_i, :]))
+                axes5[i, 0].scatter(np.real(txdata_ext[ref_frame, i * 2, ul_sf_i, ofdm_sym_i, :]), np.imag(txdata_ext[ref_frame, i * 2, ul_sf_i, ofdm_sym_i, :]))
 
-            for frameIdx in range(n_frame):    # Frame
-                for cellIdx in range(n_cell):  # Cell
-                    for ueIdx in range(n_ue):  # UE
-                        for bsAntIdx in range(n_ant):  # BS ANT
+                axes5[i, 1].set_title('User %d'%(2 * i + 1))
+                axes5[i, 1].scatter(np.real(ul_data[ref_frame, i * 2 + 1, ul_sym_i, :]), np.imag(ul_data[ref_frame, i * 2 + 1, ul_sym_i, :]))
+                axes5[i, 1].scatter(np.real(txdata_ext[ref_frame, i * 2 + 1, ul_sf_i, ofdm_sym_i, :]), np.imag(txdata_ext[ref_frame, i * 2 + 1, ul_sf_i, ofdm_sym_i, :]))
 
-                            I = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 0:samps_per_slot * 2:2] / 2 ** 15
-                            Q = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 1:samps_per_slot * 2:2] / 2 ** 15
-                            IQ = I + (Q * 1j)
-                            tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk = pilot_finder(IQ, pilot_type, flip=True,
-                                                                                              pilot_seq=ofdm_pilot)
-                            # Find percentage of LTS peaks within a symbol
-                            # (e.g., in a 4096-sample pilot slot, we expect 64, 64-long sequences... assuming no CP)
-                            # seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / symbol_per_slot)
-                            seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (peak_map[frameIdx, cellIdx, ueIdx, bsAntIdx] / symbol_per_slot)  # use matched filter analysis output
+                for f in range(ul_data.shape[0]):
+                    evm[f, 2 * i] = 100 * np.linalg.norm(ul_data[f, 2 * i, ul_sym_i, :] - txdata_ext[f, 2 * i, ul_sf_i, ofdm_sym_i, :], 2) / ul_data.shape[3]
+                    evm[f, 2 * i + 1] = 100 * np.linalg.norm(ul_data[f, 2 * i + 1, ul_sym_i, :] - txdata_ext[f, 2 * i + 1, ul_sf_i, ofdm_sym_i, :], 2) / ul_data.shape[3]
+                axes6[0, 0].plot(range(ul_data.shape[0]), evm[:, 2 * i], label='User %d'%(2 * i))
+                axes6[0, 0].plot(range(ul_data.shape[0]), evm[:, 2 * i + 1], label='User %d'%(2 * i + 1))
+            axes6[0, 0].legend(loc='upper right', frameon=False)
 
-                            # Compute Power of Time Domain Signal
-                            rms = np.sqrt(np.mean(IQ * np.conj(IQ)))
+
+    # Plot DL data symbols
+    if dl_data_avail > 0:
+        fig4, axes4 = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
+        dl_sf_i = 0
+
+        # DL Samps: #Frames, #Cell, #Uplink Symbol, #Antennas, #Samples
+        samps_mat = np.reshape(
+                downlink_samples, (downlink_samples.shape[0], downlink_samples.shape[1], downlink_samples.shape[2], downlink_samples.shape[3], samps_per_slot, 2))
+        dl_samps = (samps_mat[:, :, :, :, :, 0] +
+                samps_mat[:, :, :, :, :, 1]*1j)*2**-15
+
+
+        axes4[0, 0].set_title('Downlink Data IQ - Cell %d - Antenna %d - Symbol %d' % (cell_i, ant_i, dl_sf_i))
+        axes4[0, 0].set_ylabel('Frame %d (IQ)' % ref_frame)
+        axes4[0, 0].plot(np.real(dl_samps[ref_frame, cell_i, dl_sf_i, ant_i, :]))
+        axes4[0, 0].plot(np.imag(dl_samps[ref_frame, cell_i, dl_sf_i, ant_i, :]))
+
+        axes4[1, 0].set_ylabel('All Frames (IQ)')
+        axes4[1, 0].plot(np.real(dl_samps[:, cell_i, dl_sf_i, ant_i, :]).flatten())
+        axes4[1, 0].plot(np.imag(dl_samps[:, cell_i, dl_sf_i, ant_i, :]).flatten())
+
+    if deep_inspect:
+        filter_pilots_start = time.time()
+        match_filt, seq_num, seq_len, cmpx_pilots, seq_orig = hdf5_lib.filter_pilots(samps, z_padding, fft_size, cp, pilot_type, nonzero_sc_size)
+        filter_pilots_end = time.time()
+
+        frame_sanity_start = time.time()
+        match_filt_clr, frame_map, f_st, peak_map = hdf5_lib.frame_sanity(match_filt, seq_num, seq_len, n_frm_st, frame_to_plot=frm_i, plt_ant=ant_i, cp = cp)
+        frame_sanity_end = time.time()
+        print(">>>> filter_pilots time: %f \n" % ( filter_pilots_end - filter_pilots_start) )
+        print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
+
+        # Find LTS peaks across frame
+        snr_start = time.time()
+        n_frame = pilot_samples.shape[0]
+        n_cell = pilot_samples.shape[1]
+        n_ue = pilot_samples.shape[2]
+        n_ant = pilot_samples.shape[3]
+        seq_found = np.zeros((n_frame, n_cell, n_ue, n_ant))
+
+        td_pwr_dbm_noise = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
+        td_pwr_dbm_signal = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
+        snr = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
+
+        for frameIdx in range(n_frame):    # Frame
+            for cellIdx in range(n_cell):  # Cell
+                for ueIdx in range(n_ue):  # UE
+                    for bsAntIdx in range(n_ant):  # BS ANT
+
+                        I = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 0:samps_per_slot * 2:2] / 2 ** 15
+                        Q = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 1:samps_per_slot * 2:2] / 2 ** 15
+                        IQ = I + (Q * 1j)
+                        tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk = pilot_finder(IQ, pilot_type, flip=True,
+                                                                                          pilot_seq=ofdm_pilot)
+                        # Find percentage of LTS peaks within a symbol
+                        # (e.g., in a 4096-sample pilot slot, we expect 64, 64-long sequences... assuming no CP)
+                        # seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / symbol_per_slot)
+                        seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (peak_map[frameIdx, cellIdx, ueIdx, bsAntIdx] / symbol_per_slot)  # use matched filter analysis output
+
+                        # Compute Power of Time Domain Signal
+                        rms = np.sqrt(np.mean(IQ * np.conj(IQ)))
+                        td_pwr_lin = np.real(rms) ** 2
+                        td_pwr_dbm_s = 10 * np.log10(td_pwr_lin / 1e-3)
+                        td_pwr_dbm_signal[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_s
+
+                        # Compute SNR
+                        # Noise
+                        if noise_avail:
+                            # noise_samples
+                            In = noise_samples[frameIdx, cellIdx, 0, bsAntIdx, 0:samps_per_slot * 2:2] / 2 ** 15
+                            Qn = noise_samples[frameIdx, cellIdx, 0, bsAntIdx, 1:samps_per_slot * 2:2] / 2 ** 15
+                            IQn = In + (Qn * 1j)
+                            # sio.savemat('test_pwr.mat', {'pilot_t': IQn})
+
+                            # Compute Noise Power (Time Domain)
+                            rms = np.sqrt(np.mean(IQn * np.conj(IQn)))
                             td_pwr_lin = np.real(rms) ** 2
-                            td_pwr_dbm_s = 10 * np.log10(td_pwr_lin / 1e-3)
-                            td_pwr_dbm_signal[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_s
+                            td_pwr_dbm_n = 10 * np.log10(td_pwr_lin / 1e-3)
+                            td_pwr_dbm_noise[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_n
+                            # SNR
+                            snr[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_s - td_pwr_dbm_n
 
-                            # Compute SNR
-                            # Noise
-                            if noise_avail:
-                                # noise_samples
-                                In = noise_samples[frameIdx, cellIdx, 0, bsAntIdx, 0:samps_per_slot * 2:2] / 2 ** 15
-                                Qn = noise_samples[frameIdx, cellIdx, 0, bsAntIdx, 1:samps_per_slot * 2:2] / 2 ** 15
-                                IQn = In + (Qn * 1j)
-                                # sio.savemat('test_pwr.mat', {'pilot_t': IQn})
+                        dbg2 = False
+                        if dbg2:
+                            fig = plt.figure(1234)
+                            ax1 = fig.add_subplot(2, 1, 1)
+                            ax1.plot(np.abs(IQ))
+                            ax2 = fig.add_subplot(2, 1, 2)
+                            ax2.stem(np.abs(lts_corr))
+                            ax2.scatter(np.linspace(0.0, len(lts_corr), num=1000), pilot_thresh * np.ones(1000), color='r')
+                            plt.show()
 
-                                # Compute Noise Power (Time Domain)
-                                rms = np.sqrt(np.mean(IQn * np.conj(IQn)))
-                                td_pwr_lin = np.real(rms) ** 2
-                                td_pwr_dbm_n = 10 * np.log10(td_pwr_lin / 1e-3)
-                                td_pwr_dbm_noise[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_n
-                                # SNR
-                                snr[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_s - td_pwr_dbm_n
+        snr_end = time.time()
+        print(">>>> compute_snr time: %f \n" % (snr_end - snr_start))
 
-                            dbg2 = False
-                            if dbg2:
-                                fig = plt.figure(1234)
-                                ax1 = fig.add_subplot(2, 1, 1)
-                                ax1.plot(np.abs(IQ))
-                                ax2 = fig.add_subplot(2, 1, 2)
-                                ax2.stem(np.abs(lts_corr))
-                                ax2.scatter(np.linspace(0.0, len(lts_corr), num=1000), pilot_thresh * np.ones(1000), color='r')
-                                plt.show()
+        # Plots:
+        print("Plotting the results:\n")
+        n_cell = match_filt_clr.shape[1]
+        n_ue = match_filt_clr.shape[2]
 
-            snr_end = time.time()
-            print(">>>> compute_snr time: %f \n" % (snr_end - snr_start))
-
-            # Plots:
-            print("Plotting the results:\n")
-            n_cell = match_filt_clr.shape[1]
-            n_ue = match_filt_clr.shape[2]
-
-            # plot a frame:
-            fig, axes = plt.subplots(nrows=n_cell, ncols=n_ue, squeeze=False)
-            fig.suptitle('MF Frame # {} Antenna # {}'.format(ref_frame, ant_i))
-            for n_c in range(n_cell):
-                for n_u in range(n_ue):
-                    axes[n_c, n_u].stem(match_filt[ref_frame - n_frm_st, n_c, n_u, ant_i, :])
-                    axes[n_c, n_u].set_xlabel('Samples')
-                    axes[n_c, n_u].set_title('Cell {} UE {}'.format(n_c, n_u))
-                    axes[n_c, n_u].grid(True)
+        # plot a frame:
+        fig, axes = plt.subplots(nrows=n_cell, ncols=n_ue, squeeze=False)
+        fig.suptitle('MF Frame # {} Antenna # {}'.format(ref_frame, ant_i))
+        for n_c in range(n_cell):
+            for n_u in range(n_ue):
+                axes[n_c, n_u].stem(match_filt[ref_frame - n_frm_st, n_c, n_u, ant_i, :])
+                axes[n_c, n_u].set_xlabel('Samples')
+                axes[n_c, n_u].set_title('Cell {} UE {}'.format(n_c, n_u))
+                axes[n_c, n_u].grid(True)
  
-            # plot frame_map:
-            n_cell = frame_map.shape[1]
-            n_ue = frame_map.shape[2]
-            n_ant = frame_map.shape[3]
+        # plot frame_map:
+        n_cell = frame_map.shape[1]
+        n_ue = frame_map.shape[2]
+        n_ant = frame_map.shape[3]
 
-            # For some damm reason, if one of the subplots has all of the frames in the same state (good/bad/partial)
-            # it chooses a random color to paint the whole subplot!
-            # Below is some sort of remedy (will fail if SISO!):
-            for n_c in range(n_cell):
-                for n_u in range(n_ue):
-                    f_map = frame_map[:,n_c,n_u,:]
-                    n_gf = f_map[f_map == 1].size
-                    n_bf = f_map[f_map == -1].size
-                    n_pr = f_map[f_map == 0].size
-                    if n_gf == 0:
-                        frame_map[-1,n_c,n_u,-1] = 1
-                        print("No good frames! Colored the last frame of the last antenna Good for cell {} and UE {} to keep plotter happy!".format(n_c,n_u))
-                    if n_pr == 0:
-                        frame_map[0,n_c,n_u,-1] = 0
-                        print("No partial frames! Colored frame 0 of the last antenna for cell {} and UE {} Partial to keep plotter happy!".format(n_c,n_u))
-                    if n_bf == 0:
-                        frame_map[-1,n_c,n_u,0] = -1
-                        print("No bad frames! Colored the last frame of antenna 0 Bad for cell {} and UE {} to keep plotter happy!".format(n_c,n_u))
+        # For some damm reason, if one of the subplots has all of the frames in the same state (good/bad/partial)
+        # it chooses a random color to paint the whole subplot!
+        # Below is some sort of remedy (will fail if SISO!):
+        for n_c in range(n_cell):
+            for n_u in range(n_ue):
+                f_map = frame_map[:,n_c,n_u,:]
+                n_gf = f_map[f_map == 1].size
+                n_bf = f_map[f_map == -1].size
+                n_pr = f_map[f_map == 0].size
+                if n_gf == 0:
+                    frame_map[-1,n_c,n_u,-1] = 1
+                    print("No good frames! Colored the last frame of the last antenna Good for cell {} and UE {} to keep plotter happy!".format(n_c,n_u))
 
-            #plot F starts for each antenna
-            sub_fr_strt = f_st
-            n_frame = sub_fr_strt.shape[0]      # no. of captured frames
-            n_cell = sub_fr_strt.shape[1]       # no. of cells
-            n_ue = sub_fr_strt.shape[2]         # no. of UEs
-            n_ant = sub_fr_strt.shape[3]        # no. of BS antennas
-            sf_strts = np.reshape(sub_fr_strt, (n_frame*n_cell*n_ue,n_ant))
+                if n_pr == 0:
+                    frame_map[0,n_c,n_u,-1] = 0
+                    print("No partial frames! Colored frame 0 of the last antenna for cell {} and UE {} Partial to keep plotter happy!".format(n_c,n_u))
+                if n_bf == 0:
+                    frame_map[-1,n_c,n_u,0] = -1
+                    print("No bad frames! Colored the last frame of antenna 0 Bad for cell {} and UE {} to keep plotter happy!".format(n_c,n_u))
 
-            fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
-            fig.suptitle('Frames\' starting indices per antenna')
-            #plot channel analysis
+        #plot F starts for each antenna
+        sub_fr_strt = f_st
+        n_frame = sub_fr_strt.shape[0]      # no. of captured frames
+        n_cell = sub_fr_strt.shape[1]       # no. of cells
+        n_ue = sub_fr_strt.shape[2]         # no. of UEs
+        n_ant = sub_fr_strt.shape[3]        # no. of BS antennas
+        sf_strts = np.reshape(sub_fr_strt, (n_frame*n_cell*n_ue,n_ant))
 
-            show_plot(cmpx_pilots, seq_orig, match_filt, user_i, ant_i, ref_frame, n_frm_st)
+        fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+        fig.suptitle('Frames\' starting indices per antenna')
+        #plot channel analysis
+
+        show_plot(cmpx_pilots, seq_orig, match_filt, user_i, ant_i, ref_frame, n_frm_st)
 
 
-            for n_c in range(n_cell):
-                for n_u in range(n_ue):
-                    sf_strts = sub_fr_strt[:,n_c,n_u,:]
-                    x_pl = np.arange(sf_strts.shape[0]) + n_frm_st
-                    for j in range(n_ant):
-                        axes[n_u, n_c].plot(x_pl,sf_strts[:,j].flatten(), label = 'Antenna: {}'.format(j) )
-                    axes[n_u, n_c].legend(loc='lower right', ncol=8, frameon=False)
-                    axes[n_u, n_c].set_xlabel('Frame no.')
-                    axes[n_u, n_c].set_ylabel('Starting index')
-                    axes[n_u, n_c].grid(True)
+        for n_c in range(n_cell):
+            for n_u in range(n_ue):
+                sf_strts = sub_fr_strt[:,n_c,n_u,:]
+                x_pl = np.arange(sf_strts.shape[0]) + n_frm_st
+                for j in range(n_ant):
+                    axes[n_u, n_c].plot(x_pl,sf_strts[:,j].flatten(), label = 'Antenna: {}'.format(j) )
+                axes[n_u, n_c].legend(loc='lower right', ncol=8, frameon=False)
+                axes[n_u, n_c].set_xlabel('Frame no.')
+                axes[n_u, n_c].set_ylabel('Starting index')
+                axes[n_u, n_c].grid(True)
 
-            # PILOT MAP
+        # PILOT MAP
+        fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+        c = []
+        fig.suptitle('Pilot Map (Percentage of Detected Pilots Per Symbol) - NOTE: Might exceed 100% due to threshold')
+        for n_c in range(n_cell):
+            for n_u in range(n_ue):
+                c.append(axes[n_u, n_c].imshow(seq_found[:, n_c, n_u, :].T, vmin=0, vmax=100, cmap='Blues',
+                                               interpolation='nearest',
+                                               extent=[n_frm_st, n_frm_end, n_ant, 0],
+                                               aspect="auto"))
+                axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
+                axes[n_u, n_c].set_ylabel('Antenna #')
+                axes[n_u, n_c].set_xlabel('Frame #')
+                axes[n_u, n_c].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
+                axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
+                axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
+        cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, 100, 11), orientation='horizontal')
+        cbar.ax.set_xticklabels(['0%', '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'])
+
+        #fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+        #c = []
+        #fig.suptitle('Frame Map')
+        #for n_c in range(n_cell):
+        #    for n_u in range(n_ue):
+        #        c.append( axes[n_u, n_c].imshow(frame_map[:,n_c,n_u,:].T, cmap=plt.cm.get_cmap('Blues', 3), interpolation='none',
+        #              extent=[n_frm_st,n_frm_end, n_ant,0],  aspect="auto") )
+        #        axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
+        #        axes[n_u, n_c].set_ylabel('Antenna #')
+        #        axes[n_u, n_c].set_xlabel('Frame #')
+        #        # Minor ticks
+        #        axes[n_u, n_c].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
+        #        axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
+        #        # Gridlines based on minor ticks
+        #        axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
+
+        #cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')
+        #cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])
+        ##plt.show()
+
+        #############
+        #  SNR MAP  #
+        #############
+        if noise_avail:
             fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
             c = []
-            fig.suptitle('Pilot Map (Percentage of Detected Pilots Per Symbol) - NOTE: Might exceed 100% due to threshold')
+            fig.suptitle('SNR Map')
             for n_c in range(n_cell):
                 for n_u in range(n_ue):
-                    c.append(axes[n_u, n_c].imshow(seq_found[:, n_c, n_u, :].T, vmin=0, vmax=100, cmap='Blues',
-                                                   interpolation='nearest',
-                                                   extent=[n_frm_st, n_frm_end, n_ant, 0],
-                                                   aspect="auto"))
+                    c.append(
+                        axes[n_u, n_c].imshow(snr[:, n_c, n_u, :].T, vmin=np.min(snr), vmax=np.max(snr), cmap='Blues',
+                                              interpolation='nearest',
+                                              extent=[n_frm_st, n_frm_end, n_ant, 0],
+                                              aspect="auto"))
                     axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
                     axes[n_u, n_c].set_ylabel('Antenna #')
                     axes[n_u, n_c].set_xlabel('Frame #')
                     axes[n_u, n_c].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
                     axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
                     axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
-            cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, 100, 11), orientation='horizontal')
-            cbar.ax.set_xticklabels(['0%', '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'])
+            cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, np.max(snr), 10),
+                                orientation='horizontal')
 
-            #fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
-            #c = []
-            #fig.suptitle('Frame Map')
-            #for n_c in range(n_cell):
-            #    for n_u in range(n_ue):
-            #        c.append( axes[n_u, n_c].imshow(frame_map[:,n_c,n_u,:].T, cmap=plt.cm.get_cmap('Blues', 3), interpolation='none',
-            #              extent=[n_frm_st,n_frm_end, n_ant,0],  aspect="auto") )
-            #        axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
-            #        axes[n_u, n_c].set_ylabel('Antenna #')
-            #        axes[n_u, n_c].set_xlabel('Frame #')
-            #        # Minor ticks
-            #        axes[n_u, n_c].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
-            #        axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
-            #        # Gridlines based on minor ticks
-            #        axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
-
-            #cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')
-            #cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])
-            ##plt.show()
-
-            #############
-            #  SNR MAP  #
-            #############
-            if noise_avail:
-                fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
-                c = []
-                fig.suptitle('SNR Map')
-                for n_c in range(n_cell):
-                    for n_u in range(n_ue):
-                        c.append(
-                            axes[n_u, n_c].imshow(snr[:, n_c, n_u, :].T, vmin=np.min(snr), vmax=np.max(snr), cmap='Blues',
-                                                  interpolation='nearest',
-                                                  extent=[n_frm_st, n_frm_end, n_ant, 0],
-                                                  aspect="auto"))
-                        axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
-                        axes[n_u, n_c].set_ylabel('Antenna #')
-                        axes[n_u, n_c].set_xlabel('Frame #')
-                        axes[n_u, n_c].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
-                        axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
-                        axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
-                cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, np.max(snr), 10),
-                                    orientation='horizontal')
-
-            plt.show()
-        else:
-            plt.show()
+    plt.show()
 
 
 def analyze_hdf5(hdf5, frame_i=10, cell_i=0, subcarrier_i=7, offset=-1, zoom=0, pl=0):
@@ -1021,17 +1057,22 @@ def main():
             print(hdf5.metadata)
             pilot_samples = hdf5.pilot_samples
             uplink_samples = hdf5.uplink_samples
+            downlink_samples = hdf5.downlink_samples
             noise_avail = len(hdf5.noise_samples) > 0
 
             # Check which data we have available
             pilots_avail = len(pilot_samples) > 0
             ul_data_avail = len(uplink_samples) > 0
+            dl_data_avail = len(downlink_samples) > 0
             if pilots_avail:
                 print("HDF5 pilot data size:")
                 print(pilot_samples.shape)
             if ul_data_avail:
                 print("HDF5 uplink data size:")
                 print(uplink_samples.shape)
+            if dl_data_avail:
+                print("HDF5 downlink data size:")
+                print(downlink_samples.shape)
 
         else:
             hdf5 = hdf5_lib(filename, n_frames, fr_strt, sub_sample)
@@ -1039,11 +1080,13 @@ def main():
             pilot_samples = hdf5.pilot_samples
             uplink_samples = hdf5.uplink_samples
             noise_samples = hdf5.noise_samples
+            downlink_samples = hdf5.downlink_samples
 
             # Check which data we have available
             pilots_avail = len(pilot_samples) > 0
             ul_data_avail = len(uplink_samples) > 0
             noise_avail = len(noise_samples) > 0
+            dl_data_avail = len(downlink_samples) > 0
 
             if pilots_avail:
                 print("Found Pilots!")
@@ -1051,10 +1094,16 @@ def main():
                     print("Found Uplink Data")
                 if noise_avail:
                     print("Found Noise Samples!")
+                if dl_data_avail:
+                    print("Found Downlink Data")
             else:
-                if not ul_data_avail:
-                    raise Exception(' **** No pilots or uplink data found **** ')
+                if dl_data_avail:
+                    print("Found Downlink Data")
+                else:
+                    if not ul_data_avail:
+                        raise Exception(' **** No pilots or uplink data found **** ')
             if not ul_data_avail and demodulate:
+                demodulate = False
                 print("Uplink data is not available, ignoring demodulate option...")
 
             if verify:
