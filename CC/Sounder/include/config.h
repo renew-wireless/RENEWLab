@@ -45,6 +45,7 @@ public:
     }
     inline size_t num_cells(void) const { return this->num_cells_; }
     inline size_t guard_mult(void) const { return this->guard_mult_; }
+    inline bool bs_hw_framer(void) const { return this->bs_hw_framer_; }
     inline bool hw_framer(void) const { return this->hw_framer_; }
     inline int prefix(void) const { return this->prefix_; }
     inline int postfix(void) const { return this->postfix_; }
@@ -62,6 +63,10 @@ public:
     inline size_t ul_data_frame_num(void) const
     {
         return this->ul_data_frame_num_;
+    }
+    inline size_t dl_data_frame_num(void) const
+    {
+        return this->dl_data_frame_num_;
     }
     inline bool beam_sweep(void) const { return this->beam_sweep_; }
     inline size_t beacon_ant(void) const { return this->beacon_ant_; }
@@ -88,9 +93,14 @@ public:
     {
         return this->dl_slot_per_frame_;
     }
+    inline const std::vector<std::vector<size_t>>& dl_slots(void) const
+    {
+        return this->dl_slots_;
+    }
     inline double rate(void) const { return this->rate_; }
     inline int tx_advance(void) const { return this->tx_advance_; }
     inline size_t cl_sdr_ch(void) const { return this->cl_sdr_ch_; }
+    inline size_t bs_sdr_ch(void) const { return this->bs_sdr_ch_; }
 
     inline bool running(void) const { return this->running_.load(); }
     inline void running(bool value) { this->running_ = value; }
@@ -172,13 +182,21 @@ public:
     {
         return this->cl_sdr_ids_;
     }
-    inline const std::vector<std::string>& tx_fd_data_files(void) const
+    inline const std::vector<std::string>& ul_tx_fd_data_files(void) const
     {
-        return this->tx_fd_data_files_;
+        return this->ul_tx_fd_data_files_;
     }
-    inline const std::vector<std::string>& tx_td_data_files(void) const
+    inline const std::vector<std::string>& ul_tx_td_data_files(void) const
     {
-        return this->tx_td_data_files_;
+        return this->ul_tx_td_data_files_;
+    }
+    inline const std::vector<std::string>& dl_tx_fd_data_files(void) const
+    {
+        return this->dl_tx_fd_data_files_;
+    }
+    inline const std::vector<std::string>& dl_tx_td_data_files(void) const
+    {
+        return this->dl_tx_td_data_files_;
     }
 
     inline const std::vector<size_t>& data_ind(void) const
@@ -284,6 +302,17 @@ public:
         return this->txdata_freq_dom_;
     }
 
+    inline std::vector<std::vector<std::complex<int16_t>>>& dl_txdata_time_dom(
+        void)
+    {
+        return this->dl_txdata_time_dom_;
+    }
+    inline const std::vector<std::vector<std::complex<float>>>&
+    dl_txdata_freq_dom(void) const
+    {
+        return this->dl_txdata_freq_dom_;
+    }
+
     inline size_t getPackageDataLength() const
     {
         return (2 * this->samps_per_slot_ * sizeof(short));
@@ -310,6 +339,7 @@ public:
     bool isDlData(int, int);
     unsigned getCoreCount();
     void loadULData(const std::string&);
+    void loadDLData(const std::string&);
 
 private:
     bool bs_present_;
@@ -349,6 +379,7 @@ private:
     std::vector<std::string> bs_sdr_file_; // No accessor
     std::string hub_file_; // No accessor
     std::string ref_sdr;
+    size_t bs_sdr_ch_;
     std::vector<std::vector<std::string>> bs_sdr_ids_;
     std::vector<std::string> hub_ids_;
     std::vector<std::string> calib_ids_;
@@ -366,15 +397,17 @@ private:
     std::string bs_channel_;
     std::vector<std::string> frames_;
     std::string frame_mode_;
+    bool bs_hw_framer_;
     bool hw_framer_;
     size_t max_frame_;
     size_t ul_data_frame_num_;
+    size_t dl_data_frame_num_;
     std::vector<std::vector<size_t>>
         pilot_slots_; // Accessed through getClientId
     std::vector<std::vector<size_t>> noise_slots_;
     std::vector<std::vector<size_t>>
         ul_slots_; // Accessed through getUlSFIndex()
-    std::vector<std::vector<size_t>> dl_slots_; // No accessor
+    std::vector<std::vector<size_t>> dl_slots_;
     bool single_gain_;
     std::vector<double> tx_gain_;
     std::vector<double> rx_gain_;
@@ -409,6 +442,8 @@ private:
     std::vector<std::vector<std::complex<float>>> tx_data_;
     std::vector<std::vector<std::complex<float>>> txdata_freq_dom_;
     std::vector<std::vector<std::complex<int16_t>>> txdata_time_dom_;
+    std::vector<std::vector<std::complex<float>>> dl_txdata_freq_dom_;
+    std::vector<std::vector<std::complex<int16_t>>> dl_txdata_time_dom_;
 
     std::vector<std::string> cl_frames_;
     std::vector<std::vector<size_t>> cl_pilot_slots_;
@@ -417,8 +452,10 @@ private:
 
     std::vector<std::vector<double>> cl_txgain_vec_;
     std::vector<std::vector<double>> cl_rxgain_vec_;
-    std::vector<std::string> tx_td_data_files_;
-    std::vector<std::string> tx_fd_data_files_;
+    std::vector<std::string> ul_tx_td_data_files_;
+    std::vector<std::string> ul_tx_fd_data_files_;
+    std::vector<std::string> dl_tx_td_data_files_;
+    std::vector<std::string> dl_tx_fd_data_files_;
 
     std::atomic<bool> running_;
     bool core_alloc_;

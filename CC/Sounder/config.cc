@@ -89,6 +89,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         throw std::invalid_argument(
             "error channel config: not any of A/B/AB!\n");
     }
+    bs_sdr_ch_ = (bs_channel_ == "AB") ? 2 : 1;
     single_gain_ = tddConf.value("single_gain", true);
 
     if (tddConf.value("txgainA", 20) > kMaxTxGainBS) {
@@ -333,9 +334,11 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         cl_agc_en_ = tddConfCl.value("agc_en", false);
         cl_agc_gain_init_ = tddConfCl.value("agc_gain_init", 70); // 0 to 108
         frame_mode_ = tddConfCl.value("frame_mode", "continuous_resync");
+        bs_hw_framer_ = tddConfCl.value("bs_hw_framer", false);
         hw_framer_ = tddConfCl.value("hw_framer", false);
         tx_advance_ = tddConfCl.value("tx_advance", 250); // 250
         ul_data_frame_num_ = tddConfCl.value("ul_data_frame_num", 1);
+        dl_data_frame_num_ = tddConfCl.value("dl_data_frame_num", 1);
 
         // Help verify whether gain exceeds max value
         struct compare {
@@ -600,6 +603,9 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         ul_slot_per_frame_, dl_slot_per_frame_, fft_size_,
         symbol_data_subcarrier_num_, data_mod_.c_str(),
         this->getFrameDurationSec() * 1e6);
+    std::printf("Thread Config: %zu BS receive threads, %zu Client receive "
+                "threads, %zu Recording Threads\n",
+        bs_rx_thread_num_, cl_rx_thread_num_, task_thread_num_);
     running_.store(true);
 }
 
@@ -626,7 +632,7 @@ void Config::loadULData(const std::string& directory)
             std::printf(
                 "Loading UL frequency-domain data for radio %zu to %s\n", i,
                 filename_ul_data_f.c_str());
-            tx_fd_data_files_.push_back("ul_data_f_" + filename_tag);
+            ul_tx_fd_data_files_.push_back("ul_data_f_" + filename_tag);
             FILE* fp_tx_f = std::fopen(filename_ul_data_f.c_str(), "rb");
             if (!fp_tx_f) {
                 throw std::runtime_error(
@@ -637,7 +643,7 @@ void Config::loadULData(const std::string& directory)
                 = directory + "/ul_data_t_" + filename_tag;
             std::printf("Loading UL time-domain data for radio %zu to %s\n", i,
                 filename_ul_data_t.c_str());
-            tx_td_data_files_.push_back(filename_ul_data_t);
+            ul_tx_td_data_files_.push_back(filename_ul_data_t);
             FILE* fp_tx_t = std::fopen(filename_ul_data_t.c_str(), "rb");
             if (!fp_tx_t) {
                 throw std::runtime_error(
@@ -683,6 +689,79 @@ void Config::loadULData(const std::string& directory)
     }
 }
 
+void Config::loadDLData(const std::string& directory)
+{
+    // compose data slot
+    if (dl_data_slot_present_) {
+        std::vector<std::complex<float>> prefix_zpad_t(prefix_, 0);
+        std::vector<std::complex<float>> postfix_zpad_t(postfix_, 0);
+        dl_txdata_time_dom_.resize(num_bs_antennas_all_);
+        dl_txdata_freq_dom_.resize(num_bs_antennas_all_);
+        // For now, we're reading one frame worth of data
+        std::string filename_tag = data_mod_ + "_"
+            + std::to_string(symbol_data_subcarrier_num_) + "_"
+            + std::to_string(fft_size_) + "_"
+            + std::to_string(dl_slot_per_frame_) + "_"
+            + std::to_string(dl_data_frame_num_) + "_" + bs_channel_ + ".bin";
+
+        std::string filename_dl_data_f
+            = directory + "/dl_data_f_" + filename_tag;
+        std::printf("Loading DL frequency-domain data to %s\n",
+            filename_dl_data_f.c_str());
+        dl_tx_fd_data_files_.push_back("dl_data_f_" + filename_tag);
+        FILE* fp_tx_f = std::fopen(filename_dl_data_f.c_str(), "rb");
+        if (!fp_tx_f) {
+            throw std::runtime_error(
+                filename_dl_data_f + std::string(" not found!"));
+        }
+
+        std::string filename_dl_data_t
+            = directory + "/dl_data_t_" + filename_tag;
+        std::printf(
+            "Loading DL time-domain data to %s\n", filename_dl_data_t.c_str());
+        dl_tx_td_data_files_.push_back(filename_dl_data_t);
+        FILE* fp_tx_t = std::fopen(filename_dl_data_t.c_str(), "rb");
+        if (!fp_tx_t) {
+            throw std::runtime_error(
+                filename_dl_data_t + std::string(" not found!"));
+        }
+
+        // Frame * UL Slots * Channel * Samples
+        for (size_t u = 0; u < dl_slot_per_frame_; u++) {
+            for (size_t h = 0; h < num_bs_antennas_all_; h++) {
+                size_t ant_i = h;
+
+                std::vector<std::complex<float>> data_freq_dom(
+                    fft_size_ * symbol_per_slot_);
+                size_t read_num = std::fread(data_freq_dom.data(),
+                    2 * sizeof(float), fft_size_ * symbol_per_slot_, fp_tx_f);
+                if (read_num != (fft_size_ * symbol_per_slot_)) {
+                    MLPD_WARN("BAD Read of Downlink Freq-Domain Data: "
+                              "%zu/%zu\n",
+                        read_num, fft_size_ * symbol_per_slot_);
+                }
+                dl_txdata_freq_dom_[ant_i].insert(
+                    dl_txdata_freq_dom_[ant_i].end(), data_freq_dom.begin(),
+                    data_freq_dom.end());
+
+                std::vector<std::complex<float>> data_time_dom(samps_per_slot_);
+                read_num = std::fread(data_time_dom.data(), 2 * sizeof(float),
+                    samps_per_slot_, fp_tx_t);
+                if (read_num != samps_per_slot_) {
+                    MLPD_WARN("BAD Read of Downlink Time-Domain Data: "
+                              "%zu/%zu\n",
+                        read_num, samps_per_slot_);
+                }
+                dl_txdata_time_dom_[ant_i].insert(
+                    dl_txdata_time_dom_[ant_i].end(), data_time_dom.begin(),
+                    data_time_dom.end());
+            }
+        }
+        std::fclose(fp_tx_f);
+        std::fclose(fp_tx_t);
+    }
+}
+
 size_t Config::getNumAntennas()
 {
     size_t ret;
@@ -722,8 +801,8 @@ size_t Config::getNumBsSdrs()
     if (this->bs_present_ == false) {
         sdr_num = 1;
     } else {
+        sdr_num = num_bs_sdrs_all_;
         for (size_t i = 0; i < num_cells_; i++) {
-            sdr_num += n_bs_sdrs_.at(i);
             if (internal_measurement_ == true && ref_node_enable_ == true)
                 sdr_num--;
         }
@@ -750,6 +829,7 @@ size_t Config::getNumRecordedSdrs()
         ret += getNumBsSdrs();
     }
     if (this->client_present_ == true && dl_slot_per_frame_ > 0) {
+        // Only consider clients that have 'D' in their schedule
         for (size_t i = 0; i < cl_dl_slots_.size(); i++) {
             if (cl_dl_slots_.at(i).size() > 0)
                 ret++;

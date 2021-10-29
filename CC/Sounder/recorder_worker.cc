@@ -427,6 +427,18 @@ herr_t RecorderWorker::initHDF5()
         write_attribute(
             mainGroup, "PILOT_NUM", this->cfg_->pilot_slot_per_frame());
 
+        // Data subcarriers
+        if (this->cfg_->data_ind().size() > 0)
+            write_attribute(mainGroup, "OFDM_DATA_SC", this->cfg_->data_ind());
+
+        // Pilot subcarriers (indexes)
+        if (this->cfg_->pilot_sc_ind().size() > 0)
+            write_attribute(
+                mainGroup, "OFDM_PILOT_SC", this->cfg_->pilot_sc_ind());
+        if (this->cfg_->pilot_sc().size() > 0)
+            write_attribute(
+                mainGroup, "OFDM_PILOT_SC_VALS", this->cfg_->pilot_sc());
+
         // Number of Client Antennas
         write_attribute(mainGroup, "CL_NUM", this->cfg_->num_cl_antennas());
 
@@ -458,16 +470,6 @@ herr_t RecorderWorker::initHDF5()
             write_attribute(
                 mainGroup, "CL_TX_GAIN_B", this->cfg_->cl_txgain_vec().at(1));
 
-            // Number of frames for UL data recorded in bit source files
-            write_attribute(mainGroup, "UL_DATA_FRAME_NUM",
-                this->cfg_->ul_data_frame_num());
-
-            // Names of Files including uplink tx frequency-domain data
-            if (this->cfg_->tx_fd_data_files().size() > 0) {
-                write_attribute(mainGroup, "TX_FD_DATA_FILENAMES",
-                    this->cfg_->tx_fd_data_files());
-            }
-
             // Client frame schedule (vec of strings)
             write_attribute(
                 mainGroup, "CL_FRAME_SCHED", this->cfg_->cl_frames());
@@ -477,18 +479,15 @@ herr_t RecorderWorker::initHDF5()
         }
 
         if (this->cfg_->ul_data_slot_present()) {
-            // Data subcarriers
-            if (this->cfg_->data_ind().size() > 0)
-                write_attribute(
-                    mainGroup, "OFDM_DATA_SC", this->cfg_->data_ind());
+            // Number of frames for UL data recorded in bit source files
+            write_attribute(mainGroup, "UL_DATA_FRAME_NUM",
+                this->cfg_->ul_data_frame_num());
 
-            // Pilot subcarriers (indexes)
-            if (this->cfg_->pilot_sc_ind().size() > 0)
-                write_attribute(
-                    mainGroup, "OFDM_PILOT_SC", this->cfg_->pilot_sc_ind());
-            if (this->cfg_->pilot_sc().size() > 0)
-                write_attribute(
-                    mainGroup, "OFDM_PILOT_SC_VALS", this->cfg_->pilot_sc());
+            // Names of Files including uplink tx frequency-domain data
+            if (this->cfg_->ul_tx_fd_data_files().size() > 0) {
+                write_attribute(mainGroup, "TX_FD_DATA_FILENAMES",
+                    this->cfg_->ul_tx_fd_data_files());
+            }
 
             // Freq. Domain Data Symbols
             for (size_t i = 0; i < this->cfg_->txdata_freq_dom().size(); i++) {
