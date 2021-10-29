@@ -127,7 +127,7 @@ set(SOUNDER_SOURCES
     data_generator.cc
     Radio.cc
     receiver.cc
-    recorder.cc
+    scheduler.cc
     recorder_worker.cc
     recorder_thread.cc
     BaseRadioSet.cc

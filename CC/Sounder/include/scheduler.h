@@ -1,25 +1,23 @@
 /*
- Copyright (c) 2018-2019 
+ Copyright (c) 2018-2021 
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
- Author(s): Peiyao Zhao 
-            Rahman Doost-Mohamamdy, doost@rice.edu
  
 ----------------------------------------------------------------------
  Record received frames from massive-mimo base station in HDF5 format
 ---------------------------------------------------------------------
 */
-#ifndef SOUDER_RECORDER_H_
-#define SOUDER_RECORDER_H_
+#ifndef SOUDER_SCHEDULER_H_
+#define SOUDER_SCHEDULER_H_
 
 #include "receiver.h"
 #include "recorder_thread.h"
 
 namespace Sounder {
 
-class Recorder {
+class Scheduler {
 public:
-    Recorder(Config* in_cfg, unsigned int core_start = 0u);
-    ~Recorder();
+    Scheduler(Config* in_cfg, unsigned int core_start = 0u);
+    ~Scheduler();
 
     void do_it();
     int getRecordedFrameNum();
@@ -46,8 +44,8 @@ private:
 
     /* Core assignment start variables */
     const unsigned int kMainDispatchCore;
-    const unsigned int kRecorderCore;
+    const unsigned int kSchedulerCore;
     const unsigned int kRecvCore;
-}; /* class Recorder */
+}; /* class Scheduler */
 }; /* Namespace sounder */
-#endif /* SOUDER_RECORDER_H_ */
+#endif /* SOUDER_SCHEDULER_H_ */

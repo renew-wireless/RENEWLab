@@ -6,7 +6,7 @@
  Record received frames from massive-mimo base station in HDF5 format
 ---------------------------------------------------------------------
 */
-#include "include/recorder.h"
+#include "include/scheduler.h"
 #include "include/logger.h"
 #include "include/macros.h"
 #include "include/signalHandler.hpp"
@@ -14,9 +14,9 @@
 
 namespace Sounder {
 // buffer length of each rx thread
-const int Recorder::kSampleBufferFrameNum = 80;
+const int Scheduler::kSampleBufferFrameNum = 80;
 // dequeue bulk size, used to reduce the overhead of dequeue in main thread
-const int Recorder::KDequeueBulkSize = 5;
+const int Scheduler::KDequeueBulkSize = 5;
 
 #if (DEBUG_PRINT)
 const int kDsSim = 5;
@@ -24,11 +24,11 @@ const int kDsSim = 5;
 
 static const int kQueueSize = 36;
 
-Recorder::Recorder(Config* in_cfg, unsigned int core_start)
+Scheduler::Scheduler(Config* in_cfg, unsigned int core_start)
     : cfg_(in_cfg)
     , kMainDispatchCore(core_start)
-    , kRecorderCore(kMainDispatchCore + 1)
-    , kRecvCore(kRecorderCore + in_cfg->task_thread_num())
+    , kSchedulerCore(kMainDispatchCore + 1)
+    , kRecvCore(kSchedulerCore + in_cfg->task_thread_num())
 {
     size_t bs_rx_thread_num = cfg_->bs_rx_thread_num();
     size_t cl_rx_thread_num = cfg_->cl_rx_thread_num();
@@ -42,7 +42,7 @@ Recorder::Recorder(Config* in_cfg, unsigned int core_start)
     message_queue_ = moodycamel::ConcurrentQueue<Event_data>(
         rx_thread_buff_size_ * kQueueSize);
 
-    MLPD_TRACE("Recorder construction: rx threads: %zu, recorder threads: %u, "
+    MLPD_TRACE("Scheduler construction: rx threads: %zu, recorder threads: %u, "
                "chunk size: %zu\n",
         total_rx_thread_num, cfg_->task_thread_num(), rx_thread_buff_size_);
 
@@ -69,7 +69,7 @@ Recorder::Recorder(Config* in_cfg, unsigned int core_start)
     }
 }
 
-void Recorder::gc(void)
+void Scheduler::gc(void)
 {
     MLPD_TRACE("Garbage collect\n");
     this->receiver_.reset();
@@ -81,9 +81,9 @@ void Recorder::gc(void)
     }
 }
 
-Recorder::~Recorder() { this->gc(); }
+Scheduler::~Scheduler() { this->gc(); }
 
-void Recorder::do_it()
+void Scheduler::do_it()
 {
     size_t recorder_threads = this->cfg_->task_thread_num();
     size_t total_antennas = cfg_->getNumRecordedSdrs();
@@ -92,7 +92,6 @@ void Recorder::do_it()
     size_t thread_antennas = 0;
     std::vector<pthread_t> recv_threads;
 
-    MLPD_TRACE("Recorder work thread\n");
     if ((this->cfg_->core_alloc() == true)
         && (pin_to_core(kMainDispatchCore) != 0)) {
         MLPD_ERROR("Pinning main recorder thread to core 0 failed");
@@ -117,7 +116,7 @@ void Recorder::do_it()
         for (unsigned int i = 0u; i < recorder_threads; i++) {
             int thread_core = -1;
             if (this->cfg_->core_alloc() == true) {
-                thread_core = kRecorderCore + i;
+                thread_core = kSchedulerCore + i;
             }
 
             MLPD_INFO("Creating recorder thread: %u, with antennas %zu:%zu "
@@ -150,10 +149,6 @@ void Recorder::do_it()
         // get a bulk of events from the receivers
         ret = this->message_queue_.try_dequeue_bulk(
             ctok, events_list, KDequeueBulkSize);
-        //if (ret > 0)
-        //{
-        //    MLPD_TRACE("Message(s) received: %d\n", ret );
-        //}
         // handle each event
         for (int bulk_count = 0; bulk_count < ret; bulk_count++) {
             Event_data& event = events_list[bulk_count];
@@ -197,21 +192,21 @@ void Recorder::do_it()
     this->recorders_.clear();
 }
 
-int Recorder::getRecordedFrameNum() { return this->max_frame_number_; }
+int Scheduler::getRecordedFrameNum() { return this->max_frame_number_; }
 
 extern "C" {
-Recorder* Recorder_new(Config* in_cfg)
+Scheduler* Scheduler_new(Config* in_cfg)
 {
-    Recorder* rec = new Recorder(in_cfg);
+    Scheduler* rec = new Scheduler(in_cfg);
     return rec;
 }
 
-void Recorder_start(Recorder* rec) { rec->do_it(); }
-int Recorder_getRecordedFrameNum(Recorder* rec)
+void Scheduler_start(Scheduler* rec) { rec->do_it(); }
+int Scheduler_getRecordedFrameNum(Scheduler* rec)
 {
     return rec->getRecordedFrameNum();
 }
-const char* Recorder_getTraceFileName(Recorder* rec)
+const char* Scheduler_getTraceFileName(Scheduler* rec)
 {
     return rec->getTraceFileName().c_str();
 }
