@@ -157,9 +157,8 @@ void Scheduler::do_it()
             if (event.event_type == kEventRxSymbol) {
                 size_t thread_index = event.ant_id / thread_antennas;
                 int offset = event.data;
-                Sounder::RecorderThread::RecordEventData do_record_task;
-                do_record_task.event_type
-                    = Sounder::RecorderThread::RecordEventType::kTaskRecord;
+                Event_data do_record_task;
+                do_record_task.event_type = kTaskRecord;
                 do_record_task.data = offset;
                 do_record_task.rx_buffer = this->rx_buffer_;
                 do_record_task.rx_buff_size = this->rx_thread_buff_size_;

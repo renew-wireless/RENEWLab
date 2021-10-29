@@ -13,6 +13,7 @@
 #include "BaseRadioSet.h"
 #include "ClientRadioSet.h"
 #include "concurrentqueue.h"
+#include "macros.h"
 #include <algorithm>
 #include <arpa/inet.h>
 #include <cassert>
@@ -37,35 +38,6 @@ public:
         : std::runtime_error(message)
     {
     }
-};
-
-enum ReceiverEventType { kEventRxSymbol = 0 };
-
-struct Event_data {
-    ReceiverEventType event_type;
-    int data;
-    int ant_id;
-};
-
-struct Package {
-    uint32_t frame_id;
-    uint32_t symbol_id;
-    uint32_t cell_id;
-    uint32_t ant_id;
-    short data[];
-    Package(int f, int s, int c, int a)
-        : frame_id(f)
-        , symbol_id(s)
-        , cell_id(c)
-        , ant_id(a)
-    {
-    }
-};
-
-// each thread has a SampleBuffer
-struct SampleBuffer {
-    std::vector<char> buffer;
-    std::atomic_int* pkg_buf_inuse;
 };
 
 class Receiver {

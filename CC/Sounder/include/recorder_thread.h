@@ -16,14 +16,14 @@ Event based message queue thread class for the recorder worker
 namespace Sounder {
 class RecorderThread {
 public:
-    enum RecordEventType { kThreadTermination, kTaskRecord };
-
-    struct RecordEventData {
-        RecordEventType event_type;
-        int data;
-        SampleBuffer* rx_buffer;
-        size_t rx_buff_size;
-    };
+    //    enum RecordEventType { kThreadTermination, kTaskRecord };
+    //
+    //    struct RecordEvent_data {
+    //        RecordEventType event_type;
+    //        int data;
+    //        SampleBuffer* rx_buffer;
+    //        size_t rx_buff_size;
+    //    };
 
     RecorderThread(Config* in_cfg, size_t thread_id, int core,
         size_t queue_size, size_t antenna_offset, size_t num_antennas,
@@ -32,16 +32,16 @@ public:
 
     void Start(void);
     void Stop(void);
-    bool DispatchWork(RecordEventData event);
+    bool DispatchWork(Event_data event);
 
 private:
     /*Main threading loop */
     void DoRecording(void);
-    void HandleEvent(RecordEventData event);
+    void HandleEvent(Event_data event);
     void Finalize();
 
     //1 - Producer (dispatcher), 1 - Consumer
-    moodycamel::ConcurrentQueue<RecordEventData> event_queue_;
+    moodycamel::ConcurrentQueue<Event_data> event_queue_;
     moodycamel::ProducerToken producer_token_;
     RecorderWorker worker_;
     std::thread thread_;

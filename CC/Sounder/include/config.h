@@ -255,18 +255,15 @@ public:
         return this->gold_cf32_;
     }
 
-    inline unsigned int cl_rx_thread_num(void) const
+    inline size_t cl_rx_thread_num(void) const
     {
         return this->cl_rx_thread_num_;
     }
-    inline unsigned int bs_rx_thread_num(void) const
+    inline size_t bs_rx_thread_num(void) const
     {
         return this->bs_rx_thread_num_;
     }
-    inline unsigned int task_thread_num(void) const
-    {
-        return this->task_thread_num_;
-    }
+    inline size_t task_thread_num(void) const { return this->task_thread_num_; }
 
     inline const std::vector<std::string>& hub_ids(void) const
     {
@@ -459,9 +456,9 @@ private:
 
     std::atomic<bool> running_;
     bool core_alloc_;
-    unsigned int bs_rx_thread_num_;
-    unsigned int cl_rx_thread_num_;
-    unsigned int task_thread_num_;
+    size_t bs_rx_thread_num_;
+    size_t cl_rx_thread_num_;
+    size_t task_thread_num_;
 };
 
 #endif /* CONFIG_HEADER */

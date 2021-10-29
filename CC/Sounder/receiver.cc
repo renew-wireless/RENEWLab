@@ -261,15 +261,15 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             = std::calloc(config_->samps_per_slot(), sizeof(int16_t) * 2);
     }
     size_t slot_byte_size = config_->samps_per_slot() * sizeof(int16_t) * 2;
-    size_t tx_slots = config_->dl_slot_per_frame();
-    if (tx_slots > 0) {
+    if (config_->dl_slot_per_frame() > 0) {
         size_t txIndex = tid * config_->bs_sdr_ch();
         for (size_t ch = 0; ch < config_->bs_sdr_ch(); ch++) {
             std::memcpy(txbuff.at(ch),
                 config_->dl_txdata_time_dom().at(txIndex + ch).data(),
                 slot_byte_size);
         }
-        MLPD_INFO("%zu downlink slots will be sent per frame...\n", tx_slots);
+        MLPD_INFO("%zu downlink slots will be sent per frame...\n",
+            config_->dl_slot_per_frame());
     }
 
     int cell = 0;
@@ -439,7 +439,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
                     // schedule downlink slots
                     if (config_->dl_data_slot_present() == true) {
-                        for (size_t s = 0; s < tx_slots; s++) {
+                        for (size_t s = 0; s < config_->dl_slot_per_frame();
+                             s++) {
                             txTimeBs = rxTimeBs + txTimeDelta
                                 + config_->dl_slots().at(radio_id).at(s)
                                     * config_->samps_per_slot()
@@ -455,7 +456,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                                         read_num, config_->samps_per_slot());
                                 }
                             }
-                            if (kUseUHD && s < (tx_slots - 1))
+                            if (kUseUHD
+                                && s < (config_->dl_slot_per_frame() - 1))
                                 flagsTxUlData = kStreamContinuous; // HAS_TIME
                             else
                                 flagsTxUlData

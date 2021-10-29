@@ -24,4 +24,39 @@ static constexpr size_t kStreamEndBurst = 2;
 #define UHD_INIT_TIME_SEC (3) // radio init time for UHD devices
 #define BEACON_INTERVAL (20) // frames
 
+enum SchedulerEventType {
+    kEventRxSymbol = 0,
+    kTaskRecord = 1,
+    kThreadTermination = 2
+};
+
+// each thread has a SampleBuffer
+struct SampleBuffer {
+    std::vector<char> buffer;
+    std::atomic_int* pkg_buf_inuse;
+};
+
+struct Event_data {
+    SchedulerEventType event_type;
+    int data;
+    int ant_id;
+    size_t rx_buff_size;
+    SampleBuffer* rx_buffer;
+};
+
+struct Package {
+    uint32_t frame_id;
+    uint32_t symbol_id;
+    uint32_t cell_id;
+    uint32_t ant_id;
+    short data[];
+    Package(int f, int s, int c, int a)
+        : frame_id(f)
+        , symbol_id(s)
+        , cell_id(c)
+        , ant_id(a)
+    {
+    }
+};
+
 #endif

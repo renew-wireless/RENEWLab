@@ -334,7 +334,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         cl_agc_en_ = tddConfCl.value("agc_en", false);
         cl_agc_gain_init_ = tddConfCl.value("agc_gain_init", 70); // 0 to 108
         frame_mode_ = tddConfCl.value("frame_mode", "continuous_resync");
-        bs_hw_framer_ = tddConfCl.value("bs_hw_framer", false);
+        bs_hw_framer_ = tddConfCl.value("bs_hw_framer", true);
         hw_framer_ = tddConfCl.value("hw_framer", false);
         tx_advance_ = tddConfCl.value("tx_advance", 250); // 250
         ul_data_frame_num_ = tddConfCl.value("ul_data_frame_num", 1);
@@ -584,9 +584,9 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
     if (core_alloc_ == true) {
         if (bs_present_ == true) {
-            MLPD_INFO("Allocating %d cores to receive threads ... \n",
+            MLPD_INFO("Allocating %zu cores to receive threads ... \n",
                 bs_rx_thread_num_);
-            MLPD_INFO("Allocating %d cores to record threads ... \n",
+            MLPD_INFO("Allocating %zu cores to record threads ... \n",
                 task_thread_num_);
         }
         if (client_present_ == true) {
