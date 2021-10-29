@@ -277,7 +277,7 @@ herr_t RecorderWorker::initHDF5()
 
         this->file_ = new H5::H5File(this->hdf5_name_, H5F_ACC_TRUNC);
         auto mainGroup = this->file_->createGroup("/Data");
-        if (this->cfg_->bs_rx_thread_num() == true
+        if (this->cfg_->bs_rx_thread_num() > 0
             && this->cfg_->pilot_slot_per_frame() > 0) {
             H5::DataSpace pilot_dataspace(kDsDim, dims_pilot, max_dims_pilot);
             this->pilot_prop_.setChunk(kDsDim, cdims);
@@ -516,7 +516,7 @@ herr_t RecorderWorker::initHDF5()
             this->noise_prop_.close();
         }
 
-        if (this->cfg_->bs_rx_thread_num() == true
+        if (this->cfg_->bs_rx_thread_num() > 0
             && this->cfg_->ul_slot_per_frame() > 0) {
             H5::DataSpace data_dataspace(
                 kDsDim, dims_ul_data, max_dims_ul_data);
@@ -526,7 +526,7 @@ herr_t RecorderWorker::initHDF5()
             this->ul_data_prop_.close();
         }
 
-        if (this->cfg_->cl_rx_thread_num() == true
+        if (this->cfg_->cl_rx_thread_num() > 0
             && this->cfg_->dl_slot_per_frame() > 0) {
             H5::DataSpace data_dataspace(
                 kDsDim, dims_dl_data, max_dims_dl_data);
@@ -562,7 +562,7 @@ void RecorderWorker::openHDF5()
 {
     MLPD_TRACE("Open HDF5 file: %s\n", this->hdf5_name_.c_str());
     this->file_->openFile(this->hdf5_name_, H5F_ACC_RDWR);
-    if (this->cfg_->bs_rx_thread_num() == true
+    if (this->cfg_->bs_rx_thread_num() > 0
         && this->cfg_->pilot_slot_per_frame() > 0) {
         assert(this->pilot_dataset_ == nullptr);
         // Get Dataset for pilot and check the shape of it
@@ -592,7 +592,7 @@ void RecorderWorker::openHDF5()
         pilot_filespace.close();
     }
     // Get Dataset for UL DATA (If Enabled) and check the shape of it
-    if (this->cfg_->bs_rx_thread_num() == true
+    if (this->cfg_->bs_rx_thread_num() > 0
         && this->cfg_->ul_slot_per_frame() > 0) {
         this->ul_dataset_
             = new H5::DataSet(this->file_->openDataSet("/Data/UplinkData"));
@@ -621,7 +621,7 @@ void RecorderWorker::openHDF5()
     }
 
     // Get Dataset for DL DATA (If Enabled) and check the shape of it
-    if (this->cfg_->cl_rx_thread_num() == true
+    if (this->cfg_->cl_rx_thread_num() > 0
         && this->cfg_->dl_slot_per_frame() > 0) {
         this->dl_dataset_
             = new H5::DataSet(this->file_->openDataSet("/Data/DownlinkData"));
@@ -688,7 +688,7 @@ void RecorderWorker::closeHDF5()
         hsize_t IQ = 2 * this->cfg_->samps_per_slot();
 
         // Resize Pilot Dataset
-        if (this->cfg_->bs_rx_thread_num() == true
+        if (this->cfg_->bs_rx_thread_num() > 0
             && this->cfg_->pilot_slot_per_frame() > 0) {
             assert(this->pilot_dataset_ != nullptr);
             this->frame_number_pilot_ = frame_number;
@@ -698,12 +698,12 @@ void RecorderWorker::closeHDF5()
             this->pilot_dataset_->extend(dims_pilot);
             this->pilot_prop_.close();
             this->pilot_dataset_->close();
-            delete this->pilot_dataset_;
+            //delete this->pilot_dataset_;
             this->pilot_dataset_ = nullptr;
         }
 
         // Resize UL Data Dataset
-        if (this->cfg_->bs_rx_thread_num() == true
+        if (this->cfg_->bs_rx_thread_num() > 0
             && this->cfg_->ul_slot_per_frame() > 0) {
             assert(this->ul_dataset_ != nullptr);
             this->frame_number_ul_data_ = frame_number;
@@ -718,7 +718,7 @@ void RecorderWorker::closeHDF5()
         }
 
         // Resize DL Data Dataset
-        if (this->cfg_->cl_rx_thread_num() == true
+        if (this->cfg_->cl_rx_thread_num() > 0
             && this->cfg_->dl_slot_per_frame() > 0) {
             assert(this->dl_dataset_ != nullptr);
             this->frame_number_dl_data_ = frame_number;
