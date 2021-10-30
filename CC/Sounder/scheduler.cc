@@ -86,7 +86,7 @@ Scheduler::~Scheduler() { this->gc(); }
 void Scheduler::do_it()
 {
     size_t recorder_threads = this->cfg_->task_thread_num();
-    size_t total_antennas = cfg_->getNumRecordedSdrs();
+    size_t total_antennas = cfg_->getNumRecordedSdrs() * cfg_->bs_sdr_ch();
     size_t total_rx_thread_num
         = cfg_->bs_rx_thread_num() + cfg_->cl_rx_thread_num();
     size_t thread_antennas = 0;

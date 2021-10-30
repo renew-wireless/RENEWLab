@@ -508,13 +508,16 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
         }
 
         // for UHD device update slot_id on host
-        if (kUseUHD == true) {
+        if (kUseUHD == true || config_->bs_hw_framer() == false) {
             slot_id++;
         }
     }
     MLPD_SYMBOL(
         "Process %d -- Loop Rx Freed memory at: %p\n", tid, zeroes_memory);
     free(zeroes_memory);
+    for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
+        std::free(txbuff.at(ch));
+    }
 }
 
 void* Receiver::clientTxRx_launch(void* in_context)
