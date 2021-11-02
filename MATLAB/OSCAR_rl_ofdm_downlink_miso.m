@@ -41,7 +41,7 @@ bs_sched                  = string.empty();
 ue_sched                  = string.empty();
 
 % Waveform params
-TX_SCALE                = 1;                                      % Scale for Tx waveform ([0:1])
+TX_SCALE                = 0.5;                                      % Scale for Tx waveform ([0:1])
 
 % OFDM params
 SC_IND_PILOTS         = [8 22 44 58];                    % Pilot subcarrier indices
@@ -91,10 +91,16 @@ else
 end
 
 % Last node in list is calibration node!
-%bs_ids = ["RF3E000300", "RF3E000510", "RF3E000484", "RF3E000460", "RF3E000496", "RF3E000476", "RF3E000537", "RF3E000089"];
-bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716", ...
-    "RF3E000674", "RF3E000704", "RF3E000676", "RF3E000668", "RF3E000157"];
-ue_ids= ["RF3E000145"];
+%bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716", "RF3E000674", "RF3E000704", "RF3E000676", "RF3E000668", "RF3E000340", "RF3E000744", "RF3E000161", "RF3E000735", "RF3E000387", "RF3E000389", "RF3E000206", "RF3E000211", "RF3E000256", "RF3E000383", "RF3E000304", "RF3E000303", "RF3E000157"];
+bs_ids = ["RF3E000674", "RF3E000704", "RF3E000676", "RF3E000668", "RF3E000157"];
+    %"RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", ... GOOD
+    %"RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716", ... GOOD
+    %"RF3E000674", "RF3E000704", "RF3E000676", "RF3E000668", ... BAD
+    %"RF3E000340", "RF3E000744", "RF3E000161", "RF3E000735", ... GOOD
+    %"RF3E000387", "RF3E000389", "RF3E000206", "RF3E000211", ... GOOD    
+    %"RF3E000256", "RF3E000383", "RF3E000304", "RF3E000303", ... BAD
+    %"RF3E000157"];
+ue_ids= ["RF3E000119"];
 
 beacon_node = 0; % set 0 to make all nodes send beacon
 
@@ -296,9 +302,11 @@ if ~WIRED_UE
     node_ue.sdr_unsetcorr();              % activate correlator
 end
 
+corr_peak_all = zeros(1, N_BS_NODE);
 if AUTO_OFFSET
     for ibs =1:N_BS_NODE
         lts_corr = abs(conv(conj(fliplr(lts_t)), sign(rx_vec_pilot(ibs, :))));
+        %figure; plot(lts_corr);
         lts_peaks = find(lts_corr > 0.8*max(lts_corr));
         [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
         [lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts));  % use size of lts+cp (80)
@@ -309,6 +317,7 @@ if AUTO_OFFSET
         end
         offset = lts_peaks(lts_second_peak_index(1)) - (2*length(lts));  % Get sSecond peak
         pilot_data_start(ibs) = offset;
+        corr_peak_all(ibs) = lts_peaks(lts_second_peak_index(1));
 
         %v0 = filter(fliplr(conj(uplink_pilot_tx)), a, rx_vec_pilot(ibs, :));
         %v1 = filter(unos, a, abs(rx_vec_pilot(ibs, :)) .^ 2);
@@ -322,6 +331,23 @@ if AUTO_OFFSET
         end
     end
 end
+
+% Sample offset calibration
+samp_offset_array = corr_peak_all - corr_peak_all(1);
+rx_mat_calibrated_tmp = zeros(size(rx_vec_pilot));
+
+for ibs =1:N_BS_NODE
+    curr_offset = samp_offset_array(ibs);
+    
+    if curr_offset < 0
+        rx_mat_calibrated_tmp(ibs, 1+abs(curr_offset):end) = rx_vec_pilot(ibs, 1:end-abs(curr_offset));
+    elseif  curr_offset > 0
+        rx_mat_calibrated_tmp(ibs, 1:end-curr_offset) = rx_vec_pilot(ibs, 1+curr_offset:end);
+    else
+        rx_mat_calibrated_tmp(ibs, :) = rx_vec_pilot(ibs, :);
+    end
+end
+
 
 uplink_pilot_rx = zeros(N_BS_NODE, ue_pilot_len);
 uplink_pilot_csi = zeros(N_BS_NODE, N_SC);
@@ -343,7 +369,11 @@ downlink_pilot_csi = zeros(N_BS_NODE, N_SC);
 ifft_in_mat = zeros(N_BS_NODE, N_SC, N_OFDM_SYMS);
 for isc =1:N_SC
     downlink_pilot_csi(:, isc) = diag(squeeze(cal_mat(:, isc))) * squeeze(uplink_pilot_csi(:, isc));
-    downlink_beam_weights = pinv(squeeze(downlink_pilot_csi(:, isc)));
+    try
+        downlink_beam_weights = pinv(squeeze(downlink_pilot_csi(:, isc)));
+    catch
+        stop =1
+    end
     for isym = 1:N_OFDM_SYMS
         ifft_in_mat(:, isc, isym) = downlink_beam_weights.' * precoding_in_mat(isc, isym);
     end
@@ -512,8 +542,11 @@ payload_dl_syms_mat = dl_syms_eq_pc_mat(SC_IND_DATA, :);
 
 
 %% Step 5: Demodulate and Print Stats
-rx_syms = reshape(payload_dl_syms_mat, 1, N_DATA_SC);
-
+try
+    rx_syms = reshape(payload_dl_syms_mat, 1, N_DATA_SC);
+catch
+   stop = 1 
+end
 rx_data = demod_sym(rx_syms ,MOD_ORDER);
 
 % EVM & SNR
