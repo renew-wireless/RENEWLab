@@ -30,7 +30,7 @@ WRITE_PNG_FILES    = 0;                                      % Enable writing pl
 %Iris params:
 USE_HUB                 = 1;
 WIRED_UE                = 0;
-TX_FRQ                    = 3.6e9;    
+TX_FRQ                    = 3.55e9;    
 RX_FRQ                    = TX_FRQ;
 TX_GN                      = 80;
 RX_GN                      = 65;
@@ -85,22 +85,37 @@ lts_lcp = [lts_t(33:64) lts_t lts_t]; % 2.5 LTS
 % nodes.
 
 if USE_HUB
-    hub_id = "FH4B000021";
+    %hub_id = "FH4B000021";
+    hub_id = "FH4B000019";
 else
     hub_id = [];
 end
 
 % Last node in list is calibration node!
 %bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716", "RF3E000674", "RF3E000704", "RF3E000676", "RF3E000668", "RF3E000340", "RF3E000744", "RF3E000161", "RF3E000735", "RF3E000387", "RF3E000389", "RF3E000206", "RF3E000211", "RF3E000256", "RF3E000383", "RF3E000304", "RF3E000303", "RF3E000157"];
-bs_ids = ["RF3E000674", "RF3E000704", "RF3E000676", "RF3E000668", "RF3E000157"];
-    %"RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", ... GOOD
-    %"RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716", ... GOOD
-    %"RF3E000674", "RF3E000704", "RF3E000676", "RF3E000668", ... BAD
-    %"RF3E000340", "RF3E000744", "RF3E000161", "RF3E000735", ... GOOD
-    %"RF3E000387", "RF3E000389", "RF3E000206", "RF3E000211", ... GOOD    
-    %"RF3E000256", "RF3E000383", "RF3E000304", "RF3E000303", ... BAD
-    %"RF3E000157"];
-ue_ids= ["RF3E000119"];
+bs_ids = ["RF3E000631", "RF3E000561", "RF3E000617", "RF3E000549", "RF3E000552", "RF3E000089"];
+ue_ids = ["RF3E000164"];
+
+%%
+% CHAMBER
+%"RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", ... GOOD
+%"RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716", ... GOOD
+%"RF3E000674", "RF3E000704", "RF3E000676", "RF3E000668", ... BAD
+%"RF3E000340", "RF3E000744", "RF3E000161", "RF3E000735", ... GOOD
+%"RF3E000387", "RF3E000389", "RF3E000206", "RF3E000211", ... GOOD    
+%"RF3E000256", "RF3E000383", "RF3E000304", "RF3E000303", ... BAD
+% Calib "RF3E000157"];
+% ue_ids= ["RF3E000119"];
+    
+% LAB
+% "RF3E000468", "RF3E000525", "RF3E000428"
+% "RF3E000085", "RF3E000446", "RF3E000513", "RF3E000624", "RF3E000485", "RF3E000641", "RF3E000649", "RF3E000618"
+% "RF3E000346", "RF3E000543", "RF3E000594", "RF3E000616", "RF3E000601", "RF3E000602"
+% "RF3E000631", "RF3E000561", "RF3E000617", "RF3E000549", "RF3E000552"
+% Calib  "RF3E000089"
+% UEs  RF3E000164 RF3D000016 RF3E000392 RF3E000241 RF3E000068 RF3E000201
+%ue_ids = ["RF3D000016"];
+%%
 
 beacon_node = 0; % set 0 to make all nodes send beacon
 
@@ -372,7 +387,7 @@ for isc =1:N_SC
     try
         downlink_beam_weights = pinv(squeeze(downlink_pilot_csi(:, isc)));
     catch
-        stop =1
+        stop = 1
     end
     for isym = 1:N_OFDM_SYMS
         ifft_in_mat(:, isc, isym) = downlink_beam_weights.' * precoding_in_mat(isc, isym);
@@ -426,8 +441,77 @@ end
 % Transmit beamformed signal from all antennas and receive at UEs
 bad_pilot = true;
 bad_cnt = 0;
-bad_cnt_max = 1000;
-while bad_pilot
+bad_cnt_max = 100;
+% % % while bad_pilot
+% % %     rx_vec_dl = zeros(N_UE_NODE, N_SAMP);
+% % %     node_ue.sdr_activate_rx();   % activate reading stream
+% % %     node_bs.sdrtrigger();
+% % %     [rx_dl, ~] = node_ue.uesdrrx(N_SAMP); % read data
+% % %     rx_vec_dl(:, :) = rx_dl.';
+% % %     rx_vec_downlink = zeros(N_UE_NODE, N_SAMP);
+% % %     
+% % %     all_ue_rx = 0;
+% % %     for j=1:N_UE_NODE
+% % %         if (sum(abs(rx_vec_dl(j,:))) > 0) % successful receive
+% % %             all_ue_rx = all_ue_rx + 1;
+% % %             fprintf('Downlink Beacon Successful at UE %d \n', j);
+% % %         else
+% % %             fprintf('WARNING: NO Downlink Beacon Detected at UE %d \n', j);
+% % %         end
+% % %     end
+% % %     if (all_ue_rx == N_UE_NODE)
+% % %         rx_vec_downlink = rx_vec_dl;
+% % %     end
+% % % 
+% % %     % Process downlink receive signal
+% % %     if AUTO_OFFSET
+% % %         % Correlation
+% % %         %lts_rep_dl = repmat(lts_t, 1, N_PILOTS_SYMS);  % tx_vec_iris
+% % %         lts_corr = abs(conv(conj(fliplr(lts_t)), sign(rx_vec_downlink)));
+% % %         %figure; plot(lts_corr);
+% % %         lts_peaks = find(lts_corr > 0.8*max(lts_corr));
+% % %         [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
+% % %         [lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts_t));  % use size of lts_t
+% % %         % Stop if no valid correlation peak was found
+% % %         if(isempty(lts_second_peak_index))
+% % %             bad_cnt = bad_cnt+ 1;
+% % %             fprintf('DOWNLINK TRAINING: No LTS Correlation Peaks Found! Count: %d \n', bad_cnt);
+% % %             if bad_cnt == bad_cnt_max
+% % %                 fprintf('Bad correlation exceeded max number of tries (%d). Exit now! \n', bad_cnt_max);
+% % %                 return;
+% % %             end
+% % %         else
+% % %             offset = lts_peaks(lts_second_peak_index(1)) + 1;
+% % %             dl_data_start = offset;
+% % %             dl_pilot_start = offset-(2.5*length(lts_t));
+% % %             fprintf('CORR. PEAK AT: %d, PILOT STARTS AT: %d \n', offset-1, dl_pilot_start);
+% % %             stop = 1;
+% % %             bad_pilot = false;
+% % %         end
+% % %         
+% % %         % Another correlation method (similar performance to code above)...
+% % %         if 0 
+% % %             lts_rep_dl = repmat(lts_t, 1, N_PILOTS_SYMS);
+% % %             unos = ones(size(lts_rep_dl));
+% % %             v0 = filter(fliplr(conj(lts_rep_dl)), a, rx_vec_downlink);  
+% % %             v1 = filter(unos, a, abs(rx_vec_downlink) .^ 2);
+% % %             m_filt = (abs(v0) .^ 2) ./ v1; % normalized correlation
+% % %             [~, max_idx_dl] = max(abs(m_filt));
+% % %             %% In case of bad correlatons:
+% % %             dl_data_start = max_idx_dl + 1; %max_idx_dl + 1 - N_PILOTS_SYMS * length(lts);
+% % %             fprintf('CORR. ALT. PEAK AT: %d \n', max_idx_dl);
+% % %             if dl_data_start < 0
+% % %                disp('bad dl data!');
+% % %             end
+% % %         end        
+% % %     end
+% % % end
+
+num_reps = 50;
+maxVal = -1;
+maxIdx = -1;
+rx_vec_downlink_tmp = []; % zeros(N_UE_NODE, N_SAMP*num_reps);
+for idx=1:num_reps
     rx_vec_dl = zeros(N_UE_NODE, N_SAMP);
     node_ue.sdr_activate_rx();   % activate reading stream
     node_bs.sdrtrigger();
@@ -445,11 +529,13 @@ while bad_pilot
         end
     end
     if (all_ue_rx == N_UE_NODE)
-        rx_vec_downlink = rx_vec_dl(:, :);
+        rx_vec_downlink = rx_vec_dl;
     end
+    %rx_vec_downlink_tmp = [rx_vec_downlink_tmp, rx_vec_downlink];
+
 
     % Process downlink receive signal
-    if AUTO_OFFSET  
+    if AUTO_OFFSET
         % Correlation
         %lts_rep_dl = repmat(lts_t, 1, N_PILOTS_SYMS);  % tx_vec_iris
         lts_corr = abs(conv(conj(fliplr(lts_t)), sign(rx_vec_downlink)));
@@ -461,19 +547,25 @@ while bad_pilot
         if(isempty(lts_second_peak_index))
             bad_cnt = bad_cnt+ 1;
             fprintf('DOWNLINK TRAINING: No LTS Correlation Peaks Found! Count: %d \n', bad_cnt);
-            if bad_cnt == 1000
+            if bad_cnt == bad_cnt_max
                 fprintf('Bad correlation exceeded max number of tries (%d). Exit now! \n', bad_cnt_max);
                 return;
             end
         else
-            offset = lts_peaks(lts_second_peak_index(1)) + 1;
-            dl_data_start = offset;
-            dl_pilot_start = offset-(2.5*length(lts_t));
-            fprintf('CORR. PEAK AT: %d, PILOT STARTS AT: %d \n', offset-1, dl_pilot_start);
-            stop = 1;
-            bad_pilot = false;
+            % [val, indexMax] = max(lts_corr(lts_peaks(lts_second_peak_index)));
+
+            maxValTmp = lts_corr(lts_peaks(lts_second_peak_index(1)))
+            if maxVal < maxValTmp
+                maxVal = maxValTmp;
+                %figure; plot(lts_corr);
+                offset = lts_peaks(lts_second_peak_index(1)) + 1;
+                dl_data_start = offset;
+                dl_pilot_start = offset-(2.5*length(lts_t));
+                rx_vec_downlink_tmp = rx_vec_downlink;
+                fprintf('CORR. PEAK AT: %d, PILOT STARTS AT: %d \n', offset-1, dl_pilot_start);
+            end
         end
-        
+
         % Another correlation method (similar performance to code above)...
         if 0 
             lts_rep_dl = repmat(lts_t, 1, N_PILOTS_SYMS);
@@ -492,6 +584,8 @@ while bad_pilot
     end
 end
 
+
+
 % Deactivate correlator and cleanup
 if ~WIRED_UE
     node_ue.sdr_unsetcorr();              
@@ -502,6 +596,7 @@ node_ue.sdr_close();
 
 %% Step 4: Process Received Data (Downlink)
 % Pilots
+rx_vec_downlink = rx_vec_downlink_tmp;
 rx_dl_pilot_vec = rx_vec_downlink(1, dl_pilot_start - timing_offset: dl_pilot_start + 2*length(lts) - 1 - timing_offset);
 rx_lts1 = rx_dl_pilot_vec(-64  + -FFT_OFFSET + [97:160]);
 rx_lts2 = rx_dl_pilot_vec(-FFT_OFFSET + [97:160]);
@@ -542,11 +637,14 @@ payload_dl_syms_mat = dl_syms_eq_pc_mat(SC_IND_DATA, :);
 
 
 %% Step 5: Demodulate and Print Stats
-try
-    rx_syms = reshape(payload_dl_syms_mat, 1, N_DATA_SC);
-catch
-   stop = 1 
+N_DATA_SC_RX = N_RX_DATA_OFDM_SYMS * length(SC_IND_DATA);
+
+if N_DATA_SC_RX ~= N_DATA_SC
+    disp('Missing Data. Exit now!');
+    return;
 end
+
+rx_syms = reshape(payload_dl_syms_mat, 1, N_DATA_SC);
 rx_data = demod_sym(rx_syms ,MOD_ORDER);
 
 % EVM & SNR
@@ -564,7 +662,6 @@ fprintf('Num Bytes:  \t  %d\n', N_DATA_SC * log2(MOD_ORDER) / 8);
 fprintf('Sym Errors:  \t %d (of %d total symbols)\n', sym_errs, N_DATA_SC);
 fprintf('Bit Errors: \t %d (of %d total bits)\n', bit_errs, N_DATA_SC * log2(MOD_ORDER));
 fprintf('EVM: \t %f, SNR: %f \n', aevms, snr);
-
 
 %% Step 6: Plotting
 cf = 0;
