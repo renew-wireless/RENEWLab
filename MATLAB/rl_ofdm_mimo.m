@@ -54,7 +54,7 @@ else
     TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
     chan_type               = "iris";
     USE_HUB                 = 1;
-    TX_FRQ                  = 3.55e9;
+    TX_FRQ                  = 3.56e9;
     RX_FRQ                  = TX_FRQ;
     TX_GN                   = 80;
     TX_GN_ue                = 80;
@@ -399,117 +399,117 @@ cf = 0;
 fst_clr = [0, 0.4470, 0.7410];
 sec_clr = [0.8500, 0.3250, 0.0980];
 if PLOT
-% Rx signal
-cf = cf + 1;
-figure(cf); clf;
-for sp = 1:N_BS_NODE
-    subplot(N_BS_NODE,2,2*(sp -1) + 1 );
-    plot(real(rx_vec_iris(sp,:)));
-    axis([0 length(rx_vec_iris(sp,:)) -TX_SCALE TX_SCALE])
-    grid on;
-    title(sprintf('BS antenna %d Rx Waveform (I)', sp));
-
-    subplot(N_BS_NODE,2,2*sp);
-    plot(imag(rx_vec_iris(sp,:)), 'color' , sec_clr);
-    axis([0 length(rx_vec_iris(sp,:)) -TX_SCALE TX_SCALE]);
-    grid on;
-    title(sprintf('BS antenna %d Rx Waveform (Q)', sp));
-end 
-
-
-%Tx signal
-cf = cf + 1;
-figure(cf); clf;
-for sp=1:N_UE
-    subplot(N_UE,2,2*(sp -1) + 1);
-    plot(real(tx_vecs_iris(:,sp)));
-    axis([0 length(tx_vecs_iris(:,sp)) -TX_SCALE TX_SCALE])
-    grid on;
-    title(sprintf('UE %d Tx Waveform (I)', sp));
-
-    subplot(N_UE,2,2*sp);
-    plot(imag(tx_vecs_iris(:,sp)), 'color' , sec_clr);
-    axis([0 length(tx_vecs_iris(:,sp)) -TX_SCALE TX_SCALE])
-    grid on;
-    title(sprintf('UE %d Tx Waveform (Q)',sp));
-end
-
-%% Rx LTS correlation
-cf = cf+ 1;
-figure(cf); clf;
-for sp = 1:N_BS_NODE
-    subplot(N_BS_NODE,1,sp);
-    plot(lts_corr(sp,:)) 
-    grid on;
-    xlabel('Samples');
-    y_label = sprintf('Anetnna %d',sp);
-    ylabel(y_label);
-    myAxis = axis();
-    axis([1, 1000, myAxis(3), myAxis(4)])
-end
-tb = annotation('textbox', [0 0.87 1 0.1], ...
-    'String', 'LTS Correlations', ...
-    'EdgeColor', 'none', ...
-    'HorizontalAlignment', 'center');
-tb.FontWeight = 'bold';
-
-%% Constellations
-cf = cf+ 1;
-figure(cf); clf;
-if N_BS_NODE >=4
-    sp_rows = ceil(N_BS_NODE/4)+1;
-else
-    sp_rows = ceil(N_BS_NODE/2)+1;
-end
-sp_cols = ceil(N_BS_NODE/(sp_rows -1));
-
-for sp=1:N_UE
-    subplot(sp_rows,sp_cols, sp);
-    plot(syms_eq_pc(:,sp),'o','MarkerSize',1, 'color', sec_clr);
-    axis square; axis(1.5*[-1 1 -1 1]);
-    grid on;
-    hold on;
-    plot(tx_syms(:, sp),'*', 'MarkerSize',10, 'LineWidth',2, 'color', fst_clr);
-    title(sprintf('Equalized Uplink Tx (blue) and \n Rx (red) symbols for stream %d', sp));
-    % legend({'Rx','Tx'},'Location','EastOutside', 'fontsize', 12);
-end
-
-for sp=1:N_BS_NODE
-    subplot(sp_rows,sp_cols, sp_cols+sp);
-    plot(squeeze(Y_data(sp,:,:)),'co','MarkerSize',1);
-    axis square; axis(max(max(max( abs( Y_data)) ))*[-1 1 -1 1]);
-    title(sprintf('Unequalized received symbols \n at BS ant. %d', sp));
-    grid on;
-    hold on;
-end
-
-%% Channel Estimates
-cf = cf + 1;
-cond_clr = [0.8500, 0.250, 0.1980];
-
-bw_span = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1)).';
-
-figure(cf); clf;
-sp = 0;
-for ibs = 1:N_BS_NODE
-    for iue = 1:N_UE
-        sp = sp+1;
-        subplot(N_BS_NODE,N_UE,sp); 
-        bar(bw_span, fftshift(abs( squeeze(H_hat(ibs, iue, : ) ) ) ),1,'LineWidth', 1);
-        axis([min(bw_span) max(bw_span) 0 1.1*max(abs( squeeze(H_hat(ibs, iue, :) ) ) )])
+    % Rx signal
+    cf = cf + 1;
+    figure(cf); clf;
+    for sp = 1:N_BS_NODE
+        subplot(N_BS_NODE,2,2*(sp -1) + 1 );
+        plot(real(rx_vec_iris(sp,:)));
+        axis([0 length(rx_vec_iris(sp,:)) -TX_SCALE TX_SCALE])
         grid on;
-        title(sprintf('UE %d -> BS ant. %d Channel Est. (Mag.)', iue, ibs))
-        xlabel('Baseband Frequency (MHz)')
-    end
-end
+        title(sprintf('BS antenna %d Rx Waveform (I)', sp));
 
-subplot(N_BS_NODE+1,1,N_BS_NODE+1);
-bh = bar(bw_span, fftshift(channel_condition_db) ,1, 'LineWidth', 1);
-set(bh,'FaceColor',cond_clr);
-axis([min(bw_span) max(bw_span) 0 max(channel_condition_db)+1])
-grid on;
-title('Channel Condition (dB)')
-xlabel('Baseband Frequency (MHz)')
+        subplot(N_BS_NODE,2,2*sp);
+        plot(imag(rx_vec_iris(sp,:)), 'color' , sec_clr);
+        axis([0 length(rx_vec_iris(sp,:)) -TX_SCALE TX_SCALE]);
+        grid on;
+        title(sprintf('BS antenna %d Rx Waveform (Q)', sp));
+    end
+
+
+    %Tx signal
+    cf = cf + 1;
+    figure(cf); clf;
+    for sp=1:N_UE
+        subplot(N_UE,2,2*(sp -1) + 1);
+        plot(real(tx_vecs_iris(:,sp)));
+        axis([0 length(tx_vecs_iris(:,sp)) -TX_SCALE TX_SCALE])
+        grid on;
+        title(sprintf('UE %d Tx Waveform (I)', sp));
+
+        subplot(N_UE,2,2*sp);
+        plot(imag(tx_vecs_iris(:,sp)), 'color' , sec_clr);
+        axis([0 length(tx_vecs_iris(:,sp)) -TX_SCALE TX_SCALE])
+        grid on;
+        title(sprintf('UE %d Tx Waveform (Q)',sp));
+    end
+
+    %% Rx LTS correlation
+    cf = cf+ 1;
+    figure(cf); clf;
+    for sp = 1:N_BS_NODE
+        subplot(N_BS_NODE,1,sp);
+        plot(lts_corr(sp,:))
+        grid on;
+        xlabel('Samples');
+        y_label = sprintf('Anetnna %d',sp);
+        ylabel(y_label);
+        myAxis = axis();
+        axis([1, 1000, myAxis(3), myAxis(4)])
+    end
+    tb = annotation('textbox', [0 0.87 1 0.1], ...
+        'String', 'LTS Correlations', ...
+        'EdgeColor', 'none', ...
+        'HorizontalAlignment', 'center');
+    tb.FontWeight = 'bold';
+
+    %% Constellations
+    cf = cf+ 1;
+    figure(cf); clf;
+    if N_BS_NODE >=4
+        sp_rows = ceil(N_BS_NODE/4)+1;
+    else
+        sp_rows = ceil(N_BS_NODE/2)+1;
+    end
+    sp_cols = ceil(N_BS_NODE/(sp_rows -1));
+
+    for sp=1:N_UE
+        subplot(sp_rows,sp_cols, sp);
+        plot(syms_eq_pc(:,sp),'o','MarkerSize',1, 'color', sec_clr);
+        axis square; axis(1.5*[-1 1 -1 1]);
+        grid on;
+        hold on;
+        plot(tx_syms(:, sp),'*', 'MarkerSize',10, 'LineWidth',2, 'color', fst_clr);
+        title(sprintf('Equalized Uplink Tx (blue) and \n Rx (red) symbols for stream %d', sp));
+        % legend({'Rx','Tx'},'Location','EastOutside', 'fontsize', 12);
+    end
+
+    for sp=1:N_BS_NODE
+        subplot(sp_rows,sp_cols, sp_cols+sp);
+        plot(squeeze(Y_data(sp,:,:)),'co','MarkerSize',1);
+        axis square; axis(max(max(max( abs( Y_data)) ))*[-1 1 -1 1]);
+        title(sprintf('Unequalized received symbols \n at BS ant. %d', sp));
+        grid on;
+        hold on;
+    end
+
+    %% Channel Estimates
+    cf = cf + 1;
+    cond_clr = [0.8500, 0.250, 0.1980];
+
+    bw_span = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1)).';
+
+    figure(cf); clf;
+    sp = 0;
+    for ibs = 1:N_BS_NODE
+        for iue = 1:N_UE
+            sp = sp+1;
+            subplot(N_BS_NODE,N_UE,sp);
+            bar(bw_span, fftshift(abs( squeeze(H_hat(ibs, iue, : ) ) ) ),1,'LineWidth', 1);
+            axis([min(bw_span) max(bw_span) 0 1.1*max(abs( squeeze(H_hat(ibs, iue, :) ) ) )])
+            grid on;
+            title(sprintf('UE %d -> BS ant. %d Channel Est. (Mag.)', iue, ibs))
+            xlabel('Baseband Frequency (MHz)')
+        end
+    end
+
+    subplot(N_BS_NODE+1,1,N_BS_NODE+1);
+    bh = bar(bw_span, fftshift(channel_condition_db) ,1, 'LineWidth', 1);
+    set(bh,'FaceColor',cond_clr);
+    axis([min(bw_span) max(bw_span) 0 max(channel_condition_db)+1])
+    grid on;
+    title('Channel Condition (dB)')
+    xlabel('Baseband Frequency (MHz)')
 end
 
 %% EVM & SNR
@@ -519,52 +519,55 @@ evm_mat = double.empty();
 aevms = zeros(N_UE,1);
 snr_mat = zeros(N_UE,1);
 
-
-cf = cf + 1;
-figure(cf); clf;
 for sp = 1:N_UE
     tx_vec = tx_syms_mat(:,:,sp);
     evm_mat(:,sp)  = abs(tx_vec(:) - syms_eq_pc(:,sp) ).^2;
     aevms(sp) = mean(evm_mat(:,sp));
     snr_mat(sp) = -10*log10(aevms (sp));
-    
-    subplot(2,N_UE,sp)
-    plot(100*evm_mat(:,sp),'o','MarkerSize',1)
-    axis tight
-    hold on
-    plot([1 length(evm_mat(:,sp) )], 100*[aevms(sp), aevms(sp)],'color', sec_clr,'LineWidth',4)
-    hold off
-    xlabel('Data Symbol Index')
-    ylabel('EVM (%)');
-    legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
-    
-    h = text(round(.05*length(evm_mat(:,sp))), 100*aevms(sp), sprintf('Effective SINR: %.1f dB', snr_mat(sp)));
-    set(h,'Color',[1 0 0])
-    set(h,'FontWeight','bold')
-    set(h,'FontSize',10)
-    set(h,'EdgeColor',[1 0 0])
-    set(h,'BackgroundColor',[1 1 1])
-    
-    title(sprintf('Stream from UE %d', sp));
-    grid on
-    
 end
 
-for sp=1:N_UE
-   subplot(2,N_UE,N_UE+sp);
-   imagesc(1:N_OFDM_SYM, (SC_IND_DATA - N_SC/2), 100*fftshift( reshape(evm_mat(:,sp), [], N_OFDM_SYM), 1));
-    
-    hold on;
-    h = line([1,N_OFDM_SYM],[0,0]);
-    set(h,'Color',[1 0 0]);
-    set(h,'LineStyle',':');
-    hold off;
-    grid on
-    xlabel('OFDM Symbol Index');
-    ylabel('Subcarrier Index');
-    title(sprintf('Stream from UE %d', sp));
-    h = colorbar;
-    set(get(h,'title'),'string','EVM (%)'); 
+if PLOT
+    cf = cf + 1;
+    figure(cf); clf;
+    for sp = 1:N_UE
+        subplot(2,N_UE,sp)
+        plot(100*evm_mat(:,sp),'o','MarkerSize',1)
+        axis tight
+        hold on
+        plot([1 length(evm_mat(:,sp) )], 100*[aevms(sp), aevms(sp)],'color', sec_clr,'LineWidth',4)
+        hold off
+        xlabel('Data Symbol Index')
+        ylabel('EVM (%)');
+        legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
+
+        h = text(round(.05*length(evm_mat(:,sp))), 100*aevms(sp), sprintf('Effective SINR: %.1f dB', snr_mat(sp)));
+        set(h,'Color',[1 0 0])
+        set(h,'FontWeight','bold')
+        set(h,'FontSize',10)
+        set(h,'EdgeColor',[1 0 0])
+        set(h,'BackgroundColor',[1 1 1])
+
+        title(sprintf('Stream from UE %d', sp));
+        grid on
+
+    end
+
+    for sp=1:N_UE
+       subplot(2,N_UE,N_UE+sp);
+       imagesc(1:N_OFDM_SYM, (SC_IND_DATA - N_SC/2), 100*fftshift( reshape(evm_mat(:,sp), [], N_OFDM_SYM), 1));
+
+        hold on;
+        h = line([1,N_OFDM_SYM],[0,0]);
+        set(h,'Color',[1 0 0]);
+        set(h,'LineStyle',':');
+        hold off;
+        grid on
+        xlabel('OFDM Symbol Index');
+        ylabel('Subcarrier Index');
+        title(sprintf('Stream from UE %d', sp));
+        h = colorbar;
+        set(get(h,'title'),'string','EVM (%)');
+    end
 end
 fprintf('\n MIMO Results:\n');
 fprintf('Num Bytes:   %d\n', N_UE*N_DATA_SYMS * log2(MOD_ORDER) / 8);
