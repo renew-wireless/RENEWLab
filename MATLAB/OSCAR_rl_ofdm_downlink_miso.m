@@ -30,9 +30,9 @@ WRITE_PNG_FILES    = 0;                                      % Enable writing pl
 %Iris params:
 USE_HUB                 = 1;
 WIRED_UE                = 0;
-TX_FRQ                    = 3.55e9;    
+TX_FRQ                    = 3.6e9;
 RX_FRQ                    = TX_FRQ;
-TX_GN                      = 80;
+TX_GN                      = 75;
 RX_GN                      = 65;
 SMPL_RT                   = 5e6;  
 N_FRM                      = 1;
@@ -41,7 +41,7 @@ bs_sched                  = string.empty();
 ue_sched                  = string.empty();
 
 % Waveform params
-TX_SCALE                = 0.5;                                      % Scale for Tx waveform ([0:1])
+TX_SCALE                = 0.8;                                      % Scale for Tx waveform ([0:1])
 
 % OFDM params
 SC_IND_PILOTS         = [8 22 44 58];                    % Pilot subcarrier indices
@@ -93,7 +93,10 @@ end
 
 % Last node in list is calibration node!
 %bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716", "RF3E000674", "RF3E000704", "RF3E000676", "RF3E000668", "RF3E000340", "RF3E000744", "RF3E000161", "RF3E000735", "RF3E000387", "RF3E000389", "RF3E000206", "RF3E000211", "RF3E000256", "RF3E000383", "RF3E000304", "RF3E000303", "RF3E000157"];
-bs_ids = ["RF3E000631", "RF3E000561", "RF3E000617", "RF3E000549", "RF3E000552", "RF3E000089"];
+%bs_ids = ["RF3E000631", "RF3E000561", "RF3E000617", "RF3E000549", "RF3E000552", "RF3E000089"];
+bs_ids = ["RF3E000208","RF3E000636","RF3E000632","RF3E000568","RF3E000558","RF3E000633","RF3E000566"];%,"RF3E000356", ...
+               %"RF3E000546","RF3E000620","RF3E000609","RF3E000604","RF3E000612","RF3E000640", "RF3E000347","RF3E000564", ...
+               %"RF3E000569","RF3E000639","RF3E000600","RF3E000611","RF3E000627","RF3E000306","RF3E000236","RF3E000258","RF3E000254","RF3E000260"];
 ue_ids = ["RF3E000164"];
 
 %%
@@ -288,7 +291,7 @@ end
 
 
 %% Step 2: Uplink Pilot Collection and Channel Estimation
-node_bs.sdr_set_n_frame(100);
+node_bs.sdr_set_n_frame(50);
 schedule = bs_ul_sched;
 if beacon_node == 0
     schedule = bs_ul_sched_beacon;
@@ -384,11 +387,7 @@ downlink_pilot_csi = zeros(N_BS_NODE, N_SC);
 ifft_in_mat = zeros(N_BS_NODE, N_SC, N_OFDM_SYMS);
 for isc =1:N_SC
     downlink_pilot_csi(:, isc) = diag(squeeze(cal_mat(:, isc))) * squeeze(uplink_pilot_csi(:, isc));
-    try
-        downlink_beam_weights = pinv(squeeze(downlink_pilot_csi(:, isc)));
-    catch
-        stop = 1
-    end
+    downlink_beam_weights = pinv(squeeze(downlink_pilot_csi(:, isc)));
     for isym = 1:N_OFDM_SYMS
         ifft_in_mat(:, isc, isym) = downlink_beam_weights.' * precoding_in_mat(isc, isym);
     end
