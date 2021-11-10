@@ -38,9 +38,8 @@ end
 
 % Params:
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
-CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
-
 SIM_MOD                 = 0;
+PLOT                        = 0;
 
 if SIM_MOD
     chan_type               = "rayleigh";
@@ -355,149 +354,150 @@ if SIM_MOD
     rx_H_est = rx_H_est_plot;
 end
 
-cf = 0;
-fst_clr = [0, 0.4470, 0.7410];
-sec_clr = [0.8500, 0.3250, 0.0980];
-% Tx signal
-cf = cf + 1;
-figure(cf); clf;
+if PLOT
+    cf = 0;
+    fst_clr = [0, 0.4470, 0.7410];
+    sec_clr = [0.8500, 0.3250, 0.0980];
+    % Tx signal
+    cf = cf + 1;
+    figure(cf); clf;
 
-subplot(2,1,1);
-plot(real(tx_vec_iris));
-axis([0 length(tx_vec_iris) -TX_SCALE TX_SCALE])
-grid on;
-title('Tx Waveform (I)');
+    subplot(2,1,1);
+    plot(real(tx_vec_iris));
+    axis([0 length(tx_vec_iris) -TX_SCALE TX_SCALE])
+    grid on;
+    title('Tx Waveform (I)');
 
-subplot(2,1,2);
-plot(imag(tx_vec_iris), 'color' , sec_clr );
-axis([0 length(tx_vec_iris) -TX_SCALE TX_SCALE])
-grid on;
-title('Tx Waveform (Q)');
+    subplot(2,1,2);
+    plot(imag(tx_vec_iris), 'color' , sec_clr );
+    axis([0 length(tx_vec_iris) -TX_SCALE TX_SCALE])
+    grid on;
+    title('Tx Waveform (Q)');
 
-if(WRITE_PNG_FILES)
-    print(gcf,sprintf('wl_ofdm_plots_%s_txIQ', example_mode_string), '-dpng', '-r96', '-painters')
-end
+    if(WRITE_PNG_FILES)
+        print(gcf,sprintf('wl_ofdm_plots_%s_txIQ', example_mode_string), '-dpng', '-r96', '-painters')
+    end
 
-% Rx signal
-cf = cf + 1;
-figure(cf); clf;
-subplot(2,1,1);
-plot(real(rx_vec_iris));
-axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
-grid on;
-title('Rx Waveform (I)');
+    % Rx signal
+    cf = cf + 1;
+    figure(cf); clf;
+    subplot(2,1,1);
+    plot(real(rx_vec_iris));
+    axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
+    grid on;
+    title('Rx Waveform (I)');
 
-subplot(2,1,2);
-plot(imag(rx_vec_iris), 'color', sec_clr);
-axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
-grid on;
-title('Rx Waveform (Q)');
+    subplot(2,1,2);
+    plot(imag(rx_vec_iris), 'color', sec_clr);
+    axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
+    grid on;
+    title('Rx Waveform (Q)');
 
-if(WRITE_PNG_FILES)
-    print(gcf,sprintf('wl_ofdm_plots_%s_rxIQ', example_mode_string), '-dpng', '-r96', '-painters')
-end
+    if(WRITE_PNG_FILES)
+        print(gcf,sprintf('wl_ofdm_plots_%s_rxIQ', example_mode_string), '-dpng', '-r96', '-painters')
+    end
 
-% Rx LTS correlation
-cf = cf + 1;
-figure(cf); clf;
-lts_to_plot = lts_corr;
-plot(lts_to_plot, '.-b', 'LineWidth', 1);
-hold on;
-grid on;
-title('LTS Correlation')
-xlabel('Sample Index')
-myAxis = axis();
-axis([1, 1000, myAxis(3), myAxis(4)])
+    % Rx LTS correlation
+    cf = cf + 1;
+    figure(cf); clf;
+    lts_to_plot = lts_corr;
+    plot(lts_to_plot, '.-b', 'LineWidth', 1);
+    hold on;
+    grid on;
+    title('LTS Correlation')
+    xlabel('Sample Index')
+    myAxis = axis();
+    axis([1, 1000, myAxis(3), myAxis(4)])
 
-if(WRITE_PNG_FILES)
-    print(gcf,sprintf('wl_ofdm_plots_%s_ltsCorr', example_mode_string), '-dpng', '-r96', '-painters')
-end
+    if(WRITE_PNG_FILES)
+        print(gcf,sprintf('wl_ofdm_plots_%s_ltsCorr', example_mode_string), '-dpng', '-r96', '-painters')
+    end
 
-% Channel Estimates
-cf = cf + 1;
-figure(cf); clf;
-rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
-rx_H_est_plot(SC_IND_DATA) = rx_H_est(SC_IND_DATA);
-rx_H_est_plot(SC_IND_PILOTS) = rx_H_est(SC_IND_PILOTS);
+    % Channel Estimates
+    cf = cf + 1;
+    figure(cf); clf;
+    rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
+    rx_H_est_plot(SC_IND_DATA) = rx_H_est(SC_IND_DATA);
+    rx_H_est_plot(SC_IND_PILOTS) = rx_H_est(SC_IND_PILOTS);
 
-x = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1));
+    x = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1));
 
-figure(cf); clf;
-bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
-axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
-grid on;
-title('Channel Estimates (Magnitude)')
-xlabel('Baseband Frequency (MHz)')
+    figure(cf); clf;
+    bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
+    axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
+    grid on;
+    title('Channel Estimates (Magnitude)')
+    xlabel('Baseband Frequency (MHz)')
 
-if(WRITE_PNG_FILES)
-    print(gcf,sprintf('wl_ofdm_plots_%s_chanEst', example_mode_string), '-dpng', '-r96', '-painters')
-end
+    if(WRITE_PNG_FILES)
+        print(gcf,sprintf('wl_ofdm_plots_%s_chanEst', example_mode_string), '-dpng', '-r96', '-painters')
+    end
 
-% Symbol constellation
-cf = cf + 1;
-figure(cf); clf;
+    % Symbol constellation
+    cf = cf + 1;
+    figure(cf); clf;
 
-plot(payload_syms_mat(:),'o','MarkerSize',2, 'color', sec_clr);
-axis square; axis(1.5*[-1 1 -1 1]);
-xlabel('Inphase')
-ylabel('Quadrature')
-grid on;
-hold on;
+    plot(payload_syms_mat(:),'o','MarkerSize',2, 'color', sec_clr);
+    axis square; axis(1.5*[-1 1 -1 1]);
+    xlabel('Inphase')
+    ylabel('Quadrature')
+    grid on;
+    hold on;
 
-plot(tx_syms_mat(:),'*', 'MarkerSize',16, 'LineWidth',2, 'color', fst_clr);
-title('Tx and Rx Constellations')
-legend('Rx','Tx','Location','EastOutside');
+    plot(tx_syms_mat(:),'*', 'MarkerSize',16, 'LineWidth',2, 'color', fst_clr);
+    title('Tx and Rx Constellations')
+    legend('Rx','Tx','Location','EastOutside');
 
-if(WRITE_PNG_FILES)
-    print(gcf,sprintf('wl_ofdm_plots_%s_constellations', example_mode_string), '-dpng', '-r96', '-painters')
-end
-
-
-% EVM & SNR
-cf = cf + 1;
-figure(cf); clf;
-subplot(2,1,1)
-plot(100*evm_mat(:),'o','MarkerSize',1)
-axis tight
-hold on
-plot([1 length(evm_mat(:))], 100*[aevms, aevms],'color', sec_clr,'LineWidth',4)
-myAxis = axis;
-h = text(round(.05*length(evm_mat(:))), 100*aevms+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', snr));
-set(h,'Color',[1 0 0])
-set(h,'FontWeight','bold')
-set(h,'FontSize',10)
-set(h,'EdgeColor',[1 0 0])
-set(h,'BackgroundColor',[1 1 1])
-hold off
-xlabel('Data Symbol Index')
-ylabel('EVM (%)');
-legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
-title('EVM vs. Data Symbol Index')
-grid on
-
-subplot(2,1,2)
-imagesc(1:N_OFDM_SYM, (SC_IND_DATA - N_SC/2), 100*fftshift(evm_mat,1))
-
-grid on
-xlabel('OFDM Symbol Index')
-ylabel('Subcarrier Index')
-title('EVM vs. (Subcarrier & OFDM Symbol)')
-h = colorbar;
-set(get(h,'title'),'string','EVM (%)');
-myAxis = caxis();
-if (myAxis(2)-myAxis(1)) < 5
-    caxis([myAxis(1), myAxis(1)+5])
-end
+    if(WRITE_PNG_FILES)
+        print(gcf,sprintf('wl_ofdm_plots_%s_constellations', example_mode_string), '-dpng', '-r96', '-painters')
+    end
 
 
+    % EVM & SNR
+    cf = cf + 1;
+    figure(cf); clf;
+    subplot(2,1,1)
+    plot(100*evm_mat(:),'o','MarkerSize',1)
+    axis tight
+    hold on
+    plot([1 length(evm_mat(:))], 100*[aevms, aevms],'color', sec_clr,'LineWidth',4)
+    myAxis = axis;
+    h = text(round(.05*length(evm_mat(:))), 100*aevms+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', snr));
+    set(h,'Color',[1 0 0])
+    set(h,'FontWeight','bold')
+    set(h,'FontSize',10)
+    set(h,'EdgeColor',[1 0 0])
+    set(h,'BackgroundColor',[1 1 1])
+    hold off
+    xlabel('Data Symbol Index')
+    ylabel('EVM (%)');
+    legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
+    title('EVM vs. Data Symbol Index')
+    grid on
 
-if(WRITE_PNG_FILES)
-    print(gcf,sprintf('wl_ofdm_plots_%s_evm', example_mode_string), '-dpng', '-r96', '-painters')
+    subplot(2,1,2)
+    imagesc(1:N_OFDM_SYM, (SC_IND_DATA - N_SC/2), 100*fftshift(evm_mat,1))
+
+    grid on
+    xlabel('OFDM Symbol Index')
+    ylabel('Subcarrier Index')
+    title('EVM vs. (Subcarrier & OFDM Symbol)')
+    h = colorbar;
+    set(get(h,'title'),'string','EVM (%)');
+    myAxis = caxis();
+    if (myAxis(2)-myAxis(1)) < 5
+        caxis([myAxis(1), myAxis(1)+5])
+    end
+
+
+
+    if(WRITE_PNG_FILES)
+        print(gcf,sprintf('wl_ofdm_plots_%s_evm', example_mode_string), '-dpng', '-r96', '-painters')
+    end
 end
 
 % BER SIM MOD
 if SIM_MOD
-    
     cf = cf+1;
     figure(cf);
     ber_avg = mean(ber_SIM)';
