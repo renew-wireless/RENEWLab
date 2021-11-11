@@ -96,22 +96,32 @@ classdef iris_py < handle
                 obj.py_obj_hub.sync_delays();
             end
          end
-         
+
          function sdr_setcorr(obj)
              for ipy = 1:obj.n_sdrs
-                 obj.py_obj_array{ipy}.set_corr(); 
+                 obj.py_obj_array{ipy}.set_corr();
              end
          end
-         
+
+         function sdr_gettriggers(obj)
+            if obj.is_bs
+                fprintf('sdr_gettriggers: Wrong function call on BS!');
+            end
+            for ipy = 1:obj.n_sdrs
+                trig_found = obj.py_obj_array{ipy}.sdr_gettriggers();
+                fprintf('Beacon detected at UE %d ? %d \n', ipy, trig_found);
+            end
+         end
+
          function sdr_unsetcorr(obj)
              for ipy = 1:obj.n_sdrs
-                 obj.py_obj_array{ipy}.unset_corr(); 
+                 obj.py_obj_array{ipy}.unset_corr();
              end
          end
-         
+
          function sdr_configgainctrl(obj)
              for ipy = 1:obj.n_sdrs
-                 obj.py_obj_array{ipy}.config_gain_ctrl(); 
+                 obj.py_obj_array{ipy}.config_gain_ctrl();
              end
          end
          
@@ -121,6 +131,11 @@ classdef iris_py < handle
                  obj.py_obj_array{ipy}.burn_beacon();
              end
          end
+
+        function sdr_setupbeacon_single(obj)
+            % Assume Beacon only from the first Iris board in the BS array
+            obj.py_obj_array{1}.burn_beacon();
+        end
          
          function set_tddconfig(obj, is_bs, tdd_sched)
              obj.is_bs = is_bs;
