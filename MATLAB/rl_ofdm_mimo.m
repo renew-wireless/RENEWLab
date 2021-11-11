@@ -61,6 +61,7 @@ else
     RX_GN                   = 75;
     SMPL_RT                 = 5e6;
     N_FRM                   = 10;
+    BEACON_SWEEP     = 0;
     bs_ids                   = string.empty();
     ue_ids                  = string.empty();
     ue_scheds               = string.empty();
@@ -70,9 +71,8 @@ else
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
 
-        bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716"];
-
-        hub_id = "FH4B000021";
+       bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716"];
+       hub_id = "FH4B000021";
 
     else
         bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716"];
@@ -226,7 +226,8 @@ else
         'n_samp', n_samp, ...          % number of samples per frame time.
         'n_frame', N_FRM, ...
         'tdd_sched', bs_sched, ...     % number of zero-paddes samples
-        'n_zpad_samp', N_ZPAD_PRE ...
+        'n_zpad_samp', N_ZPAD_PRE, ...
+        'beacon_sweep', BEACON_SWEEP ...
         );
 
     ue_sdr_params = bs_sdr_params;
@@ -238,7 +239,6 @@ else
     
     if USE_HUB
         rx_vec_iris = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, chan_type, [], bs_sdr_params, ue_sdr_params, hub_id);
-                               
     else
         rx_vec_iris = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, chan_type, [], bs_sdr_params, ue_sdr_params, []);
     end
@@ -334,6 +334,14 @@ lts_f_mat = permute(lts_f_mat, [4 3 1 2]);
 G_lts = Y_lts_f ./ lts_f_mat;
 % Estimate the channel by averaging over the two LTS symbols:
 H_hat = mean(G_lts, 4);
+
+% Calculate Condition Number
+validIdx = find(lts_f ~=0);
+condNum = zeros(1, length(validIdx));
+for sc = 1:length(validIdx)
+    condNum(sc) = cond(H_hat(:, :, validIdx(sc))'*H_hat(:, :, validIdx(sc)));
+end
+avgCond = mean(condNum);
 
 % Reshape the payload and take subcarriers without the CP
 payload_rx = reshape(payload_rx,N_BS_NODE, (N_SC + CP_LEN),[]);
@@ -577,3 +585,4 @@ fprintf('Bit Errors:  %d (of %d total bits)\n', bit_errs, N_UE*N_DATA_SYMS * log
 fprintf("SNRs (dB): \n");
 fprintf("%.2f\t", snr_mat);
 fprintf("\n");
+fprintf("Condition Number: %f  \n", avgCond);
