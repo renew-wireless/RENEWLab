@@ -119,6 +119,13 @@ classdef iris_py < handle
              end
          end
 
+         function sdr_settxgain(obj, tx_gain)
+             for ipy = 1:obj.n_sdrs
+                 %fprintf('Set TX Gain of %d, at UE %s \n',tx_gain, obj.serial_ids(ipy));
+                 obj.py_obj_array{ipy}.sdr_settxgain(tx_gain);
+             end
+         end
+
          function sdr_configgainctrl(obj)
              for ipy = 1:obj.n_sdrs
                  obj.py_obj_array{ipy}.config_gain_ctrl();
