@@ -710,8 +710,8 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
     int buffer_chunk_size = 0;
     // use token to speed up
     moodycamel::ProducerToken local_ptok(*message_queue_);
-    char* buffer;
-    std::atomic_int* pkg_buf_inuse;
+    char* buffer = nullptr;
+    std::atomic_int* pkg_buf_inuse = nullptr;
     if (config_->dl_slot_per_frame() > 0) {
 
         buffer_chunk_size = rx_buffer[0].buffer.size() / packageLength;
