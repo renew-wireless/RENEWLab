@@ -4,7 +4,7 @@
 #include <atomic>
 #include <random>
 #include <unistd.h>
-int main(int argc, char const* argv[])
+int main()
 {
 #ifdef UNIT_TEST
     /*

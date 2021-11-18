@@ -1,6 +1,9 @@
 #ifndef MACROS_H
 #define MACROS_H
 
+#include <atomic>
+#include <vector>
+
 #ifdef USE_UHD
 static constexpr bool kUseUHD = true;
 #else
