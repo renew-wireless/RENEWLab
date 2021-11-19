@@ -5,7 +5,7 @@
 %
 %---------------------------------------------------------------------
 % Copyright (c) 2018-2019, Rice University
-% RENEW OPEN SOURCE LICENSE: http://renew-wirseless.org/license
+% RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
 % ---------------------------------------------------------------------
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
