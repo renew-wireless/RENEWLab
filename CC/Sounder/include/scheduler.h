@@ -6,8 +6,8 @@
  Record received frames from massive-mimo base station in HDF5 format
 ---------------------------------------------------------------------
 */
-#ifndef SOUDER_SCHEDULER_H_
-#define SOUDER_SCHEDULER_H_
+#ifndef SOUNDER_SCHEDULER_H_
+#define SOUNDER_SCHEDULER_H_
 
 #include "receiver.h"
 #include "recorder_thread.h"
@@ -48,4 +48,4 @@ private:
     const unsigned int kRecvCore;
 }; /* class Scheduler */
 }; /* Namespace sounder */
-#endif /* SOUDER_SCHEDULER_H_ */
+#endif /* SOUNDER_SCHEDULER_H_ */

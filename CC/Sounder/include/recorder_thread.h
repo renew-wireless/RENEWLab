@@ -6,8 +6,8 @@
 Event based message queue thread class for the recorder worker
 ---------------------------------------------------------------------
 */
-#ifndef SOUDER_RECORDER_THREAD_H_
-#define SOUDER_RECORDER_THREAD_H_
+#ifndef SOUNDER_RECORDER_THREAD_H_
+#define SOUNDER_RECORDER_THREAD_H_
 
 #include "recorder_worker.h"
 #include <condition_variable>
@@ -66,4 +66,4 @@ private:
 };
 };
 
-#endif /* SOUDER_RECORDER_THREAD_H_ */
+#endif /* SOUNDER_RECORDER_THREAD_H_ */

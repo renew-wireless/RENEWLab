@@ -6,11 +6,11 @@
  Class to handle writting data to an hdf5 file
 ---------------------------------------------------------------------
 */
-#ifndef SOUDER_RECORDER_WORKER_H_
-#define SOUDER_RECORDER_WORKER_H_
+#ifndef SOUNDER_RECORDER_WORKER_H_
+#define SOUNDER_RECORDER_WORKER_H_
 
-#include "H5Cpp.h"
 #include "config.h"
+#include "hdf5_lib.h"
 #include "receiver.h"
 
 namespace Sounder {
@@ -21,42 +21,16 @@ public:
 
     void init(void);
     void finalize(void);
-    herr_t record(int tid, Package* pkg);
+    void record(int tid, Package* pkg);
 
     inline size_t num_antennas(void) { return num_antennas_; }
     inline size_t antenna_offset(void) { return antenna_offset_; }
 
 private:
-    // pilot dataset size increment
-    static const int kConfigPilotExtentStep;
-    // data dataset size increment
-    static const int kConfigDataExtentStep;
-
-    void gc(void);
-    herr_t initHDF5();
-    void openHDF5();
-    void closeHDF5();
-    void finishHDF5();
-
     Config* cfg_;
     H5std_string hdf5_name_;
-
-    H5::H5File* file_;
-    // Group* group;
-    H5::DSetCreatPropList pilot_prop_;
-    H5::DSetCreatPropList noise_prop_;
-    H5::DSetCreatPropList ul_data_prop_;
-    H5::DSetCreatPropList dl_data_prop_;
-
-    H5::DataSet* pilot_dataset_;
-    H5::DataSet* noise_dataset_;
-    H5::DataSet* ul_dataset_;
-    H5::DataSet* dl_dataset_;
-
-    size_t frame_number_pilot_;
-    size_t frame_number_noise_;
-    size_t frame_number_ul_data_;
-    size_t frame_number_dl_data_;
+    Hdf5Lib* hdf5_;
+    std::vector<std::string> datasets;
 
     size_t max_frame_number_;
 
@@ -65,4 +39,4 @@ private:
 };
 }; /* End namespace Sounder */
 
-#endif /* SOUDER_RECORDER_WORKER_H_ */
+#endif /* SOUNDER_RECORDER_WORKER_H_ */

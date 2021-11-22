@@ -129,6 +129,7 @@ set(SOUNDER_SOURCES
     receiver.cc
     scheduler.cc
     recorder_worker.cc
+    hdf5_lib.cc
     recorder_thread.cc
     BaseRadioSet.cc
     BaseRadioSet-calibrate.cc
