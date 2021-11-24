@@ -32,6 +32,9 @@ public:
     herr_t writeDataset(std::string dataset_name,
         std::array<hsize_t, kDsDimsNum> target_id,
         std::array<hsize_t, kDsDimsNum> wrt_dim, short* wrt_data);
+    std::vector<short> readDataset(std::string dataset_name,
+        std::array<hsize_t, kDsDimsNum> target_id,
+        std::array<hsize_t, kDsDimsNum> read_dim);
     void setTargetPrimaryDimSize(hsize_t dim_size)
     {
         target_prim_dim_size = dim_size;

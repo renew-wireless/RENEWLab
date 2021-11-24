@@ -218,7 +218,6 @@ herr_t Hdf5Lib::writeDataset(std::string dataset_name,
     try {
         H5::Exception::dontPrint();
         H5::DataSpace filespace(this->datasets_.at(ds_id)->getSpace());
-        // DataspaceIndex count = wrt_dim;
         filespace.selectHyperslab(
             H5S_SELECT_SET, wrt_dim.data(), target_id.data());
         // define memory space
@@ -263,6 +262,65 @@ herr_t Hdf5Lib::writeDataset(std::string dataset_name,
     return ret;
 }
 
+std::vector<short> Hdf5Lib::readDataset(std::string dataset_name,
+    std::array<hsize_t, kDsDimsNum> target_id,
+    std::array<hsize_t, kDsDimsNum> read_dim)
+{
+    std::vector<short> read_data;
+    std::string ds_name("/" + this->group_name_ + "/" + dataset_name);
+    std::vector<std::string>::iterator it
+        = find(dataset_str_.begin(), dataset_str_.end(), dataset_name);
+    if (it == dataset_str_.end()) {
+        std::cout << ds_name << " dataset does not exist!" << std::endl;
+        return read_data;
+    }
+    size_t ds_id = it - dataset_str_.begin();
+    // Select a hyperslab in extended portion of the dataset
+    try {
+        H5::Exception::dontPrint();
+        H5::DataSpace filespace(this->datasets_.at(ds_id)->getSpace());
+        filespace.selectHyperslab(
+            H5S_SELECT_SET, read_dim.data(), target_id.data());
+        // define memory space
+        H5::DataSpace memspace(kDsDimsNum, read_dim.data(), NULL);
+        read_data.resize(read_dim.at(kDsDimsNum - 1), 0);
+        this->datasets_.at(ds_id)->read(
+            read_data.data(), H5::PredType::NATIVE_INT16, memspace, filespace);
+        filespace.close();
+    }
+    // catch failure caused by the DataSet operations
+    catch (H5::DataSetIException& error) {
+        error.printErrorStack();
+
+        MLPD_WARN(
+            "DataSet: Failed to write to dataset at primary dim index: %llu",
+            target_id.at(0));
+
+        int ndims
+            = this->datasets_.at(ds_id)->getSpace().getSimpleExtentNdims();
+
+        std::stringstream ss;
+        ss.str(std::string());
+        ss << "Dataset Dimension is: " << ndims;
+        for (size_t i = 0; i < (kDsDimsNum - 1); ++i) {
+            ss << dims_.at(ds_id)[i] << ",";
+        }
+        ss << dims_.at(ds_id)[kDsDimsNum - 1];
+        ss << "Requested Write Dimension is: " << ndims;
+        for (size_t i = 0; i < (kDsDimsNum - 1); ++i) {
+            ss << target_id[i] << ",";
+        }
+        ss << target_id[kDsDimsNum - 1];
+        MLPD_TRACE("%s", ss.str().c_str());
+        throw;
+    }
+    // catch failure caused by the DataSpace operations
+    catch (H5::DataSpaceIException& error) {
+        error.printErrorStack();
+        throw;
+    }
+    return read_data;
+}
 void Hdf5Lib::write_attribute(const char name[], double val)
 {
     hsize_t dims[] = { 1 };

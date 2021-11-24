@@ -32,7 +32,8 @@ static constexpr size_t kDsDimSymbol = 2;
 enum SchedulerEventType {
     kEventRxSymbol = 0,
     kTaskRecord = 1,
-    kThreadTermination = 2
+    kTaskRead = 2,
+    kThreadTermination = 3
 };
 
 // each thread has a SampleBuffer
