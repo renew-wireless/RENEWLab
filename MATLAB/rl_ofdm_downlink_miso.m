@@ -90,9 +90,9 @@ else
 end
 
 % Last node in list is calibration node!
-bs_ids = ["RF3E000674", "RF3E000704", "RF3E000676", "RF3E000668", "RF3E000157"];
+bs_ids = ["RF3E000674", "RF3E000704", "RF3E000676", "RF3E000668","RF3E000724","RF3E000740","RF3E000532","RF3E000716","RF3E000157"];
 ue_ids= ["RF3E000119"];
-
+%"RF3E000740","RF3E000532","RF3E000716",
 beacon_node = 0; % set 0 to make all nodes send beacon
 
 ref_calib_sched =  "RGPG";
@@ -197,7 +197,8 @@ node_ue = iris_py(ue_sdr_params, []);    % initialize UE
 
 node_bs.sdrsync();                 % Synchronize delays only for BS
 node_bs.sdrrxsetup();
-node_bs.sdr_setupbeacon();   % Burn beacon to the BS RAM
+%node_bs.sdr_setupbeacon();   % Burn beacon to the BS RAM
+node_bs.sdr_setupbeacon_single();
 
 node_ue.sdr_configgainctrl();
 node_ue.sdrrxsetup();
@@ -338,7 +339,7 @@ for ibs =1:N_BS_NODE
         rx_mat_calibrated_tmp(ibs, :) = rx_vec_pilot(ibs, :);
     end
 end
-
+rx_vec_pilot = rx_mat_calibrated_tmp;
 
 uplink_pilot_rx = zeros(N_BS_NODE, ue_pilot_len);
 uplink_pilot_csi = zeros(N_BS_NODE, N_SC);
@@ -414,11 +415,27 @@ node_ue.set_tddconfig(WIRED_UE, ue_dl_sched);
 
 % Write beamformed signal to all antennas
 donwlink_postfix_len = N_SAMP - N_ZPAD_PRE - N_OFDM_SYMS * N_SYM_SAMP;
+tx_vec_iris_sampOffset = zeros(1,N_ZPAD_PRE + size(tx_payload_vec,2) + donwlink_postfix_len);
 for i=1:N_BS_NODE
     tx_signal = [zeros(1, N_ZPAD_PRE) tx_payload_vec(i, :) zeros(1, donwlink_postfix_len)];
     tx_vec_iris = TX_SCALE .* tx_signal ./ max(abs(tx_signal));
     % figure; plot(abs(tx_vec_iris))
-    node_bs.sdrtx_single(tx_vec_iris, i);       % Burn data to the UE RAM
+    
+
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%
+    curr_offset = samp_offset_array(ibs);
+    if curr_offset < 0
+        tx_vec_iris_sampOffset(1+abs(curr_offset):end) = tx_vec_iris(1:end-abs(curr_offset));
+    elseif  curr_offset > 0
+        tx_vec_iris_sampOffset(1:end-curr_offset) = tx_vec_iris(1+curr_offset:end);
+    end
+    %%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    %node_bs.sdrtx_single(tx_vec_iris, i);       % Burn data to the UE RAM
+    node_bs.sdrtx_single(tx_vec_iris_sampOffset, i);       % Burn data to the UE RAM
 end
 
 if ~WIRED_UE
@@ -571,7 +588,7 @@ fprintf('Num Bytes:  \t  %d\n', N_DATA_SC * log2(MOD_ORDER) / 8);
 fprintf('Sym Errors:  \t %d (of %d total symbols)\n', sym_errs, N_DATA_SC);
 fprintf('Bit Errors: \t %d (of %d total bits)\n', bit_errs, N_DATA_SC * log2(MOD_ORDER));
 fprintf('EVM: \t %f, SNR: %f \n', aevms, snr);
-
+samp_offset_array
 
 %% Step 6: Plotting
 cf = 0;
