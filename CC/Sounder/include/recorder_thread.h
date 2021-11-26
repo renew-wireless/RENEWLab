@@ -47,7 +47,7 @@ private:
     std::thread thread_;
 
     size_t id_;
-    size_t package_data_length_;
+    size_t packet_data_length_;
 
     /* >= 0 to assign a core to the thread
          * <0   to disable thread core assignment */

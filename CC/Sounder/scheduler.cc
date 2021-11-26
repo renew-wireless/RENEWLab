@@ -51,11 +51,11 @@ Scheduler::Scheduler(Config* in_cfg, unsigned int core_start)
         rx_buffer_ = new SampleBuffer[total_rx_thread_num];
         size_t intsize = sizeof(std::atomic_int);
         size_t arraysize = (rx_thread_buff_size_ + intsize - 1) / intsize;
-        size_t packageLength = sizeof(Package) + cfg_->getPackageDataLength();
+        size_t packetLength = sizeof(Packet) + cfg_->getPacketDataLength();
         for (size_t i = 0; i < total_rx_thread_num; i++) {
-            rx_buffer_[i].buffer.resize(rx_thread_buff_size_ * packageLength);
-            rx_buffer_[i].pkg_buf_inuse = new std::atomic_int[arraysize];
-            std::fill_n(rx_buffer_[i].pkg_buf_inuse, arraysize, 0);
+            rx_buffer_[i].buffer.resize(rx_thread_buff_size_ * packetLength);
+            rx_buffer_[i].pkt_buf_inuse = new std::atomic_int[arraysize];
+            std::fill_n(rx_buffer_[i].pkt_buf_inuse, arraysize, 0);
         }
     }
 
@@ -75,7 +75,7 @@ void Scheduler::gc(void)
     this->receiver_.reset();
     if (this->cfg_->bs_rx_thread_num() > 0) {
         for (size_t i = 0; i < this->cfg_->bs_rx_thread_num(); i++) {
-            delete[] this->rx_buffer_[i].pkg_buf_inuse;
+            delete[] this->rx_buffer_[i].pkt_buf_inuse;
         }
         delete[] this->rx_buffer_;
     }

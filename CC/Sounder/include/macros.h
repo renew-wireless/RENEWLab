@@ -39,7 +39,22 @@ enum SchedulerEventType {
 // each thread has a SampleBuffer
 struct SampleBuffer {
     std::vector<char> buffer;
-    std::atomic_int* pkg_buf_inuse;
+    std::atomic_int* pkt_buf_inuse;
+};
+
+struct Packet {
+    uint32_t frame_id;
+    uint32_t symbol_id;
+    uint32_t cell_id;
+    uint32_t ant_id;
+    short data[];
+    Packet(int f, int s, int c, int a)
+        : frame_id(f)
+        , symbol_id(s)
+        , cell_id(c)
+        , ant_id(a)
+    {
+    }
 };
 
 struct Event_data {
@@ -48,21 +63,6 @@ struct Event_data {
     int ant_id;
     size_t rx_buff_size;
     SampleBuffer* rx_buffer;
-};
-
-struct Package {
-    uint32_t frame_id;
-    uint32_t symbol_id;
-    uint32_t cell_id;
-    uint32_t ant_id;
-    short data[];
-    Package(int f, int s, int c, int a)
-        : frame_id(f)
-        , symbol_id(s)
-        , cell_id(c)
-        , ant_id(a)
-    {
-    }
 };
 
 #endif

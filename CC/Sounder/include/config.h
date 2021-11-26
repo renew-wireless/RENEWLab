@@ -310,7 +310,7 @@ public:
         return this->dl_txdata_freq_dom_;
     }
 
-    inline size_t getPackageDataLength() const
+    inline size_t getPacketDataLength() const
     {
         return (2 * this->samps_per_slot_ * sizeof(short));
     }

@@ -306,42 +306,42 @@ void RecorderWorker::finalize(void)
     this->hdf5_->closeFile();
 }
 
-void RecorderWorker::record(int tid, Package* pkg)
+void RecorderWorker::record(int tid, Packet* pkt)
 {
     (void)tid;
     /* TODO: remove TEMP check */
     size_t end_antenna = (this->antenna_offset_ + this->num_antennas_) - 1;
 
-    if ((pkg->ant_id < this->antenna_offset_) || (pkg->ant_id > end_antenna)) {
+    if ((pkt->ant_id < this->antenna_offset_) || (pkt->ant_id > end_antenna)) {
         MLPD_ERROR(
             "Antenna id is not within range of this recorder %d, %zu:%zu",
-            pkg->ant_id, this->antenna_offset_, end_antenna);
+            pkt->ant_id, this->antenna_offset_, end_antenna);
     }
     assert(
-        (pkg->ant_id >= this->antenna_offset_) && (pkg->ant_id <= end_antenna));
+        (pkt->ant_id >= this->antenna_offset_) && (pkt->ant_id <= end_antenna));
 
     //Generates a ton of messages
-    //MLPD_TRACE( "Tid: %d -- frame_id %u, antenna: %u\n", tid, pkg->frame_id, pkg->ant_id);
+    //MLPD_TRACE( "Tid: %d -- frame_id %u, antenna: %u\n", tid, pkt->frame_id, pkt->ant_id);
 
 #if DEBUG_PRINT
     printf("record            frame %d, symbol %d, cell %d, ant %d "
            "samples: %d "
            "%d %d %d %d %d %d %d ....\n",
-        pkg->frame_id, pkg->symbol_id, pkg->cell_id, pkg->ant_id, pkg->data[1],
-        pkg->data[2], pkg->data[3], pkg->data[4], pkg->data[5], pkg->data[6],
-        pkg->data[7], pkg->data[8]);
+        pkt->frame_id, pkt->symbol_id, pkt->cell_id, pkt->ant_id, pkt->data[1],
+        pkt->data[2], pkt->data[3], pkt->data[4], pkt->data[5], pkt->data[6],
+        pkt->data[7], pkt->data[8]);
 #endif
     hsize_t IQ = 2 * this->cfg_->samps_per_slot();
     if ((this->cfg_->max_frame()) != 0
-        && (pkg->frame_id > this->cfg_->max_frame())) {
+        && (pkt->frame_id > this->cfg_->max_frame())) {
         this->hdf5_->closeDataset();
-        MLPD_TRACE("Closing file due to frame id %d : %zu max\n", pkg->frame_id,
+        MLPD_TRACE("Closing file due to frame id %d : %zu max\n", pkt->frame_id,
             this->cfg_->max_frame());
     } else {
         // Update the max frame number.
         // Note that the 'frame_id' might be out of order.
         this->max_frame_number_ = this->hdf5_->getTargetPrimaryDimSize();
-        if (pkg->frame_id >= this->max_frame_number_) {
+        if (pkt->frame_id >= this->max_frame_number_) {
             // Open the hdf5 file if we haven't.
             this->hdf5_->closeDataset();
             this->hdf5_->openDataset();
@@ -349,42 +349,42 @@ void RecorderWorker::record(int tid, Package* pkg)
                 this->max_frame_number_ + MAX_FRAME_INC);
         }
 
-        uint32_t antenna_index = pkg->ant_id - this->antenna_offset_;
+        uint32_t antenna_index = pkt->ant_id - this->antenna_offset_;
         std::array<hsize_t, kDsDimsNum> hdfoffset
-            = { pkg->frame_id, pkg->cell_id, 0, antenna_index, 0 };
+            = { pkt->frame_id, pkt->cell_id, 0, antenna_index, 0 };
         std::array<hsize_t, kDsDimsNum> count = { 1, 1, 1, 1, IQ };
         if ((this->cfg_->internal_measurement() == true)
-            || (this->cfg_->isPilot(pkg->frame_id, pkg->symbol_id) == true)) {
+            || (this->cfg_->isPilot(pkt->frame_id, pkt->symbol_id) == true)) {
             this->hdf5_->extendDataset(
-                std::string("Pilot_Samples"), pkg->frame_id);
+                std::string("Pilot_Samples"), pkt->frame_id);
             hdfoffset[kDsDimSymbol]
-                = this->cfg_->getClientId(pkg->frame_id, pkg->symbol_id);
+                = this->cfg_->getClientId(pkt->frame_id, pkt->symbol_id);
             this->hdf5_->writeDataset(
-                std::string("Pilot_Samples"), hdfoffset, count, pkg->data);
-        } else if (this->cfg_->isUlData(pkg->frame_id, pkg->symbol_id)
+                std::string("Pilot_Samples"), hdfoffset, count, pkt->data);
+        } else if (this->cfg_->isUlData(pkt->frame_id, pkt->symbol_id)
             == true) {
             this->hdf5_->extendDataset(
-                std::string("UplinkData"), pkg->frame_id);
+                std::string("UplinkData"), pkt->frame_id);
             hdfoffset[kDsDimSymbol]
-                = this->cfg_->getUlSlotIndex(pkg->frame_id, pkg->symbol_id);
+                = this->cfg_->getUlSlotIndex(pkt->frame_id, pkt->symbol_id);
             this->hdf5_->writeDataset(
-                std::string("UplinkData"), hdfoffset, count, pkg->data);
+                std::string("UplinkData"), hdfoffset, count, pkt->data);
 
-        } else if (this->cfg_->isDlData(pkg->frame_id, pkg->symbol_id)
+        } else if (this->cfg_->isDlData(pkt->frame_id, pkt->symbol_id)
             == true) {
             this->hdf5_->extendDataset(
-                std::string("DownlinkData"), pkg->frame_id);
+                std::string("DownlinkData"), pkt->frame_id);
             hdfoffset[kDsDimSymbol]
-                = this->cfg_->getDlSlotIndex(pkg->frame_id, pkg->symbol_id);
+                = this->cfg_->getDlSlotIndex(pkt->frame_id, pkt->symbol_id);
             this->hdf5_->writeDataset(
-                std::string("DownlinkData"), hdfoffset, count, pkg->data);
-        } else if (this->cfg_->isNoise(pkg->frame_id, pkg->symbol_id) == true) {
+                std::string("DownlinkData"), hdfoffset, count, pkt->data);
+        } else if (this->cfg_->isNoise(pkt->frame_id, pkt->symbol_id) == true) {
             this->hdf5_->extendDataset(
-                std::string("Noise_Samples"), pkg->frame_id);
+                std::string("Noise_Samples"), pkt->frame_id);
             hdfoffset[kDsDimSymbol]
-                = this->cfg_->getNoiseSlotIndex(pkg->frame_id, pkg->symbol_id);
+                = this->cfg_->getNoiseSlotIndex(pkt->frame_id, pkt->symbol_id);
             this->hdf5_->writeDataset(
-                std::string("Noise_Samples"), hdfoffset, count, pkg->data);
+                std::string("Noise_Samples"), hdfoffset, count, pkt->data);
         }
     } /* End else */
 }

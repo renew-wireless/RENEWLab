@@ -188,12 +188,12 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     moodycamel::ProducerToken local_ptok(*message_queue_);
 
     const size_t num_channels = config_->bs_channel().length();
-    size_t packageLength = sizeof(Package) + config_->getPackageDataLength();
-    int buffer_chunk_size = rx_buffer[0].buffer.size() / packageLength;
+    size_t packetLength = sizeof(Packet) + config_->getPacketDataLength();
+    int buffer_chunk_size = rx_buffer[0].buffer.size() / packetLength;
 
     // handle two channels at each radio
     // this is assuming buffer_chunk_size is at least 2
-    std::atomic_int* pkg_buf_inuse = rx_buffer[tid].pkg_buf_inuse;
+    std::atomic_int* pkt_buf_inuse = rx_buffer[tid].pkt_buf_inuse;
     char* buffer = rx_buffer[tid].buffer.data();
 
     size_t num_radios = config_->num_bs_sdrs_all(); //config_->n_bs_sdrs()[0]
@@ -320,7 +320,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
         // Receive data
         for (auto& it : radio_ids_in_thread) {
-            Package* pkg[num_channels];
+            Packet* pkt[num_channels];
             void* samp[num_channels];
 
             // Find cell this board belongs to...
@@ -344,7 +344,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 int bit = 1 << (cursor + ch) % sizeof(std::atomic_int);
                 int offs = (cursor + ch) / sizeof(std::atomic_int);
                 int old = std::atomic_fetch_or(
-                    &pkg_buf_inuse[offs], bit); // now full
+                    &pkt_buf_inuse[offs], bit); // now full
                 // if buffer was full, exit
                 if ((old & bit) != 0) {
                     MLPD_ERROR("thread %d buffer full\n", tid);
@@ -354,15 +354,14 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             }
 
             // Receive data into buffers
-            size_t packageLength
-                = sizeof(Package) + config_->getPackageDataLength();
+            size_t packetLength
+                = sizeof(Packet) + config_->getPacketDataLength();
             for (size_t ch = 0; ch < num_packets; ++ch) {
-                pkg[ch] = (Package*)(buffer + (cursor + ch) * packageLength);
-                samp[ch] = pkg[ch]->data;
+                pkt[ch] = (Packet*)(buffer + (cursor + ch) * packetLength);
+                samp[ch] = pkt[ch]->data;
             }
             if (num_packets != num_channels)
-                samp[num_channels - 1]
-                    = std::vector<char>(packageLength).data();
+                samp[num_channels - 1] = std::vector<char>(packetLength).data();
 
             assert(this->base_radio_set_ != NULL);
             ant_id = radio_id * num_channels;
@@ -480,27 +479,25 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             for (size_t ch = 0; ch < num_packets; ++ch) {
                 printf("receive thread %d, frame %zu, slot %zu, cell %zu, ant "
                        "%zu samples: %d %d %d %d %d %d %d %d ...\n",
-                    tid, frame_id, slot_id, cell, ant_id + ch, pkg[ch]->data[1],
-                    pkg[ch]->data[2], pkg[ch]->data[3], pkg[ch]->data[4],
-                    pkg[ch]->data[5], pkg[ch]->data[6], pkg[ch]->data[7],
-                    pkg[ch]->data[8]);
+                    tid, frame_id, slot_id, cell, ant_id + ch, pkt[ch]->data[1],
+                    pkt[ch]->data[2], pkt[ch]->data[3], pkt[ch]->data[4],
+                    pkt[ch]->data[5], pkt[ch]->data[6], pkt[ch]->data[7],
+                    pkt[ch]->data[8]);
             }
 #endif
 
             for (size_t ch = 0; ch < num_packets; ++ch) {
-                // new (pkg[ch]) Package(frame_id, slot_id, 0, ant_id + ch);
-                new (pkg[ch]) Package(frame_id, slot_id, cell, ant_id + ch);
+                // new (pkt[ch]) Packet(frame_id, slot_id, 0, ant_id + ch);
+                new (pkt[ch]) Packet(frame_id, slot_id, cell, ant_id + ch);
                 // push kEventRxSymbol event into the queue
-                Event_data package_message;
-                package_message.event_type = kEventRxSymbol;
-                package_message.ant_id = ant_id + ch;
-                // data records the position of this packet in the buffer & tid of this socket
-                // (so that task thread could know which buffer it should visit)
-                package_message.data = cursor + tid * buffer_chunk_size;
-                if (message_queue_->enqueue(local_ptok, package_message)
-                    == false) {
-                    MLPD_ERROR("socket message enqueue failed\n");
-                    throw std::runtime_error("socket message enqueue failed");
+                Event_data new_packet;
+                new_packet.event_type = kEventRxSymbol;
+                new_packet.ant_id = ant_id + ch;
+                new_packet.data = cursor + tid * buffer_chunk_size;
+                if (message_queue_->enqueue(local_ptok, new_packet) == false) {
+                    MLPD_ERROR("New packet message enqueue failed\n");
+                    throw std::runtime_error(
+                        "New packet message enqueue failed");
                 }
                 cursor++;
                 cursor %= buffer_chunk_size;
@@ -705,20 +702,20 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
         fp = std::fopen(config_->ul_tx_td_data_files().at(tid).c_str(), "rb");
     }
 
-    size_t packageLength = sizeof(Package) + config_->getPackageDataLength();
+    size_t packetLength = sizeof(Packet) + config_->getPacketDataLength();
     size_t ant_id = tid * config_->cl_sdr_ch();
     int buffer_chunk_size = 0;
     // use token to speed up
     moodycamel::ProducerToken local_ptok(*message_queue_);
     char* buffer = nullptr;
-    std::atomic_int* pkg_buf_inuse = nullptr;
+    std::atomic_int* pkt_buf_inuse = nullptr;
     if (config_->dl_slot_per_frame() > 0) {
 
-        buffer_chunk_size = rx_buffer[0].buffer.size() / packageLength;
+        buffer_chunk_size = rx_buffer[0].buffer.size() / packetLength;
         // handle two channels at each radio
         // this is assuming buffer_chunk_size is at least 2
-        pkg_buf_inuse
-            = rx_buffer[tid + config_->bs_rx_thread_num()].pkg_buf_inuse;
+        pkt_buf_inuse
+            = rx_buffer[tid + config_->bs_rx_thread_num()].pkt_buf_inuse;
         buffer = rx_buffer[tid + config_->bs_rx_thread_num()].buffer.data();
     }
 
@@ -922,13 +919,10 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
             if (config_->isDlData(frame_id, slot_id)) {
                 // Set buffer status(es) to full; fail if full already
                 for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
-                    int bit = 1
-                        << (buffer_offset + ch) % sizeof(std::atomic_int);
-                    int offs = (buffer_offset + ch) / sizeof(std::atomic_int);
                     int old = std::atomic_fetch_or(
-                        &pkg_buf_inuse[offs], bit); // now full
+                        &pkt_buf_inuse[buffer_offset], 1); // now full
                     // if buffer was full, exit
-                    if ((old & bit) != 0) {
+                    if (old != 0) {
                         MLPD_ERROR("thread %d buffer full\n", tid);
                         throw std::runtime_error("Thread %d buffer full\n");
                     }
@@ -936,12 +930,12 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
                 }
 
                 // Receive data into buffers
-                Package* pkg[config_->cl_sdr_ch()];
+                Packet* pkt[config_->cl_sdr_ch()];
                 void* samp[config_->cl_sdr_ch()];
                 for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
-                    pkg[ch] = (Package*)(buffer
-                        + (buffer_offset + ch) * packageLength);
-                    samp[ch] = pkg[ch]->data;
+                    pkt[ch] = (Packet*)(buffer
+                        + (buffer_offset + ch) * packetLength);
+                    samp[ch] = pkt[ch]->data;
                 }
 
                 if ((r = this->clientRadioSet_->radioRx(
@@ -951,20 +945,17 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
                     break;
                 }
                 for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
-                    new (pkg[ch]) Package(frame_id, slot_id, 0, ant_id + ch);
+                    new (pkt[ch]) Packet(frame_id, slot_id, 0, ant_id + ch);
                     // push kEventRxSymbol event into the queue
-                    Event_data package_message;
-                    package_message.event_type = kEventRxSymbol;
-                    package_message.ant_id = ant_id + ch;
-                    // data records the position of this packet in the buffer & tid of this socket
-                    // (so that task thread could know which buffer it should visit)
-                    package_message.data
-                        = buffer_offset + tid * buffer_chunk_size;
-                    if (message_queue_->enqueue(local_ptok, package_message)
+                    Event_data new_packet;
+                    new_packet.event_type = kEventRxSymbol;
+                    new_packet.ant_id = ant_id + ch;
+                    new_packet.data = buffer_offset + tid * buffer_chunk_size;
+                    if (message_queue_->enqueue(local_ptok, new_packet)
                         == false) {
-                        MLPD_ERROR("socket message enqueue failed\n");
+                        MLPD_ERROR("New packet message enqueue failed\n");
                         throw std::runtime_error(
-                            "socket message enqueue failed");
+                            "New packet message enqueue failed");
                     }
                     buffer_offset++;
                     buffer_offset %= buffer_chunk_size;

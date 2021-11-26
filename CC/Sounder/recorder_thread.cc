@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2020, Rice University 
+ Copyright (c) 2018-2022, Rice University 
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
 
 ---------------------------------------------------------------------
@@ -24,7 +24,7 @@ RecorderThread::RecorderThread(Config* in_cfg, size_t thread_id, int core,
     , core_alloc_(core)
     , wait_signal_(wait_signal)
 {
-    package_data_length_ = in_cfg->getPackageDataLength();
+    packet_data_length_ = in_cfg->getPacketDataLength();
     worker_.init();
     running_ = false;
 }
@@ -146,20 +146,19 @@ void RecorderThread::HandleEvent(Event_data event)
         size_t buffer_offset = offset - (buffer_id * event.rx_buff_size);
         if (event.event_type == kTaskRecord) {
             // read info
-            size_t package_length
-                = sizeof(Package) + this->package_data_length_;
+            size_t packet_length = sizeof(Packet) + this->packet_data_length_;
             char* cur_ptr_buffer = event.rx_buffer[buffer_id].buffer.data()
-                + (buffer_offset * package_length);
+                + (buffer_offset * packet_length);
 
             this->worker_.record(
-                this->id_, reinterpret_cast<Package*>(cur_ptr_buffer));
+                this->id_, reinterpret_cast<Packet*>(cur_ptr_buffer));
         }
 
         /* Free up the buffer memory */
         int bit = 1 << (buffer_offset % sizeof(std::atomic_int));
         int offs = (buffer_offset / sizeof(std::atomic_int));
         std::atomic_fetch_and(
-            &event.rx_buffer[buffer_id].pkg_buf_inuse[offs], ~bit); // now empty
+            &event.rx_buffer[buffer_id].pkt_buf_inuse[offs], ~bit); // now empty
     }
 }
 }; //End namespace Sounder
