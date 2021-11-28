@@ -30,9 +30,7 @@ RecorderWorker::RecorderWorker(
     this->hdf5_name_.insert(found_index, append);
 }
 
-RecorderWorker::~RecorderWorker()
-{ /*this->finalize();*/
-}
+RecorderWorker::~RecorderWorker() { this->finalize(); }
 
 void RecorderWorker::init(void)
 {

@@ -46,25 +46,32 @@ public:
     struct ReceiverContext {
         Receiver* ptr;
         SampleBuffer* buffer;
+        SampleBuffer* tx_buffer;
         size_t core_id;
         size_t tid;
     };
 
 public:
-    Receiver(Config* config, moodycamel::ConcurrentQueue<Event_data>* in_queue);
+    Receiver(Config* config, moodycamel::ConcurrentQueue<Event_data>* in_queue,
+        moodycamel::ConcurrentQueue<Event_data>* tx_queue,
+        std::vector<moodycamel::ProducerToken*> tx_ptoks);
     ~Receiver();
 
-    std::vector<pthread_t> startRecvThreads(
-        SampleBuffer* rx_buffer, size_t n_rx_threads, unsigned in_core_id = 0);
+    std::vector<pthread_t> startRecvThreads(SampleBuffer* rx_buffer,
+        size_t n_rx_threads, SampleBuffer* tx_buffer, unsigned in_core_id = 0);
     void completeRecvThreads(const std::vector<pthread_t>& recv_thread);
-    std::vector<pthread_t> startClientThreads(
-        SampleBuffer* rx_buffer, unsigned in_core_id = 0);
+    std::vector<pthread_t> startClientThreads(SampleBuffer* rx_buffer,
+        SampleBuffer* tx_buffer, unsigned in_core_id = 0);
     void go();
     static void* loopRecv_launch(void* in_context);
     void loopRecv(int tid, int core_id, SampleBuffer* rx_buffer);
     static void* clientTxRx_launch(void* in_context);
     void clientTxRx(int tid);
     void clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer);
+    int syncSearch(
+        std::vector<std::complex<int16_t>> sync_buff, size_t sync_num_samps);
+    void initBuffers();
+    void txPilots(size_t user_id, long long base_time);
 
 private:
     Config* config_;
@@ -74,6 +81,13 @@ private:
     size_t thread_num_;
     // pointer of message_queue_
     moodycamel::ConcurrentQueue<Event_data>* message_queue_;
+    moodycamel::ConcurrentQueue<Event_data>* tx_queue_;
+    std::vector<moodycamel::ProducerToken*> tx_ptoks_;
+    std::vector<void*> pilotbuffA;
+    std::vector<void*> pilotbuffB;
+    std::vector<void*> zeros;
+    size_t txTimeDelta;
+    size_t txFrameDelta;
 };
 
 #endif

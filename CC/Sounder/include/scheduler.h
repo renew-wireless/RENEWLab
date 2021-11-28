@@ -35,12 +35,16 @@ private:
     std::unique_ptr<Receiver> receiver_;
     SampleBuffer* rx_buffer_;
     size_t rx_thread_buff_size_;
+    SampleBuffer* tx_buffer_;
+    size_t tx_thread_buff_size_;
 
     //RecorderWorker worker_;
     std::vector<Sounder::RecorderThread*> recorders_;
     size_t max_frame_number_;
 
     moodycamel::ConcurrentQueue<Event_data> message_queue_;
+    moodycamel::ConcurrentQueue<Event_data> tx_queue_;
+    std::vector<moodycamel::ProducerToken*> tx_ptoks_ptr_;
 
     /* Core assignment start variables */
     const unsigned int kMainDispatchCore;

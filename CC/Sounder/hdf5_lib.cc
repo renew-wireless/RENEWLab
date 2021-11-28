@@ -141,6 +141,7 @@ void Hdf5Lib::removeDataset(std::string dataset_name)
         dataset_str_.at(ds_id) + " Dataset exists during garbage collection\n");
     this->datasets_.at(ds_id)->close();
     this->datasets_.at(ds_id) = nullptr;
+    delete this->datasets_.at(ds_id);
 }
 
 void Hdf5Lib::closeDataset()
@@ -167,6 +168,7 @@ void Hdf5Lib::closeDataset()
                 throw;
             }
             this->datasets_.at(i) = nullptr;
+            delete this->datasets_.at(i);
         }
         this->file_->close();
         MLPD_INFO("Saving HD5F: %llu frames saved on CPU %d\n",

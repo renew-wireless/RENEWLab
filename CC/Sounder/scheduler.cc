@@ -41,6 +41,8 @@ Scheduler::Scheduler(Config* in_cfg, unsigned int core_start)
 
     message_queue_ = moodycamel::ConcurrentQueue<Event_data>(
         rx_thread_buff_size_ * kQueueSize);
+    tx_queue_ = moodycamel::ConcurrentQueue<Event_data>(
+        rx_thread_buff_size_ * kQueueSize);
 
     MLPD_TRACE("Scheduler construction: rx threads: %zu, recorder threads: %u, "
                "chunk size: %zu\n",
@@ -59,9 +61,24 @@ Scheduler::Scheduler(Config* in_cfg, unsigned int core_start)
         }
     }
 
+    if (cfg_->ul_slot_per_frame() + cfg_->dl_slot_per_frame() > 0) {
+        // initialize rx buffers
+        tx_buffer_ = new SampleBuffer[total_rx_thread_num];
+        size_t intsize = sizeof(std::atomic_int);
+        size_t arraysize = (rx_thread_buff_size_ + intsize - 1) / intsize;
+        size_t packetLength = sizeof(Packet) + cfg_->getPacketDataLength();
+        for (size_t i = 0; i < total_rx_thread_num; i++) {
+            tx_buffer_[i].buffer.resize(rx_thread_buff_size_ * packetLength);
+            tx_buffer_[i].pkt_buf_inuse = new std::atomic_int[arraysize];
+            std::fill_n(tx_buffer_[i].pkt_buf_inuse, arraysize, 0);
+        }
+        tx_ptoks_ptr_.push_back(new moodycamel::ProducerToken(tx_queue_));
+    }
+
     // Receiver object will be used for both BS and clients
     try {
-        receiver_.reset(new Receiver(cfg_, &message_queue_));
+        receiver_.reset(
+            new Receiver(cfg_, &message_queue_, &tx_queue_, tx_ptoks_ptr_));
     } catch (ReceiverException& re) {
         std::cout << re.what() << '\n';
         gc();
@@ -100,8 +117,9 @@ void Scheduler::do_it()
     }
 
     if (this->cfg_->client_present() == true) {
-        auto client_threads = this->receiver_->startClientThreads(
-            this->rx_buffer_, kRecvCore + cfg_->bs_rx_thread_num());
+        auto client_threads
+            = this->receiver_->startClientThreads(this->rx_buffer_,
+                this->tx_buffer_, kRecvCore + cfg_->bs_rx_thread_num());
     }
 
     if (total_rx_thread_num > 0) {
@@ -132,8 +150,8 @@ void Scheduler::do_it()
         }
         if (cfg_->bs_rx_thread_num() > 0) {
             // create socket buffer and socket threads
-            recv_threads = this->receiver_->startRecvThreads(
-                this->rx_buffer_, cfg_->bs_rx_thread_num(), kRecvCore);
+            recv_threads = this->receiver_->startRecvThreads(this->rx_buffer_,
+                cfg_->bs_rx_thread_num(), this->tx_buffer_, kRecvCore);
         }
     } else
         this->receiver_->go(); // only beamsweeping
@@ -156,17 +174,27 @@ void Scheduler::do_it()
             // if kEventRxSymbol, dispatch to proper worker
             if (event.event_type == kEventRxSymbol) {
                 size_t thread_index = event.ant_id / thread_antennas;
-                int offset = event.data;
                 Event_data do_record_task;
                 do_record_task.event_type = kTaskRecord;
-                do_record_task.data = offset;
-                do_record_task.rx_buffer = this->rx_buffer_;
-                do_record_task.rx_buff_size = this->rx_thread_buff_size_;
+                do_record_task.data = event.data;
+                do_record_task.buffer = this->rx_buffer_;
+                do_record_task.buff_size = this->rx_thread_buff_size_;
+                //size_t buffer_id = (event.data / event.buff_size);
+                //size_t buffer_offset
+                //    = event.data - (buffer_id * event.buff_size);
+                //size_t packet_length
+                //    = sizeof(Packet) + cfg_->getPacketDataLength();
+                //char* cur_ptr_buffer = event.buffer[buffer_id].buffer.data()
+                //    + (buffer_offset * packet_length);
+                //Packet* pkt = reinterpret_cast<Packet*>(cur_ptr_buffer);
+                //if (pkt->symbol_id == 0 && event.ant_id == 0) {
+                //    Event_data do_read_task;
+                //    do_read_task.event_type = kTaskRead;
+                //    do_read_task.buffer = this->tx_buffer_;
+                //    do_read_task.buff_size = this->tx_thread_buff_size_;
+                //}
                 // Pass the work off to the applicable worker
                 // Worker must free the buffer, future work would involve making this cleaner
-
-                //If no worker threads, it is possible to handle the event directly.
-                //this->worker_.handleEvent(do_record_task, 0);
                 if (this->recorders_.at(thread_index)
                         ->DispatchWork(do_record_task)
                     == false) {

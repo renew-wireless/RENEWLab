@@ -31,9 +31,10 @@ static constexpr size_t kDsDimSymbol = 2;
 
 enum SchedulerEventType {
     kEventRxSymbol = 0,
-    kTaskRecord = 1,
-    kTaskRead = 2,
-    kThreadTermination = 3
+    kEventTxSymbol = 1,
+    kTaskRecord = 2,
+    kTaskRead = 3,
+    kThreadTermination = 4
 };
 
 // each thread has a SampleBuffer
@@ -61,8 +62,8 @@ struct Event_data {
     SchedulerEventType event_type;
     int data;
     int ant_id;
-    size_t rx_buff_size;
-    SampleBuffer* rx_buffer;
+    size_t buff_size;
+    SampleBuffer* buffer;
 };
 
 #endif

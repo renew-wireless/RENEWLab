@@ -35,6 +35,14 @@ public:
     inline size_t samps_per_slot(void) const { return this->samps_per_slot_; }
     inline size_t slot_per_frame(void) const { return this->slot_per_frame_; }
     inline size_t symbol_per_slot(void) const { return this->symbol_per_slot_; }
+    inline size_t samps_per_frame(void) const
+    {
+        return this->samps_per_slot_ * this->slot_per_frame_;
+    }
+    inline float frame_time(void) const
+    {
+        return this->samps_per_frame() / rate_;
+    }
     inline bool ul_data_slot_present(void) const
     {
         return this->ul_data_slot_present_;
