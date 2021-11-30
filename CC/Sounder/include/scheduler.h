@@ -47,8 +47,8 @@ private:
     moodycamel::ConcurrentQueue<Event_data> message_queue_;
     moodycamel::ConcurrentQueue<Event_data> tx_queue_;
     std::vector<moodycamel::ProducerToken*> tx_ptoks_ptr_;
-    std::vector<moodycamel::ConcurrentQueue<Event_data>> cl_tx_queue_;
-    std::vector<moodycamel::ProducerToken> cl_tx_ptoks_ptr_;
+    std::vector<moodycamel::ConcurrentQueue<Event_data>*> cl_tx_queue_;
+    std::vector<moodycamel::ProducerToken*> cl_tx_ptoks_ptr_;
 
     /* Core assignment start variables */
     const unsigned int kMainDispatchCore;

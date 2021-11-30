@@ -556,8 +556,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         trace_file_ = tddConf.value("trace_file", filename);
         recorder_thread_num_
             = tddConf.value("recorder_thread", RECORDER_THREAD_NUM);
-        reader_thread_num_
-            = (ul_slot_per_frame_ > 0) + (dl_slot_per_frame_ > 0);
+        reader_thread_num_ = (client_present_ && ul_slot_per_frame_ > 0)
+            + (bs_present_ && dl_slot_per_frame_ > 0);
     } else {
         recorder_thread_num_ = 0;
         reader_thread_num_ = 0;
@@ -618,7 +618,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 void Config::loadULData(const std::string& directory)
 {
     // compose data slot
-    if (ul_data_slot_present_) {
+    if (client_present_ && ul_data_slot_present_) {
         std::vector<std::complex<float>> prefix_zpad_t(prefix_, 0);
         std::vector<std::complex<float>> postfix_zpad_t(postfix_, 0);
         txdata_time_dom_.resize(num_cl_antennas_);
@@ -698,7 +698,7 @@ void Config::loadULData(const std::string& directory)
 void Config::loadDLData(const std::string& directory)
 {
     // compose data slot
-    if (dl_data_slot_present_) {
+    if (bs_present_ && dl_data_slot_present_) {
         std::vector<std::complex<float>> prefix_zpad_t(prefix_, 0);
         std::vector<std::complex<float>> postfix_zpad_t(postfix_, 0);
         dl_txdata_time_dom_.resize(num_bs_antennas_all_);

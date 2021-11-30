@@ -53,7 +53,9 @@ public:
 public:
     Receiver(Config* config, moodycamel::ConcurrentQueue<Event_data>* in_queue,
         moodycamel::ConcurrentQueue<Event_data>* tx_queue,
-        std::vector<moodycamel::ProducerToken*> tx_ptoks);
+        std::vector<moodycamel::ProducerToken*> tx_ptoks,
+        std::vector<moodycamel::ConcurrentQueue<Event_data>*> cl_tx_queue,
+        std::vector<moodycamel::ProducerToken*> cl_tx_ptoks);
     ~Receiver();
 
     std::vector<pthread_t> startRecvThreads(SampleBuffer* rx_buffer,
@@ -83,6 +85,8 @@ private:
     moodycamel::ConcurrentQueue<Event_data>* message_queue_;
     moodycamel::ConcurrentQueue<Event_data>* tx_queue_;
     std::vector<moodycamel::ProducerToken*> tx_ptoks_;
+    std::vector<moodycamel::ConcurrentQueue<Event_data>*> cl_tx_queue_;
+    std::vector<moodycamel::ProducerToken*> cl_tx_ptoks_;
 
     // Data buffers
     SampleBuffer* cl_tx_buffer_;

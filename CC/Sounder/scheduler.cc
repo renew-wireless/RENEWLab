@@ -61,21 +61,21 @@ Scheduler::Scheduler(Config* in_cfg, unsigned int core_start)
 
     if (cfg_->ul_slot_per_frame() > 0) {
         // initialize rx buffers
-        cl_tx_buffer_ = new SampleBuffer[cl_rx_thread_num];
+        cl_tx_buffer_ = new SampleBuffer[cfg_->num_cl_sdrs()];
         this->cl_tx_thread_buff_size_
             = kSampleBufferFrameNum * cfg_->slot_per_frame();
         size_t packetLength = sizeof(Packet) + cfg_->getPacketDataLength();
-        for (size_t i = 0; i < cl_rx_thread_num; i++) {
+        for (size_t i = 0; i < cfg_->num_cl_sdrs(); i++) {
             cl_tx_buffer_[i].buffer.resize(
                 cl_tx_thread_buff_size_ * packetLength);
             cl_tx_buffer_[i].pkt_buf_inuse
                 = new std::atomic_int[kSampleBufferFrameNum];
             std::fill_n(
                 cl_tx_buffer_[i].pkt_buf_inuse, kSampleBufferFrameNum, 0);
-            cl_tx_queue_.push_back(moodycamel::ConcurrentQueue<Event_data>(
+            cl_tx_queue_.push_back(new moodycamel::ConcurrentQueue<Event_data>(
                 cl_tx_thread_buff_size_ * kQueueSize));
             cl_tx_ptoks_ptr_.push_back(
-                moodycamel::ProducerToken(cl_tx_queue_.back()));
+                new moodycamel::ProducerToken(*cl_tx_queue_.back()));
         }
     }
 
@@ -95,8 +95,8 @@ Scheduler::Scheduler(Config* in_cfg, unsigned int core_start)
 
     // Receiver object will be used for both BS and clients
     try {
-        receiver_.reset(
-            new Receiver(cfg_, &message_queue_, &tx_queue_, tx_ptoks_ptr_));
+        receiver_.reset(new Receiver(cfg_, &message_queue_, &tx_queue_,
+            tx_ptoks_ptr_, cl_tx_queue_, cl_tx_ptoks_ptr_));
     } catch (ReceiverException& re) {
         std::cout << re.what() << '\n';
         gc();
@@ -142,7 +142,7 @@ void Scheduler::do_it()
 
     if (cfg_->reader_thread_num() > 0) {
         int reader_thread_index = 0;
-        if (cfg_->dl_slot_per_frame() > 0) {
+        if (cfg_->dl_slot_per_frame() > 0 && cfg_->bs_present()) {
             int thread_core = -1;
             if (this->cfg_->core_alloc() == true) {
                 thread_core
@@ -155,7 +155,7 @@ void Scheduler::do_it()
             hdf5_reader->Start();
             this->readers_.push_back(hdf5_reader);
         }
-        if (cfg_->ul_slot_per_frame() > 0) {
+        if (cfg_->ul_slot_per_frame() > 0 && cfg_->client_present()) {
             int thread_core = -1;
             if (this->cfg_->core_alloc() == true) {
                 thread_core
@@ -255,13 +255,13 @@ void Scheduler::do_it()
                 do_tx_task.offset = event.offset;
                 do_tx_task.ant_id = qid;
                 do_tx_task.frame_id = event.frame_id;
-                if (cl_tx_queue_.at(qid).try_enqueue(
-                        cl_tx_ptoks_ptr_.at(qid), do_tx_task)
+                if (cl_tx_queue_.at(qid)->try_enqueue(
+                        *cl_tx_ptoks_ptr_.at(qid), do_tx_task)
                     == 0) {
                     MLPD_WARN("Queue limit has reached! try to increase queue "
                               "size.\n");
-                    if (cl_tx_queue_.at(qid).enqueue(
-                            cl_tx_ptoks_ptr_.at(qid), do_tx_task)
+                    if (cl_tx_queue_.at(qid)->enqueue(
+                            *cl_tx_ptoks_ptr_.at(qid), do_tx_task)
                         == 0) {
                         MLPD_ERROR("Record task enqueue failed\n");
                         throw std::runtime_error("Record task enqueue failed");

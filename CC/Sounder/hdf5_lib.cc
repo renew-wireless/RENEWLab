@@ -88,41 +88,36 @@ void Hdf5Lib::openDataset()
 {
     MLPD_TRACE("Open HDF5 file: %s\n", this->hdf5_name_.c_str());
     this->file_->openFile(this->hdf5_name_, H5F_ACC_RDWR);
-    if (this->file_ == nullptr) {
-        MLPD_WARN("File does not exist while calling close: %s\n",
-            this->hdf5_name_.c_str());
-    } else {
-        for (size_t i = 0; i < dataset_str_.size(); i++) {
-            std::string ds_name(
-                "/" + this->group_name_ + "/" + this->dataset_str_.at(i));
-            try {
-                datasets_.at(i)
-                    = new H5::DataSet(this->file_->openDataSet(ds_name));
-                H5::DataSpace filespace(datasets_.at(i)->getSpace());
-                prop_list_.at(i).copy(datasets_.at(i)->getCreatePlist());
-                if (kPrintDataSetInfo == true) {
-                    int ndims = filespace.getSimpleExtentNdims();
-                    int cndims = 0;
-                    if (H5D_CHUNKED == this->prop_list_.at(i).getLayout())
-                        cndims = this->prop_list_.at(i).getChunk(
-                            ndims, this->dims_.at(i).data());
-                    using std::cout;
-                    cout << "dim " + this->dataset_str_.at(i) + " chunk = "
-                         << cndims << std::endl;
-                    cout << "New " + this->dataset_str_.at(i)
-                            + " Dataset Dimension: [";
-                    for (size_t j = 0; j < kDsDimsNum - 1; ++j)
-                        cout << this->dims_.at(i).at(j) << ",";
-                    cout << this->dims_.at(i).at(kDsDimsNum - 1) << "]"
-                         << std::endl;
-                }
-                filespace.close();
+    for (size_t i = 0; i < dataset_str_.size(); i++) {
+        std::string ds_name(
+            "/" + this->group_name_ + "/" + this->dataset_str_.at(i));
+        try {
+            datasets_.at(i)
+                = new H5::DataSet(this->file_->openDataSet(ds_name));
+            H5::DataSpace filespace(datasets_.at(i)->getSpace());
+            prop_list_.at(i).copy(datasets_.at(i)->getCreatePlist());
+            if (kPrintDataSetInfo == true) {
+                int ndims = filespace.getSimpleExtentNdims();
+                int cndims = 0;
+                if (H5D_CHUNKED == this->prop_list_.at(i).getLayout())
+                    cndims = this->prop_list_.at(i).getChunk(
+                        ndims, this->dims_.at(i).data());
+                using std::cout;
+                cout << "dim " + this->dataset_str_.at(i) + " chunk = "
+                     << cndims << std::endl;
+                cout << "New " + this->dataset_str_.at(i)
+                        + " Dataset Dimension: [";
+                for (size_t j = 0; j < kDsDimsNum - 1; ++j)
+                    cout << this->dims_.at(i).at(j) << ",";
+                cout << this->dims_.at(i).at(kDsDimsNum - 1) << "]"
+                     << std::endl;
             }
-            // catch failure caused by the H5File operations
-            catch (H5::FileIException& error) {
-                error.printErrorStack();
-                throw;
-            }
+            filespace.close();
+        }
+        // catch failure caused by the H5File operations
+        catch (H5::FileIException& error) {
+            error.printErrorStack();
+            throw;
         }
     }
 }
@@ -148,10 +143,7 @@ void Hdf5Lib::closeDataset()
 {
     MLPD_TRACE("Close HD5F file: %s\n", this->hdf5_name_.c_str());
 
-    if (this->file_ == nullptr) {
-        MLPD_WARN("File does not exist while calling close: %s\n",
-            this->hdf5_name_.c_str());
-    } else {
+    if (this->file_ != nullptr) {
         for (size_t i = 0; i < dataset_str_.size(); i++) {
             //assert(datasets_.at(i) != nullptr);
             try {

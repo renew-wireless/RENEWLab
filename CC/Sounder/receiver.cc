@@ -25,11 +25,15 @@ pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 Receiver::Receiver(Config* config,
     moodycamel::ConcurrentQueue<Event_data>* in_queue,
     moodycamel::ConcurrentQueue<Event_data>* tx_queue,
-    std::vector<moodycamel::ProducerToken*> tx_ptoks)
+    std::vector<moodycamel::ProducerToken*> tx_ptoks,
+    std::vector<moodycamel::ConcurrentQueue<Event_data>*> cl_tx_queue,
+    std::vector<moodycamel::ProducerToken*> cl_tx_ptoks)
     : config_(config)
     , message_queue_(in_queue)
     , tx_queue_(tx_queue)
     , tx_ptoks_(tx_ptoks)
+    , cl_tx_queue_(cl_tx_queue)
+    , cl_tx_ptoks_(cl_tx_ptoks)
 {
     /* initialize random seed: */
     srand(time(NULL));
@@ -701,7 +705,8 @@ void Receiver::txData(int tid, long long rxTime)
     int flagsTxUlData;
     std::vector<void*> ul_txbuff(2);
     Event_data event;
-    if (tx_queue_[tid].try_dequeue_from_producer(*tx_ptoks_[tid], event)
+    if (cl_tx_queue_.at(tid)->try_dequeue_from_producer(
+            *cl_tx_ptoks_.at(tid), event)
         == true) {
         assert(event.event_type == kEventTxSymbol);
         assert(event.ant_id == tid);
