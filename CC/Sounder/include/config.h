@@ -271,7 +271,14 @@ public:
     {
         return this->bs_rx_thread_num_;
     }
-    inline size_t task_thread_num(void) const { return this->task_thread_num_; }
+    inline size_t recorder_thread_num(void) const
+    {
+        return this->recorder_thread_num_;
+    }
+    inline size_t reader_thread_num(void) const
+    {
+        return this->reader_thread_num_;
+    }
 
     inline const std::vector<std::string>& hub_ids(void) const
     {
@@ -466,7 +473,8 @@ private:
     bool core_alloc_;
     size_t bs_rx_thread_num_;
     size_t cl_rx_thread_num_;
-    size_t task_thread_num_;
+    size_t recorder_thread_num_;
+    size_t reader_thread_num_;
 };
 
 #endif /* CONFIG_HEADER */

@@ -141,9 +141,8 @@ void RecorderThread::HandleEvent(Event_data event)
     if (event.event_type == kThreadTermination) {
         this->running_ = false;
     } else {
-        size_t offset = event.data;
-        size_t buffer_id = (offset / event.buff_size);
-        size_t buffer_offset = offset - (buffer_id * event.buff_size);
+        size_t buffer_id = (event.offset / event.buff_size);
+        size_t buffer_offset = event.offset - (buffer_id * event.buff_size);
         if (event.event_type == kTaskRecord) {
             // read info
             size_t packet_length = sizeof(Packet) + this->packet_data_length_;
@@ -152,13 +151,12 @@ void RecorderThread::HandleEvent(Event_data event)
 
             this->worker_.record(
                 this->id_, reinterpret_cast<Packet*>(cur_ptr_buffer));
+            /* Free up the buffer memory */
+            int bit = 1 << (buffer_offset % sizeof(std::atomic_int));
+            int offs = (buffer_offset / sizeof(std::atomic_int));
+            std::atomic_fetch_and(&event.buffer[buffer_id].pkt_buf_inuse[offs],
+                ~bit); // now empty
         }
-
-        /* Free up the buffer memory */
-        int bit = 1 << (buffer_offset % sizeof(std::atomic_int));
-        int offs = (buffer_offset / sizeof(std::atomic_int));
-        std::atomic_fetch_and(
-            &event.buffer[buffer_id].pkt_buf_inuse[offs], ~bit); // now empty
     }
 }
 }; //End namespace Sounder

@@ -13,8 +13,6 @@
 #include "include/utils.h"
 
 namespace Sounder {
-// buffer length of each rx thread
-const int Scheduler::kSampleBufferFrameNum = 80;
 // dequeue bulk size, used to reduce the overhead of dequeue in main thread
 const int Scheduler::KDequeueBulkSize = 5;
 
@@ -22,13 +20,12 @@ const int Scheduler::KDequeueBulkSize = 5;
 const int kDsSim = 5;
 #endif
 
-static const int kQueueSize = 36;
-
 Scheduler::Scheduler(Config* in_cfg, unsigned int core_start)
     : cfg_(in_cfg)
     , kMainDispatchCore(core_start)
     , kSchedulerCore(kMainDispatchCore + 1)
-    , kRecvCore(kSchedulerCore + in_cfg->task_thread_num())
+    , kRecvCore(kSchedulerCore + in_cfg->recorder_thread_num()
+          + in_cfg->reader_thread_num())
 {
     size_t bs_rx_thread_num = cfg_->bs_rx_thread_num();
     size_t cl_rx_thread_num = cfg_->cl_rx_thread_num();
@@ -44,8 +41,9 @@ Scheduler::Scheduler(Config* in_cfg, unsigned int core_start)
     tx_queue_ = moodycamel::ConcurrentQueue<Event_data>(
         rx_thread_buff_size_ * kQueueSize);
 
-    MLPD_TRACE("Scheduler construction: rx threads: %zu, recorder threads: %u, "
-               "chunk size: %zu\n",
+    MLPD_TRACE(
+        "Scheduler construction: rx threads: %zu, recorder/reader threads: %u, "
+        "chunk size: %zu\n",
         total_rx_thread_num, cfg_->task_thread_num(), rx_thread_buff_size_);
 
     if (total_rx_thread_num > 0) {
@@ -61,17 +59,37 @@ Scheduler::Scheduler(Config* in_cfg, unsigned int core_start)
         }
     }
 
-    if (cfg_->ul_slot_per_frame() + cfg_->dl_slot_per_frame() > 0) {
+    if (cfg_->ul_slot_per_frame() > 0) {
         // initialize rx buffers
-        tx_buffer_ = new SampleBuffer[total_rx_thread_num];
-        size_t intsize = sizeof(std::atomic_int);
-        size_t arraysize = (rx_thread_buff_size_ + intsize - 1) / intsize;
+        cl_tx_buffer_ = new SampleBuffer[cl_rx_thread_num];
+        this->cl_tx_thread_buff_size_
+            = kSampleBufferFrameNum * cfg_->slot_per_frame();
         size_t packetLength = sizeof(Packet) + cfg_->getPacketDataLength();
-        for (size_t i = 0; i < total_rx_thread_num; i++) {
-            tx_buffer_[i].buffer.resize(rx_thread_buff_size_ * packetLength);
-            tx_buffer_[i].pkt_buf_inuse = new std::atomic_int[arraysize];
-            std::fill_n(tx_buffer_[i].pkt_buf_inuse, arraysize, 0);
+        for (size_t i = 0; i < cl_rx_thread_num; i++) {
+            cl_tx_buffer_[i].buffer.resize(
+                cl_tx_thread_buff_size_ * packetLength);
+            cl_tx_buffer_[i].pkt_buf_inuse
+                = new std::atomic_int[kSampleBufferFrameNum];
+            std::fill_n(
+                cl_tx_buffer_[i].pkt_buf_inuse, kSampleBufferFrameNum, 0);
+            cl_tx_queue_.push_back(moodycamel::ConcurrentQueue<Event_data>(
+                cl_tx_thread_buff_size_ * kQueueSize));
+            cl_tx_ptoks_ptr_.push_back(
+                moodycamel::ProducerToken(cl_tx_queue_.back()));
         }
+    }
+
+    if (cfg_->dl_slot_per_frame() > 0) {
+        // initialize rx buffers
+        bs_tx_buffer_ = new SampleBuffer;
+        this->bs_tx_thread_buff_size_ = kSampleBufferFrameNum
+            * cfg_->slot_per_frame() * cfg_->num_bs_antennas_all();
+        size_t intsize = sizeof(std::atomic_int);
+        size_t arraysize = (bs_tx_thread_buff_size_ + intsize - 1) / intsize;
+        size_t packetLength = sizeof(Packet) + cfg_->getPacketDataLength();
+        bs_tx_buffer_->buffer.resize(bs_tx_thread_buff_size_ * packetLength);
+        bs_tx_buffer_->pkt_buf_inuse = new std::atomic_int[arraysize];
+        std::fill_n(bs_tx_buffer_->pkt_buf_inuse, arraysize, 0);
         tx_ptoks_ptr_.push_back(new moodycamel::ProducerToken(tx_queue_));
     }
 
@@ -102,7 +120,7 @@ Scheduler::~Scheduler() { this->gc(); }
 
 void Scheduler::do_it()
 {
-    size_t recorder_threads = this->cfg_->task_thread_num();
+    size_t recorder_threads = this->cfg_->recorder_thread_num();
     size_t total_antennas = cfg_->getNumRecordedSdrs() * cfg_->bs_sdr_ch();
     size_t total_rx_thread_num
         = cfg_->bs_rx_thread_num() + cfg_->cl_rx_thread_num();
@@ -119,7 +137,37 @@ void Scheduler::do_it()
     if (this->cfg_->client_present() == true) {
         auto client_threads
             = this->receiver_->startClientThreads(this->rx_buffer_,
-                this->tx_buffer_, kRecvCore + cfg_->bs_rx_thread_num());
+                this->cl_tx_buffer_, kRecvCore + cfg_->bs_rx_thread_num());
+    }
+
+    if (cfg_->reader_thread_num() > 0) {
+        int reader_thread_index = 0;
+        if (cfg_->dl_slot_per_frame() > 0) {
+            int thread_core = -1;
+            if (this->cfg_->core_alloc() == true) {
+                thread_core
+                    = kSchedulerCore + recorder_threads + reader_thread_index;
+                reader_thread_index++;
+            }
+            Sounder::Hdf5Reader* hdf5_reader = new Sounder::Hdf5Reader(
+                this->cfg_, this->message_queue_, bs_tx_buffer_, 0, thread_core,
+                this->bs_tx_thread_buff_size_ * kQueueSize, true);
+            hdf5_reader->Start();
+            this->readers_.push_back(hdf5_reader);
+        }
+        if (cfg_->ul_slot_per_frame() > 0) {
+            int thread_core = -1;
+            if (this->cfg_->core_alloc() == true) {
+                thread_core
+                    = kSchedulerCore + recorder_threads + reader_thread_index;
+                reader_thread_index++;
+            }
+            Sounder::Hdf5Reader* hdf5_reader = new Sounder::Hdf5Reader(
+                this->cfg_, this->message_queue_, cl_tx_buffer_, 1, thread_core,
+                this->cl_tx_thread_buff_size_ * kQueueSize, true);
+            hdf5_reader->Start();
+            this->readers_.push_back(hdf5_reader);
+        }
     }
 
     if (total_rx_thread_num > 0) {
@@ -151,7 +199,7 @@ void Scheduler::do_it()
         if (cfg_->bs_rx_thread_num() > 0) {
             // create socket buffer and socket threads
             recv_threads = this->receiver_->startRecvThreads(this->rx_buffer_,
-                cfg_->bs_rx_thread_num(), this->tx_buffer_, kRecvCore);
+                cfg_->bs_rx_thread_num(), this->bs_tx_buffer_, kRecvCore);
         }
     } else
         this->receiver_->go(); // only beamsweeping
@@ -173,33 +221,51 @@ void Scheduler::do_it()
 
             // if kEventRxSymbol, dispatch to proper worker
             if (event.event_type == kEventRxSymbol) {
+                if (event.slot_id == 0) {
+                    Event_data do_read_task;
+                    do_read_task.event_type = kTaskRead;
+                    do_read_task.ant_id = event.ant_id;
+                    do_read_task.frame_id = event.frame_id;
+                    do_read_task.node_type = event.node_type;
+                    if (this->readers_.at(event.node_type)
+                            ->DispatchWork(do_read_task)
+                        == false) {
+                        MLPD_ERROR("Record task enqueue failed\n");
+                        throw std::runtime_error("Record task enqueue failed");
+                    }
+                }
+                // Pass the work off to the applicable worker
+                // Worker must free the buffer, future work would involve making this cleaner
                 size_t thread_index = event.ant_id / thread_antennas;
                 Event_data do_record_task;
                 do_record_task.event_type = kTaskRecord;
-                do_record_task.data = event.data;
+                do_record_task.offset = event.offset;
                 do_record_task.buffer = this->rx_buffer_;
                 do_record_task.buff_size = this->rx_thread_buff_size_;
-                //size_t buffer_id = (event.data / event.buff_size);
-                //size_t buffer_offset
-                //    = event.data - (buffer_id * event.buff_size);
-                //size_t packet_length
-                //    = sizeof(Packet) + cfg_->getPacketDataLength();
-                //char* cur_ptr_buffer = event.buffer[buffer_id].buffer.data()
-                //    + (buffer_offset * packet_length);
-                //Packet* pkt = reinterpret_cast<Packet*>(cur_ptr_buffer);
-                //if (pkt->symbol_id == 0 && event.ant_id == 0) {
-                //    Event_data do_read_task;
-                //    do_read_task.event_type = kTaskRead;
-                //    do_read_task.buffer = this->tx_buffer_;
-                //    do_read_task.buff_size = this->tx_thread_buff_size_;
-                //}
-                // Pass the work off to the applicable worker
-                // Worker must free the buffer, future work would involve making this cleaner
                 if (this->recorders_.at(thread_index)
                         ->DispatchWork(do_record_task)
                     == false) {
                     MLPD_ERROR("Record task enqueue failed\n");
                     throw std::runtime_error("Record task enqueue failed");
+                }
+            } else if (event.event_type == kTaskRead) {
+                size_t qid = event.ant_id;
+                Event_data do_tx_task;
+                do_tx_task.event_type = kEventTxSymbol;
+                do_tx_task.offset = event.offset;
+                do_tx_task.ant_id = qid;
+                do_tx_task.frame_id = event.frame_id;
+                if (cl_tx_queue_.at(qid).try_enqueue(
+                        cl_tx_ptoks_ptr_.at(qid), do_tx_task)
+                    == 0) {
+                    MLPD_WARN("Queue limit has reached! try to increase queue "
+                              "size.\n");
+                    if (cl_tx_queue_.at(qid).enqueue(
+                            cl_tx_ptoks_ptr_.at(qid), do_tx_task)
+                        == 0) {
+                        MLPD_ERROR("Record task enqueue failed\n");
+                        throw std::runtime_error("Record task enqueue failed");
+                    }
                 }
             }
         }

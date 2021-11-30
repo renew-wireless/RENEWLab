@@ -118,6 +118,7 @@ void Receiver::initBuffers()
 std::vector<pthread_t> Receiver::startClientThreads(
     SampleBuffer* rx_buffer, SampleBuffer* tx_buffer, unsigned in_core_id)
 {
+    cl_tx_buffer_ = tx_buffer;
     std::vector<pthread_t> client_threads;
     if (config_->client_present() == true) {
         client_threads.resize(config_->num_cl_sdrs());
@@ -129,7 +130,6 @@ std::vector<pthread_t> Receiver::startClientThreads(
             context->core_id = in_core_id;
             context->tid = i;
             context->buffer = rx_buffer;
-            context->tx_buffer = tx_buffer;
             // start socket thread
             if (pthread_create(
                     &cl_thread_, NULL, Receiver::clientTxRx_launch, context)
@@ -150,6 +150,7 @@ std::vector<pthread_t> Receiver::startRecvThreads(SampleBuffer* rx_buffer,
 {
     assert(rx_buffer[0].buffer.size() != 0);
     thread_num_ = n_rx_threads;
+    bs_tx_buffer_ = tx_buffer;
     std::vector<pthread_t> created_threads;
     created_threads.resize(this->thread_num_);
     for (size_t i = 0; i < this->thread_num_; i++) {
@@ -159,7 +160,6 @@ std::vector<pthread_t> Receiver::startRecvThreads(SampleBuffer* rx_buffer,
         context->core_id = in_core_id;
         context->tid = i;
         context->buffer = rx_buffer;
-        context->tx_buffer = tx_buffer;
         // start socket thread
         if (pthread_create(&created_threads.at(i), NULL,
                 Receiver::loopRecv_launch, context)
@@ -524,7 +524,10 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 Event_data new_packet;
                 new_packet.event_type = kEventRxSymbol;
                 new_packet.ant_id = ant_id + ch;
-                new_packet.data = cursor + tid * buffer_chunk_size;
+                new_packet.frame_id = frame_id;
+                new_packet.node_type = kBS;
+                new_packet.buff_size = buffer_chunk_size;
+                new_packet.offset = cursor + tid * buffer_chunk_size;
                 if (message_queue_->enqueue(local_ptok, new_packet) == false) {
                     MLPD_ERROR("New packet message enqueue failed\n");
                     throw std::runtime_error(
@@ -574,7 +577,7 @@ void Receiver::clientTxRx(int tid)
 
     if (config_->core_alloc() == true) {
         int core = tid + 1 + config_->bs_rx_thread_num()
-            + config_->task_thread_num();
+            + config_->recorder_thread_num();
         MLPD_INFO("Pinning client TxRx thread %d to core %d\n", tid, core);
         if (pin_to_core(core) != 0) {
             MLPD_ERROR(
@@ -688,7 +691,49 @@ void Receiver::txPilots(size_t user_id, long long base_time)
         }
     }
 }
-// void Receiver::txData(long long tx_time, short** tx_data) {}
+
+void Receiver::txData(int tid, long long rxTime)
+{
+    size_t tx_slots = config_->cl_ul_slots().at(tid).size();
+    int NUM_SAMPS = config_->samps_per_slot();
+    size_t packetLength = sizeof(Packet) + config_->getPacketDataLength();
+    size_t tx_buffer_size = cl_tx_buffer_[tid].buffer.size() / packetLength;
+    int flagsTxUlData;
+    std::vector<void*> ul_txbuff(2);
+    Event_data event;
+    if (tx_queue_[tid].try_dequeue_from_producer(*tx_ptoks_[tid], event)
+        == true) {
+        assert(event.event_type == kEventTxSymbol);
+        assert(event.ant_id == tid);
+        size_t cur_offset = event.offset;
+        char* cur_ptr_buffer
+            = cl_tx_buffer_[tid].buffer.data() + (cur_offset * packetLength);
+
+        for (size_t s = 0; s < tx_slots; s++) {
+            for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
+                ul_txbuff.at(ch)
+                    = (void*)reinterpret_cast<Packet*>(cur_ptr_buffer)->data;
+                cur_offset = (cur_offset + 1) % tx_buffer_size;
+                cur_ptr_buffer = cl_tx_buffer_[tid].buffer.data()
+                    + (cur_offset * packetLength);
+            }
+            long long txTime = rxTime + txTimeDelta
+                + config_->cl_ul_slots().at(tid).at(s) * NUM_SAMPS
+                - config_->tx_advance();
+            if (kUseUHD && s < (tx_slots - 1))
+                flagsTxUlData = kStreamContinuous; // HAS_TIME
+            else
+                flagsTxUlData = kStreamEndBurst; // HAS_TIME & END_BURST, fixme
+            int r = clientRadioSet_->radioTx(
+                tid, ul_txbuff.data(), NUM_SAMPS, flagsTxUlData, txTime);
+            if (r < NUM_SAMPS) {
+                MLPD_WARN("BAD Write: %d/%d\n", r, NUM_SAMPS);
+            }
+        }
+        cl_tx_buffer_[tid].pkt_buf_inuse[event.frame_id % kSampleBufferFrameNum]
+            = 0;
+    }
+}
 
 int Receiver::syncSearch(
     std::vector<std::complex<int16_t>> sync_buff, size_t sync_num_samps)
@@ -738,23 +783,6 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
         syncrxbuff.at(1) = syncbuff1.data();
     }
 
-    std::vector<void*> ul_txbuff(2);
-    for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
-        ul_txbuff.at(ch)
-            = std::calloc(config_->samps_per_slot(), sizeof(int16_t) * 2);
-    }
-    size_t slot_byte_size = config_->samps_per_slot() * sizeof(int16_t) * 2;
-    size_t tx_slots = config_->cl_ul_slots().at(tid).size();
-    if (tx_slots > 0) {
-        size_t txIndex = tid * config_->cl_sdr_ch();
-        for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
-            std::memcpy(ul_txbuff.at(ch),
-                config_->txdata_time_dom().at(txIndex + ch).data(),
-                slot_byte_size);
-        }
-        MLPD_INFO("%zu uplink slots will be sent per frame...\n", tx_slots);
-    }
-
     FILE* fp = nullptr;
     if (config_->ul_data_slot_present() == true) {
         std::printf("Opening UL time-domain data for radio %d to %s\n", tid,
@@ -778,9 +806,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
             = rx_buffer[tid + config_->bs_rx_thread_num()].pkt_buf_inuse;
         buffer = rx_buffer[tid + config_->bs_rx_thread_num()].buffer.data();
     }
-
     long long rxTime(0);
-    long long txTime(0);
     int sync_index(-1);
     int rx_offset = 0;
 
@@ -842,8 +868,6 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
     int r = 0;
     rx_offset = 0;
 
-    int flagsTxUlData;
-
     while (config_->running() == true) {
         if (config_->max_frame() > 0 && frame_id >= config_->max_frame()) {
             config_->running(false);
@@ -855,6 +879,16 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
         if (r < 0) {
             config_->running(false);
             break;
+        }
+        Event_data notify_read;
+        notify_read.event_type = kEventRxSymbol;
+        notify_read.ant_id = tid; // send radio_id here
+        notify_read.frame_id = frame_id + this->txFrameDelta;
+        notify_read.slot_id = 0;
+        notify_read.node_type = kClient;
+        if (message_queue_->enqueue(local_ptok, notify_read) == false) {
+            MLPD_ERROR("Notify read message enqueue failed\n");
+            throw std::runtime_error("Notify read message enqueue failed");
         }
 
         // resync every X=1000 frames:
@@ -898,35 +932,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
         // config_->tx_advance() needs calibration based on SDR model and sampling rate
         this->txPilots(tid, rxTime);
         if (config_->ul_data_slot_present() == true) {
-            //Event_data event;
-            //if (task_queue_->try_dequeue_from_producer(
-            //        *tx_ptoks_[tid], event)) {
-            for (size_t s = 0; s < tx_slots; s++) {
-                txTime = rxTime + txTimeDelta
-                    + config_->cl_ul_slots().at(tid).at(s) * NUM_SAMPS
-                    - config_->tx_advance();
-                for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
-                    size_t read_num = std::fread(ul_txbuff.at(ch),
-                        2 * sizeof(int16_t), config_->samps_per_slot(), fp);
-                    if (read_num != config_->samps_per_slot()) {
-                        MLPD_WARN("BAD Uplink Data Read: %zu/%zu\n", read_num,
-                            config_->samps_per_slot());
-                    }
-                }
-                if (kUseUHD && s < (tx_slots - 1))
-                    flagsTxUlData = kStreamContinuous; // HAS_TIME
-                else
-                    flagsTxUlData
-                        = kStreamEndBurst; // HAS_TIME & END_BURST, fixme
-                r = clientRadioSet_->radioTx(
-                    tid, ul_txbuff.data(), NUM_SAMPS, flagsTxUlData, txTime);
-                if (r < NUM_SAMPS) {
-                    MLPD_WARN("BAD Write: %d/%d\n", r, NUM_SAMPS);
-                }
-            } // end for
-            if (frame_id % config_->ul_data_frame_num() == 0)
-                std::fseek(fp, 0, SEEK_SET);
-            //}
+            this->txData(tid, rxTime);
         } // end if config_->ul_data_slot_present()
 
         slot_id++;
@@ -966,7 +972,10 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
                     Event_data new_packet;
                     new_packet.event_type = kEventRxSymbol;
                     new_packet.ant_id = ant_id + ch;
-                    new_packet.data = buffer_offset + tid * buffer_chunk_size;
+                    new_packet.frame_id = frame_id;
+                    new_packet.node_type = kClient;
+                    new_packet.buff_size = buffer_chunk_size;
+                    new_packet.offset = buffer_offset + tid * buffer_chunk_size;
                     if (message_queue_->enqueue(local_ptok, new_packet)
                         == false) {
                         MLPD_ERROR("New packet message enqueue failed\n");
@@ -994,8 +1003,5 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
     } // end while
     if (config_->ul_data_slot_present() == true || fp != nullptr) {
         std::fclose(fp);
-    }
-    for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
-        std::free(ul_txbuff.at(ch));
     }
 }

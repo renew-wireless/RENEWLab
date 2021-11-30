@@ -15,12 +15,16 @@ static constexpr size_t kStreamEndBurst = 2;
 static constexpr size_t kDsDimsNum = 5;
 static constexpr size_t kDsDimSymbol = 2;
 
+// buffer length of each rx thread
+static constexpr size_t kSampleBufferFrameNum = 80;
+static constexpr size_t kQueueSize = 36;
+
 #define DEBUG_PRINT (0)
 #define DEBUG_RADIO (0)
 #define DEBUG_PLOT (0)
 
 // TASK & SOCKET thread number
-#define TASK_THREAD_NUM (1)
+#define RECORDER_THREAD_NUM (1)
 #define RX_THREAD_NUM (4)
 
 #define MAX_FRAME_INC (2000)
@@ -36,6 +40,8 @@ enum SchedulerEventType {
     kTaskRead = 3,
     kThreadTermination = 4
 };
+
+enum NodeType { kBS = 0, kClient = 1 };
 
 // each thread has a SampleBuffer
 struct SampleBuffer {
@@ -60,9 +66,12 @@ struct Packet {
 
 struct Event_data {
     SchedulerEventType event_type;
-    int data;
+    NodeType node_type;
+    int frame_id;
+    int slot_id;
     int ant_id;
     size_t buff_size;
+    int offset;
     SampleBuffer* buffer;
 };
 

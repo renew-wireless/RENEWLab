@@ -554,9 +554,13 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                 + std::to_string(num_cl_antennas_) + ".hdf5";
         }
         trace_file_ = tddConf.value("trace_file", filename);
-        task_thread_num_ = tddConf.value("task_thread", TASK_THREAD_NUM);
+        recorder_thread_num_
+            = tddConf.value("recorder_thread", RECORDER_THREAD_NUM);
+        reader_thread_num_
+            = (ul_slot_per_frame_ > 0) + (dl_slot_per_frame_ > 0);
     } else {
-        task_thread_num_ = 0;
+        recorder_thread_num_ = 0;
+        reader_thread_num_ = 0;
     }
 
     // Multi-threading settings
@@ -579,15 +583,17 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         cl_rx_thread_num_ = 0;
     }
 
-    core_alloc_ = num_cores
-        >= (1 + task_thread_num_ + bs_rx_thread_num_ + num_cl_sdrs_);
+    core_alloc_ = num_cores >= (1 + recorder_thread_num_ + reader_thread_num_
+                                   + bs_rx_thread_num_ + num_cl_sdrs_);
 
     if (core_alloc_ == true) {
         if (bs_present_ == true) {
             MLPD_INFO("Allocating %zu cores to receive threads ... \n",
                 bs_rx_thread_num_);
             MLPD_INFO("Allocating %zu cores to record threads ... \n",
-                task_thread_num_);
+                recorder_thread_num_);
+            MLPD_INFO("Allocating %zu cores to read threads ... \n",
+                reader_thread_num_);
         }
         if (client_present_ == true) {
             MLPD_INFO(
@@ -605,7 +611,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         this->getFrameDurationSec() * 1e6);
     std::printf("Thread Config: %zu BS receive threads, %zu Client receive "
                 "threads, %zu Recording Threads\n",
-        bs_rx_thread_num_, cl_rx_thread_num_, task_thread_num_);
+        bs_rx_thread_num_, cl_rx_thread_num_, recorder_thread_num_);
     running_.store(true);
 }
 

@@ -46,7 +46,6 @@ public:
     struct ReceiverContext {
         Receiver* ptr;
         SampleBuffer* buffer;
-        SampleBuffer* tx_buffer;
         size_t core_id;
         size_t tid;
     };
@@ -72,6 +71,7 @@ public:
         std::vector<std::complex<int16_t>> sync_buff, size_t sync_num_samps);
     void initBuffers();
     void txPilots(size_t user_id, long long base_time);
+    void txData(int tid, long long rxTime);
 
 private:
     Config* config_;
@@ -83,6 +83,10 @@ private:
     moodycamel::ConcurrentQueue<Event_data>* message_queue_;
     moodycamel::ConcurrentQueue<Event_data>* tx_queue_;
     std::vector<moodycamel::ProducerToken*> tx_ptoks_;
+
+    // Data buffers
+    SampleBuffer* cl_tx_buffer_;
+    SampleBuffer* bs_tx_buffer_;
     std::vector<void*> pilotbuffA;
     std::vector<void*> pilotbuffB;
     std::vector<void*> zeros;
