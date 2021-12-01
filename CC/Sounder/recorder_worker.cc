@@ -325,7 +325,7 @@ void RecorderWorker::record(int tid, Packet* pkt)
     printf("record            frame %d, symbol %d, cell %d, ant %d "
            "samples: %d "
            "%d %d %d %d %d %d %d ....\n",
-        pkt->frame_id, pkt->symbol_id, pkt->cell_id, pkt->ant_id, pkt->data[1],
+        pkt->frame_id, pkt->slot_id, pkt->cell_id, pkt->ant_id, pkt->data[1],
         pkt->data[2], pkt->data[3], pkt->data[4], pkt->data[5], pkt->data[6],
         pkt->data[7], pkt->data[8]);
 #endif
@@ -352,35 +352,33 @@ void RecorderWorker::record(int tid, Packet* pkt)
             = { pkt->frame_id, pkt->cell_id, 0, antenna_index, 0 };
         std::array<hsize_t, kDsDimsNum> count = { 1, 1, 1, 1, IQ };
         if ((this->cfg_->internal_measurement() == true)
-            || (this->cfg_->isPilot(pkt->frame_id, pkt->symbol_id) == true)) {
+            || (this->cfg_->isPilot(pkt->frame_id, pkt->slot_id) == true)) {
             this->hdf5_->extendDataset(
                 std::string("Pilot_Samples"), pkt->frame_id);
             hdfoffset[kDsDimSymbol]
-                = this->cfg_->getClientId(pkt->frame_id, pkt->symbol_id);
+                = this->cfg_->getClientId(pkt->frame_id, pkt->slot_id);
             this->hdf5_->writeDataset(
                 std::string("Pilot_Samples"), hdfoffset, count, pkt->data);
-        } else if (this->cfg_->isUlData(pkt->frame_id, pkt->symbol_id)
-            == true) {
+        } else if (this->cfg_->isUlData(pkt->frame_id, pkt->slot_id) == true) {
             this->hdf5_->extendDataset(
                 std::string("UplinkData"), pkt->frame_id);
             hdfoffset[kDsDimSymbol]
-                = this->cfg_->getUlSlotIndex(pkt->frame_id, pkt->symbol_id);
+                = this->cfg_->getUlSlotIndex(pkt->frame_id, pkt->slot_id);
             this->hdf5_->writeDataset(
                 std::string("UplinkData"), hdfoffset, count, pkt->data);
 
-        } else if (this->cfg_->isDlData(pkt->frame_id, pkt->symbol_id)
-            == true) {
+        } else if (this->cfg_->isDlData(pkt->frame_id, pkt->slot_id) == true) {
             this->hdf5_->extendDataset(
                 std::string("DownlinkData"), pkt->frame_id);
             hdfoffset[kDsDimSymbol]
-                = this->cfg_->getDlSlotIndex(pkt->frame_id, pkt->symbol_id);
+                = this->cfg_->getDlSlotIndex(pkt->frame_id, pkt->slot_id);
             this->hdf5_->writeDataset(
                 std::string("DownlinkData"), hdfoffset, count, pkt->data);
-        } else if (this->cfg_->isNoise(pkt->frame_id, pkt->symbol_id) == true) {
+        } else if (this->cfg_->isNoise(pkt->frame_id, pkt->slot_id) == true) {
             this->hdf5_->extendDataset(
                 std::string("Noise_Samples"), pkt->frame_id);
             hdfoffset[kDsDimSymbol]
-                = this->cfg_->getNoiseSlotIndex(pkt->frame_id, pkt->symbol_id);
+                = this->cfg_->getNoiseSlotIndex(pkt->frame_id, pkt->slot_id);
             this->hdf5_->writeDataset(
                 std::string("Noise_Samples"), hdfoffset, count, pkt->data);
         }

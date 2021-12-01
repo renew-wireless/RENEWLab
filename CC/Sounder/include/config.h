@@ -39,10 +39,6 @@ public:
     {
         return this->samps_per_slot_ * this->slot_per_frame_;
     }
-    inline float frame_time(void) const
-    {
-        return this->samps_per_frame() / rate_;
-    }
     inline bool ul_data_slot_present(void) const
     {
         return this->ul_data_slot_present_;

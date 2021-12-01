@@ -92,25 +92,34 @@ Event_data Hdf5Reader::ReadFrame(Event_data event, int& offset)
 {
     int first_offset = offset;
     size_t frame_offset = event.frame_id % config_->ul_data_frame_num();
-    size_t tx_slots = event.node_type == kBS ? config_->dl_slot_per_frame()
-                                             : config_->ul_slot_per_frame();
+    size_t num_tx_slots = event.node_type == kBS ? config_->dl_slot_per_frame()
+                                                 : config_->ul_slot_per_frame();
+    std::vector<std::vector<size_t>> tx_slots = event.node_type == kBS
+        ? config_->cl_dl_slots()
+        : config_->cl_ul_slots();
     size_t num_ch
         = event.node_type == kBS ? config_->bs_sdr_ch() : config_->cl_sdr_ch();
     size_t radio_id = event.ant_id;
     size_t packet_length = sizeof(Packet) + this->packet_data_length_;
-    if (event.frame_id > 0 && frame_offset == 0)
+    if (event.frame_id > 0 && frame_offset == 0) {
+        std::printf("Moving to the beginning of the file \n");
         std::fseek(fp.at(radio_id), 0, SEEK_SET);
-    for (size_t s = 0; s < tx_slots; s++) {
+    }
+    for (size_t s = 0; s < num_tx_slots; s++) {
         for (size_t ch = 0; ch < num_ch; ch++) {
             char* cur_ptr_buffer = (char*)tx_buffer_[radio_id].buffer.data()
                 + (offset * packet_length);
+            Packet* pkt = (Packet*)cur_ptr_buffer;
             offset = (offset + 1) % event.buff_size;
-            size_t read_num = std::fread(cur_ptr_buffer, 2 * sizeof(int16_t),
+            size_t read_num = std::fread(pkt->data, 2 * sizeof(int16_t),
                 config_->samps_per_slot(), fp.at(radio_id));
             if (read_num != config_->samps_per_slot()) {
                 MLPD_WARN("BAD Uplink Data Read: %zu/%zu\n", read_num,
                     config_->samps_per_slot());
             }
+            pkt->frame_id = event.frame_id;
+            pkt->slot_id = tx_slots.at(radio_id).at(s);
+            pkt->ant_id = radio_id * num_ch + ch;
         }
     }
     Event_data read_complete;
@@ -144,8 +153,11 @@ void Hdf5Reader::DoReading(void)
     moodycamel::ConsumerToken ctok(this->event_queue_);
     moodycamel::ProducerToken local_ptok(this->msg_queue_);
 
-    fp.resize(config_->num_cl_sdrs(), nullptr);
-    for (size_t tid = 0; tid < config_->num_cl_sdrs(); tid++) {
+    size_t radio_num
+        = this->id_ ? config_->num_cl_sdrs() : config_->num_bs_sdrs_all();
+
+    fp.resize(radio_num, nullptr);
+    for (size_t tid = 0; tid < radio_num; tid++) {
         if (config_->ul_data_slot_present() == true) {
             std::printf("Opening UL time-domain data for radio %zu to %s\n",
                 tid, config_->ul_tx_td_data_files().at(tid).c_str());
@@ -155,10 +167,9 @@ void Hdf5Reader::DoReading(void)
     }
 
     int offset = 0;
-    size_t radio_num
-        = this->id_ ? config_->num_cl_sdrs() : config_->num_bs_sdrs_all();
     size_t packet_length = sizeof(Packet) + this->packet_data_length_;
-    size_t txFrameDelta = std::ceil(TIME_DELTA / (1e3 * config_->frame_time()));
+    size_t txFrameDelta
+        = std::ceil(TIME_DELTA / (1e3 * config_->getFrameDurationSec()));
     // Initially read a few frames and push to tx buffers
     for (size_t i = 0; i < txFrameDelta; i++) {
         for (size_t u = 0; u < radio_num; u++) {
