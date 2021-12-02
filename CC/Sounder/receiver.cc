@@ -896,11 +896,6 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
             config_->running(false);
             break;
         }
-        if (r != NUM_SAMPS) {
-            MLPD_WARN("BAD Beacon Receive(%d/%d) at Time %lld, frame count "
-                      "%zu, radio id %d\n",
-                r, NUM_SAMPS + rx_offset, rxTime, frame_id, tid);
-        }
         if (config_->ul_data_slot_present() == true) {
             Event_data new_frame;
             new_frame.event_type = kEventRxSymbol;

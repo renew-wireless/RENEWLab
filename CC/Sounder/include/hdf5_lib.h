@@ -15,6 +15,7 @@ Copyright (c) 2018-2022
 #include <algorithm>
 #include <array>
 #include <complex>
+#include <map>
 
 namespace Sounder {
 class Hdf5Lib {
@@ -71,6 +72,8 @@ private:
     std::vector<std::array<hsize_t, kDsDimsNum>> dims_;
     hsize_t target_prim_dim_size;
     hsize_t max_prim_dim_size;
+
+    std::map<std::string, size_t> ds_name_id;
 };
 };
 #endif

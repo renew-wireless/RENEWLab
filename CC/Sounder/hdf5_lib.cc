@@ -81,6 +81,8 @@ int Hdf5Lib::createDataset(H5std_string dataset_name,
     dataspace_.push_back(ds_dataspace);
     dims_.push_back(tot_dims);
     datasets_.push_back(nullptr);
+    size_t map_size = ds_name_id.size();
+    ds_name_id[dataset_name] = map_size;
     return 0;
 }
 
@@ -125,13 +127,7 @@ void Hdf5Lib::openDataset()
 void Hdf5Lib::removeDataset(std::string dataset_name)
 {
     std::string ds_name("/" + this->group_name_ + "/" + dataset_name);
-    std::vector<std::string>::iterator it
-        = find(dataset_str_.begin(), dataset_str_.end(), ds_name);
-    if (it == dataset_str_.end()) {
-        std::cout << ds_name << " dataset does not exist!" << std::endl;
-        return;
-    }
-    size_t ds_id = it - dataset_str_.begin();
+    size_t ds_id = ds_name_id[dataset_name];
     MLPD_TRACE(
         dataset_str_.at(ds_id) + " Dataset exists during garbage collection\n");
     this->datasets_.at(ds_id)->close();
@@ -171,13 +167,7 @@ void Hdf5Lib::closeDataset()
 bool Hdf5Lib::extendDataset(std::string dataset_name, size_t prim_dim_size)
 {
     std::string ds_name("/" + this->group_name_ + "/" + dataset_name);
-    std::vector<std::string>::iterator it
-        = find(dataset_str_.begin(), dataset_str_.end(), dataset_name);
-    if (it == dataset_str_.end()) {
-        std::cout << ds_name << " dataset does not exist!" << std::endl;
-        return false;
-    }
-    size_t ds_id = it - dataset_str_.begin();
+    size_t ds_id = ds_name_id[dataset_name];
     if (dims_.at(ds_id).at(0) <= prim_dim_size) {
         hsize_t new_dim_size = dims_.at(ds_id).at(0) + kDsExtendStep;
         if (this->max_prim_dim_size != 0) {
@@ -200,13 +190,7 @@ herr_t Hdf5Lib::writeDataset(std::string dataset_name,
     std::array<hsize_t, kDsDimsNum> wrt_dim, short* wrt_data)
 {
     std::string ds_name("/" + this->group_name_ + "/" + dataset_name);
-    std::vector<std::string>::iterator it
-        = find(dataset_str_.begin(), dataset_str_.end(), dataset_name);
-    if (it == dataset_str_.end()) {
-        std::cout << ds_name << " dataset does not exist!" << std::endl;
-        return -1;
-    }
-    size_t ds_id = it - dataset_str_.begin();
+    size_t ds_id = ds_name_id[dataset_name];
     herr_t ret = 0;
     // Select a hyperslab in extended portion of the dataset
     try {
@@ -262,13 +246,7 @@ std::vector<short> Hdf5Lib::readDataset(std::string dataset_name,
 {
     std::vector<short> read_data;
     std::string ds_name("/" + this->group_name_ + "/" + dataset_name);
-    std::vector<std::string>::iterator it
-        = find(dataset_str_.begin(), dataset_str_.end(), dataset_name);
-    if (it == dataset_str_.end()) {
-        std::cout << ds_name << " dataset does not exist!" << std::endl;
-        return read_data;
-    }
-    size_t ds_id = it - dataset_str_.begin();
+    size_t ds_id = ds_name_id[dataset_name];
     // Select a hyperslab in extended portion of the dataset
     try {
         H5::Exception::dontPrint();
