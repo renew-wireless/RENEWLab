@@ -127,11 +127,16 @@ void Scheduler::do_it()
     size_t thread_antennas = 0;
     std::vector<pthread_t> recv_threads;
 
-    if ((this->cfg_->core_alloc() == true)
-        && (pin_to_core(kMainDispatchCore) != 0)) {
-        MLPD_ERROR("Pinning main recorder thread to core 0 failed");
-        throw std::runtime_error(
-            "Pinning main recorder thread to core 0 failed");
+    if (this->cfg_->core_alloc() == true) {
+        if (pin_to_core(kMainDispatchCore) != 0) {
+            std::string err_str
+                = std::string("Pinning main recorder thread to core ")
+                + std::to_string(kMainDispatchCore) + std::string(" failed");
+            throw std::runtime_error(err_str);
+        } else {
+            MLPD_INFO("Successfully pinned main scheduler thread to core %d",
+                kMainDispatchCore);
+        }
     }
 
     if (this->cfg_->client_present() == true) {
@@ -142,6 +147,7 @@ void Scheduler::do_it()
 
     if (cfg_->reader_thread_num() > 0) {
         int reader_thread_index = 0;
+        this->readers_.resize(2);
         if (cfg_->dl_slot_per_frame() > 0 && cfg_->bs_present()) {
             int thread_core = -1;
             if (this->cfg_->core_alloc() == true) {
@@ -149,11 +155,11 @@ void Scheduler::do_it()
                     = kSchedulerCore + recorder_threads + reader_thread_index;
                 reader_thread_index++;
             }
-            Sounder::Hdf5Reader* hdf5_reader = new Sounder::Hdf5Reader(
+            Sounder::Hdf5Reader* bs_hdf5_reader = new Sounder::Hdf5Reader(
                 this->cfg_, this->message_queue_, bs_tx_buffer_, 0, thread_core,
                 this->bs_tx_thread_buff_size_ * kQueueSize, true);
-            hdf5_reader->Start();
-            this->readers_.push_back(hdf5_reader);
+            bs_hdf5_reader->Start();
+            this->readers_.at(0) = bs_hdf5_reader;
         }
         if (cfg_->ul_slot_per_frame() > 0 && cfg_->client_present()) {
             int thread_core = -1;
@@ -162,11 +168,11 @@ void Scheduler::do_it()
                     = kSchedulerCore + recorder_threads + reader_thread_index;
                 reader_thread_index++;
             }
-            Sounder::Hdf5Reader* hdf5_reader = new Sounder::Hdf5Reader(
+            Sounder::Hdf5Reader* cl_hdf5_reader = new Sounder::Hdf5Reader(
                 this->cfg_, this->message_queue_, cl_tx_buffer_, 1, thread_core,
                 this->cl_tx_thread_buff_size_ * kQueueSize, true);
-            hdf5_reader->Start();
-            this->readers_.push_back(hdf5_reader);
+            cl_hdf5_reader->Start();
+            this->readers_.at(1) = cl_hdf5_reader;
         }
     }
 
@@ -221,32 +227,34 @@ void Scheduler::do_it()
 
             // if kEventRxSymbol, dispatch to proper worker
             if (event.event_type == kEventRxSymbol) {
-                if (event.slot_id == 0) {
+                if (event.slot_id == 0) { // Beacon event, schedule read
                     Event_data do_read_task;
                     do_read_task.event_type = kTaskRead;
                     do_read_task.ant_id = event.ant_id;
                     do_read_task.frame_id = event.frame_id;
                     do_read_task.node_type = event.node_type;
+                    do_read_task.buff_size = event.buff_size;
                     if (this->readers_.at(event.node_type)
                             ->DispatchWork(do_read_task)
                         == false) {
                         MLPD_ERROR("Record task enqueue failed\n");
                         throw std::runtime_error("Record task enqueue failed");
                     }
-                }
-                // Pass the work off to the applicable worker
-                // Worker must free the buffer, future work would involve making this cleaner
-                size_t thread_index = event.ant_id / thread_antennas;
-                Event_data do_record_task;
-                do_record_task.event_type = kTaskRecord;
-                do_record_task.offset = event.offset;
-                do_record_task.buffer = this->rx_buffer_;
-                do_record_task.buff_size = this->rx_thread_buff_size_;
-                if (this->recorders_.at(thread_index)
-                        ->DispatchWork(do_record_task)
-                    == false) {
-                    MLPD_ERROR("Record task enqueue failed\n");
-                    throw std::runtime_error("Record task enqueue failed");
+                } else {
+                    // Pass the work off to the applicable worker
+                    // Worker must free the buffer, future work would involve making this cleaner
+                    size_t thread_index = event.ant_id / thread_antennas;
+                    Event_data do_record_task;
+                    do_record_task.event_type = kTaskRecord;
+                    do_record_task.offset = event.offset;
+                    do_record_task.buffer = this->rx_buffer_;
+                    do_record_task.buff_size = this->rx_thread_buff_size_;
+                    if (this->recorders_.at(thread_index)
+                            ->DispatchWork(do_record_task)
+                        == false) {
+                        MLPD_ERROR("Record task enqueue failed\n");
+                        throw std::runtime_error("Record task enqueue failed");
+                    }
                 }
             } else if (event.event_type == kTaskRead) {
                 size_t qid = event.ant_id;

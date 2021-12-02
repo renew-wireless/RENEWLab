@@ -37,7 +37,7 @@ Hdf5Reader::~Hdf5Reader() { Finalize(); }
 //before calling member function
 void Hdf5Reader::Start(void)
 {
-    MLPD_INFO("Launching recorder task thread with id: %zu and core %d\n",
+    MLPD_INFO("Launching reader task thread with id: %zu and core %d\n",
         this->id_, this->core_alloc_);
     {
         std::lock_guard<std::mutex> thread_lock(this->sync_);
@@ -59,7 +59,7 @@ void Hdf5Reader::Finalize(void)
 {
     //Wait for thread to cleanly finish the messages in the queue
     if (this->thread_.joinable() == true) {
-        MLPD_TRACE("Joining Recorder Thread on CPU %d \n", sched_getcpu());
+        MLPD_TRACE("Joining Reader Thread on CPU %d \n", sched_getcpu());
         this->Stop();
         this->thread_.join();
     }
@@ -74,7 +74,7 @@ bool Hdf5Reader::DispatchWork(Event_data event)
         MLPD_WARN("Queue limit has reached! try to increase queue size.\n");
         if (this->event_queue_.enqueue(this->producer_token_, event) == 0) {
             MLPD_ERROR("Record task enqueue failed\n");
-            throw std::runtime_error("Record task enqueue failed");
+            throw std::runtime_error("Read task enqueue failed");
             ret = false;
         }
     }
@@ -102,7 +102,6 @@ Event_data Hdf5Reader::ReadFrame(Event_data event, int& offset)
     size_t radio_id = event.ant_id;
     size_t packet_length = sizeof(Packet) + this->packet_data_length_;
     if (event.frame_id > 0 && frame_offset == 0) {
-        std::printf("Moving to the beginning of the file \n");
         std::fseek(fp.at(radio_id), 0, SEEK_SET);
     }
     for (size_t s = 0; s < num_tx_slots; s++) {
@@ -114,8 +113,8 @@ Event_data Hdf5Reader::ReadFrame(Event_data event, int& offset)
             size_t read_num = std::fread(pkt->data, 2 * sizeof(int16_t),
                 config_->samps_per_slot(), fp.at(radio_id));
             if (read_num != config_->samps_per_slot()) {
-                MLPD_WARN("BAD Uplink Data Read: %zu/%zu\n", read_num,
-                    config_->samps_per_slot());
+                MLPD_WARN("BAD File Read For Frame %d: %zu/%zu\n",
+                    event.frame_id, read_num, config_->samps_per_slot());
             }
             pkt->frame_id = event.frame_id;
             pkt->slot_id = tx_slots.at(radio_id).at(s);
@@ -140,12 +139,12 @@ void Hdf5Reader::DoReading(void)
     }
 
     if (this->core_alloc_ >= 0) {
-        MLPD_INFO("Pinning recording thread %zu to core %d\n", this->id_,
+        MLPD_INFO("Pinning reading thread %zu to core %d\n", this->id_,
             this->core_alloc_);
         pthread_t this_thread = this->thread_.native_handle();
         if (pin_thread_to_core(this->core_alloc_, this_thread) != 0) {
-            MLPD_ERROR("Pin recording thread %zu to core %d failed\n",
-                this->id_, this->core_alloc_);
+            MLPD_ERROR("Pin reading thread %zu to core %d failed\n", this->id_,
+                this->core_alloc_);
             throw std::runtime_error("Pin recording thread to core failed");
         }
     }
@@ -174,7 +173,7 @@ void Hdf5Reader::DoReading(void)
     for (size_t i = 0; i < txFrameDelta; i++) {
         for (size_t u = 0; u < radio_num; u++) {
             Event_data event;
-            event.frame_id = 0;
+            event.frame_id = i;
             event.node_type = this->id_ ? kClient : kBS;
             event.ant_id = u;
             size_t buff_size = tx_buffer_[u].buffer.size() / packet_length;

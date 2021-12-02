@@ -554,8 +554,10 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                 + std::to_string(num_cl_antennas_) + ".hdf5";
         }
         trace_file_ = tddConf.value("trace_file", filename);
-        recorder_thread_num_
-            = tddConf.value("recorder_thread", RECORDER_THREAD_NUM);
+        recorder_thread_num_ = tddConf.value("recorder_thread",
+            bs_present_ || (client_present_ && dl_slot_per_frame_ > 0)
+                ? RECORDER_THREAD_NUM
+                : 0);
         reader_thread_num_ = (client_present_ && ul_slot_per_frame_ > 0)
             + (bs_present_ && dl_slot_per_frame_ > 0);
     } else {
@@ -610,8 +612,9 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         symbol_data_subcarrier_num_, data_mod_.c_str(),
         this->getFrameDurationSec() * 1e6);
     std::printf("Thread Config: %zu BS receive threads, %zu Client receive "
-                "threads, %zu Recording Threads\n",
-        bs_rx_thread_num_, cl_rx_thread_num_, recorder_thread_num_);
+                "threads, %zu recording threads, %zu reading thread\n",
+        bs_rx_thread_num_, num_cl_sdrs_, recorder_thread_num_,
+        reader_thread_num_);
     running_.store(true);
 }
 
@@ -675,10 +678,10 @@ void Config::loadULData(const std::string& directory)
                         txdata_freq_dom_[ant_i].end(), data_freq_dom.begin(),
                         data_freq_dom.end());
 
-                    std::vector<std::complex<float>> data_time_dom(
+                    std::vector<std::complex<int16_t>> data_time_dom(
                         samps_per_slot_);
                     read_num = std::fread(data_time_dom.data(),
-                        2 * sizeof(float), samps_per_slot_, fp_tx_t);
+                        2 * sizeof(int16_t), samps_per_slot_, fp_tx_t);
                     if (read_num != samps_per_slot_) {
                         MLPD_WARN("BAD Read of Uplink Time-Domain Data: "
                                   "%zu/%zu\n",
