@@ -24,7 +24,7 @@ pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 Receiver::Receiver(Config* config,
     moodycamel::ConcurrentQueue<Event_data>* in_queue,
-    moodycamel::ConcurrentQueue<Event_data>* tx_queue,
+    std::vector<moodycamel::ConcurrentQueue<Event_data>*> tx_queue,
     std::vector<moodycamel::ProducerToken*> tx_ptoks,
     std::vector<moodycamel::ConcurrentQueue<Event_data>*> cl_tx_queue,
     std::vector<moodycamel::ProducerToken*> cl_tx_ptoks)
@@ -206,6 +206,77 @@ void* Receiver::loopRecv_launch(void* in_context)
     return 0;
 }
 
+int Receiver::baseTxData(int radio_id, int cell, long long base_time)
+{
+    int num_samps = config_->samps_per_slot();
+    size_t packetLength = sizeof(Packet) + config_->getPacketDataLength();
+    size_t tx_buffer_size
+        = bs_tx_buffer_[radio_id].buffer.size() / packetLength;
+    int flagsTxData;
+    std::vector<void*> dl_txbuff(2);
+    Event_data event;
+    if (tx_queue_.at(radio_id)->try_dequeue_from_producer(
+            *tx_ptoks_.at(radio_id), event)
+        == true) {
+        assert(event.event_type == kEventTxSymbol);
+        assert(event.ant_id == radio_id);
+        size_t cur_offset = event.offset;
+        for (size_t s = 0; s < config_->dl_slot_per_frame(); s++) {
+            for (size_t ch = 0; ch < config_->bs_sdr_ch(); ++ch) {
+                char* cur_ptr_buffer = bs_tx_buffer_[radio_id].buffer.data()
+                    + (cur_offset * packetLength);
+                Packet* pkt = reinterpret_cast<Packet*>(cur_ptr_buffer);
+                assert(pkt->slot_id == config_->dl_slots().at(cell).at(s));
+                assert(pkt->ant_id == config_->bs_sdr_ch() * radio_id + ch);
+                dl_txbuff.at(ch) = pkt->data;
+                cur_offset = (cur_offset + 1) % tx_buffer_size;
+            }
+            long long txTime = 0;
+            if (kUseUHD == true || config_->bs_hw_framer() == false) {
+                txTime = base_time + txTimeDelta
+                    + config_->dl_slots().at(radio_id).at(s) * num_samps
+                    - config_->tx_advance();
+            } else {
+                size_t frame_id = (size_t)(base_time >> 32);
+                txTime = (frame_id + txFrameDelta) << 32
+                    | (config_->dl_slots().at(radio_id).at(s) << 16);
+            }
+            if (kUseUHD == true && s < (config_->dl_slot_per_frame() - 1))
+                flagsTxData = kStreamContinuous; // HAS_TIME
+            else
+                flagsTxData = kStreamEndBurst; // HAS_TIME & END_BURST, fixme
+            int r = this->base_radio_set_->radioTx(
+                radio_id, cell, dl_txbuff.data(), flagsTxData, txTime);
+            if (r < num_samps) {
+                MLPD_WARN("BAD Write: %d/%d\n", r, num_samps);
+            }
+        }
+        bs_tx_buffer_[radio_id]
+            .pkt_buf_inuse[event.frame_id % kSampleBufferFrameNum]
+            = 0;
+        return 0;
+    }
+    return -1;
+}
+
+void Receiver::notifyPacket(NodeType node_type, int frame_id, int slot_id,
+    int ant_id, int buff_size, int offset)
+{
+    moodycamel::ProducerToken local_ptok(*message_queue_);
+    Event_data new_frame;
+    new_frame.event_type = kEventRxSymbol;
+    new_frame.frame_id = frame_id;
+    new_frame.slot_id = slot_id;
+    new_frame.ant_id = ant_id;
+    new_frame.node_type = node_type;
+    new_frame.buff_size = buff_size;
+    new_frame.offset = offset;
+    if (message_queue_->enqueue(local_ptok, new_frame) == false) {
+        MLPD_ERROR("New frame message enqueue failed\n");
+        throw std::runtime_error("New frame message enqueue failed");
+    }
+}
+
 void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 {
     if (config_->core_alloc() == true) {
@@ -232,6 +303,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     const size_t num_channels = config_->bs_channel().length();
     size_t packetLength = sizeof(Packet) + config_->getPacketDataLength();
     int buffer_chunk_size = rx_buffer[0].buffer.size() / packetLength;
+    int bs_tx_buff_size = kSampleBufferFrameNum * config_->slot_per_frame();
 
     // handle two channels at each radio
     // this is assuming buffer_chunk_size is at least 2
@@ -290,33 +362,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     if (num_channels == 2)
         samp_buffer[1] = samp_buffer1.data();
 
-    FILE* fp = nullptr;
-    if (config_->dl_data_slot_present() == true) {
-        std::printf("Opening DL time-domain data for radio %d to %s\n", tid,
-            config_->dl_tx_td_data_files().at(tid).c_str());
-        fp = std::fopen(config_->dl_tx_td_data_files().at(tid).c_str(), "rb");
-    }
-
-    std::vector<void*> txbuff(2);
-    for (size_t ch = 0; ch < config_->bs_sdr_ch(); ch++) {
-        txbuff.at(ch)
-            = std::calloc(config_->samps_per_slot(), sizeof(int16_t) * 2);
-    }
-    size_t slot_byte_size = config_->samps_per_slot() * sizeof(int16_t) * 2;
-    if (config_->dl_slot_per_frame() > 0) {
-        size_t txIndex = tid * config_->bs_sdr_ch();
-        for (size_t ch = 0; ch < config_->bs_sdr_ch(); ch++) {
-            std::memcpy(txbuff.at(ch),
-                config_->dl_txdata_time_dom().at(txIndex + ch).data(),
-                slot_byte_size);
-        }
-        MLPD_INFO("%zu downlink slots will be sent per frame...\n",
-            config_->dl_slot_per_frame());
-    }
-
     int cell = 0;
     // for UHD device, the first pilot should not have an END_BURST flag
-    int flagsTxUlData;
     if (kUseUHD == true) {
         // For multi-USRP BS perform dummy radioRx to avoid initial late packets
         int bs_sync_ret = -1;
@@ -390,8 +437,6 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             }
 
             // Receive data into buffers
-            size_t packetLength
-                = sizeof(Packet) + config_->getPacketDataLength();
             for (size_t ch = 0; ch < num_packets; ++ch) {
                 pkt[ch] = (Packet*)(buffer + (cursor + ch) * packetLength);
                 samp[ch] = pkt[ch]->data;
@@ -402,38 +447,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             assert(this->base_radio_set_ != NULL);
             ant_id = radio_id * num_channels;
 
-            if (kUseUHD == false && config_->bs_hw_framer() == true) {
-                long long frameTime;
-                if (this->base_radio_set_->radioRx(
-                        radio_id, cell, samp, frameTime)
-                    < 0) {
-                    config_->running(false);
-                    break;
-                }
-
-                frame_id = (size_t)(frameTime >> 32);
-                slot_id = (size_t)((frameTime >> 16) & 0xFFFF);
-
-                if (config_->internal_measurement()
-                    && config_->ref_node_enable()) {
-                    if (radio_id == config_->cal_ref_sdr_id()) {
-                        ant_id = slot_id < radio_id * num_channels
-                            ? slot_id
-                            : slot_id - num_channels;
-                        slot_id = 0; // downlink reciprocal pilot
-                    } else {
-                        if (radio_id >= config_->cal_ref_sdr_id())
-                            ant_id -= num_channels;
-                        slot_id = 1; // uplink reciprocal pilot
-                    }
-                } else if (config_->internal_measurement()
-                    && !config_->ref_node_enable()) {
-                    // Mapping (compress schedule to eliminate Gs)
-                    size_t adv
-                        = int(slot_id / (config_->guard_mult() * num_channels));
-                    slot_id = slot_id - ((config_->guard_mult() - 1) * 2 * adv);
-                }
-            } else {
+            if (kUseUHD == true || config_->bs_hw_framer() == false) {
                 int rx_len = config_->samps_per_slot();
                 int r;
 
@@ -473,40 +487,56 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
                     // schedule downlink slots
                     if (config_->dl_data_slot_present() == true) {
-                        for (size_t s = 0; s < config_->dl_slot_per_frame();
-                             s++) {
-                            txTimeBs = rxTimeBs + this->txTimeDelta
-                                + config_->dl_slots().at(radio_id).at(s)
-                                    * config_->samps_per_slot()
-                                - config_->tx_advance();
-                            for (size_t ch = 0; ch < config_->bs_sdr_ch();
-                                 ch++) {
-                                size_t read_num = std::fread(txbuff.at(ch),
-                                    2 * sizeof(int16_t),
-                                    config_->samps_per_slot(), fp);
-                                if (read_num != config_->samps_per_slot()) {
-                                    MLPD_WARN(
-                                        "BAD downlink Data Read: %zu/%zu\n",
-                                        read_num, config_->samps_per_slot());
-                                }
-                            }
-                            if (kUseUHD
-                                && s < (config_->dl_slot_per_frame() - 1))
-                                flagsTxUlData = kStreamContinuous; // HAS_TIME
-                            else
-                                flagsTxUlData
-                                    = kStreamEndBurst; // HAS_TIME & END_BURST, fixme
-                            r = clientRadioSet_->radioTx(tid, txbuff.data(),
-                                config_->samps_per_slot(), flagsTxUlData,
-                                txTimeBs);
-                            if (r < (int)config_->samps_per_slot()) {
-                                MLPD_WARN("BAD Write: %d/%zu\n", r,
-                                    config_->samps_per_slot());
-                            }
-                        } // end for
-                        if (frame_id % config_->dl_data_frame_num() == 0)
-                            std::fseek(fp, 0, SEEK_SET);
+                        while (-1 != baseTxData(radio_id, cell, rxTimeBs))
+                            ;
+                        this->notifyPacket(kBS, frame_id + this->txFrameDelta,
+                            0, radio_id,
+                            bs_tx_buff_size); // Notify new frame
                     } // end if config_->dul_data_slot_present()
+                }
+                if (!config_->isPilot(frame_id, slot_id)
+                    && !config_->isUlData(frame_id, slot_id))
+                    continue;
+            } else {
+                long long frameTime;
+                if (this->base_radio_set_->radioRx(
+                        radio_id, cell, samp, frameTime)
+                    < 0) {
+                    config_->running(false);
+                    break;
+                }
+
+                frame_id = (size_t)(frameTime >> 32);
+                slot_id = (size_t)((frameTime >> 16) & 0xFFFF);
+
+                if (config_->internal_measurement()
+                    && config_->ref_node_enable()) {
+                    if (radio_id == config_->cal_ref_sdr_id()) {
+                        ant_id = slot_id < radio_id * num_channels
+                            ? slot_id
+                            : slot_id - num_channels;
+                        slot_id = 0; // downlink reciprocal pilot
+                    } else {
+                        if (radio_id >= config_->cal_ref_sdr_id())
+                            ant_id -= num_channels;
+                        slot_id = 1; // uplink reciprocal pilot
+                    }
+                } else if (config_->internal_measurement()
+                    && !config_->ref_node_enable()) {
+                    // Mapping (compress schedule to eliminate Gs)
+                    size_t adv
+                        = int(slot_id / (config_->guard_mult() * num_channels));
+                    slot_id = slot_id - ((config_->guard_mult() - 1) * 2 * adv);
+                }
+                if (config_->getClientId(frame_id, slot_id)
+                    == 0) { // first received pilot
+                    if (config_->dl_data_slot_present() == true) {
+                        while (-1 != baseTxData(radio_id, cell, frameTime))
+                            ;
+                        this->notifyPacket(kBS, frame_id + this->txFrameDelta,
+                            0, radio_id,
+                            bs_tx_buff_size); // Notify new frame
+                    }
                 }
             }
 
@@ -525,19 +555,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 // new (pkt[ch]) Packet(frame_id, slot_id, 0, ant_id + ch);
                 new (pkt[ch]) Packet(frame_id, slot_id, cell, ant_id + ch);
                 // push kEventRxSymbol event into the queue
-                Event_data new_packet;
-                new_packet.event_type = kEventRxSymbol;
-                new_packet.ant_id = ant_id + ch;
-                new_packet.slot_id = slot_id;
-                new_packet.frame_id = frame_id;
-                new_packet.node_type = kBS;
-                new_packet.buff_size = buffer_chunk_size;
-                new_packet.offset = cursor + tid * buffer_chunk_size;
-                if (message_queue_->enqueue(local_ptok, new_packet) == false) {
-                    MLPD_ERROR("New packet message enqueue failed\n");
-                    throw std::runtime_error(
-                        "New packet message enqueue failed");
-                }
+                this->notifyPacket(kBS, frame_id, slot_id, ant_id + ch,
+                    buffer_chunk_size, cursor + tid * buffer_chunk_size);
                 cursor++;
                 cursor %= buffer_chunk_size;
             }
@@ -551,9 +570,6 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     MLPD_SYMBOL(
         "Process %d -- Loop Rx Freed memory at: %p\n", tid, zeroes_memory);
     free(zeroes_memory);
-    for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
-        std::free(txbuff.at(ch));
-    }
 }
 
 void* Receiver::clientTxRx_launch(void* in_context)
@@ -697,7 +713,7 @@ void Receiver::txPilots(size_t user_id, long long base_time)
     }
 }
 
-void Receiver::txData(int tid, long long base_time)
+int Receiver::clientTxData(int tid, long long base_time)
 {
     size_t tx_slots = config_->cl_ul_slots().at(tid).size();
     int num_samps = config_->samps_per_slot();
@@ -738,7 +754,9 @@ void Receiver::txData(int tid, long long base_time)
         }
         cl_tx_buffer_[tid].pkt_buf_inuse[event.frame_id % kSampleBufferFrameNum]
             = 0;
+        return 0;
     }
+    return -1;
 }
 
 int Receiver::syncSearch(
@@ -796,13 +814,6 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
         rxbuff.at(1) = buff1.data();
     }
 
-    FILE* fp = nullptr;
-    if (config_->ul_data_slot_present() == true) {
-        std::printf("Opening UL time-domain data for radio %d to %s\n", tid,
-            config_->ul_tx_td_data_files().at(tid).c_str());
-        fp = std::fopen(config_->ul_tx_td_data_files().at(tid).c_str(), "rb");
-    }
-
     size_t packetLength = sizeof(Packet) + config_->getPacketDataLength();
     size_t ant_id = tid * config_->cl_sdr_ch();
     int buffer_chunk_size = 0;
@@ -821,7 +832,10 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
     }
 
     // tx_buffer info
-    size_t tx_buffer_size = cl_tx_buffer_[tid].buffer.size() / packetLength;
+    size_t tx_buffer_size = 0;
+    if (config_->ul_data_slot_present() == true) {
+        tx_buffer_size = cl_tx_buffer_[tid].buffer.size() / packetLength;
+    }
 
     long long rxTime(0);
     int sync_index(-1);
@@ -897,17 +911,8 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
             break;
         }
         if (config_->ul_data_slot_present() == true) {
-            Event_data new_frame;
-            new_frame.event_type = kEventRxSymbol;
-            new_frame.ant_id = tid; // send radio_id here
-            new_frame.frame_id = frame_id + this->txFrameDelta;
-            new_frame.slot_id = 0;
-            new_frame.node_type = kClient;
-            new_frame.buff_size = tx_buffer_size;
-            if (message_queue_->enqueue(local_ptok, new_frame) == false) {
-                MLPD_ERROR("New frame message enqueue failed\n");
-                throw std::runtime_error("New frame message enqueue failed");
-            }
+            this->notifyPacket(kClient, frame_id + this->txFrameDelta, 0, tid,
+                tx_buffer_size); // Notify new frame
         }
 
         // resync every X=1000 frames:
@@ -951,7 +956,8 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
         // config_->tx_advance() needs calibration based on SDR model and sampling rate
         this->txPilots(tid, rxTime);
         if (config_->ul_data_slot_present() == true) {
-            this->txData(tid, rxTime);
+            while (-1 != this->clientTxData(tid, rxTime))
+                ;
         } // end if config_->ul_data_slot_present()
 
         slot_id++;
@@ -988,20 +994,9 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
                 for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
                     new (pkt[ch]) Packet(frame_id, slot_id, 0, ant_id + ch);
                     // push kEventRxSymbol event into the queue
-                    Event_data new_packet;
-                    new_packet.event_type = kEventRxSymbol;
-                    new_packet.ant_id = ant_id + ch;
-                    new_packet.frame_id = frame_id;
-                    new_packet.slot_id = slot_id;
-                    new_packet.node_type = kClient;
-                    new_packet.buff_size = buffer_chunk_size;
-                    new_packet.offset = buffer_offset + tid * buffer_chunk_size;
-                    if (message_queue_->enqueue(local_ptok, new_packet)
-                        == false) {
-                        MLPD_ERROR("New packet message enqueue failed\n");
-                        throw std::runtime_error(
-                            "New packet message enqueue failed");
-                    }
+                    this->notifyPacket(kClient, frame_id, slot_id, ant_id + ch,
+                        buffer_chunk_size,
+                        buffer_offset + tid * buffer_chunk_size);
                     buffer_offset++;
                     buffer_offset %= buffer_chunk_size;
                 }
@@ -1021,7 +1016,4 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
         frame_id++;
         slot_id = 0;
     } // end while
-    if (fp != nullptr) {
-        std::fclose(fp);
-    }
 }

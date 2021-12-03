@@ -38,9 +38,6 @@ Scheduler::Scheduler(Config* in_cfg, unsigned int core_start)
 
     message_queue_ = moodycamel::ConcurrentQueue<Event_data>(
         rx_thread_buff_size_ * kQueueSize);
-    tx_queue_ = moodycamel::ConcurrentQueue<Event_data>(
-        rx_thread_buff_size_ * kQueueSize);
-
     MLPD_TRACE(
         "Scheduler construction: rx threads: %zu, recorder/reader threads: %u, "
         "chunk size: %zu\n",
@@ -81,21 +78,27 @@ Scheduler::Scheduler(Config* in_cfg, unsigned int core_start)
 
     if (cfg_->dl_slot_per_frame() > 0) {
         // initialize rx buffers
-        bs_tx_buffer_ = new SampleBuffer;
-        this->bs_tx_thread_buff_size_ = kSampleBufferFrameNum
-            * cfg_->slot_per_frame() * cfg_->num_bs_antennas_all();
+        bs_tx_buffer_ = new SampleBuffer[cfg_->num_bs_sdrs_all()];
+        this->bs_tx_thread_buff_size_
+            = kSampleBufferFrameNum * cfg_->slot_per_frame();
         size_t intsize = sizeof(std::atomic_int);
         size_t arraysize = (bs_tx_thread_buff_size_ + intsize - 1) / intsize;
         size_t packetLength = sizeof(Packet) + cfg_->getPacketDataLength();
-        bs_tx_buffer_->buffer.resize(bs_tx_thread_buff_size_ * packetLength);
-        bs_tx_buffer_->pkt_buf_inuse = new std::atomic_int[arraysize];
-        std::fill_n(bs_tx_buffer_->pkt_buf_inuse, arraysize, 0);
-        tx_ptoks_ptr_.push_back(new moodycamel::ProducerToken(tx_queue_));
+        for (size_t i = 0; i < cfg_->num_bs_sdrs_all(); i++) {
+            bs_tx_buffer_[i].buffer.resize(
+                bs_tx_thread_buff_size_ * packetLength);
+            bs_tx_buffer_[i].pkt_buf_inuse = new std::atomic_int[arraysize];
+            std::fill_n(bs_tx_buffer_[i].pkt_buf_inuse, arraysize, 0);
+            tx_queue_.push_back(new moodycamel::ConcurrentQueue<Event_data>(
+                bs_tx_thread_buff_size_ * kQueueSize));
+            tx_ptoks_ptr_.push_back(
+                new moodycamel::ProducerToken(*tx_queue_.back()));
+        }
     }
 
     // Receiver object will be used for both BS and clients
     try {
-        receiver_.reset(new Receiver(cfg_, &message_queue_, &tx_queue_,
+        receiver_.reset(new Receiver(cfg_, &message_queue_, tx_queue_,
             tx_ptoks_ptr_, cl_tx_queue_, cl_tx_ptoks_ptr_));
     } catch (ReceiverException& re) {
         std::cout << re.what() << '\n';

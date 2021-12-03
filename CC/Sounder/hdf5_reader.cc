@@ -88,28 +88,35 @@ bool Hdf5Reader::DispatchWork(Event_data event)
     return ret;
 }
 
-Event_data Hdf5Reader::ReadFrame(Event_data event, int& offset)
+Event_data Hdf5Reader::ReadFrame(Event_data event, int* offset)
 {
-    int first_offset = offset;
-    size_t frame_offset = event.frame_id % config_->ul_data_frame_num();
+    size_t data_frame_num = event.node_type == kBS
+        ? config_->ul_data_frame_num()
+        : config_->dl_data_frame_num();
+    size_t frame_offset = event.frame_id % data_frame_num;
     size_t num_tx_slots = event.node_type == kBS ? config_->dl_slot_per_frame()
                                                  : config_->ul_slot_per_frame();
-    std::vector<std::vector<size_t>> tx_slots = event.node_type == kBS
+    std::vector<std::vector<size_t>> tx_slots = (event.node_type == kBS)
         ? config_->cl_dl_slots()
         : config_->cl_ul_slots();
     size_t num_ch
         = event.node_type == kBS ? config_->bs_sdr_ch() : config_->cl_sdr_ch();
     size_t radio_id = event.ant_id;
+    size_t sched_id = event.node_type == kBS
+        ? 0 // TODO: consider multicell for kBS
+        : radio_id;
     size_t packet_length = sizeof(Packet) + this->packet_data_length_;
+    size_t tx_buf_size = tx_buffer_[radio_id].buffer.size() / packet_length;
+    int first_offset = offset[radio_id];
     if (event.frame_id > 0 && frame_offset == 0) {
         std::fseek(fp.at(radio_id), 0, SEEK_SET);
     }
     for (size_t s = 0; s < num_tx_slots; s++) {
         for (size_t ch = 0; ch < num_ch; ch++) {
             char* cur_ptr_buffer = (char*)tx_buffer_[radio_id].buffer.data()
-                + (offset * packet_length);
+                + (offset[radio_id] * packet_length);
+            offset[radio_id] = (offset[radio_id] + 1) % tx_buf_size;
             Packet* pkt = (Packet*)cur_ptr_buffer;
-            offset = (offset + 1) % event.buff_size;
             size_t read_num = std::fread(pkt->data, 2 * sizeof(int16_t),
                 config_->samps_per_slot(), fp.at(radio_id));
             if (read_num != config_->samps_per_slot()) {
@@ -117,7 +124,7 @@ Event_data Hdf5Reader::ReadFrame(Event_data event, int& offset)
                     event.frame_id, read_num, config_->samps_per_slot());
             }
             pkt->frame_id = event.frame_id;
-            pkt->slot_id = tx_slots.at(radio_id).at(s);
+            pkt->slot_id = tx_slots.at(sched_id).at(s);
             pkt->ant_id = radio_id * num_ch + ch;
         }
     }
@@ -154,18 +161,20 @@ void Hdf5Reader::DoReading(void)
 
     size_t radio_num
         = this->id_ ? config_->num_cl_sdrs() : config_->num_bs_sdrs_all();
+    std::vector<std::string> td_data_files = this->id_
+        ? config_->ul_tx_td_data_files()
+        : config_->dl_tx_td_data_files();
 
     fp.resize(radio_num, nullptr);
     for (size_t tid = 0; tid < radio_num; tid++) {
-        if (config_->ul_data_slot_present() == true) {
-            std::printf("Opening UL time-domain data for radio %zu to %s\n",
-                tid, config_->ul_tx_td_data_files().at(tid).c_str());
-            fp.at(tid) = std::fopen(
-                config_->ul_tx_td_data_files().at(tid).c_str(), "rb");
-        }
+        std::printf("Opening time-domain data for radio %zu to %s\n", tid,
+            td_data_files.at(tid).c_str());
+        fp.at(tid) = std::fopen(td_data_files.at(tid).c_str(), "rb");
     }
 
-    int offset = 0;
+    int* offset = new int[radio_num];
+    for (size_t i = 0; i < radio_num; i++)
+        offset[i] = 0;
     size_t packet_length = sizeof(Packet) + this->packet_data_length_;
     size_t txFrameDelta
         = std::ceil(TIME_DELTA / (1e3 * config_->getFrameDurationSec()));
@@ -176,8 +185,7 @@ void Hdf5Reader::DoReading(void)
             event.frame_id = i;
             event.node_type = this->id_ ? kClient : kBS;
             event.ant_id = u;
-            size_t buff_size = tx_buffer_[u].buffer.size() / packet_length;
-            event.buff_size = buff_size;
+            event.buff_size = tx_buffer_[u].buffer.size() / packet_length;
             Event_data read_complete = this->ReadFrame(event, offset);
             if (msg_queue_.enqueue(local_ptok, read_complete) == false) {
                 MLPD_ERROR("Read complete message enqueue failed\n");

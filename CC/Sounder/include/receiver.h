@@ -52,7 +52,7 @@ public:
 
 public:
     Receiver(Config* config, moodycamel::ConcurrentQueue<Event_data>* in_queue,
-        moodycamel::ConcurrentQueue<Event_data>* tx_queue,
+        std::vector<moodycamel::ConcurrentQueue<Event_data>*> tx_queue,
         std::vector<moodycamel::ProducerToken*> tx_ptoks,
         std::vector<moodycamel::ConcurrentQueue<Event_data>*> cl_tx_queue,
         std::vector<moodycamel::ProducerToken*> cl_tx_ptoks);
@@ -66,6 +66,9 @@ public:
     void go();
     static void* loopRecv_launch(void* in_context);
     void loopRecv(int tid, int core_id, SampleBuffer* rx_buffer);
+    int baseTxData(int radio_id, int cell, long long base_time);
+    void notifyPacket(NodeType node_type, int frame_id, int slot_id, int ant_id,
+        int buff_size, int offset = 0);
     static void* clientTxRx_launch(void* in_context);
     void clientTxRx(int tid);
     void clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer);
@@ -73,7 +76,7 @@ public:
         std::vector<std::complex<int16_t>> sync_buff, size_t sync_num_samps);
     void initBuffers();
     void txPilots(size_t user_id, long long base_time);
-    void txData(int tid, long long base_time);
+    int clientTxData(int tid, long long base_time);
 
 private:
     Config* config_;
@@ -83,7 +86,7 @@ private:
     size_t thread_num_;
     // pointer of message_queue_
     moodycamel::ConcurrentQueue<Event_data>* message_queue_;
-    moodycamel::ConcurrentQueue<Event_data>* tx_queue_;
+    std::vector<moodycamel::ConcurrentQueue<Event_data>*> tx_queue_;
     std::vector<moodycamel::ProducerToken*> tx_ptoks_;
     std::vector<moodycamel::ConcurrentQueue<Event_data>*> cl_tx_queue_;
     std::vector<moodycamel::ProducerToken*> cl_tx_ptoks_;

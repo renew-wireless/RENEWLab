@@ -37,7 +37,7 @@ public:
     void Start(void);
     void Stop(void);
     bool DispatchWork(Event_data event);
-    Event_data ReadFrame(Event_data event, int& offset);
+    Event_data ReadFrame(Event_data event, int* offset);
 
 private:
     /*Main threading loop */
