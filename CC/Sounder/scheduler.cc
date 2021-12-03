@@ -260,22 +260,42 @@ void Scheduler::do_it()
                     }
                 }
             } else if (event.event_type == kTaskRead) {
-                size_t qid = event.ant_id;
+                size_t ant_id = event.ant_id;
                 Event_data do_tx_task;
                 do_tx_task.event_type = kEventTxSymbol;
                 do_tx_task.offset = event.offset;
-                do_tx_task.ant_id = qid;
+                do_tx_task.ant_id = ant_id;
                 do_tx_task.frame_id = event.frame_id;
-                if (cl_tx_queue_.at(qid)->try_enqueue(
-                        *cl_tx_ptoks_ptr_.at(qid), do_tx_task)
-                    == 0) {
-                    MLPD_WARN("Queue limit has reached! try to increase queue "
-                              "size.\n");
-                    if (cl_tx_queue_.at(qid)->enqueue(
-                            *cl_tx_ptoks_ptr_.at(qid), do_tx_task)
+                do_tx_task.node_type = event.node_type;
+                if (event.node_type == kClient) {
+                    if (cl_tx_queue_.at(ant_id)->try_enqueue(
+                            *cl_tx_ptoks_ptr_.at(ant_id), do_tx_task)
                         == 0) {
-                        MLPD_ERROR("Record task enqueue failed\n");
-                        throw std::runtime_error("Record task enqueue failed");
+                        MLPD_WARN(
+                            "Queue limit has reached! try to increase queue "
+                            "size.\n");
+                        if (cl_tx_queue_.at(ant_id)->enqueue(
+                                *cl_tx_ptoks_ptr_.at(ant_id), do_tx_task)
+                            == 0) {
+                            MLPD_ERROR("Record task enqueue failed\n");
+                            throw std::runtime_error(
+                                "Record task enqueue failed");
+                        }
+                    }
+                } else { // Push BS Tx event
+                    if (tx_queue_.at(ant_id)->try_enqueue(
+                            *tx_ptoks_ptr_.at(ant_id), do_tx_task)
+                        == 0) {
+                        MLPD_WARN(
+                            "Queue limit has reached! try to increase queue "
+                            "size.\n");
+                        if (tx_queue_.at(ant_id)->enqueue(
+                                *tx_ptoks_ptr_.at(ant_id), do_tx_task)
+                            == 0) {
+                            MLPD_ERROR("Record task enqueue failed\n");
+                            throw std::runtime_error(
+                                "Record task enqueue failed");
+                        }
                     }
                 }
             }

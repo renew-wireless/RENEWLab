@@ -194,18 +194,6 @@ void Receiver::go()
     }
 }
 
-void* Receiver::loopRecv_launch(void* in_context)
-{
-    ReceiverContext* context = (ReceiverContext*)in_context;
-    auto me = context->ptr;
-    auto tid = context->tid;
-    auto core_id = context->core_id;
-    auto buffer = context->buffer;
-    delete context;
-    me->loopRecv(tid, core_id, buffer);
-    return 0;
-}
-
 int Receiver::baseTxData(int radio_id, int cell, long long base_time)
 {
     int num_samps = config_->samps_per_slot();
@@ -275,6 +263,18 @@ void Receiver::notifyPacket(NodeType node_type, int frame_id, int slot_id,
         MLPD_ERROR("New frame message enqueue failed\n");
         throw std::runtime_error("New frame message enqueue failed");
     }
+}
+
+void* Receiver::loopRecv_launch(void* in_context)
+{
+    ReceiverContext* context = (ReceiverContext*)in_context;
+    auto me = context->ptr;
+    auto tid = context->tid;
+    auto core_id = context->core_id;
+    auto buffer = context->buffer;
+    delete context;
+    me->loopRecv(tid, core_id, buffer);
+    return 0;
 }
 
 void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
