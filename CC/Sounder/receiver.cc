@@ -227,7 +227,7 @@ int Receiver::baseTxData(int radio_id, int cell, long long base_time)
             } else {
                 size_t frame_id = (size_t)(base_time >> 32);
                 txTime = (frame_id + txFrameDelta) << 32
-                    | (config_->dl_slots().at(radio_id).at(s) << 16);
+                    | (config_->dl_slots().at(cell).at(s) << 16);
             }
             if (kUseUHD == true && s < (config_->dl_slot_per_frame() - 1))
                 flagsTxData = kStreamContinuous; // HAS_TIME
