@@ -109,10 +109,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         noise_samples = hdf5.noise_samples[:, :, :, plot_bs_nodes, :]
     dl_data_avail = len(hdf5.downlink_samples) > 0
     if dl_data_avail:
-        if not pilot_data_avail:
-            all_bs_nodes = set(range(hdf5.downlink_samples.shape[3]))
-            plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
-        downlink_samples = hdf5.downlink_samples[:, :, :, plot_bs_nodes, :]
+        downlink_samples = hdf5.downlink_samples
         if not pilot_data_avail:
             frm_plt = min(frame_i, downlink_samples.shape[0] + n_frm_st)
             # Verify frame_i does not exceed max number of collected frames
