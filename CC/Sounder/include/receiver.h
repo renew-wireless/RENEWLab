@@ -66,7 +66,7 @@ public:
     void go();
     static void* loopRecv_launch(void* in_context);
     void loopRecv(int tid, int core_id, SampleBuffer* rx_buffer);
-    int baseTxData(int radio_id, int cell, long long base_time);
+    int baseTxData(int radio_id, int cell, int frame_id, long long base_time);
     void notifyPacket(NodeType node_type, int frame_id, int slot_id, int ant_id,
         int buff_size, int offset = 0);
     static void* clientTxRx_launch(void* in_context);

@@ -194,7 +194,8 @@ void Receiver::go()
     }
 }
 
-int Receiver::baseTxData(int radio_id, int cell, long long base_time)
+int Receiver::baseTxData(
+    int radio_id, int cell, int frame_id, long long base_time)
 {
     int num_samps = config_->samps_per_slot();
     size_t packetLength = sizeof(Packet) + config_->getPacketDataLength();
@@ -209,6 +210,8 @@ int Receiver::baseTxData(int radio_id, int cell, long long base_time)
         assert(event.event_type == kEventTxSymbol);
         assert(event.ant_id == radio_id);
         size_t cur_offset = event.offset;
+        long long txFrameTime = base_time
+            + (event.frame_id - frame_id) * config_->samps_per_frame();
         for (size_t s = 0; s < config_->dl_slot_per_frame(); s++) {
             for (size_t ch = 0; ch < config_->bs_sdr_ch(); ++ch) {
                 char* cur_ptr_buffer = bs_tx_buffer_[radio_id].buffer.data()
@@ -221,12 +224,12 @@ int Receiver::baseTxData(int radio_id, int cell, long long base_time)
             }
             long long txTime = 0;
             if (kUseUHD == true || config_->bs_hw_framer() == false) {
-                txTime = base_time + txTimeDelta
+                txTime = txFrameTime
                     + config_->dl_slots().at(radio_id).at(s) * num_samps
                     - config_->tx_advance();
             } else {
-                size_t frame_id = (size_t)(base_time >> 32);
-                txTime = (frame_id + txFrameDelta) << 32
+                //size_t frame_id = (size_t)(base_time >> 32);
+                txTime = ((size_t)event.frame_id << 32)
                     | (config_->dl_slots().at(cell).at(s) << 16);
             }
             if (kUseUHD == true && s < (config_->dl_slot_per_frame() - 1))
@@ -487,7 +490,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
                     // schedule downlink slots
                     if (config_->dl_data_slot_present() == true) {
-                        while (-1 != baseTxData(radio_id, cell, rxTimeBs))
+                        while (-1
+                            != baseTxData(radio_id, cell, frame_id, rxTimeBs))
                             ;
                         this->notifyPacket(kBS, frame_id + this->txFrameDelta,
                             0, radio_id,
@@ -531,7 +535,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 if (config_->getClientId(frame_id, slot_id)
                     == 0) { // first received pilot
                     if (config_->dl_data_slot_present() == true) {
-                        while (-1 != baseTxData(radio_id, cell, frameTime))
+                        while (-1
+                            != baseTxData(radio_id, cell, frame_id, frameTime))
                             ;
                         this->notifyPacket(kBS, frame_id + this->txFrameDelta,
                             0, radio_id,
@@ -817,21 +822,22 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
         rxbuff.at(1) = buff1.data();
     }
 
-    size_t packetLength = sizeof(Packet) + config_->getPacketDataLength();
     size_t ant_id = tid * config_->cl_sdr_ch();
-    int buffer_chunk_size = 0;
     // use token to speed up
     moodycamel::ProducerToken local_ptok(*message_queue_);
+
     char* buffer = nullptr;
     std::atomic_int* pkt_buf_inuse = nullptr;
+    int buffer_chunk_size = 0;
+    int buffer_id = tid + config_->bs_rx_thread_num();
+    size_t packetLength = sizeof(Packet) + config_->getPacketDataLength();
     if (config_->dl_slot_per_frame() > 0) {
 
-        buffer_chunk_size = rx_buffer[0].buffer.size() / packetLength;
+        buffer_chunk_size = rx_buffer[buffer_id].buffer.size() / packetLength;
         // handle two channels at each radio
         // this is assuming buffer_chunk_size is at least 2
-        pkt_buf_inuse
-            = rx_buffer[tid + config_->bs_rx_thread_num()].pkt_buf_inuse;
-        buffer = rx_buffer[tid + config_->bs_rx_thread_num()].buffer.data();
+        pkt_buf_inuse = rx_buffer[buffer_id].pkt_buf_inuse;
+        buffer = rx_buffer[buffer_id].buffer.data();
     }
 
     // tx_buffer info
@@ -970,10 +976,13 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
             if (config_->isDlData(frame_id, slot_id)) {
                 // Set buffer status(es) to full; fail if full already
                 for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
+                    int bit = 1
+                        << (buffer_offset + ch) % sizeof(std::atomic_int);
+                    int offs = (buffer_offset + ch) / sizeof(std::atomic_int);
                     int old = std::atomic_fetch_or(
-                        &pkt_buf_inuse[buffer_offset], 1); // now full
+                        &pkt_buf_inuse[offs], bit); // now full
                     // if buffer was full, exit
-                    if (old != 0) {
+                    if ((old & bit) != 0) {
                         MLPD_ERROR("thread %d buffer full\n", tid);
                         throw std::runtime_error("Thread %d buffer full\n");
                     }
@@ -1000,7 +1009,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
                     // push kEventRxSymbol event into the queue
                     this->notifyPacket(kClient, frame_id, slot_id, ant_id + ch,
                         buffer_chunk_size,
-                        buffer_offset + tid * buffer_chunk_size);
+                        buffer_offset + buffer_id * buffer_chunk_size);
                     buffer_offset++;
                     buffer_offset %= buffer_chunk_size;
                 }
