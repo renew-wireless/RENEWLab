@@ -76,7 +76,7 @@ public:
         std::vector<std::complex<int16_t>> sync_buff, size_t sync_num_samps);
     void initBuffers();
     void txPilots(size_t user_id, long long base_time);
-    int clientTxData(int tid, long long base_time);
+    int clientTxData(int tid, int frame_id, long long base_time);
 
 private:
     Config* config_;

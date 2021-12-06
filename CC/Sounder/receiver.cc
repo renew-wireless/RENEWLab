@@ -691,7 +691,7 @@ void Receiver::txPilots(size_t user_id, long long base_time)
         ? kStreamContinuous
         : kStreamEndBurst;
     int num_samps = config_->samps_per_slot();
-    long long txTime = base_time + this->txTimeDelta
+    long long txTime = base_time
         + config_->cl_pilot_slots().at(user_id).at(0) * num_samps
         - config_->tx_advance();
 
@@ -701,7 +701,7 @@ void Receiver::txPilots(size_t user_id, long long base_time)
         MLPD_WARN("BAD Write: %d/%d\n", r, num_samps);
     }
     if (config_->cl_sdr_ch() == 2) {
-        txTime = base_time + this->txTimeDelta
+        txTime = base_time
             + config_->cl_pilot_slots().at(user_id).at(1) * num_samps
             - config_->tx_advance();
 
@@ -713,7 +713,7 @@ void Receiver::txPilots(size_t user_id, long long base_time)
     }
 }
 
-int Receiver::clientTxData(int tid, long long base_time)
+int Receiver::clientTxData(int tid, int frame_id, long long base_time)
 {
     size_t tx_slots = config_->cl_ul_slots().at(tid).size();
     int num_samps = config_->samps_per_slot();
@@ -728,6 +728,9 @@ int Receiver::clientTxData(int tid, long long base_time)
         assert(event.event_type == kEventTxSymbol);
         assert(event.ant_id == tid);
         size_t cur_offset = event.offset;
+        long long txFrameTime = base_time
+            + (event.frame_id - frame_id) * config_->samps_per_frame();
+        txPilots(tid, txFrameTime); // assuming pilot is always sent before data
 
         for (size_t s = 0; s < tx_slots; s++) {
             for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
@@ -739,7 +742,7 @@ int Receiver::clientTxData(int tid, long long base_time)
                 ul_txbuff.at(ch) = pkt->data;
                 cur_offset = (cur_offset + 1) % tx_buffer_size;
             }
-            long long txTime = base_time + txTimeDelta
+            long long txTime = txFrameTime
                 + config_->cl_ul_slots().at(tid).at(s) * num_samps
                 - config_->tx_advance();
             if (kUseUHD && s < (tx_slots - 1))
@@ -954,10 +957,11 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
         }
         // schedule all TX slot
         // config_->tx_advance() needs calibration based on SDR model and sampling rate
-        this->txPilots(tid, rxTime);
         if (config_->ul_data_slot_present() == true) {
-            while (-1 != this->clientTxData(tid, rxTime))
+            while (-1 != this->clientTxData(tid, frame_id, rxTime))
                 ;
+        } else {
+            this->txPilots(tid, rxTime + txTimeDelta);
         } // end if config_->ul_data_slot_present()
 
         slot_id++;
