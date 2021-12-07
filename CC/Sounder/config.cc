@@ -399,7 +399,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                || (client_present_ == true
                       && cl_ul_slots_.at(0).empty() == false));
 
-    dl_data_slot_present_ = ((bs_present_ == true
+    dl_data_slot_present_ = ((bs_present_ == true && dl_slots_.empty() == false
                                  && (dl_slots_.at(0).empty() == false))
         || (client_present_ == true && cl_dl_slots_.at(0).empty() == false));
 

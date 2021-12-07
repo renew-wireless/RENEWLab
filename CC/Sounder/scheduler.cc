@@ -230,7 +230,8 @@ void Scheduler::do_it()
 
             // if kEventRxSymbol, dispatch to proper worker
             if (event.event_type == kEventRxSymbol) {
-                if (event.slot_id == 0) { // Beacon event, schedule read
+                if (cfg_->internal_measurement() == false
+                    && event.slot_id == 0) { // Beacon event, schedule read
                     Event_data do_read_task;
                     do_read_task.event_type = kTaskRead;
                     do_read_task.ant_id = event.ant_id;
