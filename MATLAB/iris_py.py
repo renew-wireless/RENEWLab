@@ -111,6 +111,7 @@ class Iris_py:
 
                 ### Setup channel rates, ports, gains, and filters ###
                 info = self.sdr.getHardwareInfo()
+                self.sdr.writeSetting("RESET_DATA_LOGIC", "")
                 for chan in [0, 1]:
 
                         #Tx:
@@ -126,9 +127,7 @@ class Iris_py:
                                 self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'RF', tx_freq - .75*sample_rate)
                                 self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'BB', .75*sample_rate)
 
-                        #print("Set TX frequency to %f" % self.sdr.getFrequency(SOAPY_SDR_TX, chan))
-                        #self.sdr.setAntenna(SOAPY_SDR_TX, chan, "TRX")
-                        #self.sdr.setGain(SOAPY_SDR_TX, chan, 'ATTN', -6)
+                        self.sdr.writeSetting(SOAPY_SDR_TX, chan, "CALIBRATE", 'SKLK')
 
                         #Rx:
                         if sample_rate is not None:
@@ -143,22 +142,21 @@ class Iris_py:
                                 self.sdr.setFrequency(SOAPY_SDR_RX, chan, 'RF', rx_freq - .75*sample_rate)
                                 self.sdr.setFrequency(SOAPY_SDR_RX, chan, 'BB', .75*sample_rate)
 
-                        self.sdr.setAntenna(SOAPY_SDR_RX, chan, "TRX")
+                        self.sdr.writeSetting(SOAPY_SDR_RX, chan, "CALIBRATE", 'SKLK')
+                        self.sdr.setAntenna(SOAPY_SDR_TX, chan, "TRX")
+                        self.sdr.setDCOffsetMode(SOAPY_SDR_RX, chan, True)
 
                         if self.agc_en:
                                 self.sdr.setGain(SOAPY_SDR_RX, chan, 100)  # high gain value
                         else:
                                 self.sdr.setGain(SOAPY_SDR_RX, chan, rx_gain)
 
-                        self.sdr.setDCOffsetMode(SOAPY_SDR_RX, chan, True)
-
                 self.tx_stream = None  # Burst mode
+                #self.sdr.writeSetting("RESET_DATA_LOGIC", "")
 
-                self.sdr.writeSetting("RESET_DATA_LOGIC", "")
-
-                if not self.both_channels:
-                        self.sdr.writeSetting(SOAPY_SDR_RX, 1, 'ENABLE_CHANNEL', 'false')
-                        self.sdr.writeSetting(SOAPY_SDR_TX, 1, 'ENABLE_CHANNEL', 'false')
+                #if not self.both_channels:
+                #        self.sdr.writeSetting(SOAPY_SDR_RX, 1, 'ENABLE_CHANNEL', 'false')
+                #        self.sdr.writeSetting(SOAPY_SDR_TX, 1, 'ENABLE_CHANNEL', 'false')
 
         # Set trigger:
         def set_trigger(self):
@@ -252,6 +250,16 @@ class Iris_py:
                 if r1 < 0:
                     print("Problem activating stream\n")
 
+        def activate_stream_rx_burst_trig(self):
+                flags = SOAPY_SDR_END_BURST
+                flags |= SOAPY_SDR_WAIT_TRIGGER
+                r1 = self.sdr.activateStream(self.rx_stream, flags, 0, self.n_samp)
+                if r1 < 0:
+                    print("Problem activating stream\n")
+
+        def activate_tx_replay(self, sigLen):
+                self.sdr.writeSetting("TX_REPLAY", str(sigLen))
+
         def burn_beacon(self):
                 '''Write beacon to the FPGA ram'''
                 buf_a = cfloat2uint32(beacon, order='QI')
@@ -295,6 +303,24 @@ class Iris_py:
                         r1 = self.sdr.readStream(
                             self.rx_stream, [wave_rx_a, wave_rx_b], int(self.n_samp))
                         print("reading stream: ({})".format(r1))
+                    rx_frames_a[m*in_len: (m*in_len + in_len)] = wave_rx_a
+
+                return(rx_frames_a)
+
+        def recv_stream_trig(self):
+                '''Read an incoming stream.'''
+                max_frames = int(self.max_frames)
+                in_len = int(self.n_samp)
+                wave_rx_a = np.zeros((in_len), dtype=np.complex64)
+                wave_rx_b = np.zeros((in_len), dtype=np.complex64)
+                rx_frames_a = np.zeros((in_len*max_frames), dtype=np.complex64)
+
+                print("n_samp is: %d  \n" % self.n_samp)
+
+                for m in range(max_frames):
+                    self.sdr.writeSetting("TRIGGER_GEN", "")
+                    r1 = self.sdr.readStream(self.rx_stream, [wave_rx_a, wave_rx_b], int(self.n_samp))
+                    print("reading stream: ({})".format(r1))
                     rx_frames_a[m*in_len: (m*in_len + in_len)] = wave_rx_a
 
                 return(rx_frames_a)
