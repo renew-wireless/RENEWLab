@@ -122,6 +122,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     imbalance_cal_en_ = tddConf.value("imbalance_calibrate", false);
     beam_sweep_ = tddConf.value("beamsweep", false);
     beacon_ant_ = tddConf.value("beacon_antenna", 0);
+    beacon_radio_ = beacon_ant_ / bs_sdr_ch_;
+    beacon_ch_ = beacon_ant_ % bs_sdr_ch_;
     max_frame_ = tddConf.value("max_frame", 0);
     num_cells_ = tddConf.value("cells", 1);
     bs_hw_framer_ = tddConf.value("bs_hw_framer", true);
@@ -457,6 +459,12 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         beacon_ci16_.end(), post_beacon_zpad.begin(), post_beacon_zpad.end());
     beacon_ci16_.insert(
         beacon_ci16_.end(), postfix_zpad.begin(), postfix_zpad.end());
+
+    neg_beacon_ci16_.resize(beacon_ci16_.size());
+    for (size_t i = 0; i < beacon_ci16_.size(); i++) {
+        neg_beacon_ci16_.at(i)
+            = std::complex<int16_t>(0, 0) - beacon_ci16_.at(i);
+    }
 
     // compose pilot slot
     if (fft_size_ > kMaxSupportedFFTSize) {

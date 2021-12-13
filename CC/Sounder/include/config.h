@@ -73,7 +73,9 @@ public:
         return this->dl_data_frame_num_;
     }
     inline bool beam_sweep(void) const { return this->beam_sweep_; }
+    inline size_t beacon_channel(void) const { return this->beacon_ch_; }
     inline size_t beacon_ant(void) const { return this->beacon_ant_; }
+    inline size_t beacon_radio(void) const { return this->beacon_radio_; }
     inline size_t num_cl_antennas(void) const { return this->num_cl_antennas_; }
     inline size_t fft_size(void) const { return this->fft_size_; }
     inline size_t cp_size(void) const { return this->cp_size_; }
@@ -151,6 +153,10 @@ public:
     inline std::vector<std::complex<int16_t>>& beacon_ci16(void)
     {
         return this->beacon_ci16_;
+    }
+    inline std::vector<std::complex<int16_t>>& neg_beacon_ci16(void)
+    {
+        return this->neg_beacon_ci16_;
     }
     inline std::vector<std::vector<std::complex<float>>>& tx_data(void)
     {
@@ -394,8 +400,11 @@ private:
     std::vector<std::complex<float>> gold_cf32_;
     std::vector<uint32_t> beacon_;
     std::vector<std::complex<int16_t>> beacon_ci16_;
+    std::vector<std::complex<int16_t>> neg_beacon_ci16_;
     int beacon_size_;
     size_t beacon_ant_;
+    size_t beacon_radio_;
+    size_t beacon_ch_;
     bool beam_sweep_;
     std::vector<size_t> n_bs_sdrs_;
     std::vector<size_t> n_bs_antennas_; //No accessor

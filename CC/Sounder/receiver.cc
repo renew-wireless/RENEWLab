@@ -194,6 +194,39 @@ void Receiver::go()
     }
 }
 
+void Receiver::baseTxBeacon(
+    int radio_id, int cell, int frame_id, long long base_time)
+{
+    // prepare BS beacon in host buffer
+    std::vector<void*> beaconbuff(2);
+    if (config_->beam_sweep() == true) {
+        size_t beacon_frame_slot = frame_id % config_->num_bs_antennas_all();
+        for (size_t ch = 0; ch < config_->bs_sdr_ch(); ++ch) {
+            size_t cell_radio_id = radio_id + config_->n_bs_sdrs_agg().at(cell);
+            size_t cell_ant_id = cell_radio_id * config_->bs_sdr_ch();
+            int hdmd = CommsLib::hadamard2(beacon_frame_slot, cell_ant_id);
+            beaconbuff.at(ch) = hdmd == -1 ? config_->neg_beacon_ci16().data()
+                                           : config_->beacon_ci16().data();
+        }
+    } else {
+        if (config_->beacon_radio() == (size_t)radio_id) {
+            size_t bcn_ch = config_->beacon_channel();
+            beaconbuff.at(bcn_ch) = config_->beacon_ci16().data();
+            if (config_->bs_sdr_ch() > 1)
+                beaconbuff.at(1 - bcn_ch) = zeros.at(0);
+        } else { // set both channels to zeros
+            for (size_t ch = 0; ch < config_->bs_sdr_ch(); ++ch)
+                beaconbuff.at(ch) = zeros.at(ch);
+        }
+    }
+    int r_tx = this->base_radio_set_->radioTx(radio_id, cell, beaconbuff.data(),
+        kStreamEndBurst, base_time); // assume beacon is first slot
+    if (r_tx != (int)config_->samps_per_slot())
+        std::cerr << "BAD Transmit(" << r_tx << "/" << config_->samps_per_slot()
+                  << ") at Time " << base_time << ", frame count " << frame_id
+                  << std::endl;
+}
+
 int Receiver::baseTxData(
     int radio_id, int cell, int frame_id, long long base_time)
 {
@@ -212,6 +245,7 @@ int Receiver::baseTxData(
         size_t cur_offset = event.offset;
         long long txFrameTime = base_time
             + (event.frame_id - frame_id) * config_->samps_per_frame();
+        this->baseTxBeacon(radio_id, cell, event.frame_id, txFrameTime);
         for (size_t s = 0; s < config_->dl_slot_per_frame(); s++) {
             for (size_t ch = 0; ch < config_->bs_sdr_ch(); ++ch) {
                 char* cur_ptr_buffer = bs_tx_buffer_[radio_id].buffer.data()
@@ -352,7 +386,6 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
     beaconbuff.at(1u) = zeroes_memory;
 
     long long rxTimeBs(0);
-    long long txTimeBs(0);
 
     // read rx_offset to align the FPGA time of the BS
     // by performing dummy readStream()
@@ -367,7 +400,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
     int cell = 0;
     // for UHD device, the first pilot should not have an END_BURST flag
-    if (kUseUHD == true) {
+    //if (kUseUHD == true) {
+    if (kUseUHD == true || config_->bs_hw_framer() == false) {
         // For multi-USRP BS perform dummy radioRx to avoid initial late packets
         int bs_sync_ret = -1;
         MLPD_INFO("Sync BS host and FPGA timestamp for thread %d\n", tid);
@@ -476,17 +510,6 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
 
                 // schedule all TX slot
                 if (slot_id == 0) {
-                    // Schedule next beacon in BEACON_INTERVAL frames
-                    // FIXME?? From EACH cell or only one cell?
-                    txTimeBs = rxTimeBs
-                        + config_->samps_per_frame() * BEACON_INTERVAL;
-                    int r_tx = this->base_radio_set_->radioTx(radio_id, cell,
-                        beaconbuff.data(), kStreamEndBurst, txTimeBs);
-                    if (r_tx != (int)config_->samps_per_slot())
-                        std::cerr << "BAD Transmit(" << r_tx << "/"
-                                  << config_->samps_per_slot() << ") at Time "
-                                  << txTimeBs << ", frame count " << frame_id
-                                  << std::endl;
 
                     // schedule downlink slots
                     if (config_->dl_data_slot_present() == true) {
@@ -496,6 +519,9 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                         this->notifyPacket(kBS, frame_id + this->txFrameDelta,
                             0, radio_id,
                             bs_tx_buff_size); // Notify new frame
+                    } else {
+                        this->baseTxBeacon(
+                            radio_id, cell, frame_id, rxTimeBs + txTimeDelta);
                     } // end if config_->dul_data_slot_present()
                 }
                 if (!config_->isPilot(frame_id, slot_id)
@@ -689,7 +715,7 @@ void Receiver::clientTxRx(int tid)
     }
 }
 
-void Receiver::txPilots(size_t user_id, long long base_time)
+void Receiver::clientTxPilots(size_t user_id, long long base_time)
 {
     // for UHD device, the first pilot should not have an END_BURST flag
     int flags = (((kUseUHD == true) && (config_->cl_sdr_ch() == 2)))
@@ -735,7 +761,8 @@ int Receiver::clientTxData(int tid, int frame_id, long long base_time)
         size_t cur_offset = event.offset;
         long long txFrameTime = base_time
             + (event.frame_id - frame_id) * config_->samps_per_frame();
-        txPilots(tid, txFrameTime); // assuming pilot is always sent before data
+        clientTxPilots(
+            tid, txFrameTime); // assuming pilot is always sent before data
 
         for (size_t s = 0; s < tx_slots; s++) {
             for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
@@ -967,7 +994,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer)
             while (-1 != this->clientTxData(tid, frame_id, rxTime))
                 ;
         } else {
-            this->txPilots(tid, rxTime + txTimeDelta);
+            this->clientTxPilots(tid, rxTime + txTimeDelta);
         } // end if config_->ul_data_slot_present()
 
         slot_id++;
