@@ -457,13 +457,11 @@ def txrx_app(args, rate, ampl, ant, txgain, rxgain, freq, bbfreq, serialTx, seri
                 sdr.setSampleRate(SOAPY_SDR_TX, c, rate)
                 sdr.setFrequency(SOAPY_SDR_TX, c, "RF", freq-.75*rate)
                 sdr.setFrequency(SOAPY_SDR_TX, c, "BB", .75*rate)
-                sdr.writeSetting(SOAPY_SDR_TX, c, "CALIBRATE", 'SKLK')
 
                 sdr.setBandwidth(SOAPY_SDR_RX, c, 2.5*rate)
                 sdr.setSampleRate(SOAPY_SDR_RX, c, rate)
                 sdr.setFrequency(SOAPY_SDR_RX, c, "RF", freq-.75*rate)
                 sdr.setFrequency(SOAPY_SDR_RX, c, "BB", .75*rate)
-                sdr.writeSetting(SOAPY_SDR_RX, c, "CALIBRATE", 'SKLK')
 
                 sdr.setAntenna(SOAPY_SDR_TX, c, "TRX")
                 sdr.setDCOffsetMode(SOAPY_SDR_RX, c, True)
