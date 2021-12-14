@@ -127,8 +127,6 @@ class Iris_py:
                                 self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'RF', tx_freq - .75*sample_rate)
                                 self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'BB', .75*sample_rate)
 
-                        self.sdr.writeSetting(SOAPY_SDR_TX, chan, "CALIBRATE", 'SKLK')
-
                         #Rx:
                         if sample_rate is not None:
                                 self.sdr.setSampleRate(SOAPY_SDR_RX, chan, sample_rate)
@@ -142,7 +140,6 @@ class Iris_py:
                                 self.sdr.setFrequency(SOAPY_SDR_RX, chan, 'RF', rx_freq - .75*sample_rate)
                                 self.sdr.setFrequency(SOAPY_SDR_RX, chan, 'BB', .75*sample_rate)
 
-                        self.sdr.writeSetting(SOAPY_SDR_RX, chan, "CALIBRATE", 'SKLK')
                         self.sdr.setAntenna(SOAPY_SDR_TX, chan, "TRX")
                         self.sdr.setDCOffsetMode(SOAPY_SDR_RX, chan, True)
 

@@ -214,7 +214,7 @@ classdef iris_py < handle
             len = length(data);
         end
         
-        function [data, len, dataAll] = sdrrx_triggen(obj, n_samp, choose_best_frame)        % Read n_frame x n_samp data
+        function [data, len] = sdrrx_triggen(obj, n_samp, choose_best_frame)        % Read n_frame x n_samp data
             if ~obj.is_bs
                 fprintf('sdrrx: Wrong function call on UE!');
             end
@@ -231,10 +231,9 @@ classdef iris_py < handle
                 end
             end
             if ~exist('choose_best_frame', 'var')
-                [data, dataAll] = obj.get_best_frame(data_raw.', n_samp);
+                data = obj.get_best_frame(data_raw.', n_samp);
             elseif choose_best_frame == 0
                 data = data_raw.';
-                dataAll = data;
             end
             len = length(data);        
         end
@@ -293,7 +292,7 @@ classdef iris_py < handle
             end
         end
         
-        function [data, lts_corr_sum] = get_best_frame(obj, data_frame, n_samp)
+        function [data] = get_best_frame(obj, data_frame, n_samp)
             % FD LTS
             lts_f = [0 1 -1 -1 1 1 -1 1 -1 1 -1 -1 -1 -1 -1 1 1 -1 ...
                 -1 1 -1 1 -1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 1 1 -1 -1 ...
@@ -320,19 +319,19 @@ classdef iris_py < handle
 
             % Assume peak in the first 500 samples
             lts_corr_frm = reshape(lts_corr_sum, [], obj.n_frame);
-            
+
             if obj.n_sdrs == 1 && length(lts_corr_frm) >= 300
                 lts_corr_frm = lts_corr_frm(1:300,:);
             elseif (obj.n_sdrs > 1) && length(lts_corr_frm) >= 420
                 lts_corr_frm = lts_corr_frm(1:420,:);
             end
             save my_data.mat lts_corr_dr lts_corr_frm
-            
+
             % Avg corr value per frame
             frm_avg_corr = sum(lts_corr_frm,1)./obj.n_sdrs;
             % Take index of maximum corr. value
-            [max_corr, m_idx] = max(frm_avg_corr);  
-            
+            [max_corr, m_idx] = max(frm_avg_corr);
+
             % Reshape data frame to n_samp-by-n_antenna-by-n_frame
             data_split  = zeros(obj.n_samp, obj.n_sdrs,obj.n_frame);
             for nf = 1:obj.n_frame
@@ -341,7 +340,7 @@ classdef iris_py < handle
                 data_split(:,:,nf) = data_frame(strt_idx :end_idx ,:);
             end
             %data_frame = reshape(data_frame,n_samp, [], obj.n_frame );        
-    
+
             % Return the frame with the highest value 
             data = data_split(:,:,m_idx).';
             fprintf('Returning frame number %d with max mean correlation = %f \n',m_idx,max_corr);

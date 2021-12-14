@@ -2,13 +2,18 @@
 %
 %	Author(s): C. Nicolas Barati nicobarati@rice.edu 
 %		Rahman Doost-Mohamamdy: doost@rice.edu
+%               Oscar Bejarano obejarano@rice.edu
 %
-% Multiple iterations of a single-shot transmissions from one client or UE
-% to one base station radio (UE stands for User Equipment).
+% Another version of Single-Input Single-Output transmission.
+% The transmitter is set to continuously transmit the same waveform
+% until the script ends. The receiver does a single-shot capture of the
+% transmitted signal. Unlike the original rl_ofdm_siso.m script, no
+% hardware correlator is used to trigger data/transmission and reception.
+% This provides more flexibility since it can be run with BS nodes as 
+% transmitters or receivers (no firmware limitation on correlator).
 % The script explores Bit Error Rate (BER) as a function of Signal-to-Noise
-% Ratio (SNR) and therefore iterates over different SNR values (sim_SNR_db
-% variable). Within each iteration, only a single frame transmission takes
-% place.
+% Ratio (SNR) and therefore can be used to iterate over different SNR values 
+% (sim_SNR_db variable) in SIM mode. 
 %
 % We define two modes: OTA (Over-the-air) and SIM_MOD (simulation).
 % In simulation mode we simply use a Rayleigh channel whereas the OTA mode
@@ -16,9 +21,6 @@
 % In both cases the client transmits an OFDM signal that resembles a
 % typical 802.11 WLAN waveform. If the transmission is OTA, then the user
 % specifies a schedule that tells the client when to transmit its frame
-% The base station initiates the schedule by sending a beacon signal that
-% synchronizes the client. After that, the client will simply transmit its
-% frame.
 %
 %---------------------------------------------------------------------
 % Original code copyright Mango Communications, Inc.
@@ -43,8 +45,8 @@ PLOT                        =0;
 
 if SIM_MOD
     chan_type               = "rayleigh";
-    nt                      = 1; %100;
-    sim_SNR_db              = 100; %1:20;
+    nt                      = 100;
+    sim_SNR_db              = 1:20;
     nsnr                    = length(sim_SNR_db);
     snr_plot                = max(sim_SNR_db);
     TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
@@ -193,7 +195,7 @@ else
     bs_ids = ["RF3E000346"];
     ue_ids = ["RF3E000208"];
     
-    bs_sched = ["BGGGGGRG"];           % BS schedule
+    bs_sched = ["GGGGGGRG"];           % BS schedule
     ue_sched = ["GGGGGGPG"];               % UE schedule
     
     n_samp = 2^13; %length(tx_vec_iris);;
@@ -218,11 +220,10 @@ else
     ue_sdr_params.n_sdrs = N_UE;
     ue_sdr_params.tdd_sched = ue_sched;
     
-if (0)   
-    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, [], bs_sdr_params, ue_sdr_params, []);
-else
-    %%%%%%%%%%%%%%%%%%%%%%
-    % Real HW:
+ 
+    %rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, [], bs_sdr_params, ue_sdr_params, []);
+
+    % RX
     n_samp = bs_sdr_params.n_samp;
     node_bs = iris_py(bs_sdr_params,[]);        % initialize BS
     node_ue = iris_py(ue_sdr_params,[]);        % initialize UE
@@ -244,7 +245,7 @@ else
 
     % node_bs.sdr_activate_rx();          % activate reading stream
     %node_bs.sdr_activate_rx_burst_trig();     
-    [rx_vec_iris,  data0_len, dataAll] = node_bs.sdrrx_triggen(n_samp * N_BS_NODE, 0);
+    [rx_vec_iris,  data0_len] = node_bs.sdrrx_triggen(n_samp * N_BS_NODE, 0);
     
     % ONCE sdrrx is called, the TDD sched will be executed.
     %[y,  data0_len] = node_bs.sdrrx_notrig(n_samp * N_BS_NODE, 0);
@@ -252,34 +253,11 @@ else
     node_bs.sdr_close();                % close streams and exit gracefully.
     node_ue.sdr_close();
     fprintf('Length of the received vector from HW: \tUE:%d\n', data0_len);
-    %%%%%%%%%%%%%%%%%%%%%%%%
-end
     
 end
 
 %rx_vec_iris = rx_vec_iris.';
 l_rx_dec=length(rx_vec_iris);
-
-
-%%%%%%%%%%%%%%%%%
-% Rx signal
-fst_clr = [0, 0.4470, 0.7410];
-sec_clr = [0.8500, 0.3250, 0.0980];
-cf = 0;
-cf = cf + 1;
-figure(cf); clf;
-subplot(2,1,1);
-plot(real(rx_vec_iris));
-axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
-grid on;
-title('Rx Waveform (I)');
-
-subplot(2,1,2);
-plot(imag(rx_vec_iris), 'color', sec_clr);
-axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
-grid on;
-title('Rx Waveform (Q)');
-%%%%%%%%%%%%%%%%%
 
 %% Correlate for LTS
 % Correlation
@@ -322,31 +300,6 @@ end
 
 lts_ind = lts_start;
 payload_ind = data_start;
-
-
-% % Complex cross correlation of Rx waveform with time-domain LTS
-% peakNotFound = 1;
-% a = 1;
-% unos = ones(size(preamble.'))';
-% v0 = filter(flipud(preamble'),a,rx_vec_iris);
-% v1 = filter(unos,a,abs(rx_vec_iris).^2);
-% m_filt = (abs(v0).^2)./v1; % normalized correlation
-% lts_corr = m_filt;
-% [rho_max, ipos] = max(lts_corr);
-% %figure; plot(lts_corr);
-% payload_ind = ipos +1;
-% lts_ind = payload_ind - N_LTS_SYM*(N_SC + CP_LEN);
-% res = [lts_ind payload_ind]
-% % Re-extract LTS for channel estimate
-% if lts_ind < 1
-%     disp('Bad LTS Correlation. Exit now!');
-%     return;
-% end
-% if payload_ind + (N_SYM_SAMP * N_OFDM_SYM) > length(rx_vec_iris)
-%     disp('Bad LTS Correlation (Exceeded length). Exit now!');
-%     return;    
-% end
-
 
 rx_lts = rx_vec_iris(lts_ind : lts_ind+159);
 rx_lts1 = rx_lts(-64+-FFT_OFFSET + [97:160]);

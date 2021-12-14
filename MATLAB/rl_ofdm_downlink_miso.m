@@ -588,7 +588,6 @@ fprintf('Num Bytes:  \t  %d\n', N_DATA_SC * log2(MOD_ORDER) / 8);
 fprintf('Sym Errors:  \t %d (of %d total symbols)\n', sym_errs, N_DATA_SC);
 fprintf('Bit Errors: \t %d (of %d total bits)\n', bit_errs, N_DATA_SC * log2(MOD_ORDER));
 fprintf('EVM: \t %f, SNR: %f \n', aevms, snr);
-samp_offset_array
 
 %% Step 6: Plotting
 cf = 0;
