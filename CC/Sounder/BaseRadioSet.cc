@@ -37,12 +37,22 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         num_bs_antenntas[c] = num_radios * _cfg->bs_channel().length();
         MLPD_TRACE("Setting up radio: %zu, cells: %zu\n", num_radios,
             _cfg->num_cells());
-        if ((kUseUHD == false) && (_cfg->hub_ids().empty() == false)) {
+
+        // TODO: we can handle this better!
+        // Single hub could potentially trigger multiple BS or RRHs
+        // Leave this for future when multi-cell is enabled
+        if ((kUseUHD == false) && (_cfg->hub_ids().empty() == false)
+            && (_cfg->hub_ids().at(c).empty() == false)) {
             SoapySDR::Kwargs args;
             args["driver"] = "remote";
             args["timeout"] = "1000000";
             args["serial"] = _cfg->hub_ids().at(c);
-            hubs.push_back(SoapySDR::Device::make(args));
+            SoapySDR::Device* dev = SoapySDR::Device::make(args);
+            if (dev == NULL)
+                throw std::invalid_argument(
+                    "error making SoapySDR::Device (hub)\n");
+            else
+                hubs.push_back(dev);
         }
         bsRadios.at(c).resize(num_radios);
         std::atomic_ulong thread_count = ATOMIC_VAR_INIT(num_radios);

@@ -133,6 +133,10 @@ public:
     }
     inline const std::string& pilot_seq(void) const { return this->pilot_seq_; }
     inline const std::string& data_mod(void) const { return this->data_mod_; }
+    inline const std::string& cl_data_mod(void) const
+    {
+        return this->cl_data_mod_;
+    }
 
     inline const std::vector<size_t>& n_bs_sdrs_agg(void) const
     {
@@ -386,6 +390,7 @@ private:
     bool ul_data_slot_present_;
     bool dl_data_slot_present_;
     std::string data_mod_;
+    std::string cl_data_mod_;
 
     // BS features
     size_t num_cells_;

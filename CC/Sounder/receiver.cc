@@ -47,7 +47,7 @@ Receiver::Receiver(Config* config,
         this->base_radio_set_
             = config_->bs_present() ? new BaseRadioSet(config_) : nullptr;
     } catch (std::exception& e) {
-        throw ReceiverException("Invalid Radio Setup");
+        throw ReceiverException(e.what());
     }
 
     MLPD_TRACE("Receiver Construction -- number radios %zu\n",
