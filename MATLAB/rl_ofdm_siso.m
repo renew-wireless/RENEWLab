@@ -497,7 +497,7 @@ if PLOT
 end
 
 % BER SIM MOD
-if SIM_MOD
+if SIM_MOD && PLOT
     cf = cf+1;
     figure(cf);
     ber_avg = mean(ber_SIM)';

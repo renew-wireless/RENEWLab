@@ -36,13 +36,13 @@ if ~isloaded
 end
 
 % Params:
-N_BS_NODE               = 8;             % Number of SDRs (Matlab scripts only using antenna A)
-N_UE                    = 2;
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 SIM_MOD                 = 0;
 DEBUG                   = 0;
 PLOT                    = 0;
 if SIM_MOD
+    N_BS_NODE               = 8;             % Number of SDRs (Matlab scripts only using antenna A)
+    N_UE                    = 2;
     chan_type               = "rayleigh"; % Will use only Rayleigh for simulation
     sim_SNR_db              = 15;
     TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
@@ -61,8 +61,8 @@ else
     RX_GN                   = 75;
     SMPL_RT                 = 5e6;
     N_FRM                   = 10;
-    BEACON_SWEEP     = 0;
-    bs_ids                   = string.empty();
+    BEACON_SWEEP            = 0;
+    bs_ids                  = string.empty();
     ue_ids                  = string.empty();
     ue_scheds               = string.empty();
 
@@ -73,12 +73,15 @@ else
 
        bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716"];
        hub_id = "FH4B000021";
+       %bs_ids = ["RF3E000146","RF3E000122","RF3E000150","RF3E000128","RF3E000168","RF3E000136","RF3E000213","RF3E000142"];
+       %hub_id = "FH4B000019";
 
     else
         bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716"];
     end
 
     ue_ids= ["RF3E000119", "RF3E000145"];
+    %ue_ids= ["RF3E000164", "RF3E000392"];
 
     N_BS_NODE               = length(bs_ids);           % Number of nodes/antennas at the BS
     N_UE                    = length(ue_ids);           % Number of UE nodes
