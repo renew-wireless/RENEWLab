@@ -245,7 +245,8 @@ int Receiver::baseTxData(
         size_t cur_offset = event.offset;
         long long txFrameTime = base_time
             + (event.frame_id - frame_id) * config_->samps_per_frame();
-        this->baseTxBeacon(radio_id, cell, event.frame_id, txFrameTime);
+        if (config_->bs_hw_framer() == false)
+            this->baseTxBeacon(radio_id, cell, event.frame_id, txFrameTime);
         for (size_t s = 0; s < config_->dl_slot_per_frame(); s++) {
             for (size_t ch = 0; ch < config_->bs_sdr_ch(); ++ch) {
                 char* cur_ptr_buffer = bs_tx_buffer_[radio_id].buffer.data()
