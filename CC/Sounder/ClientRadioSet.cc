@@ -270,7 +270,7 @@ void ClientRadioSet::init(ClientRadioContext* context)
     }
     try {
         radios.at(i) = nullptr;
-        radios.at(i) = new Radio(args, SOAPY_SDR_CS16, channels, _cfg->rate());
+        radios.at(i) = new Radio(args, SOAPY_SDR_CS16, channels);
     } catch (std::runtime_error& err) {
         has_runtime_error = true;
 

@@ -20,7 +20,7 @@ private:
 
 public:
     Radio(const SoapySDR::Kwargs& args, const char soapyFmt[],
-        const std::vector<size_t>& channels, double rate);
+        const std::vector<size_t>& channels);
     ~Radio(void);
     int recv(void* const* buffs, int samples, long long& frameTime);
     int activateRecv(

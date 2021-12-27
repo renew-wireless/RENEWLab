@@ -394,8 +394,7 @@ void BaseRadioSet::init(BaseRadioContext* context)
     args["timeout"] = "1000000";
     try {
         bsRadios.at(c).at(i) = nullptr;
-        bsRadios.at(c).at(i)
-            = new Radio(args, SOAPY_SDR_CS16, channels, _cfg->rate());
+        bsRadios.at(c).at(i) = new Radio(args, SOAPY_SDR_CS16, channels);
     } catch (std::runtime_error& err) {
         if (kUseUHD == false) {
             std::cerr << "Ignoring iris " << _cfg->bs_sdr_ids().at(c).at(i)

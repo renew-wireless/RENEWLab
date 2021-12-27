@@ -6,6 +6,10 @@
 
 void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
 {
+    // Set sampling rate
+    dev->setSampleRate(SOAPY_SDR_RX, ch, _cfg->rate());
+    dev->setSampleRate(SOAPY_SDR_TX, ch, _cfg->rate());
+
     // these params are sufficient to set before DC offset and IQ imbalance calibration
     if (!kUseUHD) {
         dev->setAntenna(SOAPY_SDR_RX, ch, "TRX");
@@ -81,15 +85,17 @@ void Radio::drain_buffers(std::vector<void*> buffs, int symSamp)
 }
 
 Radio::Radio(const SoapySDR::Kwargs& args, const char soapyFmt[],
-    const std::vector<size_t>& channels, double rate)
+    const std::vector<size_t>& channels)
 {
     dev = SoapySDR::Device::make(args);
     if (dev == NULL)
         throw std::invalid_argument("error making SoapySDR::Device\n");
+
+    /* Moved to dev_init function (seems to fix the rate issue)
     for (auto ch : channels) {
         dev->setSampleRate(SOAPY_SDR_RX, ch, rate);
         dev->setSampleRate(SOAPY_SDR_TX, ch, rate);
-    }
+    }*/
     rxs = dev->setupStream(SOAPY_SDR_RX, soapyFmt, channels);
     txs = dev->setupStream(SOAPY_SDR_TX, soapyFmt, channels);
 
