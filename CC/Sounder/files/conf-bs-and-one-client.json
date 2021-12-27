@@ -25,5 +25,5 @@
 	"ue_frame_schedule" : [
 		"GGPPGGGGGGGGGGGGGGGG"
 	],
-	"tx_advance" : 135
+	"tx_advance" : [135]
 }

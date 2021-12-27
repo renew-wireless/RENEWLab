@@ -323,7 +323,17 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     cl_agc_gain_init_ = tddConf.value("agc_gain_init", 70); // 0 to 108
     frame_mode_ = tddConf.value("frame_mode", "continuous_resync");
     hw_framer_ = tddConf.value("ue_hw_framer", false);
-    tx_advance_ = tddConf.value("tx_advance", 250); // 250
+    auto tx_advance = tddConf.value("tx_advance", json::array());
+    if (tx_advance.empty() == true) {
+        tx_advance_.resize(num_cl_sdrs_, 250);
+    } else {
+        if (tx_advance.size() != num_cl_sdrs_) {
+            MLPD_ERROR(
+                "tx_advance size must be same as the number of clients!\n");
+            exit(1);
+        }
+        tx_advance_.assign(tx_advance.begin(), tx_advance.end());
+    }
     ul_data_frame_num_ = tddConf.value("ul_data_frame_num", 1);
     dl_data_frame_num_ = tddConf.value("dl_data_frame_num", 1);
 
@@ -362,8 +372,33 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         throw std::invalid_argument(msg);
     }
 
-    auto jClFrames = tddConf.value("ue_frame_schedule", json::array());
-    cl_frames_.assign(jClFrames.begin(), jClFrames.end());
+    if (tddConf.find("ue_frame_schedule") == tddConf.end()) {
+        cl_frames_.resize(num_cl_sdrs_);
+        for (size_t i = 0; i < cl_frames_.size(); i++) {
+            cl_frames_.at(i) = frames_.at(0);
+            for (size_t s = 0; s < frames_.at(0).length(); s++) {
+                char c = frames_.at(0).at(s);
+                if (c == 'B') {
+                    cl_frames_.at(i).replace(
+                        s, 1, "G"); // Dummy RX used in PHY scheduler
+                } else if (c == 'P'
+                    and ((cl_sdr_ch_ == 1 and pilot_slots_.at(0).at(i) != s)
+                            or (cl_sdr_ch_ == 2
+                                   and (pilot_slots_.at(0).at(2 * i) != s
+                                           and pilot_slots_.at(0).at(i * 2 + 1)
+                                               != s)))) {
+                    cl_frames_.at(i).replace(s, 1, "G");
+                } else if (c != 'P' && c != 'U' && c != 'D') {
+                    cl_frames_.at(i).replace(s, 1, "G");
+                }
+            }
+            std::cout << "Client " << i << " schedule: " << cl_frames_.at(i)
+                      << std::endl;
+        }
+    } else {
+        auto jClFrames = tddConf.value("ue_frame_schedule", json::array());
+        cl_frames_.assign(jClFrames.begin(), jClFrames.end());
+    }
     cl_pilot_slots_ = Utils::loadSlots(cl_frames_, 'P');
     cl_ul_slots_ = Utils::loadSlots(cl_frames_, 'U');
     cl_dl_slots_ = Utils::loadSlots(cl_frames_, 'D');
@@ -468,16 +503,12 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         pilot_sym_f_ = CommsLib::getSequence(CommsLib::LTS_SEQ_F);
         pilot_sym_t_ = CommsLib::getSequence(CommsLib::LTS_SEQ);
         symbol_data_subcarrier_num_ = Consts::kNumMappedSubcarriers_80211;
-    } else if (pilot_seq_ == "zadoff-chu") {
+    } else { // Construct Zadoff-Chu-based pilot
         pilot_sym_f_ = CommsLib::getSequence(
             CommsLib::LTE_ZADOFF_CHU_F, symbol_data_subcarrier_num_);
         pilot_sym_t_ = CommsLib::getSequence(
             CommsLib::LTE_ZADOFF_CHU, symbol_data_subcarrier_num_);
-    } else
-        std::cout
-            << pilot_seq_
-            << " is not supported! Choose either LTS (64-fft) or zaddof-chu."
-            << std::endl;
+    }
 
     auto iq_ci16 = Utils::float_to_cint16(pilot_sym_t_);
     iq_ci16.insert(iq_ci16.begin(), iq_ci16.end() - cp_size_, iq_ci16.end());

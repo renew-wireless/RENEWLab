@@ -261,7 +261,7 @@ int Receiver::baseTxData(
             if (kUseUHD == true || config_->bs_hw_framer() == false) {
                 txTime = txFrameTime
                     + config_->dl_slots().at(radio_id).at(s) * num_samps
-                    - config_->tx_advance();
+                    - config_->tx_advance(radio_id);
             } else {
                 //size_t frame_id = (size_t)(base_time >> 32);
                 txTime = ((size_t)event.frame_id << 32)
@@ -725,7 +725,7 @@ void Receiver::clientTxPilots(size_t user_id, long long base_time)
     int num_samps = config_->samps_per_slot();
     long long txTime = base_time
         + config_->cl_pilot_slots().at(user_id).at(0) * num_samps
-        - config_->tx_advance();
+        - config_->tx_advance(user_id);
 
     int r = clientRadioSet_->radioTx(
         user_id, pilotbuffA.data(), num_samps, flags, txTime);
@@ -735,7 +735,7 @@ void Receiver::clientTxPilots(size_t user_id, long long base_time)
     if (config_->cl_sdr_ch() == 2) {
         txTime = base_time
             + config_->cl_pilot_slots().at(user_id).at(1) * num_samps
-            - config_->tx_advance();
+            - config_->tx_advance(user_id);
 
         r = clientRadioSet_->radioTx(
             user_id, pilotbuffB.data(), num_samps, kStreamEndBurst, txTime);
@@ -777,7 +777,7 @@ int Receiver::clientTxData(int tid, int frame_id, long long base_time)
             }
             long long txTime = txFrameTime
                 + config_->cl_ul_slots().at(tid).at(s) * num_samps
-                - config_->tx_advance();
+                - config_->tx_advance(tid);
             if (kUseUHD && s < (tx_slots - 1))
                 flagsTxUlData = kStreamContinuous; // HAS_TIME
             else
