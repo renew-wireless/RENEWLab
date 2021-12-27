@@ -26,5 +26,5 @@
 	    "GGGGGGPPGGGGGGGGGGGG",
 	    "GGGGGGGGPPGGGGGGGGGG"
 	],
-	"tx_advance" : 135
+	"tx_advance" : [135, 135]
 }

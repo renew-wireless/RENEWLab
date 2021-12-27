@@ -155,11 +155,11 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
                   << std::endl;
     } else {
         //beaconSize + 82 (BS FE delay) + 68 (path delay) + 17 (correlator delay) + 82 (Client FE Delay)
-        int clTrigOffset = _cfg->beacon_size() + _cfg->tx_advance();
-        int sf_start = clTrigOffset / _cfg->samps_per_slot();
-        int sp_start = clTrigOffset % _cfg->samps_per_slot();
-
         for (size_t i = 0; i < radios.size(); i++) {
+            int clTrigOffset = _cfg->beacon_size() + _cfg->tx_advance(i);
+            int sf_start = clTrigOffset / _cfg->samps_per_slot();
+            int sp_start = clTrigOffset % _cfg->samps_per_slot();
+
             auto dev = radios.at(i)->dev;
 
             // hw_frame is only for Iris

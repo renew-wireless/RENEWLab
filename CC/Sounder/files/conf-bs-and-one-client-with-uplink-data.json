@@ -26,5 +26,5 @@
 		"GGPPUGGGGGGGGGGGGGGG"
 	],
 	"ue_modulation" : "16QAM",
-	"tx_advance" : 135
+	"tx_advance" : [135]
 }
