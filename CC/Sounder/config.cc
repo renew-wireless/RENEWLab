@@ -40,6 +40,19 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     }
 
     internal_measurement_ = tddConf.value("internal_measurement", false);
+    /* Used for internal measurements. If internal_measurement is enabled,
+       the default is to use a reference node for reciprocity calibration.
+       Users have the option of "disabling" the reference node to get a full
+       matrix (send pilot from all base station boards and receive on all
+       base station boards). The guard interval multiplier extends the number
+       of G's in a schedule (between pilots).
+     */
+
+    ref_node_enable_ = tddConf.value("reference_node_enable", true);
+    guard_mult_ = tddConf.value("meas_guard_interval_mult", 1);
+
+    sample_cal_en_ = tddConf.value("sample_calibrate", false);
+    imbalance_cal_en_ = tddConf.value("imbalance_calibrate", false);
 
     num_bs_sdrs_all_ = 0;
     num_bs_antennas_all_ = 0;
@@ -95,7 +108,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                     sdr_serials.begin(), sdr_serials.end());
 
                 // Append calibration node
-                if (internal_measurement_ == true && ref_node_enable_ == true) {
+                if ((internal_measurement_ == true && ref_node_enable_ == true) || sample_cal_en_ == true) {
                     calib_ids_.at(i) = serials_conf.value("reference", "");
                     if (calib_ids_.at(i).empty()) {
                         MLPD_ERROR(
@@ -111,6 +124,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                 n_bs_antennas_.at(i) = bs_channel_.length() * n_bs_sdrs_.at(i);
                 num_bs_sdrs_all_ += n_bs_sdrs_.at(i);
                 num_bs_antennas_all_ += n_bs_antennas_.at(i);
+                cal_ref_sdr_id_ = n_bs_sdrs_.at(i) - 1;
                 MLPD_INFO(
                     "Loading devices - cell %zu, sdrs %zu, antennas: %zu, "
                     "total bs srds: %zu\n",
@@ -208,25 +222,12 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     rx_gain_.shrink_to_fit();
     cal_tx_gain_.shrink_to_fit();
 
-    sample_cal_en_ = tddConf.value("sample_calibrate", false);
-    imbalance_cal_en_ = tddConf.value("imbalance_calibrate", false);
     beam_sweep_ = tddConf.value("beamsweep", false);
     beacon_ant_ = tddConf.value("beacon_antenna", 0);
     beacon_radio_ = beacon_ant_ / bs_sdr_ch_;
     beacon_ch_ = beacon_ant_ % bs_sdr_ch_;
     max_frame_ = tddConf.value("max_frame", 0);
     bs_hw_framer_ = tddConf.value("bs_hw_framer", true);
-
-    /* Used for internal measurements. If internal_measurement is enabled,
-       the default is to use a reference node for reciprocity calibration.
-       Users have the option of "disabling" the reference node to get a full
-       matrix (send pilot from all base station boards and receive on all
-       base station boards). The guard interval multiplier extends the number
-       of G's in a schedule (between pilots).
-     */
-
-    ref_node_enable_ = tddConf.value("reference_node_enable", true);
-    guard_mult_ = tddConf.value("meas_guard_interval_mult", 1);
 
     // Schedule for internal measurements
     if (internal_measurement_ == true) {
