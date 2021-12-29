@@ -434,7 +434,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         filter_pilots_end = time.time()
 
         frame_sanity_start = time.time()
-        match_filt_clr, frame_map, f_st, peak_map = hdf5_lib.frame_sanity(match_filt, seq_num, seq_len, n_frm_st, frame_to_plot=frm_i, plt_ant=ant_i, cp = cp)
+        match_filt_clr, frame_map, f_st, peak_map = hdf5_lib.frame_sanity(match_filt, seq_num, seq_len, n_frm_st, frame_to_plot=frame_i, plt_ant=ant_i, cp = cp)
         frame_sanity_end = time.time()
         print(">>>> filter_pilots time: %f \n" % ( filter_pilots_end - filter_pilots_start) )
         print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
