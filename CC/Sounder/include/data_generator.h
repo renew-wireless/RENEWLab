@@ -6,21 +6,19 @@
 #ifndef DATA_GENERATOR_H_
 #define DATA_GENERATOR_H_
 
-#include "config.h"
 #include <random>
 #include <string>
 
+#include "config.h"
+
 class DataGenerator {
-public:
-    // The profile of the input information bits
-    explicit DataGenerator(Config* cfg)
-        : cfg_(cfg)
-    {
-    }
+ public:
+  // The profile of the input information bits
+  explicit DataGenerator(Config* cfg) : cfg_(cfg) {}
 
-    void GenerateData(const std::string& directory);
+  void GenerateData(const std::string& directory);
 
-private:
-    Config* cfg_;
+ private:
+  Config* cfg_;
 };
 #endif

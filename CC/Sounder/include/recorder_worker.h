@@ -15,27 +15,27 @@
 
 namespace Sounder {
 class RecorderWorker {
-public:
-    RecorderWorker(Config* in_cfg, size_t antenna_offset, size_t num_antennas);
-    ~RecorderWorker();
+ public:
+  RecorderWorker(Config* in_cfg, size_t antenna_offset, size_t num_antennas);
+  ~RecorderWorker();
 
-    void init(void);
-    void finalize(void);
-    void record(int tid, Packet* pkt);
+  void init(void);
+  void finalize(void);
+  void record(int tid, Packet* pkt);
 
-    inline size_t num_antennas(void) { return num_antennas_; }
-    inline size_t antenna_offset(void) { return antenna_offset_; }
+  inline size_t num_antennas(void) { return num_antennas_; }
+  inline size_t antenna_offset(void) { return antenna_offset_; }
 
-private:
-    Config* cfg_;
-    H5std_string hdf5_name_;
-    Hdf5Lib* hdf5_;
-    std::vector<std::string> datasets;
+ private:
+  Config* cfg_;
+  H5std_string hdf5_name_;
+  Hdf5Lib* hdf5_;
+  std::vector<std::string> datasets;
 
-    size_t max_frame_number_;
+  size_t max_frame_number_;
 
-    size_t antenna_offset_;
-    size_t num_antennas_;
+  size_t antenna_offset_;
+  size_t num_antennas_;
 };
 }; /* End namespace Sounder */
 
