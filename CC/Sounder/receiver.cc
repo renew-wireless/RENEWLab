@@ -111,7 +111,7 @@ void Receiver::initBuffers() {
       throw std::runtime_error("Error allocating memory");
     }
   }
-  pilotbuffA.at(0) = config_->pilot_cf32().data();
+  pilotbuffA.at(0) = config_->pilot_ci16().data();
   if (config_->cl_sdr_ch() == 2) {
     pilotbuffA.at(1) = zeros.at(0);
     pilotbuffB.at(1) = config_->pilot_ci16().data();
