@@ -77,9 +77,9 @@ $ cd ../
 ```
 Once compiled successfully, the code can be run as the following.
 
- 1. If your JSON file includes uplink data transmission, first generate the files, including a random bits source file, as below:
+ 1. If your JSON file includes uplink/downlink data transmission, first generate the files, including a random bits source file, as below:
      ```sh
-     $ ./build/sounder -conf PATH_TO_JSON_CONFIG_FILE -gen_ul_bits
+     $ ./build/sounder -conf PATH_TO_JSON_CONFIG_FILE -gen_data_bits
      ```   
  2. Next, to start collecting channel measurement data, run the hardware discovery tool Pyfaros to create a file containing the serials of the boards to be used, and run the Sounder software as follows:
      ```sh
@@ -90,7 +90,7 @@ Once compiled successfully, the code can be run as the following.
      ```   
  3. To store the dataset and bits source files in a specific directory use the `-storepath` switch:
      ```sh
-     $ ./build/sounder -conf PATH_TO_JSON_CONFIG_FILE -storepath PATH_TO_DIRECTORY -gen_ul_bits
+     $ ./build/sounder -conf PATH_TO_JSON_CONFIG_FILE -storepath PATH_TO_DIRECTORY -gen_data_bits
      $ ./build/sounder -conf PATH_TO_JSON_CONFIG_FILE -storepath PATH_TO_DIRECTORY
      ```   
  4. The dataset file generated in the specified directory with a software generated file name including a time stamp, e.g. `trace-uplink-2021-4-16-18-41-21_1x8x2_0_7.hdf5`. You can plot different dimension the dataset, such as the pilot of uplink data received on select base station antennas, or from select users, using the `plot_hdf5.py` tool in the PYTHON directory. For example:
