@@ -223,20 +223,6 @@ void RecorderWorker::init(void) {
       this->hdf5_->write_attribute("TX_FD_DATA_FILENAMES",
                                    this->cfg_->ul_tx_fd_data_files());
     }
-
-    // Freq. Domain Data Symbols
-    for (size_t i = 0; i < this->cfg_->txdata_freq_dom().size(); i++) {
-      std::string var = std::string("OFDM_DATA_CL") + std::to_string(i);
-      this->hdf5_->write_attribute(var.c_str(),
-                                   this->cfg_->txdata_freq_dom().at(i));
-    }
-
-    // Time Domain Data Symbols
-    for (size_t i = 0; i < this->cfg_->txdata_time_dom().size(); i++) {
-      std::string var = std::string("OFDM_DATA_TIME_CL") + std::to_string(i);
-      this->hdf5_->write_attribute(var.c_str(),
-                                   this->cfg_->txdata_time_dom().at(i));
-    }
   }
   // ********************* //
 

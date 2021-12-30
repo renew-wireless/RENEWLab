@@ -353,34 +353,26 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             ul_data_frame_num = int(metadata['UL_DATA_FRAME_NUM'])
             txdata = np.empty((ul_data_frame_num, num_cl_tmp, ul_slot_num,
                          symbol_per_slot, fft_size), dtype='complex64')
-            if ul_data_frame_num > 1:
-                tx_file_names = metadata['TX_FD_DATA_FILENAMES'].astype(str)
-                read_size = 2 * ul_data_frame_num * ul_slot_num * cl_ch_num * symbol_per_slot * fft_size
-                cl = 0
-                for fn in tx_file_names:
-                    tx_file_path = hdf5.dirpath + '/' + fn
-                    print('Opening source TX data file %s'%tx_file_path)
-                    with open(tx_file_path, mode='rb') as f:
-                        txdata0 = list(struct.unpack('f'*read_size, f.read(4*read_size)))
-                        I = np.array(txdata0[0::2])
-                        Q = np.array(txdata0[1::2])
-                        IQ = I + Q * 1j
-                        txdata[:, cl:cl+cl_ch_num, :, :, :] = np.transpose(np.reshape(IQ, (ul_data_frame_num, ul_slot_num,
-                            cl_ch_num, symbol_per_slot, fft_size)), (0, 2, 1, 3, 4))
-                    cl = cl + cl_ch_num
-                rep = n_frames // ul_data_frame_num
-                txdata_ext = np.tile(txdata, (rep, 1, 1, 1, 1))
-                frac_fr = n_frames % ul_data_frame_num
-                if frac_fr > 0:
-                    frac = txdata[frac_fr:, :, :, :, :]
-                    txdata_ext = np.concatenate((txdata_ext, frac), axis=0)
-            else:
-                for f in range(ul_data_frame_num):
-                    for i in range(num_cl_tmp):
-                        tx_data0 = metadata['OFDM_DATA_CL'+str(i)]
-                        tx_data_mat = np.reshape(tx_data0, (ul_slot_num, symbol_per_slot, fft_size))
-                        txdata[f, i, :, :, :]  = tx_data_mat
-                txdata_ext = np.tile(txdata, (n_frames, 1, 1, 1, 1))
+            tx_file_names = metadata['TX_FD_DATA_FILENAMES'].astype(str)
+            read_size = 2 * ul_data_frame_num * ul_slot_num * cl_ch_num * symbol_per_slot * fft_size
+            cl = 0
+            for fn in tx_file_names:
+                tx_file_path = hdf5.dirpath + '/' + fn
+                print('Opening source TX data file %s'%tx_file_path)
+                with open(tx_file_path, mode='rb') as f:
+                    txdata0 = list(struct.unpack('f'*read_size, f.read(4*read_size)))
+                    I = np.array(txdata0[0::2])
+                    Q = np.array(txdata0[1::2])
+                    IQ = I + Q * 1j
+                    txdata[:, cl:cl+cl_ch_num, :, :, :] = np.transpose(np.reshape(IQ, (ul_data_frame_num, ul_slot_num,
+                        cl_ch_num, symbol_per_slot, fft_size)), (0, 2, 1, 3, 4))
+                cl = cl + cl_ch_num
+            rep = n_frames // ul_data_frame_num
+            txdata_ext = np.tile(txdata, (rep, 1, 1, 1, 1))
+            frac_fr = n_frames % ul_data_frame_num
+            if frac_fr > 0:
+                frac = txdata[frac_fr:, :, :, :, :]
+                txdata_ext = np.concatenate((txdata_ext, frac), axis=0)
             txdata_ext = txdata_ext[:, :, :, :, data_sc_ind]
 
             ul_sym_i = ul_sf_i * symbol_per_slot + ofdm_sym_i

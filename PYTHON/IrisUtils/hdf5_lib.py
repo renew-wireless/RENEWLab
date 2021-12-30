@@ -417,35 +417,6 @@ class hdf5_lib:
             pilot_sc_vals_complex = pilot_sc_vals[0::2] + 1j * pilot_sc_vals[1::2]
             self.metadata['OFDM_PILOT_SC_VALS'] = pilot_sc_vals_complex
 
-            # Time-domain OFDM data
-            num_cl = np.squeeze(self.metadata['CL_NUM'])
-            for clIdx in range(num_cl):
-                this_str = 'OFDM_DATA_TIME_CL' + str(clIdx)
-                if not this_str in self.metadata.keys():
-                    continue
-                data_per_cl = np.squeeze(self.metadata[this_str])
-                # some_list[start:stop:step]
-                if np.any(data_per_cl):
-                    # If data present
-                    I = np.double(data_per_cl[0::2])
-                    Q = np.double(data_per_cl[1::2])
-                    IQ = I + Q * 1j
-                    self.metadata[this_str] = IQ
-
-            # Frequency-domain OFDM data
-            for clIdx in range(num_cl):
-                this_str = 'OFDM_DATA_CL' + str(clIdx)
-                if not this_str in self.metadata.keys():
-                    continue
-                data_per_cl = np.squeeze(self.metadata[this_str])
-                # some_list[start:stop:step]
-                if np.any(data_per_cl):
-                    # If data present
-                    I = np.double(data_per_cl[0::2])
-                    Q = np.double(data_per_cl[1::2])
-                    IQ = I + Q * 1j
-                    self.metadata[this_str] = IQ
-
         return self.metadata
 
     def filter_pilots(cmpx_pilots, z_padding=150, fft_size=64, cp=16, pilot_type='lts',seq_length=[]):
