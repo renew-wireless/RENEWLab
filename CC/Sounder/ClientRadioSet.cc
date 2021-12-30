@@ -246,7 +246,7 @@ void ClientRadioSet::init(ClientRadioContext* context) {
 
   bool has_runtime_error(false);
   auto channels = Utils::strToChannels(_cfg->cl_channel());
-  MLPD_TRACE("ClientRadioSet setting up radio: %zu : %zu\n", (i + 1),
+  MLPD_TRACE("ClientRadioSet setting up radio: %d : %zu\n", (i + 1),
              _cfg->num_cl_sdrs());
   SoapySDR::Kwargs args;
   args["timeout"] = "1000000";
@@ -293,7 +293,7 @@ void ClientRadioSet::init(ClientRadioContext* context) {
       initAGC(dev, _cfg);
     }
   }
-  MLPD_TRACE("BaseRadioSet: Init complete\n");
+  MLPD_TRACE("ClientRadioSet: Init complete\n");
   assert(thread_count->load() != 0);
   thread_count->store(thread_count->load() - 1);
 }

@@ -39,9 +39,11 @@ Scheduler::Scheduler(Config* in_cfg, unsigned int core_start)
   message_queue_ = moodycamel::ConcurrentQueue<Event_data>(
       rx_thread_buff_size_ * kQueueSize);
   MLPD_TRACE(
-      "Scheduler construction: rx threads: %zu, recorder/reader threads: %u, "
+      "Scheduler construction: rx threads: %zu, recorder threads: %zu, reader "
+      "threads: %zu, "
       "chunk size: %zu\n",
-      total_rx_thread_num, cfg_->task_thread_num(), rx_thread_buff_size_);
+      total_rx_thread_num, cfg_->recorder_thread_num(),
+      cfg_->reader_thread_num(), rx_thread_buff_size_);
 
   if (total_rx_thread_num > 0) {
     // initialize rx buffers

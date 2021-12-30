@@ -120,8 +120,8 @@ void Hdf5Lib::openDataset() {
 void Hdf5Lib::removeDataset(std::string dataset_name) {
   std::string ds_name("/" + this->group_name_ + "/" + dataset_name);
   size_t ds_id = ds_name_id[dataset_name];
-  MLPD_TRACE(dataset_str_.at(ds_id) +
-             " Dataset exists during garbage collection\n");
+  MLPD_TRACE("%s Dataset exists during garbage collection\n",
+             dataset_str_.at(ds_id).c_str());
   this->datasets_.at(ds_id)->close();
   this->datasets_.at(ds_id) = nullptr;
   delete this->datasets_.at(ds_id);

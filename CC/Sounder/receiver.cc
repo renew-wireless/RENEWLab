@@ -90,8 +90,6 @@ Receiver::~Receiver() {
   }
 
   for (auto memory : zeros) {
-    MLPD_SYMBOL("Process %d -- Client Sync Tx Rx Freed memory at %p\n", tid,
-                memory);
     free(memory);
   }
   zeros.clear();
@@ -355,7 +353,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
   MLPD_INFO("Receiver thread %d has %zu radios\n", tid,
             radio_ids_in_thread.size());
   MLPD_TRACE(
-      " -- %d - radio start: %zu, end: %zu, total radios %zu, thread: %d\n",
+      " -- %d - radio start: %zu, end: %zu, total radios %zu, thread: %zu\n",
       tid, radio_ids_in_thread.front(), radio_ids_in_thread.back(), num_radios,
       thread_num_);
 
