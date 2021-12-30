@@ -6,16 +6,19 @@
 Event based message queue thread class for the recorder worker
 ---------------------------------------------------------------------
 */
-#ifndef SOUNDER_RECORDER_THREAD_H_
-#define SOUNDER_RECORDER_THREAD_H_
+#ifndef SOUNDER_HDF5_READER_H_
+#define SOUNDER_HDF5_READER_H_
 
 #include <condition_variable>
 #include <mutex>
+#include <vector>
 
-#include "recorder_worker.h"
+#include "config.h"
+#include "macros.h"
+#include "receiver.h"
 
 namespace Sounder {
-class RecorderThread {
+class Hdf5Reader {
  public:
   //    enum RecordEventType { kThreadTermination, kTaskRecord };
   //
@@ -26,25 +29,27 @@ class RecorderThread {
   //        size_t rx_buff_size;
   //    };
 
-  RecorderThread(Config* in_cfg, size_t thread_id, int core, size_t queue_size,
-                 size_t antenna_offset, size_t num_antennas,
-                 bool wait_signal = true);
-  ~RecorderThread();
+  Hdf5Reader(Config* in_cfg, moodycamel::ConcurrentQueue<Event_data>& msg_queue,
+             SampleBuffer* tx_buffer, size_t thread_id, int core,
+             size_t queue_size, bool wait_signal = true);
+  ~Hdf5Reader();
 
   void Start(void);
   void Stop(void);
   bool DispatchWork(Event_data event);
+  Event_data ReadFrame(Event_data event, int* offset);
 
  private:
   /*Main threading loop */
-  void DoRecording(void);
-  void HandleEvent(Event_data event);
+  void DoReading(void);
   void Finalize();
 
   //1 - Producer (dispatcher), 1 - Consumer
+  moodycamel::ConcurrentQueue<Event_data>& msg_queue_;
   moodycamel::ConcurrentQueue<Event_data> event_queue_;
   moodycamel::ProducerToken producer_token_;
-  RecorderWorker worker_;
+  SampleBuffer* tx_buffer_;
+  Config* config_;
   std::thread thread_;
 
   size_t id_;
@@ -64,7 +69,8 @@ class RecorderThread {
   std::mutex sync_;
   std::condition_variable condition_;
   bool running_;
+  std::vector<FILE*> fp;
 };
 };  // namespace Sounder
 
-#endif /* SOUNDER_RECORDER_THREAD_H_ */
+#endif /* SOUNDER_HDF5_READER_H_ */

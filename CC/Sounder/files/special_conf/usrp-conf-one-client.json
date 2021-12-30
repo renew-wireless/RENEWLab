@@ -29,7 +29,7 @@
                  "frame_schedule" : [
                      "GGPGUGGGGGGGGGGGGGGG"
                  ],
-	         "tx_advance" : 100,
+	         "tx_advance" : [100],
                  "modulation" : "16QAM",
                  "sdr_id" : [
                      "10.117.2.2"

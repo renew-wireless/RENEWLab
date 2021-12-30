@@ -279,6 +279,7 @@ class hdf5_lib:
         self.metadata = {}
         self.pilot_samples = []
         self.uplink_samples = []
+        self.downlink_samples = []
         self.noise_samples = []
         self.n_frm_st = n_fr_insp_st                                # index of last frame
         self.n_frm_end = self.n_frm_st + n_frames_to_inspect    # index of last frame in the range of n_frames_to_inspect
@@ -338,22 +339,26 @@ class hdf5_lib:
             else:
                 self.pilot_samples = self.data['Pilot_Samples'][self.n_frm_st:self.n_frm_end:self.sub_sample, ...]
 
-        if len(self.data.keys()) > 1:
-            print("looking into UplinkData")
-            if 'UplinkData' in self.data:
-                if self.n_frm_st == self.n_frm_end:
-                    # Consider the entire dataset (for demos etc)
-                    self.uplink_samples = self.data['UplinkData']
-                else:
-                    self.uplink_samples = self.data['UplinkData'][self.n_frm_st:self.n_frm_end:self.sub_sample, ...]
+        if 'UplinkData' in self.data:
+            if self.n_frm_st == self.n_frm_end:
+                # Consider the entire dataset (for demos etc)
+                self.uplink_samples = self.data['UplinkData']
+            else:
+                self.uplink_samples = self.data['UplinkData'][self.n_frm_st:self.n_frm_end:self.sub_sample, ...]
 
-            print("looking into Noise Samples (if enabled in Sounder)")
-            if 'Noise_Samples' in self.data:
-                if self.n_frm_st == self.n_frm_end:
-                    # Consider the entire dataset (for demos etc)
-                    self.noise_samples = self.data['Noise_Samples']
-                else:
-                    self.noise_samples = self.data['Noise_Samples'][self.n_frm_st:self.n_frm_end:self.sub_sample, ...]
+        if 'Noise_Samples' in self.data:
+            if self.n_frm_st == self.n_frm_end:
+                # Consider the entire dataset (for demos etc)
+                self.noise_samples = self.data['Noise_Samples']
+            else:
+                self.noise_samples = self.data['Noise_Samples'][self.n_frm_st:self.n_frm_end:self.sub_sample, ...]
+
+        if 'DownlinkData' in self.data:
+            if self.n_frm_st == self.n_frm_end:
+                # Consider the entire dataset (for demos etc)
+                self.downlink_samples = self.data['DownlinkData']
+            else:
+                self.downlink_samples = self.data['DownlinkData'][self.n_frm_st:self.n_frm_end:self.sub_sample, ...]
 
         return self.data
 
@@ -411,35 +416,6 @@ class hdf5_lib:
             pilot_sc_vals = self.metadata['OFDM_PILOT_SC_VALS']
             pilot_sc_vals_complex = pilot_sc_vals[0::2] + 1j * pilot_sc_vals[1::2]
             self.metadata['OFDM_PILOT_SC_VALS'] = pilot_sc_vals_complex
-
-            # Time-domain OFDM data
-            num_cl = np.squeeze(self.metadata['CL_NUM'])
-            for clIdx in range(num_cl):
-                this_str = 'OFDM_DATA_TIME_CL' + str(clIdx)
-                if not this_str in self.metadata.keys():
-                    continue
-                data_per_cl = np.squeeze(self.metadata[this_str])
-                # some_list[start:stop:step]
-                if np.any(data_per_cl):
-                    # If data present
-                    I = np.double(data_per_cl[0::2])
-                    Q = np.double(data_per_cl[1::2])
-                    IQ = I + Q * 1j
-                    self.metadata[this_str] = IQ
-
-            # Frequency-domain OFDM data
-            for clIdx in range(num_cl):
-                this_str = 'OFDM_DATA_CL' + str(clIdx)
-                if not this_str in self.metadata.keys():
-                    continue
-                data_per_cl = np.squeeze(self.metadata[this_str])
-                # some_list[start:stop:step]
-                if np.any(data_per_cl):
-                    # If data present
-                    I = np.double(data_per_cl[0::2])
-                    Q = np.double(data_per_cl[1::2])
-                    IQ = I + Q * 1j
-                    self.metadata[this_str] = IQ
 
         return self.metadata
 
