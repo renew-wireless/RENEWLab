@@ -213,20 +213,32 @@ elseif chan_type == "iris"
     node_bs.set_tddconfig(1, bs_param.tdd_sched(tdd_sched_index)); % configure the BS: schedule etc.
     node_ue.set_tddconfig(0, ue_param.tdd_sched(tdd_sched_index));
 
-    node_bs.sdr_setupbeacon();   % Burn beacon to the BS(1) RAM
+    if exist('bs_param.beacon_sweep', 'var')
+        if bs_param.beacon_sweep
+            disp('Beacon sweep');
+            node_bs.sdr_setupbeacon();       % Burn beacon to the BS RAM
+        else
+            disp('Beacon from single TX');
+            node_bs.sdr_setupbeacon_single();   % Burn beacon to the BS(1) RAM
+        end
+    else
+        disp('Beacon from single TX');
+        node_bs.sdr_setupbeacon_single();   % Burn beacon to the BS(1) RAM
+    end
 
     for i=1:n_ue
         node_ue.sdrtx_single(tx_data(:,i), i);       % Burn data to the UE RAM
     end
     node_bs.sdr_activate_rx();          % activate reading stream
 
-    node_ue.sdr_setcorr()              % activate correlator
+    node_ue.sdr_setcorr();              % activate correlator
     %node_bs.sdrtrigger(trig);           % set trigger to start the frame  
     
     % Iris Rx 
     % Only UL data:
-
     [y, data0_len] = node_bs.sdrrx(n_samp); % read data
+
+    node_ue.sdr_gettriggers();
 
     node_bs.sdr_close();                % close streams and exit gracefully.
     node_ue.sdr_close();

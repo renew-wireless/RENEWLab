@@ -168,10 +168,21 @@ class Iris_py:
                 '''enable the correlator, with inputs from adc'''
                 self.sdr.writeSetting("CORR_START", "A")
 
+        # Beacon detected?
+        def sdr_gettriggers(self):
+                #time.sleep(1)
+                t = SoapySDR.timeNsToTicks(self.sdr.getHardwareTime(""),self.sample_rate) >> 32 #trigger count is top 32 bits.
+                print("%d new triggers" % (t))
+                return t
+
         def unset_corr(self):
                 corr_conf = {"corr_enabled": False}
                 self.sdr.writeRegister("IRIS30", 60, 
                     self.sdr.readRegister("IRIS30", 60) & 0xFFFE)
+
+        def sdr_settxgain(self, tx_gain):
+                for chan in [0, 1]:
+                    self.sdr.setGain(SOAPY_SDR_TX, chan, min(tx_gain, 81.0))
 
         def config_sdr_tdd(self, is_bs=True, tdd_sched="G", prefix_len=0, max_frames=1):
                 '''Configure the TDD schedule and functionality when unchained. Set up the correlator.'''
@@ -251,6 +262,7 @@ class Iris_py:
                 self.sdr.writeRegisters(
                     "BEACON_RAM_WGT_B", 0, beacon_weights[1])
                 self.sdr.writeSetting("BEACON_START", str(2))
+                print("burnt beacon to node {} FPGA RAM".format(self.serial_id))
 
         # Write data to FPGA RAM
         def burn_data(self, data_r, data_i=None, replay_addr=0):
@@ -408,6 +420,8 @@ if __name__ == '__main__':
             siso_bs.set_trigger()
 
         wave_rx_a_bs_mn = siso_bs.recv_stream_tdd()
+        foundTrigger = siso_ue.sdr_gettriggers()
+        print("Beacon Trigger? {}".format(foundTrigger))
 
         freq = args.freq
         print("printing number of frames")

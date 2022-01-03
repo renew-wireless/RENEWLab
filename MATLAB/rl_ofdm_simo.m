@@ -38,7 +38,6 @@ end
 
 % Params:
 WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
-CHANNEL                 = 11;          % Channel to tune Tx and Rx radios
 SIM_MOD                 = 0;
 PLOT                    = 0;
 
@@ -57,16 +56,16 @@ if SIM_MOD
 else
     nt                      = 1;
     nsnr                    = 1;
-    TX_SCALE                = 0.5;         % Scale for Tx waveform ([0:1])
+    TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
     chan_type               = "iris";
 
     
     %Iris params:
     USE_HUB                 = 1;
-    TX_FRQ                  = 3.6e9;
+    TX_FRQ                  = 3.55e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = 80;
-    RX_GN                   = 65;
+    TX_GN                   = 70;
+    RX_GN                   = 70;
     SMPL_RT                 = 5e6;  
     N_FRM                   = 10;
     bs_ids = string.empty();
@@ -205,7 +204,7 @@ else
 
     end
     
-    ue_ids= ["RF3E000119"];
+    ue_ids= ["RF3E000145"];
 
     N_BS_NODE = length(bs_ids);
     N_UE = length(ue_ids);
