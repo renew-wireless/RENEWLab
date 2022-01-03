@@ -1,6 +1,6 @@
 # RENEWLab
 
-[![Build Status](https://falcon.ecg.rice.edu:443/buildStatus/icon?job=github_public_renewlab%2Fdl-sounder)](https://falcon.ecg.rice.edu:443/job/github_public_renewlab/job/dl-sounder/)
+[![Build Status](https://falcon.ecg.rice.edu:443/buildStatus/icon?job=github_public_renewlab%2Fdevelop)](https://falcon.ecg.rice.edu:443/job/github_public_renewlab/job/develop/)
 
 # Contents
  * [Description](#description)
