@@ -4,43 +4,35 @@
 %		Rahman Doost-Mohamamdy: doost@rice.edu
 %               Oscar Bejarano obejarano@rice.edu
 %
-% Another version of Single-Input Single-Output transmission.
-% The transmitter is set to continuously transmit the same waveform
+% Multiple iterations of a single-shot transmissions from one client or UE
+% to one base station radio (UE stands for User Equipment). In simulation
+% mode, the script explores Bit Error Rate (BER) as a function of
+% Signal-to-Noise Ratio (SNR) and therefore iterates over different SNR values.
+% Within each iteration, only a single frame transmission takes place.
+% The script supports three different transmission modes:
+%
+% 1) Simulation
+% 2) HW: Using a TDD scheduler
+% 3) HW: Using continuous TX mode, no TDD schedule defined
+%
+% In simulation mode we simply use an AWGN or Rayleigh fading channel
+% whereas the two HW modes rely on the Iris hardware for transmission and
+% reception. In all cases, the client transmits an OFDM signal that resembles a
+% typical 802.11 WLAN waveform.
+% Modes (2) and (3) simply show different ways in which the HW can be
+% configured for transmission and reception.
+%
+% In mode (2) the script defines a schedule for the BS node and one for the
+% UE node. The schedule specifies the time slot in which each node transmits
+% and receives. A beacon, sent by the base station node, is used to synchronize
+% the schedule of both devices. In this mode, the UE implements a hardware
+% based correlator to detect the beacon.
+% In Mode (3) the transmitter is set to continuously transmit the same waveform
 % until the script ends. The receiver does a single-shot capture of the
-% transmitted signal. Unlike the original rl_ofdm_siso.m script, no
-% hardware correlator is used to trigger data/transmission and reception.
-% This provides more flexibility since it can be run with BS nodes as 
-% transmitters or receivers (no firmware limitation on correlator).
-% The script explores Bit Error Rate (BER) as a function of Signal-to-Noise
-% Ratio (SNR) and therefore can be used to iterate over different SNR values 
-% (sim_SNR_db variable) in SIM mode. 
-%
-% We define two modes: OTA (Over-the-air) and SIM_MOD (simulation).
-% In simulation mode we simply use a Rayleigh channel whereas the OTA mode
-% relies on the Iris hardware for transmission and reception.
-% In both cases the client transmits an OFDM signal that resembles a
-% typical 802.11 WLAN waveform. If the transmission is OTA, then the user
-% specifies a schedule that tells the client when to transmit its frame
-%
-%%%%%%%%%%%%%%%%%%%%%%
-%% Multiple iterations of a single-shot transmissions from one client or UE
-% to one base station radio (UE stands for User Equipment).
-% The script explores Bit Error Rate (BER) as a function of Signal-to-Noise
-% Ratio (SNR) and therefore iterates over different SNR values (sim_SNR_db
-% variable). Within each iteration, only a single frame transmission takes
-% place.
-%
-% We define two modes: OTA (Over-the-air) and SIM_MOD (simulation).
-% In simulation mode we simply use a Rayleigh channel whereas the OTA mode
-% relies on the Iris hardware for transmission and reception.
-% In both cases the client transmits an OFDM signal that resembles a
-% typical 802.11 WLAN waveform. If the transmission is OTA, then the user
-% specifies a schedule that tells the client when to transmit its frame
-% The base station initiates the schedule by sending a beacon signal that
-% synchronizes the client. After that, the client will simply transmit its
-% frame.
-%%%%%%%%%%%%%%%%%%%%%%
-%
+% transmitted signal. Unlike mode (2), no hardware correlator is used to
+% trigger data/transmission and reception. This provides more flexibility
+% since it can be run with BS nodes as transmitters or receivers (no firmware
+% limitation on correlator).
 %---------------------------------------------------------------------
 % Original code copyright Mango Communications, Inc.
 % Distributed under the WARP License http://warpproject.org/license
