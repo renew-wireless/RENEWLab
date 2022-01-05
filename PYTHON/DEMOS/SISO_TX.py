@@ -97,8 +97,6 @@ def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, waveFreq, numSamps, se
         sdr.setSampleRate(SOAPY_SDR_TX, c, rate)
         sdr.setFrequency(SOAPY_SDR_TX, c, "RF", freq-.75*rate)
         sdr.setFrequency(SOAPY_SDR_TX, c, "BB", .75*rate)
-        #sdr.setFrequency(SOAPY_SDR_TX, c, "RF", freq+bbfreq)
-        #sdr.setFrequency(SOAPY_SDR_TX, c, "BB", bbfreq)
         sdr.setAntenna(SOAPY_SDR_TX, c, "TRX")
 
         if lo_tone:

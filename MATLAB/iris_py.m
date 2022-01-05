@@ -61,7 +61,7 @@ classdef iris_py < handle
                 obj.n_frame = sdr_params.n_frame;
                 obj.tdd_sched = sdr_params.tdd_sched; % This is an array
                 obj.n_zpad_samp = sdr_params.n_zpad_samp;
-                
+                fprintf('Sampling rate: %d \n', obj.sample_rate);
                 for ipy=1:obj.n_sdrs
                     id_str = convertStringsToChars(obj.serial_ids(ipy));
                     py_obj = py.iris_py.Iris_py( pyargs('serial_id',id_str,...
@@ -170,6 +170,12 @@ classdef iris_py < handle
                obj.py_obj_array{ipy}.activate_stream_rx();
            end
          end
+
+         function sdr_activate_rx_burst_trig(obj)
+           for ipy=1:obj.n_sdrs
+               obj.py_obj_array{ipy}.activate_stream_rx_burst_trig();
+           end
+         end
         
         %Assume same data is Tx-ed from all memebers of the array
         function sdrtx(obj, data)
@@ -181,14 +187,69 @@ classdef iris_py < handle
         function sdrtx_single(obj, data, index)
             obj.py_obj_array{index}.burn_data( pyargs('data_r', real(data), 'data_i', imag(data)) );
         end
+
+        function sdrtx_activate_replay_single(obj, sigLen, index)
+            obj.py_obj_array{index}.activate_tx_replay( pyargs('sigLen', sigLen ) );
+        end
         
         % Read n_frame x n_samp data
+        function [data, len] = sdrrx_notrig(obj, n_samp, choose_best_frame)
+            if ~obj.is_bs
+                fprintf('sdrrx: Wrong function call on UE!');
+            end
+            data_raw = zeros(obj.n_sdrs, obj.n_frame * n_samp);  % Change this to max frame!
+
+            for jf=1:obj.n_frame
+                for ipy = 1:obj.n_sdrs
+                    rcv_data = obj.py_obj_array{ipy}.recv_stream_tdd();
+                    data_raw(ipy, (jf-1)*n_samp + 1: jf*n_samp) = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(rcv_data) ) ) ) + ...
+                        1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(rcv_data) ) ) );
+                end
+            end
+            if ~exist('choose_best_frame', 'var')
+                data = obj.get_best_frame(data_raw.', n_samp);
+            elseif choose_best_frame == 0
+                data = data_raw.';
+            end
+            len = length(data);
+        end
+
+        function [data, len] = sdrrx_triggen(obj, n_samp, choose_best_frame)        % Read n_frame x n_samp data
+            if ~obj.is_bs
+                fprintf('sdrrx: Wrong function call on UE!');
+            end
+            data_raw = zeros(obj.n_sdrs, obj.n_frame * n_samp);  % Change this to max frame!
+
+            for jf=1:obj.n_frame
+                for ipy = 1:obj.n_sdrs
+                    % Activate Stream
+                    obj.py_obj_array{ipy}.activate_stream_rx_burst_trig();
+                    % Trigger to receive
+                    rcv_data = obj.py_obj_array{ipy}.recv_stream_trig();
+                    data_raw(ipy, (jf-1)*n_samp + 1: jf*n_samp) = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(rcv_data) ) ) ) + ...
+                        1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(rcv_data) ) ) );
+                end
+            end
+            if ~exist('choose_best_frame', 'var')
+                data = obj.get_best_frame(data_raw.', n_samp);
+            elseif choose_best_frame == 0
+                data = data_raw.';
+            end
+            len = length(data);
+        end
+
+        function stop_tx_replay(obj)
+            for ipy = 1:obj.n_sdrs
+                obj.py_obj_array{ipy}.stop_tx_replay()
+            end
+        end
+
         function [data, len] = sdrrx(obj, n_samp, choose_best_frame)
             if ~obj.is_bs
                 fprintf('sdrrx: Wrong function call on UE!');
             end
             data_raw = zeros(obj.n_sdrs, obj.n_frame * n_samp);  % Change this to max frame!
-            
+
             for jf=1:obj.n_frame
                 %trigger base station
                 if obj.is_bs
@@ -261,22 +322,22 @@ classdef iris_py < handle
             lts_corr_sum = sum(lts_corr_dr,2);
             % zero non-peaks:
             lts_corr_sum(lts_corr_sum < 0.2) = 0.001;
-            
+
             % Assume peak in the first 500 samples
             lts_corr_frm = reshape(lts_corr_sum, [], obj.n_frame);
-            
+
             if obj.n_sdrs == 1 && length(lts_corr_frm) >= 300
                 lts_corr_frm = lts_corr_frm(1:300,:);
             elseif (obj.n_sdrs > 1) && length(lts_corr_frm) >= 420
                 lts_corr_frm = lts_corr_frm(1:420,:);
             end
             save my_data.mat lts_corr_dr lts_corr_frm
-            
+
             % Avg corr value per frame
             frm_avg_corr = sum(lts_corr_frm,1)./obj.n_sdrs;
             % Take index of maximum corr. value
             [max_corr, m_idx] = max(frm_avg_corr);
-           
+
             % Reshape data frame to n_samp-by-n_antenna-by-n_frame
             data_split  = zeros(obj.n_samp, obj.n_sdrs,obj.n_frame);
             for nf = 1:obj.n_frame
@@ -285,7 +346,7 @@ classdef iris_py < handle
                 data_split(:,:,nf) = data_frame(strt_idx :end_idx ,:);
             end
             %data_frame = reshape(data_frame,n_samp, [], obj.n_frame );        
-    
+
             % Return the frame with the highest value 
             data = data_split(:,:,m_idx).';
             fprintf('Returning frame number %d with max mean correlation = %f \n',m_idx,max_corr);
