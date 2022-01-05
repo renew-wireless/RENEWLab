@@ -237,7 +237,13 @@ classdef iris_py < handle
             end
             len = length(data);        
         end
-            
+
+        function stop_tx_replay(obj)
+            for ipy = 1:obj.n_sdrs
+                obj.py_obj_array{ipy}.stop_tx_replay()
+            end
+        end
+
         function [data, len] = sdrrx(obj, n_samp, choose_best_frame)
             if ~obj.is_bs
                 fprintf('sdrrx: Wrong function call on UE!');

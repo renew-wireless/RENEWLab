@@ -2,8 +2,28 @@
 %
 %	Author(s): C. Nicolas Barati nicobarati@rice.edu 
 %		Rahman Doost-Mohamamdy: doost@rice.edu
+%               Oscar Bejarano obejarano@rice.edu
 %
-% Multiple iterations of a single-shot transmissions from one client or UE
+% Another version of Single-Input Single-Output transmission.
+% The transmitter is set to continuously transmit the same waveform
+% until the script ends. The receiver does a single-shot capture of the
+% transmitted signal. Unlike the original rl_ofdm_siso.m script, no
+% hardware correlator is used to trigger data/transmission and reception.
+% This provides more flexibility since it can be run with BS nodes as 
+% transmitters or receivers (no firmware limitation on correlator).
+% The script explores Bit Error Rate (BER) as a function of Signal-to-Noise
+% Ratio (SNR) and therefore can be used to iterate over different SNR values 
+% (sim_SNR_db variable) in SIM mode. 
+%
+% We define two modes: OTA (Over-the-air) and SIM_MOD (simulation).
+% In simulation mode we simply use a Rayleigh channel whereas the OTA mode
+% relies on the Iris hardware for transmission and reception.
+% In both cases the client transmits an OFDM signal that resembles a
+% typical 802.11 WLAN waveform. If the transmission is OTA, then the user
+% specifies a schedule that tells the client when to transmit its frame
+%
+%%%%%%%%%%%%%%%%%%%%%%
+%% Multiple iterations of a single-shot transmissions from one client or UE
 % to one base station radio (UE stands for User Equipment).
 % The script explores Bit Error Rate (BER) as a function of Signal-to-Noise
 % Ratio (SNR) and therefore iterates over different SNR values (sim_SNR_db
@@ -19,6 +39,7 @@
 % The base station initiates the schedule by sending a beacon signal that
 % synchronizes the client. After that, the client will simply transmit its
 % frame.
+%%%%%%%%%%%%%%%%%%%%%%
 %
 %---------------------------------------------------------------------
 % Original code copyright Mango Communications, Inc.
@@ -37,41 +58,45 @@ if ~isloaded
 end
 
 % Params:
-WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
+WRITE_PNG_FILES         = 0;                      % Enable writing plots to PNG
 SIM_MOD                 = 0;
-PLOT                        = 0;
+PLOT                    = 0;
 
 if SIM_MOD
-    chan_type               = "rayleigh";
-    nt                      = 100;
+    chan_type               = "awgn"; %"rayleigh";
+    nt                      = 3;
     sim_SNR_db              = 1:20;
     nsnr                    = length(sim_SNR_db);
-    snr_plot                = 20;
-    TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
+    snr_plot                = max(sim_SNR_db);    % Plot results from last iter.
+    TX_SCALE                = 1;                  % Scale for Tx waveform ([0:1])
+    MODE                    = "SIM";
+    TDD_SCHED               = false;
+
 else
     nt                      = 1;
     nsnr                    = 1;
-    TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
+    TX_SCALE                = 1;                  % Scale for Tx waveform ([0:1])
     chan_type               = "iris";
+    TDD_SCHED               = false;              % Follow TDD sched or continuous TX
+    MODE                    = "HW";
 end
 ber_SIM = zeros(nt,nsnr);           % BER
 berr_th = zeros(nsnr,1);            % Theoretical BER
-fprintf("Channel type: %s \n",chan_type);
 
 %Iris params:
-N_BS_NODE 		= 1;
-N_UE 			= 1;
-TX_FRQ                  = 3.6e9;
+N_BS_NODE               = 1;
+N_UE                    = 1;
+TX_FRQ                  = 3.56e9;
 RX_FRQ                  = TX_FRQ;
-TX_GN                   = 75;
+TX_GN                   = 81;
 RX_GN                   = 70;
-SMPL_RT                 = 5e6;
-N_FRM                   = 10;
 
 if TX_GN > 81
     display('WARNING: MAXIMUM TX GAIN IS 81!');
     TX_GN = 81;
 end
+
+fprintf("SETUP -- MODE: %s, TDD SCHEDULE? %s, CHANNEL TYPE: %s \n",MODE, mat2str(TDD_SCHED), chan_type);
 
 bs_ids = string.empty();
 bs_sched = string.empty();
@@ -80,7 +105,7 @@ ue_sched = string.empty();
 
 
 % Waveform params
-N_OFDM_SYM              = 46;         % Number of OFDM symbols for burst, it needs to be less than 47
+N_OFDM_SYM              = 20;         % Number of OFDM symbols for burst, it needs to be less than 47
 MOD_ORDER               = 16;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
 
 % OFDM params
@@ -154,173 +179,235 @@ tx_vec_iris = TX_SCALE .* tx_vec_iris ./ max(abs(tx_vec_iris));
 
 for isnr = 1:nsnr
     for it = 1:nt
-if (SIM_MOD)
+	fprintf("iSNR: %d \t iNt: %d \n", isnr, it);
+        if (SIM_MOD)
 
-    % Iris nodes' parameters
-    bs_ids = ones(1, N_BS_NODE);
-    ue_ids = ones(1, N_UE);
-    n_samp = length(tx_vec_iris);
-    bs_sdr_params = struct(...
-        'id', bs_ids, ...
-        'n_sdrs', N_BS_NODE, ...        % number of nodes chained together
-        'txfreq', [], ...
-        'rxfreq', [], ...
-        'txgain', [], ...
-        'rxgain', [], ...
-        'sample_rate', [], ...
-        'n_samp', n_samp, ...          % number of samples per frame time.
-        'n_frame', [], ...
-        'tdd_sched', [], ...     % number of zero-paddes samples
-        'n_zpad_samp', N_ZPAD_PRE ...
-        );
+            % Iris nodes' parameters
+            bs_ids = ones(1, N_BS_NODE);
+            ue_ids = ones(1, N_UE);
+            n_samp = length(tx_vec_iris);
+            bs_sdr_params = struct(...
+                'id', bs_ids, ...
+                'n_sdrs', N_BS_NODE, ...        % number of nodes chained together
+                'txfreq', [], ...
+                'rxfreq', [], ...
+                'txgain', [], ...
+                'rxgain', [], ...
+                'sample_rate', [], ...
+                'n_samp', n_samp, ...          % number of samples per frame time.
+                'n_frame', [], ...
+                'tdd_sched', [], ...     % number of zero-paddes samples
+                'n_zpad_samp', N_ZPAD_PRE ...
+                );
 
-    ue_sdr_params = bs_sdr_params;
-    ue_sdr_params.id =  ue_ids;
-    ue_sdr_params.n_sdrs = N_UE;
-    ue_sdr_params.txgain = [];
+            ue_sdr_params = bs_sdr_params;
+            ue_sdr_params.id =  ue_ids;
+            ue_sdr_params.n_sdrs = N_UE;
+            ue_sdr_params.txgain = [];
 
-    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db(isnr), bs_sdr_params, ue_sdr_params, []);
-    %rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db(isnr));
-    rx_vec_iris = rx_vec_iris.'; % just to agree with what the hardware spits out.
-    
-else
-%% Init Iris nodes
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Set up the Iris experiment
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db(isnr), bs_sdr_params, ue_sdr_params, []);
+            %rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db(isnr));
+            %rx_vec_iris = rx_vec_iris.'; % just to agree with what the hardware spits out.
 
- % Create two Iris node objects:
-    bs_ids = ["RF3E000246"];
-    ue_ids = ["RF3E000119"];
-    
-    bs_sched = ["BGGGGGRG"];           % BS schedule
-    ue_sched = ["GGGGGGPG"];               % UE schedule
-    
-    n_samp = length(tx_vec_iris);    
-    
-    % Iris nodes' parameters
-    bs_sdr_params = struct(...
-        'id', bs_ids, ...
-        'n_sdrs', N_BS_NODE, ...
-        'txfreq', TX_FRQ, ...
-        'rxfreq', RX_FRQ, ...
-        'txgain', TX_GN, ...
-        'rxgain', RX_GN, ...
-        'sample_rate', SMPL_RT, ...
-        'n_samp', n_samp, ...          % number of samples per frame time.
-        'n_frame', N_FRM, ...
-        'tdd_sched', bs_sched, ...     % number of zero-paddes samples
-        'n_zpad_samp', N_ZPAD_PRE ...
-        );
-    
-    ue_sdr_params = bs_sdr_params;
-    ue_sdr_params.id =  ue_ids;
-    ue_sdr_params.n_sdrs = N_UE;
-    ue_sdr_params.tdd_sched = ue_sched;
-    
-    rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, [], bs_sdr_params, ue_sdr_params, []);
+        else
+            %% Init Iris nodes
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % Set up the Iris experiment
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % Create two Iris node objects:
+            bs_ids = ["RF3E000146"];
+            ue_ids = ["RF3E000164"];
+            
+            if TDD_SCHED
+                SMPL_RT  = 5e6;
+                N_FRM    = 10;
+                bs_sched = ["BGGGGGRG"];                  % BS schedule
+                ue_sched = ["GGGGGGPG"];                  % UE schedule
+                n_samp   = length(tx_vec_iris);
+            else
+                SMPL_RT  = 10e6;
+                N_FRM    = 1;
+                bs_sched = [];        % BS schedule - TDD Scheduler disabled
+                ue_sched = [];        % UE schedule - TDD Scheduler disabled
+                n_samp   = 2^13;
+            end
+        
+            % Iris nodes' parameters
+            bs_sdr_params = struct(...
+                'id', bs_ids, ...
+                'n_sdrs', N_BS_NODE, ...
+                'txfreq', TX_FRQ, ...
+                'rxfreq', RX_FRQ, ...
+                'txgain', TX_GN, ...
+                'rxgain', RX_GN, ...
+                'sample_rate', SMPL_RT, ...
+                'n_samp', n_samp, ...          % number of samples per frame time.
+                'n_frame', N_FRM, ...
+                'tdd_sched', bs_sched, ...     % number of zero-paddes samples
+                'n_zpad_samp', N_ZPAD_PRE ...
+                );
+            
+            ue_sdr_params = bs_sdr_params;
+            ue_sdr_params.id =  ue_ids;
+            ue_sdr_params.n_sdrs = N_UE;
+            ue_sdr_params.tdd_sched = ue_sched;
+            
+            if TDD_SCHED
+                rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, [], bs_sdr_params, ue_sdr_params, []);
+                rx_vec_iris = rx_vec_iris.';
+                fprintf('Length of the received vector from HW: \tUE:%d\n', length(rx_vec_iris));
+            else
+                % RX
+                n_samp = bs_sdr_params.n_samp;
+                node_bs = iris_py(bs_sdr_params,[]);        % initialize BS
+                node_ue = iris_py(ue_sdr_params,[]);        % initialize UE
 
-end
-    rx_vec_iris = rx_vec_iris.';
-    l_rx_dec=length(rx_vec_iris);
+                node_ue.sdr_configgainctrl();
+                node_bs.sdrsync();                           % synchronize delays only for BS
+                
+                node_ue.sdrrxsetup();                        % set up reading stream
+                node_bs.sdrrxsetup();
+                
+                for i=1:N_UE
+                    node_ue.sdrtx_single(tx_vec_iris, i);       % Burn data to the UE RAM (writeRegisters)
+                    node_ue.sdrtx_activate_replay_single(length(tx_vec_iris), i)           % start transmission: sdrTx.writeSetting("TX_REPLAY", str(len(signal1_ui32)))
+                end
+
+                [rx_vec_iris, data0_len] = node_bs.sdrrx_triggen(n_samp * N_BS_NODE, 0);
+
+                pause(1);
+                node_ue.stop_tx_replay();    
+                node_bs.sdr_close();                % close streams and exit gracefully.
+                node_ue.sdr_close();
+                fprintf('Length of the received vector from HW: \tUE:%d\n', data0_len);
+            end  % End IF TDD_SCHED   
+        end  % End IF SIM MODE
+
+        l_rx_dec=length(rx_vec_iris);
+
+        %% Correlate for LTS
+        % Correlation
+        lts_corr = abs(conv(conj(fliplr(lts_t)), sign(rx_vec_iris)));
+        %figure; plot(lts_corr);
+        lts_peaks = find(lts_corr > 0.8*max(lts_corr));
+        [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
+        [lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts_t));  % use size of lts_t
+
+        % Stop if no valid correlation peak was found
+        if(isempty(lts_second_peak_index))
+            fprintf('No LTS Correlation Peaks Found!  Exit now... \n');
+            return;
+        end
+
+        no_valid_peak = 1;
+        cnt = 0;
+        while no_valid_peak
+            cnt = cnt + 1;
+            
+            if cnt > length(lts_second_peak_index)
+                fprintf('No Valid Correlation Peaks Found!  Exit now... \n');
+                return;
+            end
+            
+            curr_peak_idx = lts_peaks(lts_second_peak_index(cnt));
+            lts_start = curr_peak_idx - 2.5*length(lts_t) + 1;
+            data_start = curr_peak_idx + 1;
+            if lts_start < 1
+                continue;
+            elseif data_start + (N_SYM_SAMP * N_OFDM_SYM) > length(rx_vec_iris)
+                continue;
+            else
+                no_valid_peak = 0;
+                lts_corr = lts_corr(lts_start:curr_peak_idx + 840);  % Dummy value... for plotter
+                fprintf('CORR. PEAK AT: %d, PILOT STARTS AT: %d \n', curr_peak_idx, lts_start);
+            end
+            
+        end
+
+        lts_ind = lts_start;
+        payload_ind = data_start;
+
+        rx_lts = rx_vec_iris(lts_ind : lts_ind+159);
+        rx_lts1 = rx_lts(-64+-FFT_OFFSET + [97:160]);
+        rx_lts2 = rx_lts(-FFT_OFFSET + [97:160]);
+
+        % Received LTSs
+        % Do yourselves: take the FD pilots:
+        rx_lts1_f = fft(rx_lts1);
+        rx_lts2_f = fft(rx_lts2);
+
+        % Do yourselves: Calculate channel estimate from average of 2 training symbols: 
+        rx_H_est = mean([rx_lts1_f./lts_f.'   rx_lts2_f./ lts_f.'], 2); 
+
+        %% Rx payload processing
+        % Extract the payload samples (integer number of OFDM symbols following preamble)
+        if( (length(rx_vec_iris) - payload_ind ) > (N_SYM_SAMP * N_OFDM_SYM) )
+	    disp(payload_ind)
+	    disp(size(rx_vec_iris))
+	    disp(N_SYM_SAMP + N_OFDM_SYM)
+            payload_vec = rx_vec_iris(payload_ind : payload_ind + (N_SYM_SAMP * N_OFDM_SYM), :);
+        else
+            payload_vec = rx_vec_iris(payload_ind : end, :);
+        end
+
+        missed_samps = (N_SC+CP_LEN) * N_OFDM_SYM - length(payload_vec); %sometimes it's below 0.
+
+        if (missed_samps > 0) 
+            payload_vec = [payload_vec; zeros(missed_samps,1)];
+        elseif (missed_samps < 0)
+            payload_vec = payload_vec(1:end+missed_samps,:);
+        end
 
 
-%% Correlate for LTS
+        payload_mat = reshape(payload_vec, (N_SC+CP_LEN), N_OFDM_SYM);
 
-% Complex cross correlation of Rx waveform with time-domain LTS
-a = 1;
-unos = ones(size(preamble.'))';
-v0 = filter(flipud(preamble'),a,rx_vec_iris);
-v1 = filter(unos,a,abs(rx_vec_iris).^2);
-m_filt = (abs(v0).^2)./v1; % normalized correlation
-lts_corr = m_filt;
-[rho_max, ipos] = max(lts_corr);
+        % Remove the cyclic prefix, keeping FFT_OFFSET samples of CP (on average)
+        payload_mat_noCP = payload_mat(CP_LEN-FFT_OFFSET+[1:N_SC], :);
 
-payload_ind = ipos +1;
-lts_ind = payload_ind - N_LTS_SYM*(N_SC + CP_LEN);
+        % Do yourselves: bring to frequency domain:
+        syms_f_mat = fft(payload_mat_noCP, N_SC, 1);
 
-% Re-extract LTS for channel estimate
-rx_lts = rx_vec_iris(lts_ind : lts_ind+159);
-rx_lts1 = rx_lts(-64+-FFT_OFFSET + [97:160]);
-rx_lts2 = rx_lts(-FFT_OFFSET + [97:160]);
+        % Do yourselves: Equalize.
+        syms_eq_mat = syms_f_mat ./ repmat(rx_H_est, 1, N_OFDM_SYM);
 
-% Received LTSs
-% Do yourselves: take the FD pilots:
-rx_lts1_f = fft(rx_lts1);
-rx_lts2_f = fft(rx_lts2);
+        %% Calculate phase correction
+        if DO_APPLY_PHASE_ERR_CORRECTION
+            % Extract the pilots and calculate per-symbol phase error
+            pilots_f_mat = syms_eq_mat(SC_IND_PILOTS, :);
+            pilots_f_mat_comp = pilots_f_mat.*pilots_mat;
+            pilot_phase_err = angle(mean(pilots_f_mat_comp));
+        else
+            % Define an empty phase correction vector (used by plotting code below)
+            pilot_phase_err = zeros(1, N_OFDM_SYM);
+        end
+        pilot_phase_err_corr = repmat(pilot_phase_err, N_SC, 1);
+        pilot_phase_corr = exp(-1i*(pilot_phase_err_corr));
 
-% Do yourselves: Calculate channel estimate from average of 2 training symbols: 
-rx_H_est = mean([rx_lts1_f./lts_f.'   rx_lts2_f./ lts_f.'], 2); 
+        %% Apply phase correction
+        % Apply the pilot phase correction per symbol
+        syms_eq_pc_mat = syms_eq_mat .* pilot_phase_corr;
+        payload_syms_mat = syms_eq_pc_mat(SC_IND_DATA, :);
 
-%% Rx payload processing
-% Extract the payload samples (integer number of OFDM symbols following preamble)
-if( (length(rx_vec_iris) - payload_ind ) > (N_SYM_SAMP * N_OFDM_SYM) )
-    payload_vec = rx_vec_iris(payload_ind : payload_ind + (N_SYM_SAMP * N_OFDM_SYM),:);
-else
-    payload_vec = rx_vec_iris(payload_ind : end,:);
-end
+        %% Demodulate
+        rx_syms = reshape(payload_syms_mat, 1, N_DATA_SYMS);
 
-missed_samps = (N_SC+CP_LEN) * N_OFDM_SYM - length(payload_vec); %sometimes it's below 0.
+        rx_data = demod_sym(rx_syms ,MOD_ORDER);
 
-if (missed_samps > 0) 
-    payload_vec = [payload_vec; zeros(missed_samps,1)];
-elseif (missed_samps < 0)
-    payload_vec = payload_vec(1:end+missed_samps,:);
-end
+        bit_errs = length(find(dec2bin(bitxor(tx_data, rx_data),8) == '1'));
 
+        ber_SIM(it, isnr) = bit_errs/(N_DATA_SYMS * log2(MOD_ORDER));
+            
+        if (SIM_MOD) && (it == 1) && (sim_SNR_db(isnr) == snr_plot)
+            rx_vec_iris_plot = rx_vec_iris;
+            rx_data_plot = rx_data;
+            lts_corr_plot = lts_corr;
 
-payload_mat = reshape(payload_vec, (N_SC+CP_LEN), N_OFDM_SYM);
+            pilot_phase_err_plot = pilot_phase_err;
+            payload_syms_mat_plot = payload_syms_mat;
 
-% Remove the cyclic prefix, keeping FFT_OFFSET samples of CP (on average)
-payload_mat_noCP = payload_mat(CP_LEN-FFT_OFFSET+[1:N_SC], :);
-
-% Do yourselves: bring to frequency domain:
-syms_f_mat = fft(payload_mat_noCP, N_SC, 1);
-
-% Do yourselves: Equalize.
-syms_eq_mat = syms_f_mat ./ repmat(rx_H_est, 1, N_OFDM_SYM);
-
-%% Calculate phase correction
-if DO_APPLY_PHASE_ERR_CORRECTION
-    % Extract the pilots and calculate per-symbol phase error
-    pilots_f_mat = syms_eq_mat(SC_IND_PILOTS, :);
-    pilots_f_mat_comp = pilots_f_mat.*pilots_mat;
-    pilot_phase_err = angle(mean(pilots_f_mat_comp));
-else
-	% Define an empty phase correction vector (used by plotting code below)
-    pilot_phase_err = zeros(1, N_OFDM_SYM);
-end
-pilot_phase_err_corr = repmat(pilot_phase_err, N_SC, 1);
-pilot_phase_corr = exp(-1i*(pilot_phase_err_corr));
-
-%% Apply phase correction
-% Apply the pilot phase correction per symbol
-syms_eq_pc_mat = syms_eq_mat .* pilot_phase_corr;
-payload_syms_mat = syms_eq_pc_mat(SC_IND_DATA, :);
-
-%% Demodulate
-rx_syms = reshape(payload_syms_mat, 1, N_DATA_SYMS);
-
-rx_data = demod_sym(rx_syms ,MOD_ORDER);
-
-bit_errs = length(find(dec2bin(bitxor(tx_data, rx_data),8) == '1'));
-
-ber_SIM(it, isnr) = bit_errs/(N_DATA_SYMS * log2(MOD_ORDER));
-    
-if (SIM_MOD) && (it == 1) && (sim_SNR_db(isnr) == snr_plot)
-    rx_vec_iris_plot = rx_vec_iris;
-    rx_data_plot = rx_data;
-    lts_corr_plot = lts_corr;
-
-    pilot_phase_err_plot = pilot_phase_err;
-    payload_syms_mat_plot = payload_syms_mat;
-
-    rx_H_est_plot = rx_H_est;
-    
-end
-
-%% end of loop
-    end
+            rx_H_est_plot = rx_H_est;  
+        end
+    end  %% END NT (Number TX) LOOP
     if (SIM_MOD)
         if chan_type == "awgn"
             awgn = 1;
@@ -328,10 +415,10 @@ end
             awgn  = 0;
         end
         berr_th(isnr) = berr_perfect(sim_SNR_db(isnr), N_BS_NODE, MOD_ORDER, awgn);
-    % Display progress
+        % Display progress
         fprintf(1,'SNR = %f BER = %12.4e BER_no_err = %12.4e \n', sim_SNR_db(isnr), mean(ber_SIM(:,isnr)),  berr_th(isnr));
-    end
-end
+    end  % End if SIM_MODE
+end  %% END SNR LOOP
 
 % EVM & SNR
 % Do yourselves. Calculate EVM and effective SNR:
@@ -339,9 +426,7 @@ evm_mat = abs(payload_syms_mat - tx_syms_mat).^2;
 aevms = mean(evm_mat(:)); % needs to be a scalar
 snr = 10*log10(1./aevms); % calculate in dB scale.
 
-
 %% Plot Results
-
 if SIM_MOD
     rx_vec_iris = rx_vec_iris_plot;
     rx_data = rx_data_plot;
@@ -407,7 +492,7 @@ if PLOT
     title('LTS Correlation')
     xlabel('Sample Index')
     myAxis = axis();
-    axis([1, 1000, myAxis(3), myAxis(4)])
+    axis([1, length(lts_to_plot), myAxis(3), myAxis(4)])
 
     if(WRITE_PNG_FILES)
         print(gcf,sprintf('wl_ofdm_plots_%s_ltsCorr', example_mode_string), '-dpng', '-r96', '-painters')
@@ -498,6 +583,7 @@ end
 
 % BER SIM MOD
 if SIM_MOD && PLOT
+    cf = 0;
     cf = cf+1;
     figure(cf);
     ber_avg = mean(ber_SIM)';

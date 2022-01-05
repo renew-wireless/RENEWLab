@@ -322,6 +322,9 @@ class Iris_py:
 
                 return(rx_frames_a)
 
+        def stop_tx_replay(self):
+            self.sdr.writeSetting("TX_REPLAY", "")
+
         def close(self):
                 '''Cleanup streams. Rest SDRs'''
                 print("Cleaning up streams")
