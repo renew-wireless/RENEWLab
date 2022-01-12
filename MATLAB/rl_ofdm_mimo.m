@@ -58,7 +58,7 @@ else
     RX_FRQ                  = TX_FRQ;
     TX_GN                   = 80;
     TX_GN_ue                = 80;
-    RX_GN                   = 75;
+    RX_GN                   = 65;
     SMPL_RT                 = 5e6;
     N_FRM                   = 10;
     BEACON_SWEEP     = 0;
@@ -71,14 +71,17 @@ else
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
 
-       bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716"];
-       hub_id = "FH4B000021";
-
+       %bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716"];
+       %hub_id = "FH4B000021";
+        bs_ids = ["RF3E000087","RF3E000084","RF3E000107","RF3E000086","RF3E000110","RF3E000162","RF3E000127","RF3E000597",...
+                    "RF3E000346","RF3E000543","RF3E000594","RF3E000404","RF3E000616","RF3E000622","RF3E000601","RF3E000602"];
+        hub_id = ["FH4B000019"];
     else
         bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716"];
     end
 
-    ue_ids= ["RF3E000119", "RF3E000145"];
+    %ue_ids= ["RF3E000119", "RF3E000145"];
+    ue_ids= ["RF3E000164", "RF3E000392"];
 
     N_BS_NODE               = length(bs_ids);           % Number of nodes/antennas at the BS
     N_UE                    = length(ue_ids);           % Number of UE nodes
@@ -249,50 +252,60 @@ l_rx_dec=length(rx_vec_iris);
 
 %% Correlate for LTS
 % Complex cross correlation of Rx waveform with time-domain LTS
-
 a = 1;
 unos = ones(size(preamble_common'));
 lts_corr = zeros(N_BS_NODE, length(rx_vec_iris));
 data_len = (N_OFDM_SYM)*(N_SC +CP_LEN);
 rx_lts_mat = double.empty();
 payload_ind = int32.empty();
+preamble_pk = nan(N_BS_NODE, N_UE);
 payload_rx = zeros(N_BS_NODE, data_len);
 lts_peaks = zeros(N_BS_NODE, N_UE);
-
-for ibs =1:N_BS_NODE
-        % Correlation through filtering
-        v0 = filter(fliplr(preamble_common'),a,rx_vec_iris(ibs,:));
-        v1 = filter(unos,a,abs(rx_vec_iris(ibs,:)).^2);
-        lts_corr(ibs,:) = (abs(v0).^2)./v1; % normalized correlation
-        
-        % Sort the correlation values
-        sort_corr = sort(lts_corr(ibs,:), 'descend');
-        % Take the N_UE largest values
-        rho_max = sort_corr(1:N_UE);
-        % Get the indices of N_UE largest corr. values
-        lts_peaks(ibs,:) = find(lts_corr(ibs,:) >= min(rho_max));
-        
-        % position of the last peak
-        max_idx = max(lts_peaks(ibs,:));
-        
-        % In case of bad correlatons:
-        if (max_idx + data_len) > length(rx_vec_iris) || (max_idx < 0) || (max_idx - length(preamble) < 0)
-            fprintf('Bad correlation at antenna %d max_idx = %d \n', ibs, max_idx);
-            % Real value doesn't matter since we have corrrupt data:
-            max_idx = length(rx_vec_iris)-data_len -1;
-            
+badrx = zeros(1, N_BS_NODE);
+for ibs = 1:N_BS_NODE
+    rx_vec_iris_curr = rx_vec_iris(ibs,:);
+    for iue = 1:N_UE
+        lts_corr2 = abs(conv(conj(fliplr(lts_t.')), sign(rx_vec_iris_curr)));
+        %figure; plot(lts_corr2);
+        lts_peaks2 = find(lts_corr2 > 0.8*max(lts_corr2));
+        [LTS1, LTS2] = meshgrid(lts_peaks2,lts_peaks2);
+        [lts_second_peak_index2,y] = find(LTS2-LTS1 == length(lts_t));
+        if(isempty(lts_second_peak_index2))
+            fprintf('No correlation peak at antenna %d max_idx = %d. UE idx: %d \n', ibs, max_idx, iue);
+            preamble_pk(ibs, iue) = 160*iue; % Keep it from crashing...
+            badrx(ibs) = badrx(ibs) + 1;
+        else
+            if length(lts_second_peak_index2) > 1
+                preamble_pk(ibs, iue) = lts_peaks2(lts_second_peak_index2(2));
+            else
+                preamble_pk(ibs, iue) = lts_peaks2(lts_second_peak_index2(1));
+            end
         end
-            
-        payload_ind(ibs) = max_idx +1;
-        pream_ind_ibs = payload_ind(ibs) - length(preamble);
-        pl_idx = payload_ind(ibs) : payload_ind(ibs) + data_len;
-        rx_lts_mat(ibs,:) = rx_vec_iris(ibs, pream_ind_ibs: pream_ind_ibs + length(preamble) -1 );
-        payload_rx(ibs,1:length(pl_idx) -1) = rx_vec_iris(ibs, payload_ind(ibs) : payload_ind(ibs) + length(pl_idx) -2);
+        % Found higher power pilot, remove to continue search...
+        rx_vec_iris_curr(preamble_pk(ibs, iue) - length(preamble_common) + 1: preamble_pk(ibs, iue)) = 0;
+    end
+    preamble_pk(ibs,:) = sort(preamble_pk(ibs,:), 2);
+    max_idx = max(preamble_pk(ibs,:));
+    % In case of bad correlatons:
+    if (max_idx + data_len) > length(rx_vec_iris(ibs,:)) || ...
+        (max_idx < 0) || ...
+        (max_idx - length(preamble) < 0)
+        fprintf('Caught bad correlation at antenna %d !!! \n', ibs);
+        % Don't care... corrrupt data:
+        max_idx = length(rx_vec_iris(ibs,:)) - data_len - 1;
+    end
+
+    payload_ind = max_idx + 1;
+    pream_ind = payload_ind - length(preamble);
+    preamble_range = pream_ind: pream_ind + length(preamble) - 1;
+    payload_range = payload_ind : payload_ind + data_len - 1;
+    rx_lts_mat(ibs,:) = rx_vec_iris(ibs, preamble_range);
+    payload_rx(ibs,1:length(pl_idx) - 1) = rx_vec_iris(ibs, payload_range);
 
 end
 
 if DEBUG
-    figure,
+    figure;
     for sp = 1:N_BS_NODE
         subplot(N_BS_NODE,1,sp);
         plot(lts_corr(sp,:));
@@ -304,12 +317,16 @@ if DEBUG
     sgtitle('LTS correlations accross antennas')
 end
 
-
-
+% Remove problematic entries (BS boards with bad correlation)
+% Only remove those that didn't capture pilots from any UE
+rx_lts_mat = rx_lts_mat(~(badrx == N_UE), :);
+payload_rx = payload_rx(~(badrx == N_UE), :);
+badrx(badrx ~= N_UE) = 0;  % line order matters
+badrx(badrx == N_UE) = 1;
 %% Rx processing
 % Construct a matrix from the received pilots
 n_plt_samp = floor(length(preamble)/ N_UE);     % number of samples in a per-UE pilot 
-Y_lts = zeros(N_BS_NODE,N_UE, n_plt_samp);
+Y_lts = zeros(N_BS_NODE-sum(badrx),N_UE, n_plt_samp);
 for iue = 1:N_UE
    plt_j_ix = (iue-1) * n_plt_samp +1:iue * n_plt_samp;
    Y_lts(:,iue,:) = rx_lts_mat(:,plt_j_ix);
@@ -321,13 +338,13 @@ Y_lts = Y_lts(:,:,rx_lts_idx);
 
 % Reshape the matix to have each lts pilot in a different dimension:
 % N_BS_NODE x N_UE x 64 x 2
-Y_lts = reshape(Y_lts, N_BS_NODE, N_UE, [], N_LTS_SYM); 
+Y_lts = reshape(Y_lts, N_BS_NODE-sum(badrx), N_UE, [], N_LTS_SYM);
 
 % Take FFT:
 Y_lts_f = fft(Y_lts, N_SC,3);
 % Construct known pilot matrix to use i next step:
-lts_f_mat = repmat(lts_f, N_BS_NODE *N_UE * N_LTS_SYM,1);
-lts_f_mat = reshape(lts_f_mat, [], N_LTS_SYM, N_UE, N_BS_NODE);
+lts_f_mat = repmat(lts_f, (N_BS_NODE-sum(badrx)) * N_UE * N_LTS_SYM,1);
+lts_f_mat = reshape(lts_f_mat, [], N_LTS_SYM, N_UE, N_BS_NODE-sum(badrx));
 lts_f_mat = permute(lts_f_mat, [4 3 1 2]);
 
 % Get the channel by dividing by the pilots
@@ -344,7 +361,7 @@ end
 avgCond = mean(condNum);
 
 % Reshape the payload and take subcarriers without the CP
-payload_rx = reshape(payload_rx,N_BS_NODE, (N_SC + CP_LEN),[]);
+payload_rx = reshape(payload_rx, N_BS_NODE-sum(badrx), (N_SC + CP_LEN), []);
 payload_noCP = payload_rx(:,CP_LEN-FFT_OFFSET+(1:N_SC),:);
 % Take FFT
 Y_data = fft(payload_noCP, N_SC, 2);
@@ -482,7 +499,7 @@ if PLOT
         % legend({'Rx','Tx'},'Location','EastOutside', 'fontsize', 12);
     end
 
-    for sp=1:N_BS_NODE
+    for sp=1:N_BS_NODE-sum(badrx)
         subplot(sp_rows,sp_cols, sp_cols+sp);
         plot(squeeze(Y_data(sp,:,:)),'co','MarkerSize',1);
         axis square; axis(max(max(max( abs( Y_data)) ))*[-1 1 -1 1]);
