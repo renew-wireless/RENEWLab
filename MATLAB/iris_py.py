@@ -172,7 +172,7 @@ class Iris_py:
         def sdr_gettriggers(self):
                 #time.sleep(1)
                 t = SoapySDR.timeNsToTicks(self.sdr.getHardwareTime(""),self.sample_rate) >> 32 #trigger count is top 32 bits.
-                print("%d new triggers" % (t))
+                print("%d new triggers at node %s" % (t, self.serial_id))
                 return t
 
         def unset_corr(self):
