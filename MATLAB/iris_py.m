@@ -103,12 +103,14 @@ classdef iris_py < handle
              end
          end
 
-         function sdr_gettriggers(obj)
+         function [trig_vec] = sdr_gettriggers(obj)
             if obj.is_bs
                 fprintf('sdr_gettriggers: Wrong function call on BS!');
             end
+            trig_vec = nan(1, obj.n_sdrs);
             for ipy = 1:obj.n_sdrs
                 trig_found = obj.py_obj_array{ipy}.sdr_gettriggers();
+                trig_vec(ipy) = trig_found;
                 fprintf('Beacon detected at UE %d ? %d \n', ipy, trig_found);
             end
          end

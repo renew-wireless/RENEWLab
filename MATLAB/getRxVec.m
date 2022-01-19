@@ -237,8 +237,7 @@ elseif chan_type == "iris"
     % Iris Rx 
     % Only UL data:
     [y, data0_len] = node_bs.sdrrx(n_samp); % read data
-
-    node_ue.sdr_gettriggers();
+    trig_vec_out = node_ue.sdr_gettriggers();
 
     node_bs.sdr_close();                % close streams and exit gracefully.
     node_ue.sdr_close();
