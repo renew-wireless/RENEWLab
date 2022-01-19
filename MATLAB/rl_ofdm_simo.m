@@ -62,7 +62,7 @@ else
     
     %Iris params:
     USE_HUB                 = 1;
-    TX_FRQ                  = 3.55e9;
+    TX_FRQ                  = 3.58e9;
     RX_FRQ                  = TX_FRQ;
     TX_GN                   = 70;
     RX_GN                   = 70;
@@ -196,7 +196,6 @@ else
         % For now, we use only the 4-node chains:
         
         bs_ids = ["RF3E000387", "RF3E000389", "RF3E000206", "RF3E000211", "RF3E000256", "RF3E000383", "RF3E000304", "RF3E000303"];
-        
         hub_id = "FH4B000021";
         
     else
@@ -314,7 +313,7 @@ rx_H_est_2d(idx_0,:) = 0;
 payload_mat = reshape(payload_rx, (N_SC+CP_LEN), N_OFDM_SYM, N_BS_NODE);
 
 % Remove the cyclic prefix, keeping FFT_OFFSET samples of CP (on average)
- payload_mat_noCP = payload_mat(CP_LEN-FFT_OFFSET+(1:N_SC), :,:);
+payload_mat_noCP = payload_mat(CP_LEN-FFT_OFFSET+(1:N_SC), :,:);
 
 % Take the FFT
 syms_f_mat_mrc = fft(payload_mat_noCP, N_SC, 1);
@@ -735,19 +734,20 @@ sc_data_idx = [(2:27)'; (39:64)' ];
 % SNR estimation based on the LTS signals
 n_var_1 = sum( sum( abs(H0_b1(sc_data_idx,:) - repmat(H_b1(sc_data_idx), 1,2) ).^2,2 ))/(52*2);
 n_var_2 = sum( sum( abs(H0_b2(sc_data_idx,:) - repmat(H_b2(sc_data_idx), 1,2) ).^2,2 ))/(52*2);
+
 h_pow_1 =  TX_SCALE*H_b1(sc_data_idx)'*H_b1(sc_data_idx)/(52);
 h_pow_2 =  TX_SCALE*H_b2(sc_data_idx)'*H_b2(sc_data_idx)/(52);
-h_pow_mrc = TX_SCALE*sum(H_pow(sc_data_idx,1))/52;
+h_pow_mrc = TX_SCALE*mean(H_pow(sc_data_idx,1));
 
-n_var_mrc = (n_var_1 + n_var_2)/2;  
+n_var_mrc = (n_var_1 + n_var_2)/2;
 fprintf('\n\tEVM-based SNRs:\n');
 fprintf('Branch 1 SNR:%3.2f \tBranch 2 SNR:%3.2f\t MRC SNR:%3.2f\n',...
     snr_1, snr_2, snr_mrc);
 
-snr_1_hat = 10*log10(h_pow_1/n_var_1);
-snr_2_hat = 10*log10(h_pow_2/n_var_2);
-snr_mrc_hat = 10*log10(h_pow_mrc/n_var_mrc);
-snr_1_plus_snr = 10*log10(h_pow_1/n_var_1 +  h_pow_2/n_var_2);
-fprintf('\tPilot SNR Estimates:\n');
-fprintf('Branch 1 SNR:%3.2f \tBranch 2 SNR:%3.2f\t MRC SNR:%3.2f\n',...
-    snr_1_hat, snr_2_hat, snr_mrc_hat);
+%snr_1_hat = 10*log10(h_pow_1/n_var_1);
+%snr_2_hat = 10*log10(h_pow_2/n_var_2);
+%snr_mrc_hat = 10*log10(h_pow_mrc/n_var_mrc);
+%snr_1_plus_snr = 10*log10(h_pow_1/n_var_1 +  h_pow_2/n_var_2);
+%fprintf('\tPilot SNR Estimates:\n');
+%fprintf('Branch 1 SNR:%3.2f \tBranch 2 SNR:%3.2f\t MRC SNR:%3.2f\n',...
+%    snr_1_hat, snr_2_hat, snr_mrc_hat);
