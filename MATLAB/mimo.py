@@ -90,7 +90,7 @@ def mimo(hub_serial, bs_serials, ue_serials, rate,
                     bs_obj[0].set_trigger()
 
                 rx_data[frame] = [bs.recv_stream_tdd() for bs in bs_obj]
-                amp = np.mean(np.abs(rx_data[0]))
+                amp = np.mean(np.abs(rx_data[frame][0]))
                 good_signal = amp > 0.001
                 triggers = [ue.sdr_gettriggers() for ue in ue_obj]
                 new_triggers = []
