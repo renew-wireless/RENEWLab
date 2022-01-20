@@ -180,6 +180,14 @@ class Iris_py:
                 self.sdr.writeRegister("IRIS30", 60, 
                     self.sdr.readRegister("IRIS30", 60) & 0xFFFE)
 
+        def sdr_setrxfreq(self, rx_freq):
+                for chan in [0, 1]:
+                    self.sdr.setFrequency(SOAPY_SDR_RX, chan, 'RF', rx_freq - .75*self.sample_rate)
+
+        def sdr_settxfreq(self, tx_freq):
+                for chan in [0, 1]:
+                    self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'RF', tx_freq - .75*self.sample_rate)
+
         def sdr_settxgain(self, tx_gain):
                 for chan in [0, 1]:
                     self.sdr.setGain(SOAPY_SDR_TX, chan, min(tx_gain, 81.0))

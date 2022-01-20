@@ -3,14 +3,14 @@ import iris_py
 from iris_py import *
 
 def mimo(hub_serial, bs_serials, ue_serials, rate,
-         freq, txgain, rxgain, both_channels, matfile):
+         freq, txgain, rxgain, both_channels, num_frames, matfile, rx_freq_mat_file):
     tx_data_dict = sio.loadmat(matfile)
     tx_data = tx_data_dict['tx_vec_iris']
     print(tx_data.shape)
     n_samps = tx_data.shape[0]
     n_users = tx_data.shape[1]
     if n_users != len(ue_serials):
-        print("Input data size does not match number of UEs")
+        print("Input data size does not match number of UEs!")
         return
     nsamps_pad = 0
     for i in range(n_samps):
@@ -19,6 +19,22 @@ def mimo(hub_serial, bs_serials, ue_serials, rate,
             break
     n_bs_ant = len(bs_serials)
     print("data length = {}, pad = {}, n_users = {}".format(n_samps, nsamps_pad, n_users))
+
+    
+    freq_sweep_num = 1
+    freq_sweep_en = False
+    if len(rx_freq_mat_file) > 0:
+        rx_freq_dict = sio.loadmat(rx_freq_mat_file)
+        rx_freq = rx_freq_dict['cfo_freq']
+        freq_sweep_en = True
+        if rx_freq.shape[0] == n_bs_ant:
+           freq_sweep_num = rx_freq.shape[1]
+        elif rx_freq.shape[1] == n_bs_ant:
+           freq_sweep_num = rx_freq.shape[0]
+        else:
+            print("Freq sweep data size does not match number of number of BS antennas!")
+            return
+
 
     # Init Radios
     bs_obj = [Iris_py(sdr, freq, freq, txgain, rxgain, None, rate, n_samps, both_channels) for sdr in bs_serials]
@@ -49,35 +65,53 @@ def mimo(hub_serial, bs_serials, ue_serials, rate,
     [bs.activate_stream_rx() for bs in bs_obj]
     [ue.set_corr() for ue in ue_obj]
 
-    max_try = 10
-    all_triggered = True
-    good_signal = True
-    amp = 0
-    rx_data = np.empty((n_bs_ant, n_samps), dtype=np.complex64)
+    for f in range(freq_sweep_num):
+        if freq_sweep_en:
+            [bs.sdr_setrxfreq(rx_freq[f][n]) for n, bs in enumerate(bs_obj)]
+        rx_data = np.empty((num_frames, n_bs_ant, n_samps), dtype=np.complex64)
 
-    for i in range(max_try):
-        # Receive Data
-        if hub is not None:
-            hub.set_trigger()
-        else:
-            bs_obj[0].set_trigger()
-
-        rx_data = [bs.recv_stream_tdd() for bs in bs_obj]
-        amp = np.mean(np.abs(rx_data[0]))
-        good_signal = amp > 0.001
-        triggers = [ue.sdr_gettriggers() for ue in ue_obj]
-        print("triggers = {}, Amplite = {}".format(triggers, amp))
-        all_triggered = True
+        max_try = 10
+        old_triggers = []
+        triggers = []
         for u in range(n_users):
-            if (triggers[u] == 0):
-                all_triggered = False
-        if all_triggered and good_signal:
-            break
+            old_triggers.append(0)
 
-    print("tries = {}, all_triggred = {}, good_signal = {}, amp = {}".format(i + 1, all_triggered, good_signal, amp))
+        for frame in range(num_frames):
+            all_triggered = True
+            good_signal = True
+            amp = 0
+            if frame > 0:
+                old_triggers = triggers
+            for i in range(max_try):
+                # Receive Data
+                if hub is not None:
+                    hub.set_trigger()
+                else:
+                    bs_obj[0].set_trigger()
 
-    # Save Received Data
-    sio.savemat('rx_data.mat', {'rx_vec_iris':rx_data})
+                rx_data[frame] = [bs.recv_stream_tdd() for bs in bs_obj]
+                amp = np.mean(np.abs(rx_data[0]))
+                good_signal = amp > 0.001
+                triggers = [ue.sdr_gettriggers() for ue in ue_obj]
+                new_triggers = []
+                zip_triggers = zip(triggers, old_triggers)
+                for triggers_i, old_triggers_i in zip_triggers:
+                    new_triggers.append(triggers_i - old_triggers_i)
+                print("triggers = {}, Amplitude = {}".format(new_triggers, amp))
+                all_triggered = True
+                for u in range(n_users):
+                    if (new_triggers[u] == 0):
+                        all_triggered = False
+                if all_triggered and good_signal:
+                    break
+
+            print("frame = {}, tries = {}, all_triggred = {}, good_signal = {}, amp = {}".format(frame, i + 1, all_triggered, good_signal, amp))
+
+        # Save Received Data
+        if freq_sweep_en:
+            sio.savemat('rx_data'+str(n_bs_ant)+'x'+str(n_users)+'f'+str(f)+'.mat', {'rx_vec_iris':rx_data})
+        else:
+            sio.savemat('rx_data'+str(n_bs_ant)+'x'+str(n_users)+'.mat', {'rx_vec_iris':rx_data})
 
     # Terminate Radios
     [ue.close() for ue in ue_obj]
@@ -94,8 +128,10 @@ def main():
     parser.add_option("--bs-serials", type="string", dest="bs_serials", help="serial numbers of the BS devices", default="RF3E000143,RF3E000160,RF3E000025,RF3E000034")
     parser.add_option("--ue-serials", type="string", dest="ue_serials", help="serial numbers of the UE devices", default="RF3E000164,RF3E000241")
     parser.add_option("--mat-file", type="string", dest="mat_file", help="MAT file including transmit data for UEs", default="RF3E000164,RF3E000241")
+    parser.add_option("--num-frames", type="int", dest="num_frames", help="Number of frames to collect", default=1)
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--freq", type="float", dest="freq", help="Tx freq (Hz). POWDER users must set to 3.6e9", default=3.6e9)
+    parser.add_option("--freq-mat", type="string", dest="freq_mat", help="MAT files of the list of rx frequencies", default="")
     parser.add_option("--txgain", type="float", dest="txgain", help="Optional Tx gain (dB)", default=80.0)
     parser.add_option("--rxgain", type="float", dest="rxgain", help="Optional Rx gain (dB)", default=70.0)
     parser.add_option("--both-channels", action="store_true", dest="both_channels", help="transmit from both channels",default=False)
@@ -109,7 +145,9 @@ def main():
         txgain=options.txgain,
         rxgain=options.rxgain,
         both_channels=options.both_channels,
-        matfile=options.mat_file
+        num_frames=options.num_frames,
+        matfile=options.mat_file,
+        rx_freq_mat_file=options.freq_mat
     )
 
 if __name__ == '__main__':
