@@ -5,7 +5,7 @@ from iris_py import *
 def mimo(hub_serial, bs_serials, ue_serials, rate,
          freq, txgain, rxgain, both_channels, num_frames, matfile, rx_freq_mat_file):
     tx_data_dict = sio.loadmat(matfile)
-    tx_data = tx_data_dict['tx_vec_iris']
+    tx_data = tx_data_dict['ds_QPSK_tx_signal_MIMO']
     print(tx_data.shape)
     n_samps = tx_data.shape[0]
     n_users = tx_data.shape[1]
@@ -69,8 +69,10 @@ def mimo(hub_serial, bs_serials, ue_serials, rate,
         if freq_sweep_en:
             [bs.sdr_setrxfreq(rx_freq[f][n]) for n, bs in enumerate(bs_obj)]
         rx_data = np.empty((num_frames, n_bs_ant, n_samps), dtype=np.complex64)
+        rx_data_frame = np.empty((n_bs_ant, n_samps), dtype=np.complex64)
 
         max_try = 10
+        good_frame_id = 0
         old_triggers = []
         triggers = []
         for u in range(n_users):
@@ -89,8 +91,8 @@ def mimo(hub_serial, bs_serials, ue_serials, rate,
                 else:
                     bs_obj[0].set_trigger()
 
-                rx_data[frame] = [bs.recv_stream_tdd() for bs in bs_obj]
-                amp = np.mean(np.abs(rx_data[frame][0]))
+                rx_data_frame = [bs.recv_stream_tdd() for bs in bs_obj]
+                amp = np.mean(np.abs(rx_data_frame[0]))
                 good_signal = amp > 0.001
                 triggers = [ue.sdr_gettriggers() for ue in ue_obj]
                 new_triggers = []
@@ -106,12 +108,15 @@ def mimo(hub_serial, bs_serials, ue_serials, rate,
                     break
 
             print("frame = {}, tries = {}, all_triggred = {}, good_signal = {}, amp = {}".format(frame, i + 1, all_triggered, good_signal, amp))
+            if all_triggered and good_signal:
+                rx_data[good_frame_id] = rx_data_frame
+                good_frame_id = good_frame_id + 1
 
         # Save Received Data
         if freq_sweep_en:
-            sio.savemat('rx_data'+str(n_bs_ant)+'x'+str(n_users)+'f'+str(f)+'.mat', {'rx_vec_iris':rx_data})
+            sio.savemat('rx_data'+str(n_users)+'x'+str(n_bs_ant)+'f'+str(f)+'.mat', {'rx_vec_iris':rx_data[0:good_frame_id, : ,:]})
         else:
-            sio.savemat('rx_data'+str(n_bs_ant)+'x'+str(n_users)+'.mat', {'rx_vec_iris':rx_data})
+            sio.savemat('ds_QPSK_rx_data_'+str(n_users)+'x'+str(n_bs_ant)+'_MIMO'+'.mat', {'rx_vec_iris':rx_data[0:good_frame_id, :, :]})
 
     # Terminate Radios
     [ue.close() for ue in ue_obj]
@@ -152,5 +157,3 @@ def main():
 
 if __name__ == '__main__':
     main()
- 
-
