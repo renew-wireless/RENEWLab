@@ -40,7 +40,11 @@ pilots_mat = repmat(pilots, 1, N_OFDM_SYM);
 load(tx_vec_iris_mat_file, 'tx_data');
 %load(tx_vec_iris_mat_file, 'tx_syms');
 load(tx_vec_iris_mat_file, 'tx_syms_mat');
+load(tx_vec_iris_mat_file, 'N_OFDM_SYM');
+load(tx_vec_iris_mat_file, 'MOD_ORDER');
+
 load(rx_vec_iris_mat_file, 'rx_vec_iris'); % loads rx_vec_iris
+
 rx_data_mat = permute(rx_vec_iris, [2 3 1]);
 n_f = size(rx_data_mat, 3);
 N_BS_NODE = size(rx_data_mat, 1);
@@ -53,8 +57,10 @@ snr_mrc = zeros(n_f, 1);
 bit_errs_br = zeros(n_f, N_BS_NODE);
 aevms_br = zeros(n_f, N_BS_NODE);
 snr_br = zeros(n_f, N_BS_NODE);
+elapsed = zeros(n_f, 1);
 
 for n=1:n_f
+    tic
     rx_vec_iris_n = squeeze(rx_data_mat(:, :, n));
     rx_vec_iris_n = rx_vec_iris_n.';
     %% Correlate for LTS
@@ -170,20 +176,19 @@ for n=1:n_f
     rx_data_br = demod_sym(rx_syms_br, MOD_ORDER);
 
     bit_errs_mrc(n) = length(find(dec2bin(bitxor(tx_data, rx_data_mrc),8) == '1'));
-    for i=1:N_BS_NODE
-       bit_errs_br(n, i) = length(find(dec2bin(bitxor(tx_data, rx_data_br(:, i)),8) == '1'));
-    end
+    bit_errs_br(n, :) = sum(length(find(dec2bin(bitxor(repmat(tx_data.', 1, N_BS_NODE), rx_data_br),8) == '1')));
     
     evm_mat_mrc = abs(payload_syms_mat_mrc - tx_syms_mat).^2;
     aevms_mrc(n) = mean(evm_mat_mrc(:));
     snr_mrc(n) = 10*log10(1./aevms_mrc(n));
     
-    for i=1:N_BS_NODE
-        evm_mat_br = abs(payload_syms_mat_br(:, :, i) - tx_syms_mat).^2;
-        aevms_br(n, i) = mean(evm_mat_br(:));
-        snr_br(n, i) = 10*log10(1./aevms_br(n, i));
-    end
-end
+    evm_mat_br = abs(payload_syms_mat_br - repmat(tx_syms_mat, 1, 1, N_BS_NODE)).^2;
+    aevms_br(n, :) = mean(reshape(evm_mat_br, numel(tx_syms_mat), N_BS_NODE), 1);
+    snr_br(n, :) = 10*log10(1./aevms_br(n, :));
 
+    elapsed(n) = toc;
+    fprintf('Frame %d processed in %2.2f\n', n, elapsed(n));
+end
+fprintf('Finished processing data in %5.2f\n', sum(elapsed));
 
 end
