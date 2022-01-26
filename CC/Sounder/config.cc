@@ -68,6 +68,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   if (cl_channel_ != "A" && cl_channel_ != "B" && cl_channel_ != "AB")
     throw std::invalid_argument("error channel config: not any of A/B/AB!\n");
   cl_sdr_ch_ = (cl_channel_ == "AB") ? 2 : 1;
+  bool client_serial_present = false;
 
   // Load serials file (loads hub, sdr, and rrh serials)
   std::string serials_str;
@@ -154,6 +155,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     // read client serials
     json j_ue_serials;
     if (j_serials.find("Clients") != j_serials.end()) {
+      client_serial_present = true;
       ss << j_serials.value("Clients", j_ue_serials);
       j_ue_serials = json::parse(ss);
       ss.str(std::string());
@@ -163,10 +165,11 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
       num_cl_sdrs_ = cl_sdr_ids_.size();
       num_cl_antennas_ = num_cl_sdrs_ * cl_sdr_ch_;
     } else {
-      client_present_ = false;
+      client_serial_present = false;
     }
 
-    client_present_ = !bs_only && num_cl_sdrs_ > 0 && !internal_measurement_;
+    client_present_ = !bs_only && client_serial_present && num_cl_sdrs_ > 0 &&
+                      !internal_measurement_;
     bs_present_ = !client_only && num_bs_sdrs_all_ > 0;
   }
 
@@ -292,7 +295,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     ul_slot_per_frame_ = ul_slots_.at(0).size();
     dl_slot_per_frame_ = dl_slots_.at(0).size();
     // read commons from client json config
-    if (client_present_ == false) {
+    if (client_serial_present == false) {
       num_cl_sdrs_ = num_cl_antennas_ =
           std::count(frames_.at(0).begin(), frames_.at(0).end(), 'P');
     }
@@ -309,7 +312,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   if (tx_advance.empty() == true) {
     tx_advance_.resize(num_cl_sdrs_, 250);
   } else {
-    if (tx_advance.size() != num_cl_sdrs_) {
+    if (client_present_ && tx_advance.size() != num_cl_sdrs_) {
       MLPD_ERROR("tx_advance size must be same as the number of clients!\n");
       exit(1);
     }
