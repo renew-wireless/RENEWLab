@@ -1,8 +1,8 @@
-function [bit_errs_mrc, aevms_mrc, bit_errs_br, aevms_br]= process_simo(tx_vec_iris_mat_file, rx_vec_iris_mat_file)
+function [bit_errs_mrc, aevms_mrc, bit_errs_br, aevms_br]= process_simo(tx_data, tx_syms_mat, N_OFDM_SYM, MOD_ORDER, rx_vec_iris, antenna_set, max_frame, process_branch, cfo)
 
 % Waveform params
-N_OFDM_SYM              = 46;         % Number of OFDM symbols for burst, it needs to be less than 47
-MOD_ORDER               = 4;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
+%N_OFDM_SYM              = 46;         % Number of OFDM symbols for burst, it needs to be less than 47
+%MOD_ORDER               = 4;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
 N_SC                    = 64;                                     % Number of subcarriers
 CP_LEN                  = 16;     
 
@@ -36,61 +36,53 @@ pilots = [1 1 -1 1].';
 % Repeat the pilots across all OFDM symbols
 pilots_mat = repmat(pilots, 1, N_OFDM_SYM);
 
-%load(tx_vec_iris_mat_file) % loads tx_data, tx_syms, tx_syms_mat
-load(tx_vec_iris_mat_file, 'tx_data');
-%load(tx_vec_iris_mat_file, 'tx_syms');
-load(tx_vec_iris_mat_file, 'tx_syms_mat');
-load(tx_vec_iris_mat_file, 'N_OFDM_SYM');
-load(tx_vec_iris_mat_file, 'MOD_ORDER');
-
-load(rx_vec_iris_mat_file, 'rx_vec_iris'); % loads rx_vec_iris
 
 rx_data_mat = permute(rx_vec_iris, [2 3 1]);
-n_f = size(rx_data_mat, 3);
+max_f = size(rx_data_mat, 3);
 N_BS_NODE = size(rx_data_mat, 1);
 N_UE = 1;
+n_samps = size(rx_data_mat, 2);
 
-bit_errs_mrc = zeros(n_f, 1);
-aevms_mrc = zeros(n_f, 1);
-snr_mrc = zeros(n_f, 1);
+% Each cell in antenna set tells us how many antennas to consider for MRC
+if nargin == 5 || isempty(antenna_set) || isempty(process_branch) || isempty(max_frame) || isempty(cfo)
+    antenna_set = [N_BS_NODE];
+    process_branch = 1;
+    max_frame = max_f;
+    cfo = zeros(N_BS_NODE, 1);
+end
+
+n_f = min([max_f max_frame]);
+ant_set_len = length(antenna_set);
+if max(antenna_set) > N_BS_NODE
+    display('invalid antenna set');
+end
+
+bit_errs_mrc = zeros(n_f, ant_set_len);
+aevms_mrc = zeros(n_f, ant_set_len);
+snr_mrc = zeros(n_f, ant_set_len);
 
 bit_errs_br = zeros(n_f, N_BS_NODE);
 aevms_br = zeros(n_f, N_BS_NODE);
 snr_br = zeros(n_f, N_BS_NODE);
 elapsed = zeros(n_f, 1);
 
+cfo_t = cfo(:) * [1:n_samps];
+cfo_t_exp = exp(2*pi*cfo_t*1i);
+cfo_t_exp_mat = repmat(cfo_t_exp, 1, 1, n_f);
+rx_data_mat_cfo = rx_data_mat .* cfo_t_exp_mat;
+
 for n=1:n_f
-    tic
-    rx_vec_iris_n = squeeze(rx_data_mat(:, :, n));
+    %tic
+    rx_vec_iris_n = squeeze(rx_data_mat_cfo(:, :, n));
     rx_vec_iris_n = rx_vec_iris_n.';
     %% Correlate for LTS
 
-    a = 1;
-    unos = ones(size(preamble.'))';
-    data_len = (N_OFDM_SYM)*(N_SC +CP_LEN);
+    data_len = (N_OFDM_SYM)*(N_SYM_SAMP);
     rx_lts_mat = double.empty();
     payload_rx = zeros(data_len,N_BS_NODE);
-%     payload_ind = int32.empty();
-%     m_filt = zeros(length(rx_vec_iris),N_BS_NODE);
     lts_ind = 134;
 
     for ibs =1:N_BS_NODE
-%             v0 = filter(flipud(preamble'),a,rx_vec_iris(:,ibs));
-%             v1 = filter(unos,a,abs(rx_vec_iris(:,ibs)).^2);
-%             m_filt(:,ibs) = (abs(v0).^2)./v1; % normalized correlation
-%             [~, max_idx] = max(m_filt(:,ibs));
-%             % In case of bad correlatons:
-%             if (max_idx + data_len) > length(rx_vec_iris) || (max_idx < 0) || (max_idx - length(preamble) < 0)
-%                 fprintf('Bad correlation at antenna %d max_idx = %d \n', ibs, max_idx);
-%                 valid_it = false;
-%                 % Real value doesn't matter since we have corrrupt data:
-%                 max_idx = length(rx_vec_iris)-data_len -1;
-%             end
-%             payload_ind(ibs) = max_idx +1;
-%             lts_ind = payload_ind(ibs) - length(preamble);
-
-            
-            %lts_ind = payload_ind(ibs) - length(preamble);
             rx_lts_mat(:,ibs) = rx_vec_iris_n(lts_ind: lts_ind + length(preamble) -1, ibs);
             payload_rx(1:data_len,ibs) = rx_vec_iris_n(lts_ind + length(preamble) : lts_ind + length(preamble) + data_len - 1, ibs);
     end
@@ -127,68 +119,80 @@ for n=1:n_f
 
     % Equalize MRC
     rx_H_est = reshape(rx_H_est_2d,N_SC,1,N_BS_NODE);       % Expand to a 3rd dimension to agree with the dimensions od syms_f_mat
-    H_pow = sum(abs(conj(rx_H_est_2d).*rx_H_est_2d),2);
-    H_pow = repmat(H_pow,1,N_OFDM_SYM);
 
     % Do yourselves: MRC equalization:
-    syms_eq_mat_mrc =  sum( (repmat(conj(rx_H_est), 1, N_OFDM_SYM,1).* syms_f_mat), 3)./H_pow; % MRC equalization: combine The two branches and equalize. 
-
-    %Equalize each branch separately
-
-    syms_eq_mat_br = syms_f_mat ./ repmat(rx_H_est, 1, N_OFDM_SYM, 1);
-    pilots_mat_br = repmat(pilots_mat, 1, 1, N_BS_NODE);
-
-
+    %syms_eq_mat_mrc =  sum( (repmat(conj(rx_H_est), 1, N_OFDM_SYM,1).* syms_f_mat), 3)./H_pow;
+    syms_eq_mat_mrc = zeros(N_SC, N_OFDM_SYM, ant_set_len);
+    for a = 1:ant_set_len
+        rand_ant_id = randi(N_BS_NODE, 1, antenna_set(a));
+        H_pow = sum(abs(conj(rx_H_est_2d(:, rand_ant_id)).*rx_H_est_2d(:, rand_ant_id)),2);
+        H_pow = repmat(H_pow,1,N_OFDM_SYM);
+        syms_eq_mat_mrc(:, :, a) =  sum( (repmat(conj(rx_H_est(:, :, rand_ant_id)), 1, N_OFDM_SYM,1).* syms_f_mat(: , :, rand_ant_id)), 3)./H_pow; % MRC equalization: combine The two branches and equalize. 
+    end
+    pilot_phase_err_mrc = zeros(N_OFDM_SYM, ant_set_len);
     if DO_APPLY_PHASE_ERR_CORRECTION
         % Extract the pilots and calculate per-symbol phase error
-        pilots_f_mat_mrc = syms_eq_mat_mrc(SC_IND_PILOTS, :,:);
-        pilots_f_mat_comp_mrc = pilots_f_mat_mrc.*pilots_mat;
-        pilot_phase_err_mrc = angle(mean(pilots_f_mat_comp_mrc));
-        
-        pilots_f_mat_br = syms_eq_mat_br(SC_IND_PILOTS, :, :);
-        pilots_f_mat_comp_br = pilots_f_mat_br.*pilots_mat_br;
-        pilot_phase_err_br = angle(mean(pilots_f_mat_comp_br, 1));
-
-    else
-        % Define an empty phase correction vector (used by plotting code below)
-        pilot_phase_err_mrc = zeros(1, N_OFDM_SYM);
-        pilot_phase_err_br = zeros(1, N_OFDM_SYM, N_BS_NODE);
-
+        for a = 1:ant_set_len
+            pilots_f_mat_mrc = syms_eq_mat_mrc(SC_IND_PILOTS, :, a);
+            pilots_f_mat_comp_mrc = pilots_f_mat_mrc.*pilots_mat;
+            pilot_phase_err_mrc(:, a) = angle(mean(pilots_f_mat_comp_mrc));
+        end
     end
-    pilot_phase_err_corr_mrc = repmat(pilot_phase_err_mrc, N_SC, 1);
+    pilot_phase_err_corr_mrc = permute(repmat(pilot_phase_err_mrc, 1, 1, N_SC), [3 1 2]);
     pilot_phase_corr_mrc = exp(-1i*(pilot_phase_err_corr_mrc));
-    pilot_phase_err_corr_br = repmat(pilot_phase_err_br, N_SC, 1, 1);
-    pilot_phase_corr_br = exp(-1i*(pilot_phase_err_corr_br));
-
 
     % Apply the pilot phase correction per symbol
     syms_eq_pc_mat_mrc = syms_eq_mat_mrc .* pilot_phase_corr_mrc;
-    payload_syms_mat_mrc = syms_eq_pc_mat_mrc(SC_IND_DATA, :);
+    payload_syms_mat_mrc = syms_eq_pc_mat_mrc(SC_IND_DATA, :, :);
 
-    syms_eq_pc_mat_br = syms_eq_mat_br .* pilot_phase_corr_br;
-    payload_syms_mat_br = syms_eq_pc_mat_br(SC_IND_DATA, :, :);
-    
-    %% Demodulate
-    rx_syms_mrc = reshape(payload_syms_mat_mrc, 1, N_DATA_SYMS);
-    rx_syms_br = reshape(payload_syms_mat_br, N_DATA_SYMS, N_BS_NODE);
-
+     %% Demodulate
+    rx_syms_mrc = reshape(payload_syms_mat_mrc, N_DATA_SYMS, ant_set_len);   
     rx_data_mrc = demod_sym(rx_syms_mrc, MOD_ORDER);
-    rx_data_br = demod_sym(rx_syms_br, MOD_ORDER);
 
-    bit_errs_mrc(n) = length(find(dec2bin(bitxor(tx_data, rx_data_mrc),8) == '1'));
-    bit_errs_br(n, :) = sum(length(find(dec2bin(bitxor(repmat(tx_data.', 1, N_BS_NODE), rx_data_br),8) == '1')));
-    
-    evm_mat_mrc = abs(payload_syms_mat_mrc - tx_syms_mat).^2;
-    aevms_mrc(n) = mean(evm_mat_mrc(:));
-    snr_mrc(n) = 10*log10(1./aevms_mrc(n));
-    
-    evm_mat_br = abs(payload_syms_mat_br - repmat(tx_syms_mat, 1, 1, N_BS_NODE)).^2;
-    aevms_br(n, :) = mean(reshape(evm_mat_br, numel(tx_syms_mat), N_BS_NODE), 1);
-    snr_br(n, :) = 10*log10(1./aevms_br(n, :));
+    %% Calculate BER, EVM and SNR
+    bit_errs_mrc(n) = length(find(dec2bin(bitxor(repmat(tx_data.', 1, ant_set_len), rx_data_mrc),8) == '1'));
 
-    elapsed(n) = toc;
-    fprintf('Frame %d processed in %2.2f\n', n, elapsed(n));
+    evm_mat_mrc = abs(payload_syms_mat_mrc - repmat(tx_syms_mat, 1, 1, ant_set_len)).^2;
+    for a = 1:ant_set_len
+        aevms_mrc(n, a) = mean(reshape(evm_mat_mrc(:, :, a), [], 1));
+        snr_mrc(n, a) = 10*log10(1./aevms_mrc(n, a));
+    end
+
+    %Equalize each branch separately
+    if process_branch
+        syms_eq_mat_br = syms_f_mat ./ repmat(rx_H_est, 1, N_OFDM_SYM, 1);
+        pilots_mat_br = repmat(pilots_mat, 1, 1, N_BS_NODE);
+
+        % Define an empty phase correction vector (used by plotting code below)
+        pilot_phase_err_br = zeros(1, N_OFDM_SYM, N_BS_NODE);
+        if DO_APPLY_PHASE_ERR_CORRECTION
+            pilots_f_mat_br = syms_eq_mat_br(SC_IND_PILOTS, :, :);
+            pilots_f_mat_comp_br = pilots_f_mat_br.*pilots_mat_br;
+            pilot_phase_err_br = angle(mean(pilots_f_mat_comp_br, 1));
+        end
+
+        pilot_phase_err_corr_br = repmat(pilot_phase_err_br, N_SC, 1, 1);
+        pilot_phase_corr_br = exp(-1i*(pilot_phase_err_corr_br));
+
+
+        % Apply the pilot phase correction per symbol
+        syms_eq_pc_mat_br = syms_eq_mat_br .* pilot_phase_corr_br;
+        payload_syms_mat_br = syms_eq_pc_mat_br(SC_IND_DATA, :, :);
+
+        %% Demodulate
+        rx_syms_br = reshape(payload_syms_mat_br, N_DATA_SYMS, N_BS_NODE);
+        rx_data_br = demod_sym(rx_syms_br, MOD_ORDER);
+
+        %% Calculate BER, EVM and SNR
+        bit_errs_br(n, :) = sum(length(find(dec2bin(bitxor(repmat(tx_data.', 1, N_BS_NODE), rx_data_br),8) == '1')));
+
+        evm_mat_br = abs(payload_syms_mat_br - repmat(tx_syms_mat, 1, 1, N_BS_NODE)).^2;
+        aevms_br(n, :) = mean(reshape(evm_mat_br, numel(tx_syms_mat), N_BS_NODE), 1);
+        snr_br(n, :) = 10*log10(1./aevms_br(n, :));
+    end
+    %elapsed(n) = toc;
+    %fprintf('Frame %d processed in %2.2f\n', n, elapsed(n));
 end
-fprintf('Finished processing data in %5.2f\n', sum(elapsed));
+%fprintf('Finished processing data in %5.2f\n', sum(elapsed));
 
 end
