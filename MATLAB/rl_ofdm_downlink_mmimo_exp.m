@@ -21,7 +21,7 @@ WRITE_PNG_FILES         = 0;           % Enable writing plots to PNG
 
 %Iris params:
 USE_HUB                 = 1;
-WIRED_UE                 = 1;
+WIRED_UE                 = 0;
 TX_FRQ                  = 3.6e9;    
 RX_FRQ                  = TX_FRQ;
 TX_GN                   = 75;
@@ -42,8 +42,8 @@ N_SC                    = 64;                                     % Number of su
 CP_LEN                  = 16;                                     % Cyclic prefix length
 N_SYM_SAMP              = N_SC + CP_LEN;                          % Number of samples that will go over the air
 N_SAMP                  = 4096;                                   % N_ZPAD_PRE + data_len + N_ZPAD_POST;
-N_ZPAD_PRE              = 100;                                    % Zero-padding prefix for Iris
-N_ZPAD_POST             = 76;                                     % Zero-padding postfix for Iris
+N_ZPAD_PRE              = 128;                                    % Zero-padding prefix for Iris
+N_ZPAD_POST             = 128;                                     % Zero-padding postfix for Iris
 N_OFDM_SYMS              = floor((N_SAMP - N_ZPAD_PRE - N_ZPAD_POST) / N_SYM_SAMP);  % Number of OFDM symbols for burst, it needs to be less than 47
 N_PILOTS_SYMS           = 2;
 N_DATA_SYMS             = (N_OFDM_SYMS - N_PILOTS_SYMS);       % Number of data symbols (one per data-bearing subcarrier per OFDM symbol)
@@ -53,7 +53,6 @@ MOD_ORDER               = 4;           % Modulation order (2/4/16/64 = BSPK/QPSK
 % Rx processing params
 FFT_OFFSET                    = 16;          % Number of CP samples to use in FFT (on average)
 AUTO_OFFSET_FIND = 1;
-RECIP_PLOT = 1;
 PILOT_PLOT = 1;
 DOWNLINK_PLOT = 1;
 
@@ -74,20 +73,25 @@ lts = [lts_t(49:64) lts_t];
 % nodes.
 
 if USE_HUB
-    hub_id = "FH4A000001";
+    hub_id = "FH4B000019";
 else
     hub_id = [];
 end
 
-bs_ids = ["RF3E000183", "RF3E000152", "RF3E000123", "RF3E000178", "RF3E000113", "RF3E000176", "RF3E000132", "RF3E000108"];
-ue_ids= ["RF3E000103", "RF3E000180"];
+chain2 = ["RF3E000087", "RF3E000084", "RF3E000107", "RF3E000110", "RF3E000086", "RF3E000162", "RF3E000127", "RF3E000597"];
+chain3 = ["RF3E000346", "RF3E000543", "RF3E000594", "RF3E000404", "RF3E000616", "RF3E000622", "RF3E000601", "RF3E000602"];
+chain4 = ["RF3E000146", "RF3E000122", "RF3E000150", "RF3E000128", "RF3E000168", "RF3E000136", "RF3E000213", "RF3E000142"];
+chain5 = ["RF3E000356", "RF3E000546", "RF3E000620", "RF3E000609", "RF3E000604", "RF3E000612", "RF3E000640", "RF3E000551"];
+chain6 = ["RF3E000208", "RF3E000636", "RF3E000632", "RF3E000568", "RF3E000558", "RF3E000633", "RF3E000566", "RF3E000635"];
+bs_ids = [chain2 chain3];
+ue_ids= ["RF3E000164"]; %, "RF3D000016"]; %, "RF3E000180"];
 
 %bs_sched = ["PGRG", "RGPG"];  % All BS schedule, Ref Schedule
 % We send downlink pilots in the first phase
 % And downlink data in the second phase
 % With this schedule we can sound max N_OFDM_SYMS downlink channels
-bs_sched = ["BGPG", "BGPG"];  % BS schedule
-ue_sched = ["GGRG", "GGRG"];  % UE schedule
+bs_sched = "BGPG";  % BS schedule
+ue_sched = "GGRG";  % UE schedule
 
 N_BS_NODE = length(bs_ids);
 N_UE_NODE = length(ue_ids);
@@ -161,46 +165,58 @@ node_ue.sdr_configgainctrl();
 node_ue.sdrrxsetup();
 
 
-dl_pilot_rx = zeros(N_UE_NODE, data_len);
-rx_fft = zeros(N_BS_NODE, N_UE, N_SC);
-downlink_pilot_csi = zeros(N_BS_NODE, N_UE, N_SC);
-
 %% Downlink Pilot Phase
-FIRST_PHASE_ID = 1;
 postfix_len = N_SAMP - data_len - N_ZPAD_PRE;
+node_ue.set_tddconfig(WIRED_UE, ue_sched); % configure the BS: schedule etc.
+node_bs.set_tddconfig(1, bs_sched); % configure the BS: schedule etc.
 for i=1:N_BS_NODE
-    node_bs.set_tddconfig_single(1, bs_sched(FIRST_PHASE_ID), i); % configure the BS: schedule etc.
-    node_ue.set_tddconfig_single(1, ue_sched(FIRST_PHASE_ID), i); % configure the BS: schedule etc.
-    tx_data = [zeros(1, N_ZPAD_PRE) exp_pilot_tx(i, :) zeros(1, recip_postfix_len)];
-    node_bs.sdrtx_single(tx_data, i);  % Burn data to the BS RAM
+    tx_pilot_signal = [zeros(1, N_ZPAD_PRE) exp_pilot_tx(i, :) zeros(1, postfix_len)];
+    node_bs.sdrtx_single(tx_pilot_signal, i);  % Burn data to the BS RAM
 end
 
-if ~WIRED_UE
-    node_ue.sdr_setcorr();              % activate correlator
-end
-node_ue.sdr_activate_rx();   % activate reading stream
-node_bs.sdrtrigger();
-[rx_vec_iris, data0_len] = node_ue.uesdrrx(N_SAMP); % read data
-if ~WIRED_UE
-    node_ue.sdr_unsetcorr();              % activate correlator
+
+max_try = 10;
+good_signal = 0;
+for i=1:max_try
+    if ~WIRED_UE
+        node_ue.sdr_setcorr();              % activate correlator
+    end
+    node_ue.sdr_activate_rx();   % activate reading stream
+    node_bs.sdrtrigger();
+    [rx_vec_iris, data0_len] = node_ue.uesdrrx(N_SAMP); % read data
+    if ~WIRED_UE
+        node_ue.sdr_unsetcorr();              % activate correlator
+    end
+    amp = mean(abs(rx_vec_iris));
+    if sum(amp > 0.002) == N_UE_NODE
+        good_signal = 1;
+        break;
+    end
 end
 
-a = 1;
-unos = ones(size(conj(lts)));
-rx_data_start = 160;
+if good_signal == 0
+    disp('Did not receive good signal during pilot phase!');
+    return;
+end
+
+dl_pilot_rx = zeros(data_len, N_UE_NODE);
+rx_fft = zeros(N_SC, N_BS_NODE, N_UE_NODE);
+downlink_pilot_csi = zeros(N_SC, N_BS_NODE, N_UE_NODE);
+
+rx_data_start = 189;
 for iue = 1:N_UE_NODE
-    dl_pilot_rx(iue, :) = rx_vec_iris(iue, rx_data_start: rx_data_start + data_len - 1);
+    dl_pilot_rx(:, iue) = rx_vec_iris(rx_data_start: rx_data_start + data_len - 1, iue);
     for ibs = 1:N_BS_NODE
         for rid = 1:DATA_REP
             start_index = CP_LEN + ((rid - 1) + (ibs - 1) * DATA_REP) * N_SYM_SAMP;
-            rx_fft(ibs, iue, :) = rx_fft(ibs, iue, :) + fft(dl_pilot_rx(iue, 1 + start_index : start_index + N_SC), N_SC);
+            rx_fft(:, ibs, iue) = rx_fft(:, ibs, iue) + fft(dl_pilot_rx(1 + start_index : start_index + N_SC, iue), N_SC);
         end
     end
 end
 
 for iue = 1:N_UE_NODE
-    for ibs = 1:N_BS
-        downlink_pilot_csi(ibs, iue, :) = (rx_fft(ibs, iue, :) / DATA_REP) .* lts_f;
+    for ibs = 1:N_BS_NODE
+        downlink_pilot_csi(:, ibs, iue) = (rx_fft(:, ibs, iue) / DATA_REP) .* lts_f.';
     end
 end
 
@@ -208,8 +224,7 @@ end
 %% Downlink CSI Calculation and Zeroforcing
 ifft_in_mat = zeros(N_BS_NODE, N_SC, N_OFDM_SYMS);
 for isc =1:N_SC
-    downlink_pilot_csi(:, :, isc) = diag(squeeze(cal_mat(:, isc))) * squeeze(uplink_pilot_csi(:, :, isc));
-    downlink_beam_weights = pinv(squeeze(downlink_pilot_csi(:, :, isc)));
+    downlink_beam_weights = pinv(squeeze(downlink_pilot_csi(isc, :, :)));
     for isym = 1:N_OFDM_SYMS
         ifft_in_mat(:, isc, isym) = downlink_beam_weights.' * precoding_in_mat(:, isc, isym);
     end
@@ -230,45 +245,57 @@ end
 % Reshape to a vector
 tx_payload_vec = reshape(tx_payload_mat, N_BS_NODE, numel(tx_payload_mat(1, :, :)));
 
-bs_sched_id = 4;
-node_bs.set_tddconfig(1, bs_sched(bs_sched_id)); % configure the BS: schedule etc.
-
-ue_sched_id = 2;
-node_ue.set_tddconfig(WIRED_UE, ue_sched(ue_sched_id)); % configure the BS: schedule etc.
 
 % Write beamformed signal to all antennas
 donwlink_postfix_len = N_SAMP - N_ZPAD_PRE - N_OFDM_SYMS * N_SYM_SAMP;
 for i=1:N_BS_NODE
-    tx_data = [zeros(1, N_ZPAD_PRE) tx_payload_vec(i, :) zeros(1, donwlink_postfix_len)];
-    tx_vec_iris = TX_SCALE .* tx_data ./ max(abs(tx_data));
+    tx_data_signal = [zeros(1, N_ZPAD_PRE) tx_payload_vec(i, :) zeros(1, donwlink_postfix_len)];
+    tx_vec_iris = TX_SCALE .* tx_data_signal ./ max(abs(tx_data_signal));
     node_bs.sdrtx_single(tx_vec_iris, i);       % Burn data to the UE RAM
 end
 
-if ~WIRED_UE
-    node_ue.sdr_setcorr();              % activate correlator
-end
-
 % Transmit beamformed signal from all antennas and receive at UEs
-node_ue.sdr_activate_rx();   % activate reading stream
-node_bs.sdrtrigger();
-[rx_vec_downlink, ~] = node_ue.sdrrx(N_SAMP); % read data
+max_try = 10;
+good_signal = 0;
+for i=1:max_try
+    if ~WIRED_UE
+        node_ue.sdr_setcorr();              % activate correlator
+    end
 
-if ~WIRED_UE
-    node_ue.sdr_unsetcorr();              % activate correlator
+    node_ue.sdr_activate_rx();   % activate reading stream
+
+    node_bs.sdrtrigger();
+    [rx_vec_downlink, ~] = node_ue.uesdrrx(N_SAMP); % read data
+
+    if ~WIRED_UE
+        node_ue.sdr_unsetcorr();              % activate correlator
+    end
+    amp = mean(abs(rx_vec_downlink));
+    if sum(amp > 0.002) == N_UE_NODE
+        good_signal = 1;
+        break;
+    end
 end
 
+if good_signal == 0
+    disp('Did not receive good signal during pilot phase!');
+    node_bs.sdr_close();
+    node_ue.sdr_close();
+    return;
+end
+rx_vec_downlink = rx_vec_downlink.';
 node_bs.sdr_close();
 node_ue.sdr_close();
 
 
 %% Process downlink receive signal
-dl_data_start = ones(1, N_UE_NODE) * 100;
+dl_data_start = 188;
 
-N_RX_OFDM_SYMS = min(N_OFDM_SYMS, floor((N_SAMP - dl_data_start(1))/N_SYM_SAMP));
+N_RX_OFDM_SYMS = min(N_OFDM_SYMS, floor((N_SAMP - dl_data_start)/N_SYM_SAMP));
 rx_dl_vec = zeros(N_UE_NODE, N_RX_OFDM_SYMS * N_SYM_SAMP);
 for iue=1:N_UE_NODE
-    end_idx = min(4096, dl_data_start(iue) + N_RX_OFDM_SYMS * N_SYM_SAMP - 1);
-    rx_dl_vec(iue, :) = rx_vec_downlink(iue, dl_data_start(iue): end_idx);
+    end_idx = min(4096, dl_data_start + N_RX_OFDM_SYMS * N_SYM_SAMP - 1);
+    rx_dl_vec(iue, :) = rx_vec_downlink(iue, dl_data_start: end_idx);
 end
 rx_dl_mat = reshape(rx_dl_vec, N_UE_NODE, N_SYM_SAMP, N_RX_OFDM_SYMS);
 if(CP_LEN > 0)
@@ -307,46 +334,36 @@ dl_syms_eq_pc_mat = dl_syms_eq_mat.* pilot_dl_phase_corr;
 payload_dl_syms_mat = dl_syms_eq_pc_mat(:, SC_IND_DATA, :);
 payload_dl_syms_mat = reshape(payload_dl_syms_mat, N_UE_NODE, numel(payload_dl_syms_mat(1,:,:)));
 
+%% Demodulate
+rx_data = demod_sym(payload_dl_syms_mat ,MOD_ORDER);
+
+sym_errs = sum(tx_data(:) ~= rx_data(:));
+bit_errs = length(find(dec2bin(bitxor(tx_data(:), rx_data(:)),8) == '1'));
+evm_mat = double.empty();
+aevms = zeros(N_UE_NODE,1);
+snr_mat = zeros(N_UE_NODE,1);
+
+for sp = 1:N_UE_NODE
+    tx_vec = tx_syms_mat(sp, :,:);
+    evm_mat(:,sp)  = abs(tx_vec(:) - payload_dl_syms_mat(sp, :).' ).^2;
+    aevms(sp) = mean(evm_mat(:,sp));
+    snr_mat(sp) = -10*log10(aevms (sp));
+end
 
 %% Plotting
 cf = 0;
 
-% Reciprocal Calibration Vectors Plots
-if RECIP_PLOT
-    cf = cf + 1;
-    figure(cf);clf;
-
-    for i = 1:N_BS_NODE
-        subplot(N_BS_NODE, 1, i);
-        plot(-32:1:31, abs(cal_mat(i, :)));
-        axis([-40 40 0 5])
-        grid on;
-        title('Calibration MAGNITUDE');
-    end
-
-    cf = cf + 1;
-    figure(cf);clf;
-
-    for i = 1:N_BS_NODE
-        subplot(N_BS_NODE, 1, i);
-        plot(-32:1:31, angle(cal_mat(i, :)));
-        axis([-40 40 -pi pi])
-        grid on;
-        title('Calibration ANGLE');
-    end
-end
-
-% Uplink Pilot Rx Vectors Plots
+% Downlink Pilot Rx Vectors Plots
 if PILOT_PLOT
     cf = cf + 1;
     figure(cf);clf;
 
-    for i = 1:N_BS_NODE
-        subplot(N_BS_NODE, 1, i);
-        plot(real(rx_vec_pilot(i, :)));
-        axis([0 N_SAMP -.1 .1])
+    for i = 1:N_UE_NODE
+        subplot(N_UE_NODE, 1, i);
+        plot(real(rx_vec_iris(:, i)));
+        axis([0 N_SAMP -1 1])
         grid on;
-        title('Received Pilots (Real)');
+        title('Received Downlink Pilots (Real)');
     end
 end
 
@@ -358,10 +375,10 @@ if DOWNLINK_PLOT
     for i = 1:N_UE_NODE
         subplot(N_UE_NODE, 1, i);
         plot(real(rx_vec_downlink(i, :)));
-        xline(dl_data_start(i),'--r')
-        axis([0 N_SAMP -.1 .1])
+        xline(dl_data_start,'--r')
+        axis([0 N_SAMP -1 1])
         grid on;
-        title('Received Pilots (Real)');
+        title('Received Downlink Data (Real)');
     end
     % DL
     cf = cf + 1;
@@ -370,7 +387,7 @@ if DOWNLINK_PLOT
     for i = 1:N_UE_NODE
         subplot(N_UE_NODE,1,i)
         plot(payload_dl_syms_mat(i, :),'ro','MarkerSize',1);
-        axis square; axis(1.5*[-1 1 -1 1]);
+        axis square; axis(2.5*[-1 1 -1 1]);
         grid on;
         hold on;
 
@@ -380,6 +397,6 @@ if DOWNLINK_PLOT
     end
 end
 
-
-
+sym_errs
+snr_mat
 

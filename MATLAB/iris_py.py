@@ -153,6 +153,7 @@ class Iris_py:
                         self.sdr.setDCOffsetMode(SOAPY_SDR_RX, chan, True)
 
                 self.tx_stream = None  # Burst mode
+                self.rx_stream = None  # Burst mode
 
                 self.sdr.writeSetting("RESET_DATA_LOGIC", "")
 
