@@ -290,17 +290,17 @@ class Iris_py:
                 in_len = int(self.n_samp)
                 wave_rx_a = np.zeros((in_len), dtype=np.complex64)
                 wave_rx_b = np.zeros((in_len), dtype=np.complex64)
-                rx_frames_a = np.zeros((in_len*max_frames), dtype=np.complex64)
-
                 n_R = self.tdd_sched.count("R")  # How many Read frames in the tdd schedule
-                print("n_samp is: %d  \n" % self.n_samp)
+                print("Number of samples: {}  number of read slots (R): {}  max frames: {} \n".format(self.n_samp, n_R, max_frames))
 
-                for m in range(max_frames):
-                    for k in range(n_R):
-                        r1 = self.sdr.readStream(
-                            self.rx_stream, [wave_rx_a, wave_rx_b], int(self.n_samp))
-                        print("reading stream: ({})".format(r1))
-                    rx_frames_a[m*in_len: (m*in_len + in_len)] = wave_rx_a
+                #rx_frames_a = np.zeros((in_len*max_frames*n_R), dtype=np.complex64)
+                rx_frames_a = np.zeros((in_len*n_R), dtype=np.complex64)
+                #for m in range(max_frames):
+                for k in range(n_R):
+                    r1 = self.sdr.readStream(self.rx_stream, [wave_rx_a, wave_rx_b], int(self.n_samp))
+                    print("reading stream: ({})".format(r1))
+                    #rx_frames_a[m*k*in_len: (m*k*in_len + in_len)] = wave_rx_a
+                    rx_frames_a[k*in_len: (k*in_len + in_len)] = wave_rx_a
 
                 return(rx_frames_a)
 

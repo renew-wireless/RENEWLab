@@ -29,6 +29,7 @@
 clear
 close all;
 
+
 [version, executable, isloaded] = pyversion;
 if ~isloaded
     pyversion /usr/bin/python
@@ -51,18 +52,19 @@ if SIM_MOD
 
 else 
     %Iris params:
-    TX_SCALE                = 1;         % Scale for Tx waveform ([0:1])
+    TX_SCALE                = 0.6;         % Scale for Tx waveform ([0:1])
     chan_type               = "iris";
     USE_HUB                 = 1;
-    TX_FRQ                  = 3.56e9;
+    TX_FRQ                  = 3.6e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = 80;
-    TX_GN_ue                = 80;
-    RX_GN                   = 65;
+    TX_GN_BS                = 70;
+    RX_GN_BS                = 70;
+    TX_GN_UE                = [70, 70];
+    RX_GN_UE                = [70, 70];
     SMPL_RT                 = 5e6;
-    N_FRM                   = 10;
-    BEACON_SWEEP     = 0;
-    bs_ids                   = string.empty();
+    N_FRM                   = 1;
+    BEACON_SWEEP            = 0;
+    bs_ids                  = string.empty();
     ue_ids                  = string.empty();
     ue_scheds               = string.empty();
 
@@ -73,11 +75,13 @@ else
 
        %bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716"];
        %hub_id = "FH4B000021";
-        bs_ids = ["RF3E000087","RF3E000084","RF3E000107","RF3E000086","RF3E000110","RF3E000162","RF3E000127","RF3E000597",...
-                    "RF3E000346","RF3E000543","RF3E000594","RF3E000404","RF3E000616","RF3E000622","RF3E000601","RF3E000602"];
+        bs_ids = ["RF3E000087","RF3E000084","RF3E000107","RF3E000110","RF3E000162","RF3E000127","RF3E000597"];%, ...
+                    %"RF3E000346","RF3E000543","RF3E000594","RF3E000404","RF3E000616","RF3E000622","RF3E000601","RF3E000602", ...
+		    %"RF3E000146","RF3E000122","RF3E000150","RF3E000128","RF3E000168","RF3E000136","RF3E000213","RF3E000142"];
         hub_id = ["FH4B000019"];
     else
         bs_ids = ["RF3E000246", "RF3E000490", "RF3E000749", "RF3E000697", "RF3E000724", "RF3E000740", "RF3E000532", "RF3E000716"];
+        hub_id = [];
     end
 
     %ue_ids= ["RF3E000119", "RF3E000145"];
@@ -104,11 +108,12 @@ SC_IND_DATA             = [2:7 9:21 23:27 39:43 45:57 59:64];     % Data subcarr
 SC_IND_DATA_PILOT       = [2:27 39:64]';
 N_SC                    = 64;                                     % Number of subcarriers
 CP_LEN                  = 16;                                     % Cyclic prefix length
+CP_LEN_LTS              = 32;
 N_DATA_SYMS             = N_OFDM_SYM * length(SC_IND_DATA);       % Number of data symbols (one per data-bearing subcarrier per OFDM symbol) per UE
 N_LTS_SYM               = 2;                                      % Number of 
 N_SYM_SAMP              = N_SC + CP_LEN;                          % Number of samples that will go over the air
-N_ZPAD_PRE              = 90;                                     % Zero-padding prefix for Iris
-N_ZPAD_POST             = N_ZPAD_PRE -14;                         % Zero-padding postfix for Iris
+N_ZPAD_PRE              = 100;                                     % Zero-padding prefix for Iris
+N_ZPAD_POST             = N_ZPAD_PRE - 14;                         % Zero-padding postfix for Iris
 
 % Rx processing params
 FFT_OFFSET                    = 16;          % Number of CP samples to use in FFT (on average)
@@ -125,8 +130,10 @@ preamble_common = [lts_t(33:64); repmat(lts_t,N_LTS_SYM,1)];
 l_pre = length(preamble_common);
 pre_z = zeros(size(preamble_common));
 preamble = zeros(N_UE * l_pre, N_UE);
+preamble_vec = [];
 for jp = 1:N_UE
     preamble((jp-1)*l_pre + 1: (jp-1)*l_pre+l_pre,jp) = preamble_common;
+    preamble_vec = [preamble_vec; preamble_common];
 end
 
 %% Generate a payload of random integers
@@ -166,17 +173,36 @@ tx_payload_vecs = reshape(tx_payload_mat, ceil(numel(tx_payload_mat)/N_UE), N_UE
 
 % Construct the full time-domain OFDM waveform
 tx_vecs = [zeros(N_ZPAD_PRE, N_UE); preamble; tx_payload_vecs; zeros(N_ZPAD_POST, N_UE)];
+%tx_vecs = [zeros(N_ZPAD_PRE, N_UE); preamble];
 
 % Leftover from zero padding:
 tx_vecs_iris = tx_vecs;
 % Scale the Tx vector to +/- 1
 tx_vecs_iris = TX_SCALE .* tx_vecs_iris ./ max(abs(tx_vecs_iris));
 
+% Transmission schedule
+% Make sure sim and OTA work the same way...
+%bs_sched = ["BGGGGGRG"];           % BS schedule
+%ue_sched = ["GGGGGGPG"];           % UE schedule
+bs_sched = "BG";
+ue_sched_i = "GG" + repelem('G',[2*N_UE]);
+ue_sched = repmat(ue_sched_i, 1, N_UE);
+for ue_idx = 1:N_UE
+    % Individual Pilots (uplink)
+    curr_str_bs = "RG";
+    bs_sched = bs_sched + curr_str_bs;
+    ue_sched{ue_idx}(2*ue_idx+1:2*ue_idx+2) = 'PG';
+end
+% Multi-user TX (uplink)
+bs_sched = [bs_sched + "RG"];
+ue_sched = [ue_sched + "PG"];
+numRxSyms = bs_sched.count("R");
+
+%number of samples in a subframe or symbol
+n_samp = length(tx_vecs_iris);
+
 %% SIMULATION:
 if (SIM_MOD) 
-
-    %number of samples in a frame
-    n_samp = length(tx_vecs_iris);
 
     % Iris nodes' parameters
     bs_sdr_params = struct(...
@@ -198,8 +224,16 @@ if (SIM_MOD)
     ue_sdr_params.n_sdrs = N_UE;
     ue_sdr_params.txgain = [];
 
-    rx_vec_iris = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, chan_type, sim_SNR_db, bs_sdr_params, ue_sdr_params, []);
-    rx_vec_iris = rx_vec_iris.'; % just to agree with what the hardware spits out.
+    % Replicate what's done in hardware just to ensure we are doing the same.
+    %tx_vecs = [zeros(N_ZPAD_PRE, N_UE); preamble; tx_payload_vecs; zeros(N_ZPAD_POST, N_UE)];
+    tx_vec_iris_reshape = zeros(length(tx_vecs)*N_UE, N_UE);
+    for symIdx = 1:N_UE
+        tx_vec_iris_reshape((symIdx-1)*n_samp+1:symIdx*n_samp, symIdx) = tx_vecs_iris(:,symIdx);
+    end
+    tx_vec_iris_reshape = [tx_vec_iris_reshape; tx_vecs_iris];
+
+    rx_vec_iris = getRxVec(tx_vec_iris_reshape, N_BS_NODE, N_UE, chan_type, sim_SNR_db, bs_sdr_params, ue_sdr_params, []);
+    %rx_vec_iris = rx_vec_iris.';
     
 %% Init Iris nodes
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -208,23 +242,14 @@ if (SIM_MOD)
 else
     % Create BS Hub and UE objects. Note: BS object is a collection of Iris
     % nodes.
-
-
-    bs_sched = ["BGGGGGRG"];           % BS schedule
-    ue_sched = ["GGGGGGPG"];           % UE schedule
-
-
-    %number of samples in a frame
-    n_samp = length(tx_vecs_iris);
-   
     % Iris nodes' parameters
     bs_sdr_params = struct(...
         'id', bs_ids, ...
         'n_sdrs', N_BS_NODE, ...        % number of nodes chained together
         'txfreq', TX_FRQ, ...   
         'rxfreq', RX_FRQ, ...
-        'txgain', TX_GN, ...
-        'rxgain', RX_GN, ...
+        'txgain', TX_GN_BS, ...
+        'rxgain', RX_GN_BS, ...
         'sample_rate', SMPL_RT, ...
         'n_samp', n_samp, ...          % number of samples per frame time.
         'n_frame', N_FRM, ...
@@ -236,104 +261,105 @@ else
     ue_sdr_params = bs_sdr_params;
     ue_sdr_params.id =  ue_ids;
     ue_sdr_params.n_sdrs = N_UE;
-    ue_sdr_params.txgain = TX_GN_ue;
+    ue_sdr_params.txgain = TX_GN_UE;
+    ue_sdr_params.rxgain = RX_GN_UE;
     
     ue_sdr_params.tdd_sched = ue_sched;
-    
-    if USE_HUB
-        rx_vec_iris = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, chan_type, [], bs_sdr_params, ue_sdr_params, hub_id);
-    else
-        rx_vec_iris = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, chan_type, [], bs_sdr_params, ue_sdr_params, []);
+    choose_best_frame = 0;
+    [rx_vec_iris, beaconVec] = getRxVec(tx_vecs_iris, N_BS_NODE, N_UE, chan_type, [], bs_sdr_params, ue_sdr_params, hub_id, choose_best_frame);
+    if sum(beaconVec) == 0
+        disp("[ERROR] No beacons detected by any UE. Exit Now!");
+        return;
     end
-
 end
 
+
+%load('jan25_mimo_two_new_sched2.mat');
 l_rx_dec=length(rx_vec_iris);
+rx_vec_iris = rx_vec_iris.';
+%save('jan25_mimo_two_new_sched2.mat')
+assert(l_rx_dec == numRxSyms*n_samp, 'Number of returned samples is less than expected. Exit now!');
+
+
 
 %% Correlate for LTS
 % Complex cross correlation of Rx waveform with time-domain LTS
-a = 1;
-unos = ones(size(preamble_common'));
-lts_corr = zeros(N_BS_NODE, length(rx_vec_iris));
 data_len = (N_OFDM_SYM)*(N_SC +CP_LEN);
 rx_lts_mat = double.empty();
 payload_ind = int32.empty();
 preamble_pk = nan(N_BS_NODE, N_UE);
 payload_rx = zeros(N_BS_NODE, data_len);
-lts_peaks = zeros(N_BS_NODE, N_UE);
 badrx = zeros(1, N_BS_NODE);
+
+% Break into the number of R symbols in the BS schedule
 for ibs = 1:N_BS_NODE
-    rx_vec_iris_curr = rx_vec_iris(ibs,:);
-    for iue = 1:N_UE
-        lts_corr2 = abs(conv(conj(fliplr(lts_t.')), sign(rx_vec_iris_curr)));
-        %figure; plot(lts_corr2);
-        lts_peaks2 = find(lts_corr2 > 0.8*max(lts_corr2));
-        [LTS1, LTS2] = meshgrid(lts_peaks2,lts_peaks2);
+    for isym = 1: N_UE
+        startIdx = (isym-1)*n_samp + 1;
+        endIdx = (isym-1)*n_samp + n_samp;
+        currSym = rx_vec_iris(ibs, startIdx:endIdx);
+        lts_corr = abs(conv(conj(fliplr(lts_t.')), sign(currSym)));
+
+        if DEBUG
+            figure; plot(lts_corr);
+        end
+        lts_peaks = find(lts_corr > 0.8*max(lts_corr));
+        [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
         [lts_second_peak_index2,y] = find(LTS2-LTS1 == length(lts_t));
         if(isempty(lts_second_peak_index2))
-            fprintf('No correlation peak at antenna %d max_idx = %d. UE idx: %d \n', ibs, max_idx, iue);
-            preamble_pk(ibs, iue) = 160*iue; % Keep it from crashing...
+            fprintf('NO correlation peak at antenna %d sched sym idx: %d \n', ibs, isym);
             badrx(ibs) = badrx(ibs) + 1;
         else
             if length(lts_second_peak_index2) > 1
-                preamble_pk(ibs, iue) = lts_peaks2(lts_second_peak_index2(2));
+                preamble_pk(ibs, isym) = lts_peaks(lts_second_peak_index2(2));
             else
-                preamble_pk(ibs, iue) = lts_peaks2(lts_second_peak_index2(1));
+                preamble_pk(ibs, isym) = lts_peaks(lts_second_peak_index2(1));
+            end
+
+            % Check if valid...
+            pk_tmp = preamble_pk(ibs,isym);
+            if ((pk_tmp + data_len) > n_samp || (pk_tmp - (isym * l_pre)) < 0)
+                fprintf('INVALID correlation peak at antenna %d sched sym idx: %d \n', ibs, isym);
+                preamble_pk(ibs,isym) = nan;
+                badrx(ibs) = badrx(ibs) + 1;
             end
         end
-        % Found higher power pilot, remove to continue search...
-        rx_vec_iris_curr(preamble_pk(ibs, iue) - length(preamble_common) + 1: preamble_pk(ibs, iue)) = 0;
     end
-    preamble_pk(ibs,:) = sort(preamble_pk(ibs,:), 2);
-    max_idx = max(preamble_pk(ibs,:));
-    % In case of bad correlatons:
-    if (max_idx + data_len) > length(rx_vec_iris(ibs,:)) || ...
-        (max_idx < 0) || ...
-        (max_idx - length(preamble) < 0)
-        fprintf('Caught bad correlation at antenna %d !!! \n', ibs);
-        % Don't care... corrrupt data:
-        max_idx = length(rx_vec_iris(ibs,:)) - data_len - 1;
-    end
+end
 
-    payload_ind = max_idx + 1;
+% Get symbol of interest (last R)
+startIdx = (numRxSyms-1)*n_samp + 1;
+endIdx = numRxSyms*n_samp;
+rx_vec_iris_tmp = rx_vec_iris(:, startIdx:endIdx);
+[maxVal, maxIdx] = max(preamble_pk, [], 2);
+
+% Find payload start and deal with bad correlation
+for ibs = 1:N_BS_NODE
+    payload_ind = (N_UE - maxIdx(ibs)) * l_pre + maxVal + 1;
     pream_ind = payload_ind - length(preamble);
     preamble_range = pream_ind: pream_ind + length(preamble) - 1;
     payload_range = payload_ind : payload_ind + data_len - 1;
-    rx_lts_mat(ibs,:) = rx_vec_iris(ibs, preamble_range);
-    payload_rx(ibs,1:length(pl_idx) - 1) = rx_vec_iris(ibs, payload_range);
-
-end
-
-if DEBUG
-    figure;
-    for sp = 1:N_BS_NODE
-        subplot(N_BS_NODE,1,sp);
-        plot(lts_corr(sp,:));
-        grid on;
-        xlabel('Samples');
-        y_label = sprintf('Anetnna %d',sp);
-        ylabel(y_label);
-    end
-    sgtitle('LTS correlations accross antennas')
+    rx_lts_mat(ibs,:) = rx_vec_iris_tmp(ibs, preamble_range);
+    payload_rx(ibs,:) = rx_vec_iris_tmp(ibs, payload_range);
 end
 
 % Remove problematic entries (BS boards with bad correlation)
 % Only remove those that didn't capture pilots from any UE
 rx_lts_mat = rx_lts_mat(~(badrx == N_UE), :);
 payload_rx = payload_rx(~(badrx == N_UE), :);
-badrx(badrx ~= N_UE) = 0;  % line order matters
-badrx(badrx == N_UE) = 1;
+badrx(badrx ~= N_UE) = 0;  % line order matters (1)
+badrx(badrx == N_UE) = 1;  % line order matters (2)
+
 %% Rx processing
 % Construct a matrix from the received pilots
-n_plt_samp = floor(length(preamble)/ N_UE);     % number of samples in a per-UE pilot 
-Y_lts = zeros(N_BS_NODE-sum(badrx),N_UE, n_plt_samp);
+n_plt_samp = l_pre;     % number of samples in a per-UE pilot
+Y_lts = zeros(N_BS_NODE-sum(badrx), N_UE, n_plt_samp);
 for iue = 1:N_UE
    plt_j_ix = (iue-1) * n_plt_samp +1:iue * n_plt_samp;
    Y_lts(:,iue,:) = rx_lts_mat(:,plt_j_ix);
 end
 
 % Take N_SC spamples from each LTS
-rx_lts_idx = CP_LEN +1 : N_LTS_SYM * N_SC +CP_LEN;
+rx_lts_idx = CP_LEN_LTS-FFT_OFFSET + 1 : N_LTS_SYM * N_SC + CP_LEN_LTS-FFT_OFFSET;
 Y_lts = Y_lts(:,:,rx_lts_idx);
 
 % Reshape the matix to have each lts pilot in a different dimension:
@@ -342,7 +368,7 @@ Y_lts = reshape(Y_lts, N_BS_NODE-sum(badrx), N_UE, [], N_LTS_SYM);
 
 % Take FFT:
 Y_lts_f = fft(Y_lts, N_SC,3);
-% Construct known pilot matrix to use i next step:
+% Construct known pilot matrix to use in next step:
 lts_f_mat = repmat(lts_f, (N_BS_NODE-sum(badrx)) * N_UE * N_LTS_SYM,1);
 lts_f_mat = reshape(lts_f_mat, [], N_LTS_SYM, N_UE, N_BS_NODE-sum(badrx));
 lts_f_mat = permute(lts_f_mat, [4 3 1 2]);
@@ -389,14 +415,11 @@ for j=1:length(nz_sc)
     channel_condition_db(nz_sc(j)) = 10*log10(channel_condition(nz_sc(j)) );
 end
 
-%DO_APPLY_PHASE_ERR_CORRECTION = 1
-
-if DO_APPLY_PHASE_ERR_CORRECTION
+if (DO_APPLY_PHASE_ERR_CORRECTION)
     % Extract the pilots and calculate per-symbol phase error
     pilots_f_mat = syms_eq(:,SC_IND_PILOTS,:);
     pilots_f_mat_comp = pilots_f_mat.* permute(pilots_mat, [3 1 2]);
     pilot_phase_err = angle(mean(pilots_f_mat_comp,2));
-    
 else
 	% Define an empty phase correction vector (used by plotting code below)
     pilot_phase_err = zeros(N_UE, 1, N_OFDM_SYM);
@@ -603,3 +626,10 @@ fprintf("SNRs (dB): \n");
 fprintf("%.2f\t", snr_mat);
 fprintf("\n");
 fprintf("Condition Number: %f  \n", avgCond);
+
+if ~SIM_MOD
+    nobeacon = find(beaconVec==0);
+    if nobeacon
+        fprintf("WARNING: No downlink beacon detected at these UEs: [%d] \n ==> No uplink transmission triggered. Retry, and/or check UE device and gains.\n",nobeacon)
+    end
+end

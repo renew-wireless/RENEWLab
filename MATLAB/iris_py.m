@@ -64,13 +64,25 @@ classdef iris_py < handle
                 fprintf('Sampling rate: %d \n', obj.sample_rate);
                 for ipy=1:obj.n_sdrs
                     id_str = convertStringsToChars(obj.serial_ids(ipy));
+
+                    if length(obj.tx_gain) > 1
+                        i_tx_gain = obj.tx_gain(ipy);
+                    else
+                        i_tx_gain = obj.tx_gain;
+                    end
+                    if length(obj.rx_gain) > 1
+                        i_rx_gain = obj.rx_gain(ipy);
+                    else
+                        i_rx_gain = obj.rx_gain;
+                    end
+
                     py_obj = py.iris_py.Iris_py( pyargs('serial_id',id_str,...
                         'tx_freq', obj.tx_freq, 'rx_freq', obj.rx_freq,...
-                        'tx_gain',obj.tx_gain,'rx_gain',obj.rx_gain,...
+                        'tx_gain',i_tx_gain,'rx_gain',i_rx_gain,...
                         'sample_rate',obj.sample_rate, 'n_samp', obj.n_samp) );
-                    
                     obj.py_obj_array(ipy,:) = {py_obj};
                 end
+                return;
             end
         end
 
@@ -148,9 +160,13 @@ classdef iris_py < handle
          
          function set_tddconfig(obj, is_bs, tdd_sched)
              obj.is_bs = is_bs;
-             sched  = convertStringsToChars(tdd_sched);
              for ipy = 1:obj.n_sdrs
-                 obj.py_obj_array{ipy}.config_sdr_tdd( pyargs('tdd_sched', sched, ...
+                if length(tdd_sched) > 1
+                    sched  = convertStringsToChars(tdd_sched{ipy});
+                else
+                    sched  = convertStringsToChars(tdd_sched);
+                end
+                obj.py_obj_array{ipy}.config_sdr_tdd( pyargs('tdd_sched', sched, ...
                      'is_bs', is_bs, 'prefix_len', obj.n_zpad_samp, 'max_frames', 1));
              end
          end
@@ -250,7 +266,13 @@ classdef iris_py < handle
             if ~obj.is_bs
                 fprintf('sdrrx: Wrong function call on UE!');
             end
-            data_raw = zeros(obj.n_sdrs, obj.n_frame * n_samp);  % Change this to max frame!
+
+            if length(obj.tdd_sched) > 1
+                numRs = count(obj.tdd_sched{1}, "R");   % Assuming all schedules have the same number of R slots
+            else
+                numRs = count(obj.tdd_sched, "R");
+            end
+            data_raw = zeros(obj.n_sdrs, obj.n_frame * n_samp * numRs);  % Change this to max frame!
 
             for jf=1:obj.n_frame
                 %trigger base station
@@ -262,15 +284,15 @@ classdef iris_py < handle
                         disp('triggering FAROS hub...')
                     end
                 end
-                
                 for ipy = 1:obj.n_sdrs
                     rcv_data = obj.py_obj_array{ipy}.recv_stream_tdd();
-                    data_raw(ipy, (jf-1)*n_samp + 1: jf*n_samp) = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(rcv_data) ) ) ) + ...
+                    data_raw(ipy, (jf-1)*n_samp*numRs + 1: jf*n_samp*numRs) = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(rcv_data) ) ) ) + ...
                         1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(rcv_data) ) ) );
                 end
             end
+
             if ~exist('choose_best_frame', 'var')
-                data = obj.get_best_frame(data_raw.', n_samp);
+                data = obj.get_best_frame(data_raw.', n_samp*numRs);
             elseif choose_best_frame == 0
                 data = data_raw.';
             end
@@ -289,6 +311,8 @@ classdef iris_py < handle
                 data_raw(ipy, :) = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(rcv_data) ) ) ) + ...
                     1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(rcv_data) ) ) );
             end
+            figure; plot(abs(data_raw(1,:)))
+            figure; plot(abs(data_raw(2,:)))
             data = data_raw.';
             len = length(data);
         end

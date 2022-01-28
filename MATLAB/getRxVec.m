@@ -1,4 +1,4 @@
-function y = getRxVec(tx_data, n_bs, n_ue, chan_type, snr, bs_param, ue_param, hub_id)
+function [y, trig_vec_out] = getRxVec(tx_data, n_bs, n_ue, chan_type, snr, bs_param, ue_param, hub_id, choose_best_frame)
 %%% Returns Rx vector passed through the channel type given in the input
 %%% list.
 
@@ -211,7 +211,7 @@ elseif chan_type == "iris"
     
     tdd_sched_index = 1; % for uplink only one frame schedule is sufficient
     node_bs.set_tddconfig(1, bs_param.tdd_sched(tdd_sched_index)); % configure the BS: schedule etc.
-    node_ue.set_tddconfig(0, ue_param.tdd_sched(tdd_sched_index));
+    node_ue.set_tddconfig(0, ue_param.tdd_sched);
 
     if exist('bs_param.beacon_sweep', 'var')
         if bs_param.beacon_sweep
@@ -236,7 +236,7 @@ elseif chan_type == "iris"
     
     % Iris Rx 
     % Only UL data:
-    [y, data0_len] = node_bs.sdrrx(n_samp); % read data
+    [y, data0_len] = node_bs.sdrrx(n_samp, choose_best_frame); % read data
     trig_vec_out = node_ue.sdr_gettriggers();
 
     node_bs.sdr_close();                % close streams and exit gracefully.
