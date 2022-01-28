@@ -97,7 +97,7 @@ Once compiled successfully, the code can be run as the following.
      ```sh
      $ ../../PYTHON/IrisUtils/plot_hdf5.py PATH_TO_DATASET_FILE # add command line options
      ```   
- 5. For more info on how to use these tools including all the options available for dataset processing as well as other tools available in the RENEWLab codebase, visit the [RENEW Documentation](https://docs.renew-wireless.org) website.
+ 5. Checkout the [RENEW Wireless Wiki](https://wiki.renew-wireless.org/) for more details.
 
 # Contributing and Support
 
