@@ -171,6 +171,9 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     client_present_ = !bs_only && client_serial_present && num_cl_sdrs_ > 0 &&
                       !internal_measurement_;
     bs_present_ = !client_only && num_bs_sdrs_all_ > 0;
+  } else {
+    std::cout << "Serial file empty! Exitting.." << std::endl;
+    exit(1);
   }
 
   static const int kMaxTxGainBS = 81;
@@ -299,6 +302,32 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
       num_cl_sdrs_ = num_cl_antennas_ =
           std::count(frames_.at(0).begin(), frames_.at(0).end(), 'P');
     }
+    if (tddConf.find("ue_frame_schedule") == tddConf.end()) {
+      cl_frames_.resize(num_cl_sdrs_);
+      for (size_t i = 0; i < cl_frames_.size(); i++) {
+        cl_frames_.at(i) = frames_.at(0);
+        for (size_t s = 0; s < frames_.at(0).length(); s++) {
+          char c = frames_.at(0).at(s);
+          if (c == 'B') {
+            cl_frames_.at(i).replace(s, 1,
+                                     "G");  // Dummy RX used in PHY scheduler
+          } else if (c == 'P' and
+                     ((cl_sdr_ch_ == 1 and pilot_slots_.at(0).at(i) != s) or
+                      (cl_sdr_ch_ == 2 and
+                       (pilot_slots_.at(0).at(2 * i) != s and
+                        pilot_slots_.at(0).at(i * 2 + 1) != s)))) {
+            cl_frames_.at(i).replace(s, 1, "G");
+          } else if (c != 'P' && c != 'U' && c != 'D') {
+            cl_frames_.at(i).replace(s, 1, "G");
+          }
+        }
+        std::cout << "Client " << i << " schedule: " << cl_frames_.at(i)
+                  << std::endl;
+      }
+    } else {
+      auto jClFrames = tddConf.value("ue_frame_schedule", json::array());
+      cl_frames_.assign(jClFrames.begin(), jClFrames.end());
+    }
   }
 
   // Clients
@@ -353,32 +382,6 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     throw std::invalid_argument(msg);
   }
 
-  if (tddConf.find("ue_frame_schedule") == tddConf.end()) {
-    cl_frames_.resize(num_cl_sdrs_);
-    for (size_t i = 0; i < cl_frames_.size(); i++) {
-      cl_frames_.at(i) = frames_.at(0);
-      for (size_t s = 0; s < frames_.at(0).length(); s++) {
-        char c = frames_.at(0).at(s);
-        if (c == 'B') {
-          cl_frames_.at(i).replace(s, 1,
-                                   "G");  // Dummy RX used in PHY scheduler
-        } else if (c == 'P' and
-                   ((cl_sdr_ch_ == 1 and pilot_slots_.at(0).at(i) != s) or
-                    (cl_sdr_ch_ == 2 and
-                     (pilot_slots_.at(0).at(2 * i) != s and
-                      pilot_slots_.at(0).at(i * 2 + 1) != s)))) {
-          cl_frames_.at(i).replace(s, 1, "G");
-        } else if (c != 'P' && c != 'U' && c != 'D') {
-          cl_frames_.at(i).replace(s, 1, "G");
-        }
-      }
-      std::cout << "Client " << i << " schedule: " << cl_frames_.at(i)
-                << std::endl;
-    }
-  } else {
-    auto jClFrames = tddConf.value("ue_frame_schedule", json::array());
-    cl_frames_.assign(jClFrames.begin(), jClFrames.end());
-  }
   cl_pilot_slots_ = Utils::loadSlots(cl_frames_, 'P');
   cl_ul_slots_ = Utils::loadSlots(cl_frames_, 'U');
   cl_dl_slots_ = Utils::loadSlots(cl_frames_, 'D');
@@ -396,6 +399,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
        (client_present_ == true && cl_ul_slots_.at(0).empty() == false));
 
   dl_data_slot_present_ =
+      (internal_measurement_ == false) &&
       ((bs_present_ == true && dl_slots_.empty() == false &&
         (dl_slots_.at(0).empty() == false)) ||
        (client_present_ == true && cl_dl_slots_.at(0).empty() == false));
