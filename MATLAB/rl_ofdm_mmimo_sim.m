@@ -49,10 +49,11 @@ N_BS_ANT                = 64;               % N_BS_ANT >> N_UE
 N_UPLINK_SYMBOLS        = N_OFDM_SYMS;
 N_0                     = 1e-2;
 H_var                   = 1;
-
 DO_SAVE_RX_DATA = 0;
-DO_APPLY_HW_IMPERFECTION = 1;
-DO_RECIPROCAL_CALIBRATION = 1;
+DO_APPLY_HW_IMPERFECTION = 0;
+DO_RECIPROCAL_CALIBRATION = 0;
+
+DO_PLOT = 1;
 
 % LTS for CFO and channel estimation
 lts_f = [0 1 -1 -1 1 1 -1 1 -1 1 -1 -1 -1 -1 -1 1 1 -1 -1 1 -1 1 -1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1];
@@ -266,11 +267,12 @@ tx_dl_data = tx_ul_data; % use same data for downlink as uplink
 tx_dl_syms = tx_ul_syms; % use same data symbols for downlink as uplink
 % Reshape the symbol vector to a matrix with one column per OFDM symbol
 tx_dl_syms_mat = reshape(tx_dl_syms, N_UE, length(SC_IND_DATA), N_OFDM_SYMS);
-
+tx_dl_data_vec = zeros(N_UE, N_OFDM_SYMS);
 tx_mult_mat = zeros(N_BS_ANT, N_SC, N_OFDM_SYMS + 2);
 for i=1:N_SC
     lts_f_vec = lts_f(i)*ones(N_UE, 1);
-    tx_mult_f = [lts_f_vec lts_f_vec squeeze(ifft_in_mat(:, i, :))];
+    tx_dl_data_vec(:, :) = permute(ifft_in_mat(:, i, :), [1 3 2]);
+    tx_mult_f = [lts_f_vec lts_f_vec tx_dl_data_vec];
     tx_mult_mat(:, i, :) = squeeze(precoding_mat(:, i, :)) * tx_mult_f; % N_BS_ANT * N_SC * N_OFDM_SYMS
 end
 
@@ -351,260 +353,99 @@ dl_aevms = mean(dl_evm_mat, 2);
 dl_snrs = 10*log10(1 ./ dl_aevms);
 
 %% Plots:
-cf = 0;
+if DO_PLOT
+    cf = 0;
+    N_ROW = ceil(sqrt(N_UE));
+    if N_ROW == sqrt(N_UE)
+        N_COL = N_ROW;
+    else
+        N_COL = ceil(N_UE / N_ROW);
+    end
 
-% UL
-cf = cf + 1;
-figure(cf); clf;
-subplot(2,2,1)
-plot(payload_syms_mat(1, :),'ro','MarkerSize',1);
-axis square; axis(1.5*[-1 1 -1 1]);
-grid on;
-hold on;
+    % UL
+    cf = cf + 1;
+    figure(cf); clf;
+    for i=1:N_UE
+        subplot(N_ROW, N_COL, i)
+        plot(payload_syms_mat(i, :),'ro','MarkerSize',1);
+        axis square; axis(1.5 * [-1 1 -1 1]);
+        grid on;
+        hold on;
 
-plot(tx_ul_syms(1, :),'bo');
-title('Uplink Tx and Rx Constellations')
-legend('Rx','Tx');
+        plot(tx_ul_syms(i, :),'bo');
+        title("Uplink Constellation - User "+ num2str(i))
+        legend('Rx','Tx');
+    end
 
+    % DL
+    cf = cf + 1;
+    figure(cf); clf;
+    for i=1:N_UE
+        subplot(N_ROW, N_COL, i)
+        plot(payload_dl_syms_mat(i, :),'ro','MarkerSize',1);
+        axis square; axis(1.5*[-1 1 -1 1]);
+        grid on;
+        hold on;
 
-subplot(2,2,2)
-plot(payload_syms_mat(2, :),'ro','MarkerSize',1);
-axis square; axis(1.5*[-1 1 -1 1]);
-grid on;
-hold on;
+        plot(tx_dl_syms(i, :),'bo');
+        title("Downlink Constellation - User " + num2str(i))
+        legend('Rx','Tx');
+    end
 
-plot(tx_ul_syms(2, :),'bo');
-legend('Rx','Tx');
+    % EVM & SNR UL
+    cf = cf + 1;
+    figure(cf); clf;
 
+    for i=1:N_UE
+        subplot(N_ROW, N_COL, i)
+        plot(100*ul_evm_mat(i, :),'o','MarkerSize',1)
+        axis tight
+        hold on
+        plot([1 length(ul_evm_mat(i ,:))], 100*[ul_aevms(i ,:), ul_aevms(i ,:)],'r','LineWidth',2)
+        title('Downlink Rx Stats')
+        myAxis = axis;
+        h = text(round(.05*length(ul_evm_mat(i, :))), 100*ul_aevms(i, :)+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', ul_snrs(i, :)));
+        set(h,'Color',[1 0 0])
+        set(h,'FontWeight','bold')
+        set(h,'FontSize',10)
+        set(h,'EdgeColor',[1 0 0])
+        set(h,'BackgroundColor',[1 1 1])
+        hold off
+        xlabel('Data Symbol Index')
+        ylabel('EVM (%)');
+        legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
+        title("UL - User " + num2str(i))
+        grid on
+    end
 
-subplot(2,2,3)
-plot(payload_syms_mat(3, :),'ro','MarkerSize',1);
-axis square; axis(1.5*[-1 1 -1 1]);
-grid on;
-hold on;
-
-plot(tx_ul_syms(3, :),'bo');
-legend('Rx','Tx');
-
-
-subplot(2,2,4)
-plot(payload_syms_mat(4, :),'ro','MarkerSize',1);
-axis square; axis(1.5*[-1 1 -1 1]);
-grid on;
-hold on;
-
-plot(tx_ul_syms(4, :),'bo');
-legend('Rx','Tx');
-
-% DL
-cf = cf + 1;
-figure(cf); clf;
-subplot(2,2,1)
-plot(payload_dl_syms_mat(1, :),'ro','MarkerSize',1);
-axis square; axis(1.5*[-1 1 -1 1]);
-grid on;
-hold on;
-
-plot(tx_dl_syms(1, :),'bo');
-title('Downlink Tx and Rx Constellations')
-legend('Rx','Tx');
-
-
-subplot(2,2,2)
-plot(payload_dl_syms_mat(2, :),'ro','MarkerSize',1);
-axis square; axis(1.5*[-1 1 -1 1]);
-grid on;
-hold on;
-
-plot(tx_dl_syms(2, :),'bo');
-legend('Rx','Tx');
-
-
-subplot(2,2,3)
-plot(payload_dl_syms_mat(3, :),'ro','MarkerSize',1);
-axis square; axis(1.5*[-1 1 -1 1]);
-grid on;
-hold on;
-
-plot(tx_dl_syms(3, :),'bo');
-legend('Rx','Tx');
+    % EVM & SNR DL
+    cf = cf + 1;
+    figure(cf); clf;
 
 
-subplot(2,2,4)
-plot(payload_dl_syms_mat(4, :),'ro','MarkerSize',1);
-axis square; axis(1.5*[-1 1 -1 1]);
-grid on;
-hold on;
+    for i=1:N_UE
+        subplot(N_ROW, N_COL, i)
+        plot(100*dl_evm_mat(i, :),'o','MarkerSize',1)
+        axis tight
+        hold on
+        plot([1 length(dl_evm_mat(i, :))], 100*[dl_aevms(i, :), dl_aevms(i, :)],'r','LineWidth',2)
+        title('Downlink Rx Stats')
+        myAxis = axis;
+        h = text(round(.05*length(dl_evm_mat(i, :))), 100*dl_aevms(i, :)+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', dl_snrs(i, :)));
+        set(h,'Color',[1 0 0])
+        set(h,'FontWeight','bold')
+        set(h,'FontSize',10)
+        set(h,'EdgeColor',[1 0 0])
+        set(h,'BackgroundColor',[1 1 1])
+        hold off
+        xlabel('Data Symbol Index')
+        ylabel('EVM (%)');
+        legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
+        title("DL - User " + num2str(i))
+        grid on
+    end
 
-plot(tx_dl_syms(4, :),'bo');
-legend('Rx','Tx');
-
-% EVM & SNR UL
-cf = cf + 1;
-figure(cf); clf;
-
-
-subplot(2,2,1)
-plot(100*ul_evm_mat(1,:),'o','MarkerSize',1)
-axis tight
-hold on
-plot([1 length(ul_evm_mat(1,:))], 100*[ul_aevms(1,:), ul_aevms(1,:)],'r','LineWidth',2)
-title('Downlink Rx Stats')
-myAxis = axis;
-h = text(round(.05*length(ul_evm_mat(1,:))), 100*ul_aevms(1,:)+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', ul_snrs(1,:)));
-set(h,'Color',[1 0 0])
-set(h,'FontWeight','bold')
-set(h,'FontSize',10)
-set(h,'EdgeColor',[1 0 0])
-set(h,'BackgroundColor',[1 1 1])
-hold off
-xlabel('Data Symbol Index')
-ylabel('EVM (%)');
-legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
-title('EVM vs. Data Symbol Index')
-grid on
-
-
-subplot(2,2,2)
-plot(100*ul_evm_mat(2,:),'o','MarkerSize',1)
-axis tight
-hold on
-plot([1 length(ul_evm_mat(2,:))], 100*[ul_aevms(2,:), ul_aevms(2,:)],'r','LineWidth',2)
-myAxis = axis;
-h = text(round(.05*length(ul_evm_mat(2,:))), 100*ul_aevms(2,:)+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', ul_snrs(2,:)));
-set(h,'Color',[1 0 0])
-set(h,'FontWeight','bold')
-set(h,'FontSize',10)
-set(h,'EdgeColor',[1 0 0])
-set(h,'BackgroundColor',[1 1 1])
-hold off
-xlabel('Data Symbol Index')
-ylabel('EVM (%)');
-legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
-title('EVM vs. Data Symbol Index')
-grid on
-
-subplot(2,2,3)
-plot(100*ul_evm_mat(3,:),'o','MarkerSize',1)
-axis tight
-hold on
-plot([1 length(ul_evm_mat(3,:))], 100*[ul_aevms(3,:), ul_aevms(3,:)],'r','LineWidth',2)
-myAxis = axis;
-h = text(round(.05*length(ul_evm_mat(3,:))), 100*ul_aevms(3,:)+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', ul_snrs(3,:)));
-set(h,'Color',[1 0 0])
-set(h,'FontWeight','bold')
-set(h,'FontSize',10)
-set(h,'EdgeColor',[1 0 0])
-set(h,'BackgroundColor',[1 1 1])
-hold off
-xlabel('Data Symbol Index')
-ylabel('EVM (%)');
-legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
-title('EVM vs. Data Symbol Index')
-grid on
-
-subplot(2,2,4)
-plot(100*ul_evm_mat(4,:),'o','MarkerSize',1)
-axis tight
-hold on
-plot([1 length(ul_evm_mat(4,:))], 100*[ul_aevms(4,:), ul_aevms(4,:)],'r','LineWidth',2)
-myAxis = axis;
-h = text(round(.05*length(ul_evm_mat(4,:))), 100*ul_aevms(4,:)+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', ul_snrs(4,:)));
-set(h,'Color',[1 0 0])
-set(h,'FontWeight','bold')
-set(h,'FontSize',10)
-set(h,'EdgeColor',[1 0 0])
-set(h,'BackgroundColor',[1 1 1])
-hold off
-xlabel('Data Symbol Index')
-ylabel('EVM (%)');
-legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
-title('EVM vs. Data Symbol Index')
-grid on
-
-% EVM & SNR DL
-cf = cf + 1;
-figure(cf); clf;
-
-
-subplot(2,2,1)
-plot(100*dl_evm_mat(1,:),'o','MarkerSize',1)
-axis tight
-hold on
-plot([1 length(dl_evm_mat(1,:))], 100*[dl_aevms(1,:), dl_aevms(1,:)],'r','LineWidth',2)
-title('Downlink Rx Stats')
-myAxis = axis;
-h = text(round(.05*length(dl_evm_mat(1,:))), 100*dl_aevms(1,:)+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', dl_snrs(1,:)));
-set(h,'Color',[1 0 0])
-set(h,'FontWeight','bold')
-set(h,'FontSize',10)
-set(h,'EdgeColor',[1 0 0])
-set(h,'BackgroundColor',[1 1 1])
-hold off
-xlabel('Data Symbol Index')
-ylabel('EVM (%)');
-legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
-title('EVM vs. Data Symbol Index')
-grid on
-
-
-subplot(2,2,2)
-plot(100*dl_evm_mat(2,:),'o','MarkerSize',1)
-axis tight
-hold on
-plot([1 length(dl_evm_mat(2,:))], 100*[dl_aevms(2,:), dl_aevms(2,:)],'r','LineWidth',2)
-myAxis = axis;
-h = text(round(.05*length(dl_evm_mat(2,:))), 100*dl_aevms(2,:)+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', dl_snrs(2,:)));
-set(h,'Color',[1 0 0])
-set(h,'FontWeight','bold')
-set(h,'FontSize',10)
-set(h,'EdgeColor',[1 0 0])
-set(h,'BackgroundColor',[1 1 1])
-hold off
-xlabel('Data Symbol Index')
-ylabel('EVM (%)');
-legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
-title('EVM vs. Data Symbol Index')
-grid on
-
-subplot(2,2,3)
-plot(100*dl_evm_mat(3,:),'o','MarkerSize',1)
-axis tight
-hold on
-plot([1 length(dl_evm_mat(3,:))], 100*[dl_aevms(3,:), dl_aevms(3,:)],'r','LineWidth',2)
-myAxis = axis;
-h = text(round(.05*length(dl_evm_mat(3,:))), 100*dl_aevms(3,:)+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', dl_snrs(3,:)));
-set(h,'Color',[1 0 0])
-set(h,'FontWeight','bold')
-set(h,'FontSize',10)
-set(h,'EdgeColor',[1 0 0])
-set(h,'BackgroundColor',[1 1 1])
-hold off
-xlabel('Data Symbol Index')
-ylabel('EVM (%)');
-legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
-title('EVM vs. Data Symbol Index')
-grid on
-
-subplot(2,2,4)
-plot(100*dl_evm_mat(4,:),'o','MarkerSize',1)
-axis tight
-hold on
-plot([1 length(dl_evm_mat(4,:))], 100*[dl_aevms(4,:), dl_aevms(4,:)],'r','LineWidth',2)
-myAxis = axis;
-h = text(round(.05*length(dl_evm_mat(4,:))), 100*dl_aevms(4,:)+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', dl_snrs(4,:)));
-set(h,'Color',[1 0 0])
-set(h,'FontWeight','bold')
-set(h,'FontSize',10)
-set(h,'EdgeColor',[1 0 0])
-set(h,'BackgroundColor',[1 1 1])
-hold off
-xlabel('Data Symbol Index')
-ylabel('EVM (%)');
-legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
-title('EVM vs. Data Symbol Index')
-grid on
-
+end
 
 fprintf('\nUL Results:\n');
 fprintf('===== SNRs: =====\n');
