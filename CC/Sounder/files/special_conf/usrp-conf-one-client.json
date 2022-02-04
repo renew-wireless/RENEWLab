@@ -1,38 +1,33 @@
 {
-        "BaseStations" : {
-                 "serials_file" : "files/special_conf/topology.json",
-                 "frequency" : 2.5e9,
-                 "channel" : "A",
-                 "rxgainA" : 10,
-                 "txgainA" : 10,
-                 "rxgainB" : 10,
-                 "txgainB" : 10,
-                 "rate" : 20e6,
-                 "frame_schedule" : [
-                     "BGPGUGGGGGGGGGGGGGGG"
-                 ],
-                 "max_frame" : 0,
-                 "ofdm_symbol_per_slot" : 10,
-                 "fft_size" : 64,
-                 "cp_size" : 16,
-                 "prefix" : 160,
-                 "postfix" : 160,
-                 "beamsweep" : true
-        },
-
-        "Clients" : {
-                 "channel" : "A",
-                 "rxgainA" : [10],
-                 "txgainA" : [10],
-                 "rxgainB" : [10],
-                 "txgainB" : [10],
-                 "frame_schedule" : [
-                     "GGPGUGGGGGGGGGGGGGGG"
-                 ],
-	         "tx_advance" : [100],
-                 "modulation" : "16QAM",
-                 "sdr_id" : [
-                     "10.117.2.2"
-                 ]
-        }
+  "serial_file" : "files/special_conf/userp_topology.json",
+  "frequency" : 2.5e9,
+  "channel" : "A",
+  "rx_gain_a" : 10,
+  "tx_gain_a" : 10,
+  "rx_gain_b" : 10,
+  "tx_gain_b" : 10,
+  "sample_rate" : 20e6,
+  "frame_schedule" : [
+      "BGPGUGGGGGGGGGGGGGGG"
+  ],
+  "max_frame" : 0,
+  "ofdm_symbol_per_slot" : 10,
+  "fft_size" : 64,
+  "cp_size" : 16,
+  "ofdm_tx_zero_prefix" : 160,
+  "ofdm_tx_zero_postfix" : 160,
+  "beamsweep" : true,
+  "channel" : "A",
+  "ue_rx_gain_a" : [10],
+  "ue_tx_gain_a" : [10],
+  "ue_rx_gain_b" : [10],
+  "ue_tx_gain_b" : [10],
+  "ue_frame_schedule" : [
+      "BGPGUGGGGGGGGGGGGGGG"
+  ],
+  "tx_advance" : [100],
+  "ue_modulation" : "16QAM",
+  "sdr_id" : [
+      "10.117.2.2"
+  ]
 }

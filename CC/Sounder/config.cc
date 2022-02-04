@@ -68,6 +68,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   if (cl_channel_ != "A" && cl_channel_ != "B" && cl_channel_ != "AB")
     throw std::invalid_argument("error channel config: not any of A/B/AB!\n");
   cl_sdr_ch_ = (cl_channel_ == "AB") ? 2 : 1;
+  bool client_serial_present = false;
 
   // Load serials file (loads hub, sdr, and rrh serials)
   std::string serials_str;
@@ -154,6 +155,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     // read client serials
     json j_ue_serials;
     if (j_serials.find("Clients") != j_serials.end()) {
+      client_serial_present = true;
       ss << j_serials.value("Clients", j_ue_serials);
       j_ue_serials = json::parse(ss);
       ss.str(std::string());
@@ -163,11 +165,15 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
       num_cl_sdrs_ = cl_sdr_ids_.size();
       num_cl_antennas_ = num_cl_sdrs_ * cl_sdr_ch_;
     } else {
-      client_present_ = false;
+      client_serial_present = false;
     }
 
-    client_present_ = !bs_only && num_cl_sdrs_ > 0 && !internal_measurement_;
+    client_present_ = !bs_only && client_serial_present && num_cl_sdrs_ > 0 &&
+                      !internal_measurement_;
     bs_present_ = !client_only && num_bs_sdrs_all_ > 0;
+  } else {
+    std::cout << "Serial file empty! Exitting.." << std::endl;
+    exit(1);
   }
 
   static const int kMaxTxGainBS = 81;
@@ -292,9 +298,35 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     ul_slot_per_frame_ = ul_slots_.at(0).size();
     dl_slot_per_frame_ = dl_slots_.at(0).size();
     // read commons from client json config
-    if (client_present_ == false) {
+    if (client_serial_present == false) {
       num_cl_sdrs_ = num_cl_antennas_ =
           std::count(frames_.at(0).begin(), frames_.at(0).end(), 'P');
+    }
+    if (tddConf.find("ue_frame_schedule") == tddConf.end()) {
+      cl_frames_.resize(num_cl_sdrs_);
+      for (size_t i = 0; i < cl_frames_.size(); i++) {
+        cl_frames_.at(i) = frames_.at(0);
+        for (size_t s = 0; s < frames_.at(0).length(); s++) {
+          char c = frames_.at(0).at(s);
+          if (c == 'B') {
+            cl_frames_.at(i).replace(s, 1,
+                                     "G");  // Dummy RX used in PHY scheduler
+          } else if (c == 'P' and
+                     ((cl_sdr_ch_ == 1 and pilot_slots_.at(0).at(i) != s) or
+                      (cl_sdr_ch_ == 2 and
+                       (pilot_slots_.at(0).at(2 * i) != s and
+                        pilot_slots_.at(0).at(i * 2 + 1) != s)))) {
+            cl_frames_.at(i).replace(s, 1, "G");
+          } else if (c != 'P' && c != 'U' && c != 'D') {
+            cl_frames_.at(i).replace(s, 1, "G");
+          }
+        }
+        std::cout << "Client " << i << " schedule: " << cl_frames_.at(i)
+                  << std::endl;
+      }
+    } else {
+      auto jClFrames = tddConf.value("ue_frame_schedule", json::array());
+      cl_frames_.assign(jClFrames.begin(), jClFrames.end());
     }
   }
 
@@ -309,7 +341,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   if (tx_advance.empty() == true) {
     tx_advance_.resize(num_cl_sdrs_, 250);
   } else {
-    if (tx_advance.size() != num_cl_sdrs_) {
+    if (client_present_ && tx_advance.size() != num_cl_sdrs_) {
       MLPD_ERROR("tx_advance size must be same as the number of clients!\n");
       exit(1);
     }
@@ -350,32 +382,6 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     throw std::invalid_argument(msg);
   }
 
-  if (tddConf.find("ue_frame_schedule") == tddConf.end()) {
-    cl_frames_.resize(num_cl_sdrs_);
-    for (size_t i = 0; i < cl_frames_.size(); i++) {
-      cl_frames_.at(i) = frames_.at(0);
-      for (size_t s = 0; s < frames_.at(0).length(); s++) {
-        char c = frames_.at(0).at(s);
-        if (c == 'B') {
-          cl_frames_.at(i).replace(s, 1,
-                                   "G");  // Dummy RX used in PHY scheduler
-        } else if (c == 'P' and
-                   ((cl_sdr_ch_ == 1 and pilot_slots_.at(0).at(i) != s) or
-                    (cl_sdr_ch_ == 2 and
-                     (pilot_slots_.at(0).at(2 * i) != s and
-                      pilot_slots_.at(0).at(i * 2 + 1) != s)))) {
-          cl_frames_.at(i).replace(s, 1, "G");
-        } else if (c != 'P' && c != 'U' && c != 'D') {
-          cl_frames_.at(i).replace(s, 1, "G");
-        }
-      }
-      std::cout << "Client " << i << " schedule: " << cl_frames_.at(i)
-                << std::endl;
-    }
-  } else {
-    auto jClFrames = tddConf.value("ue_frame_schedule", json::array());
-    cl_frames_.assign(jClFrames.begin(), jClFrames.end());
-  }
   cl_pilot_slots_ = Utils::loadSlots(cl_frames_, 'P');
   cl_ul_slots_ = Utils::loadSlots(cl_frames_, 'U');
   cl_dl_slots_ = Utils::loadSlots(cl_frames_, 'D');
@@ -393,6 +399,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
        (client_present_ == true && cl_ul_slots_.at(0).empty() == false));
 
   dl_data_slot_present_ =
+      (internal_measurement_ == false) &&
       ((bs_present_ == true && dl_slots_.empty() == false &&
         (dl_slots_.at(0).empty() == false)) ||
        (client_present_ == true && cl_dl_slots_.at(0).empty() == false));
@@ -619,12 +626,13 @@ void Config::loadULData(const std::string& directory) {
     txdata_freq_dom_.resize(num_cl_antennas_);
     // For now, we're reading one frame worth of data
     for (size_t i = 0; i < num_cl_sdrs_; i++) {
-      std::string filename_tag =
-          data_mod_ + "_" + std::to_string(symbol_data_subcarrier_num_) + "_" +
-          std::to_string(fft_size_) + "_" + std::to_string(symbol_per_slot_) +
-          "_" + std::to_string(cl_ul_slots_[i].size()) + "_" +
-          std::to_string(ul_data_frame_num_) + "_" + cl_channel_ + "_" +
-          std::to_string(i) + ".bin";
+      std::string filename_tag = cl_data_mod_ + "_" +
+                                 std::to_string(symbol_data_subcarrier_num_) +
+                                 "_" + std::to_string(fft_size_) + "_" +
+                                 std::to_string(symbol_per_slot_) + "_" +
+                                 std::to_string(cl_ul_slots_[i].size()) + "_" +
+                                 std::to_string(ul_data_frame_num_) + "_" +
+                                 cl_channel_ + "_" + std::to_string(i) + ".bin";
 
       std::string filename_ul_data_f = directory + "/ul_data_f_" + filename_tag;
       std::printf("Loading UL frequency-domain data for radio %zu to %s\n", i,

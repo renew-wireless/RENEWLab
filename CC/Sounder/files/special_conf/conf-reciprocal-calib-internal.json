@@ -1,20 +1,18 @@
 {
-	"BaseStations" : {
-		 "serials_file" : "files/topology.json",
-		 "frequency" : 3.6e9,
-		 "channel" : "A",
-		 "rxgainA" : 61,
-		 "txgainA" : 80,
-		 "rxgainB" : 61,
-		 "txgainB" : 80,
-		 "rate" : 5e6,
-		 "max_frame" : 4000,
-		 "ofdm_symbol_per_slot" : 1,
-		 "fft_size" : 512,
-		 "cp_size" : 32,
-		 "prefix" : 160,
-		 "postfix" : 160,
-		 "pilot_seq" : "zadoff-chu",
-		 "internal_measurement" : true
-	}
+	"serial_file" : "files/topology.json",
+	"frequency" : 3.6e9,
+	"channel" : "A",
+	"rx_gain_a" : 61,
+	"tx_gain_a" : 80,
+	"rx_gain_b" : 61,
+	"tx_gain_b" : 80,
+	"sample_rate" : 5e6,
+	"max_frame" : 4000,
+	"ofdm_symbol_per_slot" : 1,
+	"fft_size" : 512,
+	"cp_size" : 32,
+        "ofdm_tx_zero_prefix" : 160,
+        "ofdm_tx_zero_postfix" : 160,
+	"pilot_seq" : "zadoff-chu",
+	"internal_measurement" : true
 }
