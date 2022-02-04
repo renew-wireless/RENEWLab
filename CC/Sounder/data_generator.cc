@@ -27,7 +27,7 @@ void DataGenerator::GenerateData(const std::string& directory) {
       int mod_order = 1 << mod_type;
 
       std::string filename_tag =
-          cfg_->data_mod() + "_" +
+          cfg_->cl_data_mod() + "_" +
           std::to_string(cfg_->symbol_data_subcarrier_num()) + "_" +
           std::to_string(cfg_->fft_size()) + "_" +
           std::to_string(cfg_->symbol_per_slot()) + "_" +
