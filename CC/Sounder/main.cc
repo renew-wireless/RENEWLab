@@ -49,7 +49,8 @@ int main(int argc, char* argv[]) {
       try {
         config->loadULData(FLAGS_storepath);
         config->loadDLData(FLAGS_storepath);
-        auto dr = std::make_unique<Sounder::Scheduler>(config.get());
+        auto dr = std::make_unique<Sounder::Scheduler>(config.get(),
+            config->core_offset());
         dr->do_it();
         ret = EXIT_SUCCESS;
 

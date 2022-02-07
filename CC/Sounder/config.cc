@@ -191,6 +191,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   pilot_seq_ = tddConf.value("pilot_seq", "lts");
   data_mod_ = tddConf.value("modulation", "QPSK");
   single_gain_ = tddConf.value("single_gain", true);
+  core_offset_ = tddConf.value("core_offset", 0);
 
   if (tddConf.value("tx_gain_a", 20) > kMaxTxGainBS) {
     std::string msg = "ERROR: BaseStation ChanA - Maximum TX gain value is ";

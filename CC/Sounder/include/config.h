@@ -61,6 +61,7 @@ class Config {
   inline bool imbalance_cal_en(void) const { return this->imbalance_cal_en_; }
   inline bool sample_cal_en(void) const { return this->sample_cal_en_; }
   inline size_t max_frame(void) const { return this->max_frame_; }
+  inline size_t core_offset(void) const { return this->core_offset_; }
   inline size_t ul_data_frame_num(void) const {
     return this->ul_data_frame_num_;
   }
@@ -313,6 +314,7 @@ class Config {
   bool dl_data_slot_present_;
   std::string data_mod_;
   std::string cl_data_mod_;
+  size_t core_offset_;
 
   // BS features
   size_t num_cells_;
