@@ -74,8 +74,8 @@ static void PrintBitmask(const struct bitmask* bm) {
   }
 }
 
-void SetCpuLayoutOnNumaNodes(bool verbose,
-                             const std::vector<size_t>& cores_to_exclude) {
+void Utils::SetCpuLayoutOnNumaNodes(bool verbose,
+                                    const std::vector<size_t>& cores_to_exclude) {
   if (cpu_layout_initialized == false) {
     int lib_accessable = numa_available();
     if (lib_accessable == -1) {
