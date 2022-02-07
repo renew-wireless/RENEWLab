@@ -307,7 +307,7 @@ void* Receiver::loopRecv_launch(void* in_context) {
 void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
   if (config_->core_alloc() == true) {
     MLPD_INFO("Pinning rx thread %d to core %d\n", tid, core_id + tid);
-    if (pin_to_core(core_id + tid) != 0) {
+    if (Utils::PinToCore(core_id + tid) != 0) {
       MLPD_ERROR("Pin rx thread %d to core %d failed\n", tid, core_id + tid);
       throw std::runtime_error("Pin rx thread to core failed");
     }
@@ -603,7 +603,7 @@ void Receiver::clientTxRx(int tid) {
     int core =
         tid + 1 + config_->bs_rx_thread_num() + config_->recorder_thread_num();
     MLPD_INFO("Pinning client TxRx thread %d to core %d\n", tid, core);
-    if (pin_to_core(core) != 0) {
+    if (Utils::PinToCore(core) != 0) {
       MLPD_ERROR("Pin client TxRx thread %d to core %d failed in client txrx\n",
                  tid, core);
       throw std::runtime_error(
@@ -782,7 +782,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
     int core = tid + core_id;
 
     MLPD_INFO("Pinning client synctxrx thread %d to core %d\n", tid, core);
-    if (pin_to_core(core) != 0) {
+    if (Utils::PinToCore(core) != 0) {
       MLPD_ERROR("Pin client synctxrx thread %d to core %d failed\n", tid,
                  core);
       throw std::runtime_error("Failed to Pin client synctxrx thread to core");

@@ -34,6 +34,18 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   ss.str(std::string());
   ss.clear();
 
+  // Initialize the compute configuration
+  // Default exclude 1 core with id = 0
+  std::vector<size_t> excluded(1, 0);
+  if (tddConf.contains("exclude_cores")) {
+    auto exclude_cores = tddConf.at("exclude_cores");
+    excluded.resize(exclude_cores.size());
+    for (size_t i = 0; i < exclude_cores.size(); i++) {
+      excluded.at(i) = exclude_cores.at(i);
+    }
+  }
+  Utils::SetCpuLayoutOnNumaNodes(true, excluded);
+
   if (bs_only && client_only == true) {
     MLPD_ERROR("Client-Only and BS-Only can't both be enabled!\n");
     exit(1);

@@ -143,7 +143,7 @@ void Hdf5Reader::DoReading(void) {
     MLPD_INFO("Pinning reading thread %zu to core %d\n", this->id_,
               this->core_alloc_);
     pthread_t this_thread = this->thread_.native_handle();
-    if (pin_thread_to_core(this->core_alloc_, this_thread) != 0) {
+    if (Utils::PinThreadToCore(this->core_alloc_, this_thread) != 0) {
       MLPD_ERROR("Pin reading thread %zu to core %d failed\n", this->id_,
                  this->core_alloc_);
       throw std::runtime_error("Pin recording thread to core failed");

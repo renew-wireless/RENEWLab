@@ -128,7 +128,7 @@ void Scheduler::do_it() {
   std::vector<pthread_t> recv_threads;
 
   if (this->cfg_->core_alloc() == true) {
-    if (pin_to_core(kMainDispatchCore) != 0) {
+    if (Utils::PinToCore(kMainDispatchCore) != 0) {
       std::string err_str =
           std::string("Pinning main recorder thread to core ") +
           std::to_string(kMainDispatchCore) + std::string(" failed");
