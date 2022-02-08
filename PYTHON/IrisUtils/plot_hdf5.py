@@ -12,7 +12,7 @@
 
 
 ---------------------------------------------------------------------
- Copyright © 2018-2020. Rice University.
+ Copyright © 2018-2022. Rice University.
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
 ---------------------------------------------------------------------
 """
@@ -231,58 +231,90 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         calib_mat = np.divide(calibCSI[:, 0, :, :], calibCSI[:, 1, :, :])
         if (ant_i > num_bs_ants - 1):
             ant_i = num_bs_ants - 1
-        fig3, axes3 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
-        axes3[0, 0].set_title('Reciprocity Calibration Factor Across Frames - Cell 0 - Subcarrier %d' % subcarrier_i)
+        if num_cl == 0:
+            fig3, axes3 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
+            axes3[0, 0].set_title('Reciprocity Calibration Factor Across Frames - Cell 0 - Subcarrier %d' % subcarrier_i)
 
-        axes3[0, 0].set_ylabel('Magtinute (ant %d)' % (ant_i))
-        axes3[0, 0].plot(np.abs(calib_mat[:, ant_i, subcarrier_i]).flatten(), label='')
-        axes3[0, 0].set_xlabel('Frame')
-        axes3[0, 0].legend(frameon=False)
+            axes3[0, 0].set_ylabel('Magtinute (ant %d)' % (ant_i))
+            axes3[0, 0].plot(np.abs(calib_mat[:, ant_i, subcarrier_i]).flatten(), label='')
+            axes3[0, 0].set_xlabel('Frame')
+            axes3[0, 0].legend(frameon=False)
 
-        axes3[1, 0].set_ylabel('Phase (ant %d)' % (ant_i))
-        axes3[1, 0].plot(np.angle(calib_mat[:, ant_i, subcarrier_i]).flatten())
-        axes3[1, 0].set_ylim(-np.pi, np.pi)
-        axes3[1, 0].set_xlabel('Frame')
-        axes3[1, 0].legend(frameon=False)
-        axes3[1, 0].grid()
+            axes3[1, 0].set_ylabel('Phase (ant %d)' % (ant_i))
+            axes3[1, 0].plot(np.angle(calib_mat[:, ant_i, subcarrier_i]).flatten())
+            axes3[1, 0].set_ylim(-np.pi, np.pi)
+            axes3[1, 0].set_xlabel('Frame')
+            axes3[1, 0].legend(frameon=False)
+            axes3[1, 0].grid()
 
-        axes3[2, 0].set_ylabel('Magnitude')
-        for i in range(calib_mat.shape[1]):
-            axes3[2, 0].plot(np.abs(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d" % plot_bs_nodes[i])
-        axes3[2, 0].set_xlabel('Frame')
-        axes3[2, 0].legend(loc='lower right', frameon=False)
+            axes3[2, 0].set_ylabel('Magnitude')
+            for i in range(calib_mat.shape[1]):
+                axes3[2, 0].plot(np.abs(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d" % plot_bs_nodes[i])
+            axes3[2, 0].set_xlabel('Frame')
+            axes3[2, 0].legend(loc='lower right', frameon=False)
 
-        axes3[3, 0].set_ylabel('Phase')
-        for i in range(calib_mat.shape[1]):
-            axes3[3, 0].plot(np.angle(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d" % plot_bs_nodes[i])
-        axes3[3, 0].set_xlabel('Frame')
-        axes3[3, 0].set_ylim(-np.pi, np.pi)
-        axes3[3, 0].legend(loc='lower right', frameon=False)
-        axes3[3, 0].grid()
+            axes3[3, 0].set_ylabel('Phase')
+            for i in range(calib_mat.shape[1]):
+                axes3[3, 0].plot(np.angle(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d" % plot_bs_nodes[i])
+            axes3[3, 0].set_xlabel('Frame')
+            axes3[3, 0].set_ylim(-np.pi, np.pi)
+            axes3[3, 0].legend(loc='lower right', frameon=False)
+            axes3[3, 0].grid()
 
-        fig4, axes4 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
-        axes4[0, 0].set_title('Reciprocity Calibration Factor Across Subcarriers - Cell 0 - Frame %d' % ref_frame)
-        axes4[0, 0].set_ylabel('Magnitude ant %d' % (ant_i))
-        axes4[0, 0].plot(np.abs(calib_mat[ref_frame, ant_i, :]).flatten())
-        axes4[0, 0].set_xlabel('Subcarrier')
+            fig4, axes4 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
+            axes4[0, 0].set_title('Reciprocity Calibration Factor Across Subcarriers - Cell 0 - Frame %d' % ref_frame)
+            axes4[0, 0].set_ylabel('Magnitude ant %d' % (ant_i))
+            axes4[0, 0].plot(np.abs(calib_mat[ref_frame, ant_i, :]).flatten())
+            axes4[0, 0].set_xlabel('Subcarrier')
 
-        axes4[1, 0].set_ylabel('Phase ant %d' % (ant_i))
-        axes4[1, 0].plot(np.angle(calib_mat[ref_frame, ant_i, :]).flatten())
-        axes4[1, 0].set_ylim(-np.pi, np.pi)
-        axes4[1, 0].set_xlabel('Subcarrier')
+            axes4[1, 0].set_ylabel('Phase ant %d' % (ant_i))
+            axes4[1, 0].plot(np.angle(calib_mat[ref_frame, ant_i, :]).flatten())
+            axes4[1, 0].set_ylim(-np.pi, np.pi)
+            axes4[1, 0].set_xlabel('Subcarrier')
 
-        axes4[2, 0].set_ylabel('Magnitude')
-        for i in range(calib_mat.shape[1]):
-            axes4[2, 0].plot(np.abs(calib_mat[ref_frame, i, :]).flatten(), label="ant %d" % plot_bs_nodes[i])
-        axes4[2, 0].set_xlabel('Subcarrier')
-        axes4[2, 0].legend(loc='lower right', frameon=False)
+            axes4[2, 0].set_ylabel('Magnitude')
+            for i in range(calib_mat.shape[1]):
+                axes4[2, 0].plot(np.abs(calib_mat[ref_frame, i, :]).flatten(), label="ant %d" % plot_bs_nodes[i])
+            axes4[2, 0].set_xlabel('Subcarrier')
+            axes4[2, 0].legend(loc='lower right', frameon=False)
 
-        axes4[3, 0].set_ylabel('Phase')
-        for i in range(calib_mat.shape[1]):
-            axes4[3, 0].plot(np.angle(calib_mat[ref_frame, i, :]).flatten(), label="ant %d" % plot_bs_nodes[i])
-        axes4[3, 0].set_xlabel('Subcarrier')
-        axes4[3, 0].set_ylim(-np.pi, np.pi)
-        axes4[3, 0].legend(loc='lower right', frameon=False)
+            axes4[3, 0].set_ylabel('Phase')
+            for i in range(calib_mat.shape[1]):
+                axes4[3, 0].plot(np.angle(calib_mat[ref_frame, i, :]).flatten(), label="ant %d" % plot_bs_nodes[i])
+            axes4[3, 0].set_xlabel('Subcarrier')
+            axes4[3, 0].set_ylim(-np.pi, np.pi)
+            axes4[3, 0].legend(loc='lower right', frameon=False)
+        else:
+            uplink_csi = userCSI[:, 2:2+num_cl, :, :]
+            # imp: Frames, #Antennas, #Users, Subcarrier
+            implicit_dl_csi = np.empty((uplink_csi.shape[0], uplink_csi.shape[2], uplink_csi.shape[1], uplink_csi.shape[3]), dtype='complex64')
+            for i in range(uplink_csi.shape[0]):
+                for j in range(uplink_csi.shape[3]):
+                    implicit_dl_csi[i, :, :, j] = np.transpose(uplink_csi[i, :, :, j] * calib_mat[i, :, j])
+            implicit_dl_csi = implicit_dl_csi[:, :num_bs_ants - 1, :, :]
+            # downlink_samples: #Frames, #Cell, #Uplink Symbol, #Antennas, #Samples
+            # CSI:              #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
+            downlink_csi, _ = hdf5_lib.samps2csi(downlink_samples, num_bs_ants - 1, samps_per_slot, fft_size=fft_size,
+                                            offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
+            # exp: Frames, #Antennas, #Users, Subcarrier
+            explicit_dl_csi = downlink_csi[:, 0, :, 0, :, :]
+
+            dl_csi_err_mag = np.abs(explicit_dl_csi - implicit_dl_csi)
+            dl_csi_err_phs = np.angle(explicit_dl_csi - implicit_dl_csi)
+            fig3, axes3 = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
+            axes3[0, 0].set_title('Implicit vs Explicit DL CSI - Cell 0 - Subcarrier %d' % subcarrier_i)
+
+            axes3[0, 0].set_ylabel('magtinute (ant %d)' % (ant_i))
+            axes3[0, 0].plot(dl_csi_err_mag[:, ant_i, 0, subcarrier_i].flatten(), label='')
+            axes3[0, 0].set_xlabel('frame')
+            axes3[0, 0].legend(frameon=False)
+
+            axes3[1, 0].set_ylabel('Phase (ant %d)' % (ant_i))
+            axes3[1, 0].plot(dl_csi_err_phs[:, ant_i, 0, subcarrier_i].flatten(), label='')
+            axes3[1, 0].set_xlabel('frame')
+            axes3[1, 0].set_ylim(-np.pi, np.pi)
+            axes3[1, 0].legend(frameon=False)
+
 
     # Plot UL data symbols
     if ul_data_avail > 0:
@@ -413,12 +445,12 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
         axes4[0, 0].set_title('Downlink Data IQ - Cell %d - Antenna %d - Symbol %d' % (cell_i, ant_i, dl_sf_i))
         axes4[0, 0].set_ylabel('Frame %d (IQ)' % ref_frame)
-        axes4[0, 0].plot(np.real(dl_samps[ref_frame, cell_i, dl_sf_i, ant_i, :]))
-        axes4[0, 0].plot(np.imag(dl_samps[ref_frame, cell_i, dl_sf_i, ant_i, :]))
+        axes4[0, 0].plot(np.real(dl_samps[ref_frame, cell_i, dl_sf_i, user_i, :]))
+        axes4[0, 0].plot(np.imag(dl_samps[ref_frame, cell_i, dl_sf_i, user_i, :]))
 
         axes4[1, 0].set_ylabel('All Frames (IQ)')
-        axes4[1, 0].plot(np.real(dl_samps[:, cell_i, dl_sf_i, ant_i, :]).flatten())
-        axes4[1, 0].plot(np.imag(dl_samps[:, cell_i, dl_sf_i, ant_i, :]).flatten())
+        axes4[1, 0].plot(np.real(dl_samps[:, cell_i, dl_sf_i, user_i, :]).flatten())
+        axes4[1, 0].plot(np.imag(dl_samps[:, cell_i, dl_sf_i, user_i, :]).flatten())
 
     if deep_inspect:
         filter_pilots_start = time.time()
@@ -624,6 +656,31 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
     plt.show()
 
+def downlink_csi_analysis(pilot_samples, ):
+    if up_calib_offset != offset:
+        csi_u,_ = hdf5_lib.samps2csi(pilot_samples[:, :, 0:1, :, :], num_cl_tmp, samps_per_slot, fft_size=fft_size,
+                                      offset=up_calib_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
+    if dn_calib_offset != offset:
+        csi_d,_ = hdf5_lib.samps2csi(pilot_samples[:, :, 0:1, :, :], num_cl_tmp, samps_per_slot, fft_size=fft_size,
+                                      offset=dn_calib_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
+    calib_corrected_csi = np.zeros(csi_d.shape, dtype='complex64')
+    calib_corrected_csi[:, :, 0, :, :, :] = csi_d[:, :, 0, :, :, :]
+    calib_corrected_csi[:, :, 1, :, :, :] = csi_u[:, :, 1, :, :, :]
+    calib_corrected_csi_cell0 = calib_corrected_csi[:, 0, :, :, :, :]
+    # TODO: add option for averaging across repeated pilots vs individual pilots
+    #calibCSI = np.mean(calib_corrected_csi_cell0, 2) # average several csi copies
+    calibCSI = calib_corrected_csi_cell0[:, :, 0, :, :] # take first csi
+    calib_mat = np.divide(calibCSI[:, 0, :, :], calibCSI[:, 1, :, :])
+
+    csi, _ = hdf5_lib.samps2csi(pilot_samples[:, :, 2:, :, :], num_cl_tmp, samps_per_slot, fft_size=fft_size,
+                                    offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
+
+    cellCSI = csi[:, cell_i, :, :, :, :]
+
+    dl_samps_mat = np.reshape(
+            downlink_samples, (downlink_samples.shape[0], downlink_samples.shape[1], downlink_samples.shape[2], downlink_samples.shape[3], samps_per_slot, 2))
+    dl_samps = (dl_samps_mat[:, :, :, :, :, 0] +
+            dl_samps_mat[:, :, :, :, :, 1]*1j)*2**-15
 
 def analyze_hdf5(hdf5, frame_i=10, cell_i=0, subcarrier_i=7, offset=-1, zoom=0, pl=0):
     '''
@@ -1078,13 +1135,16 @@ def main():
             dl_data_avail = len(downlink_samples) > 0
 
             if pilots_avail:
-                print("Found Pilots!")
+                print("Found pilot data with shape:")
+                print(pilot_samples.shape)
                 if ul_data_avail:
-                    print("Found Uplink Data")
+                    print("Found uplink data with shape:")
+                    print(uplink_samples.shape)
                 if noise_avail:
                     print("Found Noise Samples!")
                 if dl_data_avail:
-                    print("Found Downlink Data")
+                    print("Found downlink data with shape:")
+                    print(downlink_samples.shape)
             else:
                 if dl_data_avail:
                     print("Found Downlink Data")
