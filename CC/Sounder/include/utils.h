@@ -31,13 +31,17 @@
 #include <thread>
 #include <vector>
 
-int pin_thread_to_core(int core_id, pthread_t& thread_to_pin);
-int pin_to_core(int core_id);
 
 class Utils {
  public:
   Utils();
   ~Utils();
+
+  static int PinToCore(const int core_id);
+  static int PinThreadToCore(const int core_id, pthread_t& thread_to_pin, bool verbose = false);
+  static void PrintCoreAssignmentSummary();
+  // Default argument is to exclude core 0 from the list
+  static void SetCpuLayoutOnNumaNodes(bool verbose = false, const std::vector<size_t>& cores_to_exclude = std::vector<size_t>(1, 0));
 
   static std::vector<size_t> strToChannels(const std::string& channel);
   static std::vector<std::complex<float>> cint16_to_cfloat(
