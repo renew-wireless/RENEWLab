@@ -11,6 +11,7 @@
 
 #include <gflags/gflags.h>
 
+#include "include/utils.h"
 #include "include/data_generator.h"
 #include "include/scheduler.h"
 #include "include/signalHandler.hpp"
@@ -72,6 +73,7 @@ int main(int argc, char* argv[]) {
       }
     }
   }
+  Utils::PrintCoreAssignmentSummary();
   gflags::ShutDownCommandLineFlags();
   return ret;
 }

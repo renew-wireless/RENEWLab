@@ -134,7 +134,7 @@ void Scheduler::do_it() {
           std::to_string(kMainDispatchCore) + std::string(" failed");
       throw std::runtime_error(err_str);
     } else {
-      MLPD_INFO("Successfully pinned main scheduler thread to core %d",
+      MLPD_INFO("Successfully pinned main scheduler thread to core %d\n",
                 kMainDispatchCore);
     }
   }
