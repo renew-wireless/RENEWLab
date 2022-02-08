@@ -183,7 +183,8 @@ void RecorderWorker::init(void) {
   // Data modulation
   this->hdf5_->write_attribute("CL_MODULATION", this->cfg_->data_mod());
 
-  if (this->cfg_->internal_measurement() == false) {
+  if (this->cfg_->internal_measurement() == false ||
+      this->cfg_->num_cl_antennas() > 0) {
     // Client antenna polarization
     this->hdf5_->write_attribute("CL_CH_PER_RADIO", this->cfg_->cl_sdr_ch());
 
@@ -260,12 +261,13 @@ void RecorderWorker::init(void) {
   }
 
   if (this->cfg_->cl_rx_thread_num() > 0 &&
-      this->cfg_->dl_slot_per_frame() > 0) {
+      cfg_->cl_dl_slots().at(0).empty() == false) {
     // DL
     datasets.push_back("DownlinkData");
     std::array<hsize_t, kDsDimsNum> dims_dl_data = {
-        MAX_FRAME_INC, this->cfg_->num_cells(), this->cfg_->dl_slot_per_frame(),
-        this->cfg_->num_cl_antennas(), IQ};
+        MAX_FRAME_INC, this->cfg_->num_cells(),
+        this->cfg_->cl_dl_slots().at(0).size(), this->cfg_->num_cl_antennas(),
+        IQ};
     this->hdf5_->createDataset(datasets.back(), dims_dl_data, cdims);
   }
 
@@ -279,7 +281,7 @@ void RecorderWorker::finalize(void) {
   this->hdf5_->closeFile();
 }
 
-void RecorderWorker::record(int tid, Packet* pkt) {
+void RecorderWorker::record(int tid, Packet* pkt, NodeType node_type) {
   (void)tid;
   /* TODO: remove TEMP check */
   size_t end_antenna = (this->antenna_offset_ + this->num_antennas_) - 1;
@@ -325,8 +327,19 @@ void RecorderWorker::record(int tid, Packet* pkt) {
     std::array<hsize_t, kDsDimsNum> hdfoffset = {pkt->frame_id, pkt->cell_id, 0,
                                                  antenna_index, 0};
     std::array<hsize_t, kDsDimsNum> count = {1, 1, 1, 1, IQ};
-    if ((this->cfg_->internal_measurement() == true) ||
-        (this->cfg_->isPilot(pkt->frame_id, pkt->slot_id) == true)) {
+    if (this->cfg_->internal_measurement() == true) {
+      if (node_type == kClient) {
+        this->hdf5_->extendDataset(std::string("DownlinkData"), pkt->frame_id);
+        hdfoffset[kDsDimSymbol] = this->cfg_->getDlSlotIndex(0, pkt->slot_id);
+        this->hdf5_->writeDataset(std::string("DownlinkData"), hdfoffset, count,
+                                  pkt->data);
+      } else {
+        this->hdf5_->extendDataset(std::string("Pilot_Samples"), pkt->frame_id);
+        hdfoffset[kDsDimSymbol] = pkt->slot_id;
+        this->hdf5_->writeDataset(std::string("Pilot_Samples"), hdfoffset,
+                                  count, pkt->data);
+      }
+    } else if (this->cfg_->isPilot(pkt->frame_id, pkt->slot_id) == true) {
       this->hdf5_->extendDataset(std::string("Pilot_Samples"), pkt->frame_id);
       hdfoffset[kDsDimSymbol] =
           this->cfg_->getClientId(pkt->frame_id, pkt->slot_id);
@@ -339,10 +352,9 @@ void RecorderWorker::record(int tid, Packet* pkt) {
       this->hdf5_->writeDataset(std::string("UplinkData"), hdfoffset, count,
                                 pkt->data);
 
-    } else if (this->cfg_->isDlData(pkt->frame_id, pkt->slot_id) == true) {
+    } else if (this->cfg_->isDlData(0, pkt->slot_id) == true) {
       this->hdf5_->extendDataset(std::string("DownlinkData"), pkt->frame_id);
-      hdfoffset[kDsDimSymbol] =
-          this->cfg_->getDlSlotIndex(pkt->frame_id, pkt->slot_id);
+      hdfoffset[kDsDimSymbol] = this->cfg_->getDlSlotIndex(0, pkt->slot_id);
       this->hdf5_->writeDataset(std::string("DownlinkData"), hdfoffset, count,
                                 pkt->data);
     } else if (this->cfg_->isNoise(pkt->frame_id, pkt->slot_id) == true) {

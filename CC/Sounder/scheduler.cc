@@ -244,6 +244,7 @@ void Scheduler::do_it() {
           size_t thread_index = event.ant_id / thread_antennas;
           Event_data do_record_task;
           do_record_task.event_type = kTaskRecord;
+          do_record_task.node_type = event.node_type;
           do_record_task.offset = event.offset;
           do_record_task.buffer = this->rx_buffer_;
           do_record_task.buff_size = this->rx_thread_buff_size_;

@@ -116,7 +116,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         }
 
         n_bs_sdrs_.at(i) = bs_sdr_ids_.at(i).size();
-        n_bs_antennas_.at(i) = bs_channel_.length() * n_bs_sdrs_.at(i);
+        n_bs_antennas_.at(i) = bs_sdr_ch_ * n_bs_sdrs_.at(i);
         num_bs_sdrs_all_ += n_bs_sdrs_.at(i);
         num_bs_antennas_all_ += n_bs_antennas_.at(i);
         cal_ref_sdr_id_ = n_bs_sdrs_.at(i) - 1;
@@ -168,8 +168,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
       client_serial_present = false;
     }
 
-    client_present_ = !bs_only && client_serial_present && num_cl_sdrs_ > 0 &&
-                      !internal_measurement_;
+    client_present_ = !bs_only && client_serial_present && num_cl_sdrs_ > 0;
     bs_present_ = !client_only && num_bs_sdrs_all_ > 0;
   } else {
     std::cout << "Serial file empty! Exitting.." << std::endl;
@@ -232,20 +231,31 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
       calib_frames_[c].resize(n_bs_sdrs_[c]);
 
       // For measurements with single reference node
-      if (ref_node_enable_) {
-        size_t frame_length = num_channels * n_bs_sdrs_[c] - (num_channels - 1);
+      if (ref_node_enable_ == true) {
+        size_t beacon_slot = 0;
+        if (num_cl_antennas_ > 0)
+          beacon_slot = 1;  // add a "B" in the front for UE sync
+        size_t frame_length =
+            beacon_slot + n_bs_antennas_[c] + num_cl_antennas_;
         calib_frames_[c][cal_ref_sdr_id_] = std::string(frame_length, 'G');
         calib_frames_[c][cal_ref_sdr_id_].replace(
-            num_channels * cal_ref_sdr_id_, 1, "P");
+            beacon_slot + num_channels * cal_ref_sdr_id_, 1, "P");
+
         for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
           if (i != cal_ref_sdr_id_) {
             calib_frames_[c][i] = std::string(frame_length, 'G');
+            if (num_cl_antennas_ > 0) calib_frames_[c][i].replace(0, 1, "B");
             for (size_t ch = 0; ch < num_channels; ch++) {
-              calib_frames_[c][i].replace(i * num_channels + ch, 1, "P");
-              calib_frames_[c][cal_ref_sdr_id_].replace(num_channels * i + ch,
-                                                        1, "R");
+              calib_frames_[c][i].replace(beacon_slot + i * num_channels + ch,
+                                          1, "P");
+              calib_frames_[c][cal_ref_sdr_id_].replace(
+                  beacon_slot + num_channels * i + ch, 1, "R");
             }
-            calib_frames_[c][i].replace(num_channels * cal_ref_sdr_id_, 1, "R");
+            calib_frames_[c][i].replace(
+                beacon_slot + num_channels * cal_ref_sdr_id_, 1, "R");
+            for (size_t p = 0; p < num_cl_antennas_; p++)
+              calib_frames_[c][i].replace(
+                  beacon_slot + num_channels * n_bs_sdrs_[c] + p, 1, "R");
           }
         }
       } else {
@@ -273,10 +283,37 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
       for (auto i = calib_frames_[c].begin(); i != calib_frames_[c].end(); ++i)
         std::cout << *i << ' ' << std::endl;
 #endif
+      for (std::string const& s : calib_frames_[c]) std::cout << s << std::endl;
     }
-    slot_per_frame_ = calib_frames_.at(0).size();
+    slot_per_frame_ = calib_frames_.at(0).at(0).size();
+    std::cout << "Slot Per Frame: " << slot_per_frame_ << std::endl;
     if (ref_node_enable_ == true) {
-      pilot_slot_per_frame_ = 2;  // Two pilots (up/down)
+      pilot_slot_per_frame_ =
+          2 +
+          num_cl_antennas_;  // Two pilots (up/down) plus additional user pilots
+      if (num_cl_antennas_ > 0) {
+        cl_frames_.resize(num_cl_sdrs_);
+        std::string empty_frame = std::string(slot_per_frame_, 'G');
+        for (size_t i = 0; i < num_cl_sdrs_; i++) {
+          cl_frames_.at(i) = empty_frame;
+          for (size_t n = 0; n < n_bs_sdrs_.at(0); n++) {
+            if (n != cal_ref_sdr_id_) {
+              for (size_t ch = 0; ch < num_channels; ch++) {
+                size_t slot = 1 + n * num_channels + ch;
+                std::cout << "Replacing slot " << slot << std::endl;
+                cl_frames_.at(i).replace(slot, 1,
+                                         "D");  // downlink symbol for UEs
+              }
+            }
+          }
+          for (size_t ch = 0; ch < cl_sdr_ch_; ch++) {
+            size_t slot = 1 + n_bs_antennas_[0] + cl_sdr_ch_ * i + ch;
+            cl_frames_.at(i).replace(slot, 1, "P");
+          }
+          std::cout << "Client " << i << " schedule: " << cl_frames_.at(i)
+                    << std::endl;
+        }
+      }
     } else {
       pilot_slot_per_frame_ =
           num_channels * n_bs_sdrs_[0];  // Two pilots per board (up/down)
@@ -391,7 +428,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   ofdm_symbol_size_ = fft_size_ + cp_size_;
   slot_samp_size_ = symbol_per_slot_ * ofdm_symbol_size_;
   samps_per_slot_ = slot_samp_size_ + prefix_ + postfix_;
-  assert(internal_measurement_ || slot_per_frame_ == cl_frames_.at(0).size());
+  assert((internal_measurement_ && num_cl_antennas_ == 0) ||
+         slot_per_frame_ == cl_frames_.at(0).size());
 
   ul_data_slot_present_ =
       (internal_measurement_ == false) &&
@@ -527,7 +565,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     time_t now = time(0);
     tm* ltm = localtime(&now);
     std::string filename;
-    if (internal_measurement_) {
+    if (internal_measurement_ && num_cl_antennas_ == 0) {
       filename =
           directory + "/trace-internal-meas-" +
           std::to_string(1900 + ltm->tm_year) + "-" +
@@ -536,6 +574,16 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
           std::to_string(ltm->tm_min) + "-" + std::to_string(ltm->tm_sec) +
           "_" + std::to_string(num_cells_) + "_" +
           std::to_string(num_bs_antennas_all_) + ".hdf5";
+    } else if (internal_measurement_ && num_cl_antennas_ > 0) {
+      filename =
+          directory + "/trace-reciprocity-" +
+          std::to_string(1900 + ltm->tm_year) + "-" +
+          std::to_string(1 + ltm->tm_mon) + "-" + std::to_string(ltm->tm_mday) +
+          "-" + std::to_string(ltm->tm_hour) + "-" +
+          std::to_string(ltm->tm_min) + "-" + std::to_string(ltm->tm_sec) +
+          "_" + std::to_string(num_cells_) + "_" +
+          std::to_string(num_bs_antennas_all_) + "x" +
+          std::to_string(num_cl_antennas_) + ".hdf5";
     } else {
       std::string ul_present_str = (ul_data_slot_present_ ? "uplink-" : "");
       std::string dl_present_str = (dl_data_slot_present_ ? "downlink-" : "");
@@ -550,11 +598,11 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
           std::to_string(num_cl_antennas_) + ".hdf5";
     }
     trace_file_ = tddConf.value("trace_file", filename);
-    recorder_thread_num_ =
-        tddConf.value("recorder_thread",
-                      bs_present_ || (client_present_ && dl_slot_per_frame_ > 0)
-                          ? RECORDER_THREAD_NUM
-                          : 0);
+    recorder_thread_num_ = tddConf.value(
+        "recorder_thread",
+        bs_present_ || (client_present_ && cl_dl_slots_.at(0).size() > 0)
+            ? RECORDER_THREAD_NUM
+            : 0);
     reader_thread_num_ = (client_present_ && ul_slot_per_frame_ > 0) +
                          (bs_present_ && dl_slot_per_frame_ > 0);
   } else {
@@ -577,7 +625,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     bs_rx_thread_num_ = 0;
   }
 
-  if (client_present_ == true && dl_slot_per_frame_ > 0) {
+  if (client_present_ == true && cl_dl_slots_.at(0).size() > 0) {
     cl_rx_thread_num_ = num_cl_sdrs_;
   } else {
     cl_rx_thread_num_ = 0;
@@ -827,7 +875,7 @@ size_t Config::getNumRecordedSdrs() {
   if (this->bs_present_ == true) {
     ret += getNumBsSdrs();
   }
-  if (this->client_present_ == true && dl_slot_per_frame_ > 0) {
+  if (this->client_present_ == true) {
     // Only consider clients that have 'D' in their schedule
     for (size_t i = 0; i < cl_dl_slots_.size(); i++) {
       if (cl_dl_slots_.at(i).size() > 0) ret++;
@@ -839,7 +887,6 @@ size_t Config::getNumRecordedSdrs() {
 Config::~Config() {}
 
 int Config::getClientId(int frame_id, int slot_id) {
-  if (internal_measurement_) return slot_id;
   std::vector<size_t>::iterator it;
   int fid = frame_id % frames_.size();
   it = find(pilot_slots_.at(fid).begin(), pilot_slots_.at(fid).end(), slot_id);
@@ -868,11 +915,10 @@ int Config::getUlSlotIndex(int frame_id, int slot_id) {
   return -1;
 }
 
-int Config::getDlSlotIndex(int frame_id, int slot_id) {
+int Config::getDlSlotIndex(int, int slot_id) {
   std::vector<size_t>::iterator it;
-  int fid = frame_id % frames_.size();
-  it = find(dl_slots_.at(fid).begin(), dl_slots_.at(fid).end(), slot_id);
-  if (it != dl_slots_.at(fid).end()) return (it - dl_slots_.at(fid).begin());
+  it = find(cl_dl_slots_.at(0).begin(), cl_dl_slots_.at(0).end(), slot_id);
+  if (it != cl_dl_slots_.at(0).end()) return (it - cl_dl_slots_.at(0).begin());
   return -1;
 }
 
@@ -900,9 +946,9 @@ bool Config::isUlData(int frame_id, int slot_id) {
   }
 }
 
-bool Config::isDlData(int frame_id, int slot_id) {
+bool Config::isDlData(int radio_id, int slot_id) {
   try {
-    return frames_[frame_id % frames_.size()].at(slot_id) == 'D';
+    return cl_frames_[radio_id].at(slot_id) == 'D';
   } catch (const std::out_of_range&) {
     return false;
   }

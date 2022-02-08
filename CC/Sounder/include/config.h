@@ -259,9 +259,13 @@ class Config {
     return (2 * this->samps_per_slot_ * sizeof(short));
   }
 
+  /// Return the slot duration in seconds
+  inline double getSlotDurationSec() const {
+    return ((this->symbol_per_slot_ * this->samps_per_slot_) / this->rate_);
+  }
   /// Return the frame duration in seconds
   inline double getFrameDurationSec() const {
-    return ((this->symbol_per_slot_ * this->samps_per_slot_) / this->rate_);
+    return ((this->samps_per_frame()) / this->rate_);
   }
 
   size_t getNumAntennas();
