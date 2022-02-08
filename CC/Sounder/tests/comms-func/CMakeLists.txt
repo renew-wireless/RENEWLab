@@ -74,7 +74,7 @@ add_executable(comm-testbench test-main.cc
 	${SOURCE_DIR}/comms-lib-avx.cc
 	${SOURCE_DIR}/utils.cc)
 target_link_libraries(comm-testbench 
-	-lpthread --enable-threadsafe
+	-lpthread -lnuma --enable-threadsafe
 	${SOURCE_DIR}/mufft/libmuFFT.a
        	${SOURCE_DIR}/mufft/libmuFFT-sse.a
 	${SOURCE_DIR}/mufft/libmuFFT-sse3.a
