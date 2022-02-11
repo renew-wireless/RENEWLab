@@ -271,16 +271,17 @@ int Radio::recv(void* const* buffs, int samples, long long& frameTime)
     return r;
 }
 
-
 int Radio::xmit(
     const void* const* buffs, int samples, int flags, long long& frameTime)
 {
-    int soapyFlags[]
-        = { 0, SOAPY_SDR_HAS_TIME, SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST,
-              SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST };
-    int flag_args = soapyFlags[flags];
-    int r
-        = dev->writeStream(txs, buffs, samples, flag_args, frameTime, 1000000);
+//    int soapyFlags[]
+//        = { 0, SOAPY_SDR_HAS_TIME, SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST,
+//              SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST };
+//    int flag_args = soapyFlags[flags];
+//    int r
+//        = dev->writeStream(txs, buffs, samples, flag_args, frameTime, 1000000);
+    int r = txs-> send (buffs, samples, tmd, 0.1);
+
     if (r != samples)
         std::cerr << "unexpected writeStream error " << SoapySDR::errToStr(r)
                   << std::endl;
