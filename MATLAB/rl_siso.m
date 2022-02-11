@@ -153,9 +153,10 @@ sdr_params = struct(...
     'sample_rate', SMPL_RT);
 
 
-%rx_vec_iris = getRxVec(tx_vec_iris, N_BS_NODE, N_UE, chan_type, [], bs_sdr_params, ue_sdr_params, []);
 mimo_handle = mimo_driver(sdr_params);
 rx_vec_iris = mimo_handle.mimo_txrx_uplink(tx_vec_iris, 1, N_ZPAD_PRE);
+mimo_handle.close();
+
 if (isempty(rx_vec_iris))
     return;
 end

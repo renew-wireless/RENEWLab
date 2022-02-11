@@ -309,9 +309,9 @@ class Iris_py:
                 in_len = int(self.n_samp)
                 wave_rx_a = np.zeros((in_len), dtype=np.complex64)
                 wave_rx_b = np.zeros((in_len), dtype=np.complex64)
-                rx_frames_a = np.zeros((in_len*max_frames), dtype=np.complex64)
-
                 n_R = self.tdd_sched.count("R")  # How many Read frames in the tdd schedule
+                rx_frames_a = np.zeros((in_len*n_R*max_frames), dtype=np.complex64)
+
                 print("n_samp is: %d  \n" % self.n_samp)
 
                 for m in range(max_frames):
@@ -319,7 +319,8 @@ class Iris_py:
                         r1 = self.sdr.readStream(
                             self.rx_stream, [wave_rx_a, wave_rx_b], int(self.n_samp))
                         print("reading stream: ({})".format(r1))
-                    rx_frames_a[m*in_len: (m*in_len + in_len)] = wave_rx_a
+                        data_id = m*n_R+k
+                        rx_frames_a[data_id*in_len: (data_id*in_len + in_len)] = wave_rx_a
 
                 return(rx_frames_a)
 

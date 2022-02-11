@@ -77,13 +77,17 @@ classdef mimo_driver < handle
         function data = mimo_txrx_downlink(obj, tx_data_mat, n_frames, n_samps_pad)
             results = obj.mimo_obj.txrx_downlink(py.numpy.array(tx_data_mat), py.int(n_frames), py.int(n_samps_pad));
             data = [];
-            result_cell = cell(results);
-            if result_cell{1, 2} == 0
+            if results == py.NoneType
                 disp('Unsucessful downlink receive. Try different gain settings!');
             else
-                data = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(results(1)) ) ) ) + ...
-                    1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(results(1)) ) ) );
-            end        
+                result_cell = cell(results);
+                if result_cell{1, 2} == 0
+                    disp('Unsucessful downlink receive. Try different gain settings!');
+                else
+                    data = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(results(1)) ) ) ) + ...
+                        1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(results(1)) ) ) );
+                end
+            end
         end
 
         function mimo_close(obj)
