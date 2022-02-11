@@ -240,14 +240,11 @@ Radio::~Radio(void)
     // update on UHD multi USRP
     deactivateRecv();
     deactivateXmit();
-    ~uhd::multi_usrp(dev);
-    ~rx_streamer(rxs);
-    ~tx_streamer(txs);
+    // not sure if those deoncstructor is needed, will comment those out first
+//    ~uhd::multi_usrp(dev);
+//    ~rx_streamer(rxs);
+//    ~tx_streamer(txs);
 }
-
-
-
-
 
 
 int Radio::recv(void* const* buffs, int samples, long long& frameTime)
