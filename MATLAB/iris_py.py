@@ -193,8 +193,9 @@ class Iris_py:
                 for chan in [0, 1]:
                     self.sdr.setGain(SOAPY_SDR_TX, chan, min(tx_gain, 81.0))
 
-        def config_sdr_tdd(self, is_bs=True, tdd_sched="G", prefix_len=0, max_frames=1):
+        def config_sdr_tdd(self, is_bs=True, tdd_sched="G", nsamps=4096, prefix_len=0, max_frames=1):
                 '''Configure the TDD schedule and functionality when unchained. Set up the correlator.'''
+                self.n_samp = nsamps
                 global corr_threshold, beacon
                 coe = cfloat2uint32(np.conj(beacon), order='QI')
                 self.tdd_sched = tdd_sched
@@ -251,6 +252,10 @@ class Iris_py:
                 # NB: This should be called for the BS
                 self.sdr.writeSetting("SYNC_DELAYS", "")
 
+        def reset_hw_time(self):
+                # NB: This should be called for the BS
+                self.sdr.setHardwareTime(0)
+
         # Setup and activate RX streams
         def setup_stream_rx(self):
                 print("Setting up RX stream \n")
@@ -261,10 +266,9 @@ class Iris_py:
                 if r1 < 0:
                     print("Problem activating stream\n")
 
-        def burn_beacon(self):
+        def burn_beacon(self, beacon_weights = [[1, 1], [1, 1]]):
                 '''Write beacon to the FPGA ram'''
                 buf_a = cfloat2uint32(beacon, order='QI')
-                beacon_weights = [[1, 1], [1, 1]]
                 self.sdr.writeRegisters("BEACON_RAM", 0, buf_a.tolist())
                 self.sdr.writeRegisters(
                     "BEACON_RAM_WGT_A", 0, beacon_weights[0])
@@ -274,6 +278,17 @@ class Iris_py:
                 print("burnt beacon to node {} FPGA RAM".format(self.serial_id))
 
         # Write data to FPGA RAM
+        def burn_data_complex(self, data_a, data_b=None, replay_addr=0):
+                '''Write data to FPGA RAM. A pilot for example. Need to compose a complex vector out of data_r and data_i'''
+
+                buf_a = cfloat2uint32(data_a, order='QI')
+
+                self.sdr.writeRegisters("TX_RAM_A", replay_addr, buf_a.tolist())
+                if data_b is not None:
+                    buf_b = cfloat2uint32(data_b, order='QI')
+                    self.sdr.writeRegisters("TX_RAM_B", replay_addr, buf_b.tolist() )
+                print("burnt data on to node {} FPGA RAM".format(self.serial_id))
+
         def burn_data(self, data_r, data_i=None, replay_addr=0):
                 '''Write data to FPGA RAM. A pilot for example. Need to compose a complex vector out of data_r and data_i'''
 
