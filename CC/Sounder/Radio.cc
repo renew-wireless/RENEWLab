@@ -249,16 +249,24 @@ Radio::~Radio(void)
 
 int Radio::recv(void* const* buffs, int samples, long long& frameTime)
 {
-    int flags(0);
-    int r = dev->readStream(rxs, buffs, samples, flags, frameTime, 1000000);
-    if (r < 0) {
-        MLPD_ERROR("Time: %lld, readStream error: %d - %s, flags: %d\n",
-            frameTime, r, SoapySDR::errToStr(r), flags);
-        MLPD_TRACE("Samples: %d, Frame time: %lld\n", samples, frameTime);
-    } else if (r < samples) {
-        MLPD_WARN("Time: %lld, readStream returned less than requested "
-                  "samples: %d : %d, flags: %d\n",
-            frameTime, r, samples, flags);
+//    int flags(0);
+//    int r = dev->readStream(rxs, buffs, samples, flags, frameTime, 1000000);
+    int r = rxs->recv(buffs, samples, rmd, 0.1);
+
+//    if (r < 0) {
+//        MLPD_ERROR("Time: %lld, readStream error: %d - %s, flags: %d\n",
+//            frameTime, r, SoapySDR::errToStr(r), flags);
+//        MLPD_TRACE("Samples: %d, Frame time: %lld\n", samples, frameTime);
+//    } else if (r < samples) {
+//        MLPD_WARN("Time: %lld, readStream returned less than requested "
+//                  "samples: %d : %d, flags: %d\n",
+//            frameTime, r, samples, flags);
+//    }
+    if (rmd.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT)
+        break;
+    if (rmd.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE) {
+        throw std::runtime_error(
+                str(boost::format("Receiver error %s") % md.strerror()));
     }
     return r;
 }
