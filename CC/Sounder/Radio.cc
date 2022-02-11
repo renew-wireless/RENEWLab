@@ -149,8 +149,12 @@ Radio::Radio(const std::map< std::string, std::string >& args, const char uhdFmt
     if (dev == NULL)
         throw std::invalid_argument("error making UHD:Device\n");
     for (auto ch : channels) {
-        dev->setSampleRate(SOAPY_SDR_RX, ch, rate);
-        dev->setSampleRate(SOAPY_SDR_TX, ch, rate);
+//        dev->setSampleRate(SOAPY_SDR_RX, ch, rate);
+//        dev->setSampleRate(SOAPY_SDR_TX, ch, rate);
+
+        // update for UHD multi USRP
+        dev->set_rx_rate(rate, ch);
+        dev->set_tx_rate(rate, ch);
     }
 //    rxs = dev->setupStream(SOAPY_SDR_RX, soapyFmt, channels);
 //    txs = dev->setupStream(SOAPY_SDR_TX, soapyFmt, channels);
@@ -173,6 +177,7 @@ Radio::Radio(const std::map< std::string, std::string >& args, const char uhdFmt
     if (!kUseUHD)
         reset_DATA_clk_domain();
 }
+
 
 int Radio::activateRecv(
         const long long rxTime, const size_t numSamps, int flags)
