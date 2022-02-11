@@ -187,55 +187,46 @@ int Radio::activateRecv(
                 SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST };
     int flag_args = soapyFlags[flags];
     // for USRP device start rx stream UHD_INIT_TIME_SEC sec in the future
-    if (!kUseUHD)
+    if (!kUseUHD) {
+        // the following probabaly not going to be called, considered deleting, but decied to rewrite it to use UHD same
+        // as the else condition
         uhd::stream_cmd_t stream_cmd_1(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-    stream_cmd_rx = stream_cmd_1;
-    stream_cmd_rx.stream_now = true;
-    rxs->issue_stream_cmd(stream_cmd_rx);
-    return 0;
+        stream_cmd_rx = stream_cmd_1;
+        stream_cmd_rx.stream_now = true;
+        rxs->issue_stream_cmd(stream_cmd_rx);
+        return 0;
+    }
 //        dev->activateStream(rxs, flag_args, rxTime, numSamps);
-    else
-    uhd::stream_cmd_t stream_cmd_1(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-    stream_cmd_rx = stream_cmd_1;
-    stream_cmd_rx.stream_now = true;
-    rxs->issue_stream_cmd(stream_cmd_Rx);
-    return 0;
+    else {
+        uhd::stream_cmd_t stream_cmd_1(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+        stream_cmd_rx = stream_cmd_1;
+        stream_cmd_rx.stream_now = true;
+        rxs->issue_stream_cmd(stream_cmd_rx);
+        return 0;
+    }
 //        dev->activateStream(
 //            rxs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC * 1e9, 0);
 }
 
-void Radio::activateXmit(void)
-{
+void Radio::activateXmit(void) {
     // for USRP device start tx stream UHD_INIT_TIME_SEC sec in the future
-    if (!kUseUHD)
+    if (!kUseUHD) {
 //        dev->activateStream(txs);
-        // update for UHD multi USRP
-        uhd::stream_cmd_t stream_cmd_1(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-    stream_cmd_tx = stream_cmd_2;
-    stream_cmd_tx.stream_now = true;
-    txs->issue_stream_cmd(stream_cmd_tx);
-    else
+    // update for UHD multi USRP
+        uhd::stream_cmd_t stream_cmd_2(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+        stream_cmd_tx = stream_cmd_2;
+        stream_cmd_tx.stream_now = true;
+        txs->issue_stream_cmd(stream_cmd_tx);
+    }
+    else {
 //        dev->activateStream(c
 //            txs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC * 1e9, 0);
-    // update for UHD multi USRP
-    uhd::stream_cmd_t stream_cmd_1(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-    stream_cmd_tx = stream_cmd_2;
-    stream_cmd_tx.stream_now = true;
-    txs->issue_stream_cmd(stream_cmd_tx);
-}
-
-void Radio::deactivateRecv(void) {
-//    dev->deactivateStream(rxs);
-    uhd::stream_cmd_t stream_cmd_1(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
-    stream_cmd_rx = stream_cmd_1;
-    rxs->issue_stream_cmd(stream_cmd_rx);
-}
-
-void Radio::deactivateXmit(void) {
-//    dev->deactivateStream(txs);
-    uhd::stream_cmd_t stream_cmd_2(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
-    stream_cmd_tx = stream_cmd_2;
-    txs->issue_stream_cmd(stream_cmd_tx);
+        // update for UHD multi USRP
+        uhd::stream_cmd_t stream_cmd_2(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+        stream_cmd_tx = stream_cmd_2;
+        stream_cmd_tx.stream_now = true;
+        txs->issue_stream_cmd(stream_cmd_tx);
+    }
 }
 
 Radio::~Radio(void)
