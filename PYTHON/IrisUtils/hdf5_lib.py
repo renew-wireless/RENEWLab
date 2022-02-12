@@ -568,7 +568,8 @@ class hdf5_lib:
             samps = samps[::sub]
             usersamps = np.reshape(
                 samps, (samps.shape[0], samps.shape[1], num_users, samps.shape[3], samps_per_user, 2))
-            pilot_rep = (samps_per_user-bound)//(fft_size+cp)
+            ofdm_len = fft_size+cp
+            pilot_rep = (samps_per_user-bound)//ofdm_len
             #pilot_rep = min([(samps_per_user-bound)//(fft_size+cp), 2]) # consider min. 2 pilot reps
             iq = np.empty((samps.shape[0], samps.shape[1], num_users,
                            samps.shape[3], pilot_rep, fft_size), dtype='complex64')
@@ -576,8 +577,8 @@ class hdf5_lib:
                 print("chunkstart = {}, usersamps.shape = {}, samps.shape = {}, samps_per_user = {}, iq.shape = {}".format(
                     chunkstart, usersamps.shape, samps.shape, samps_per_user, iq.shape))
             for i in range(pilot_rep):
-                iq[:, :, :, :, i, :] = (usersamps[:, :, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size, 0] +
-                                        usersamps[:, :, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size, 1]*1j)*2**-15
+                iq[:, :, :, :, i, :] = (usersamps[:, :, :, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len, 0] +
+                                        usersamps[:, :, :, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len, 1]*1j)*2**-15
 
             iq = iq.swapaxes(3, 4)
             if debug:

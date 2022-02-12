@@ -33,7 +33,7 @@ from plot_lib import *
 #matplotlib.use("Agg")
 
 def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
-                user_i=0, ul_sf_i=0, dl_sf_i=0, subcarrier_i=10, offset=-1,
+                user_i=0, ul_slot_i=0, dl_slot_i=0, subcarrier_i=10, offset=-1,
                 dn_calib_offset=0, up_calib_offset=0, thresh=0.001,
                 deep_inspect=False, corr_thresh=0.00, exclude_bs_nodes=[],
                 demodulate=False):
@@ -90,6 +90,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     num_bs_ant = int(metadata['BS_ANT_NUM_PER_CELL'][cell_i])
     all_bs_nodes = set(range(num_bs_ant))
     plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
+    n_ue = num_cl
+    ofdm_len = fft_size + cp
 
     pilot_data_avail = len(hdf5.pilot_samples) > 0
     ul_data_avail = len(hdf5.uplink_samples) > 0
@@ -108,7 +110,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         dl_samps = (samps_mat[:, :, :, :, :, 0] +
                 samps_mat[:, :, :, :, :, 1]*1j)*2**-15
 
-        plot_iq_samps(dl_samps, n_frm_st, ref_frame, [cell_i], [dl_sf_i], [user_i], data_str="Downlink Data")
+        plot_iq_samps(dl_samps, n_frm_st, ref_frame, [cell_i], [dl_slot_i], [user_i], data_str="Downlink Data")
 
     if pilot_data_avail:
         pilot_samples = hdf5.pilot_samples[:, :, :, plot_bs_nodes, :]
@@ -250,7 +252,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         ul_samps = (samps_mat[:, :, :, :, :, 0] +
                 samps_mat[:, :, :, :, :, 1]*1j)*2**-15
 
-        plot_iq_samps(ul_samps, n_frm_st, ref_frame, [cell_i], [ul_sf_i], [ant_i], data_str="Uplink Data")
+        plot_iq_samps(ul_samps, n_frm_st, ref_frame, [cell_i], [ul_slot_i], [ant_i], data_str="Uplink Data")
 
         if demodulate:
             cl_ch_num = int(metadata['CL_CH_PER_RADIO'])
@@ -262,16 +264,16 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             nonzero_sc_ind = np.setdiff1d(range(fft_size), zero_sc_ind)
 
 
-            # UL Samps: #Frames, #Uplink SF, #Antennas, #Samples
+            # UL Samps: #Frames, #Uplink SLOTS, #Antennas, #Samples
             ul_samps = ul_samps[:, cell_i, :, :, :]
 
             n_frames = ul_samps.shape[0]
             ul_syms = np.empty((ul_samps.shape[0], ul_samps.shape[1],
                            ul_samps.shape[2], symbol_per_slot, fft_size), dtype='complex64')
-            # UL Syms: #Frames, #Uplink SF, #Antennas, #OFDM Symbols, #Samples
+            # UL Syms: #Frames, #Uplink SLOTS, #Antennas, #OFDM Symbols, #Samples
             for i in range(symbol_per_slot):
-                ul_syms[:, :, :, i, :] = ul_samps[:, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size]
-            # UL Syms: #Frames, #OFDM Symbols, #Uplink SF, #Antennas, #Samples
+                ul_syms[:, :, :, i, :] = ul_samps[:, :, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len]
+            # UL Syms: #Frames, #OFDM Symbols, #Uplink SLOTS, #Antennas, #Samples
             ul_syms = np.transpose(ul_syms, (0, 3, 1, 2, 4))
             # UL Syms: #Frames, # Frame All OFDM Symbols, #Antennas, #Samples
             num_ul_sym = ul_syms.shape[1] * ul_syms.shape[2]
@@ -287,20 +289,19 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             phase_corr = ul_demult_exp[:, :, :, pilot_sc_ind] * np.conj(pilot_sc_val)
             phase_err = np.angle(np.mean(phase_corr, 3))
             phase_comp = np.exp(-1j*phase_err)
+            phase_comp_exp = np.tile(np.expand_dims(phase_comp, axis= 3), (1, 1, 1, len(data_sc_ind)))
             ul_data = ul_demult_exp[:, :, :, data_sc_ind]
-            phase_comp_exp = np.empty(ul_data.shape, dtype='complex64')
-            for i in range(len(data_sc_ind)):
-                phase_comp_exp[:, :, :, i] = phase_comp
             ul_data = np.multiply(ul_data, phase_comp_exp)
             # UL DATA: #Frames, #User, # Frame OFDM Symbols, #DATA SCs
             ul_data = np.transpose(ul_data, (0, 2, 1, 3))
-            # UL DATA: #Frames, #User, # Frame DATA SCs
-            # ul_data = np.reshape(ul_data, (ul_data.shape[0], ul_data.shape[1], ul_data.shape[2] * ul_data.shape[3]))
+            # UL DATA: #Frames, #User, #Uplink SLOTS, SLOT DATA SCs
+            ul_data = np.reshape(ul_data, (ul_data.shape[0], ul_data.shape[1], ul_slot_num, symbol_per_slot * ul_data.shape[3]))
             evm = np.empty((ul_data.shape[0], ul_data.shape[1]), dtype='complex64')
+            evm_snr = np.empty((ul_data.shape[0], ul_data.shape[1]), dtype='complex64')
 
             ul_data_frame_num = int(metadata['UL_DATA_FRAME_NUM'])
             txdata = np.empty((ul_data_frame_num, num_cl_tmp, ul_slot_num,
-                         symbol_per_slot, fft_size), dtype='complex64')
+                         symbol_per_slot,  fft_size), dtype='complex64')
             tx_file_names = metadata['TX_FD_DATA_FILENAMES'].astype(str)
             read_size = 2 * ul_data_frame_num * ul_slot_num * cl_ch_num * symbol_per_slot * fft_size
             cl = 0
@@ -321,30 +322,11 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             if frac_fr > 0:
                 frac = txdata[frac_fr:, :, :, :, :]
                 txdata_ext = np.concatenate((txdata_ext, frac), axis=0)
-            txdata_ext = txdata_ext[:, :, :, :, data_sc_ind]
+            txdata_ext = np.reshape(txdata_ext[:, :, :, :, data_sc_ind], (txdata_ext.shape[0], txdata_ext.shape[1], ul_slot_num, symbol_per_slot * len(data_sc_ind)))
+            slot_evm = np.linalg.norm(ul_data[:, :, ul_slot_i, :] - txdata_ext[:, :, ul_slot_i, :], 2, axis=2) / ul_data.shape[3]
+            slot_evm_snr = 10 * np.log10(1 / slot_evm)
 
-            ul_sym_i = ul_sf_i * symbol_per_slot + ofdm_sym_i
-            fig5, axes5 = plt.subplots(nrows=num_cl_tmp//2, ncols=2, squeeze=False, figsize=(10, 8))
-            fig5.suptitle('Uplink User Constellations (ZF) - Frame %d - Cell %d - UL SF %d' % (ref_frame, cell_i, ul_sym_i))
-            fig6, axes6 = plt.subplots(nrows=1, ncols=1, squeeze=False, figsize=(10, 8))
-            fig6.suptitle('Uplink EVM - Cell %d - UL SF %d' % (cell_i, ul_sym_i))
-            axes6[0, 0].set_ylabel('EVM (%)')
-            axes6[0, 0].set_xlabel('Frame Number')
-            for i in range(num_cl_tmp//2):
-                axes5[i, 0].set_title('User %d'%(2 * i))
-                axes5[i, 0].scatter(np.real(ul_data[ref_frame, i * 2, ul_sym_i, :]), np.imag(ul_data[ref_frame, i * 2, ul_sym_i, :]))
-                axes5[i, 0].scatter(np.real(txdata_ext[ref_frame, i * 2, ul_sf_i, ofdm_sym_i, :]), np.imag(txdata_ext[ref_frame, i * 2, ul_sf_i, ofdm_sym_i, :]))
-
-                axes5[i, 1].set_title('User %d'%(2 * i + 1))
-                axes5[i, 1].scatter(np.real(ul_data[ref_frame, i * 2 + 1, ul_sym_i, :]), np.imag(ul_data[ref_frame, i * 2 + 1, ul_sym_i, :]))
-                axes5[i, 1].scatter(np.real(txdata_ext[ref_frame, i * 2 + 1, ul_sf_i, ofdm_sym_i, :]), np.imag(txdata_ext[ref_frame, i * 2 + 1, ul_sf_i, ofdm_sym_i, :]))
-
-                for f in range(ul_data.shape[0]):
-                    evm[f, 2 * i] = 100 * np.linalg.norm(ul_data[f, 2 * i, ul_sym_i, :] - txdata_ext[f, 2 * i, ul_sf_i, ofdm_sym_i, :], 2) / ul_data.shape[3]
-                    evm[f, 2 * i + 1] = 100 * np.linalg.norm(ul_data[f, 2 * i + 1, ul_sym_i, :] - txdata_ext[f, 2 * i + 1, ul_sf_i, ofdm_sym_i, :], 2) / ul_data.shape[3]
-                axes6[0, 0].plot(range(ul_data.shape[0]), evm[:, 2 * i], label='User %d'%(2 * i))
-                axes6[0, 0].plot(range(ul_data.shape[0]), evm[:, 2 * i + 1], label='User %d'%(2 * i + 1))
-            axes6[0, 0].legend(loc='upper right', frameon=False)
+            plot_constellation_stats(slot_evm, slot_evm_snr, ul_data, txdata_ext, ref_frame, cell_i, ul_slot_i)
 
 
     if deep_inspect:
