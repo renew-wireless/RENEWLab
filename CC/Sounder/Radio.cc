@@ -291,10 +291,12 @@ int Radio::xmit(
 
 int Radio::getTriggers(void) const
 {
-    return std::stoi(dev->readSetting("TRIGGER_COUNT"));
+//    return std::stoi(dev->readSetting("TRIGGER_COUNT"));
+    return 0; 
 }
 
 void Radio::reset_DATA_clk_domain(void)
 {
-    dev->writeSetting("RESET_DATA_LOGIC", "");
+//    dev->writeSetting("RESET_DATA_LOGIC", "");
+    return;
 }
