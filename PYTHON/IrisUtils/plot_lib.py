@@ -184,7 +184,7 @@ def show_plot(cmpx_pilots, lts_seq_orig, match_filt, ref_user, ref_ant, ref_fram
     ax3.stem(match_filt[frame_to_plot - frm_st_idx, 0, ref_user, ref_ant, :])
     ax3.set_xlabel('Samples')
 
-def plot_cfo(cfo, n_frm_st):
+def plot_cfo(cfo, n_frm_st, ant_i = -1):
     n_cell = cfo.shape[1]
     n_ue = cfo.shape[2]
     n_ant = cfo.shape[3]
@@ -195,7 +195,8 @@ def plot_cfo(cfo, n_frm_st):
             cfo_u = cfo[:,n_c,n_u,:]
             x_pl = np.arange(cfo_u.shape[0]) + n_frm_st
             for j in range(n_ant):
-                axes[n_u, n_c].plot(x_pl,cfo_u[:,j].flatten(), label = 'Antenna: {}'.format(j) )
+                if ant_i == -1 or j == ant_i:
+                    axes[n_u, n_c].plot(x_pl,cfo_u[:,j].flatten(), label = 'Antenna: {}'.format(j) )
             axes[n_u, n_c].legend(loc='lower right', ncol=2, frameon=False)
             axes[n_u, n_c].set_xlabel('Frame no.')
             axes[n_u, n_c].set_ylabel('CFO (Hz)')

@@ -419,7 +419,7 @@ class hdf5_lib:
 
         return self.metadata
 
-    def filter_pilots(cmpx_pilots, z_padding=150, fft_size=64, cp=16, pilot_type='lts',seq_length=[]):
+    def filter_pilots(cmpx_pilots, z_padding=150, fft_size=64, cp=16, pilot_type='lts', seq_length=[]):
         """
         """
         # dimensions of cmpx_pilots

@@ -181,7 +181,7 @@ void RecorderWorker::init(void) {
   this->hdf5_->write_attribute("CL_NUM", this->cfg_->num_cl_antennas());
 
   // Data modulation
-  this->hdf5_->write_attribute("CL_MODULATION", this->cfg_->data_mod());
+  this->hdf5_->write_attribute("CL_MODULATION", this->cfg_->cl_data_mod());
 
   if (this->cfg_->internal_measurement() == false ||
       this->cfg_->num_cl_antennas() > 0) {

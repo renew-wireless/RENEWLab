@@ -370,7 +370,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                         #print(lts_pks)
                         if lts_pks.size < 2:
                             cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
-                        elif lts_pks[0] < fft_size or lts_pks[1] < fft_size:
+                        elif lts_pks[0] < ofdm_len or lts_pks[1] < ofdm_len:
                             cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
                         else:
                             num_pks = lts_pks.size
@@ -378,9 +378,9 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                             n_cfo_samps = 0
                             for i in range(num_pks - 1):
                                 if lts_pks[i] < samps_per_slot or lts_pks[i + 1] < samps_per_slot:
-                                    sc_first = lts_pks[i] - fft_size
-                                    sc_second = lts_pks[i + 1] - fft_size
-                                    cfo_sample = cfo_sample + np.angle(np.dot(IQ[sc_first:sc_first+fft_size], np.conj(IQ[sc_second:sc_second+fft_size]))) / (ofdm_len*2*np.pi*(1/rate))
+                                    sc_first = lts_pks[i] - ofdm_len
+                                    sc_second = lts_pks[i + 1] - ofdm_len
+                                    cfo_sample = cfo_sample + np.mean(np.unwrap(np.angle(np.multiply(IQ[sc_second:sc_second+ofdm_len], np.conj(IQ[sc_first:sc_first+ofdm_len]))))) / (ofdm_len*2*np.pi*(1/rate))
                                     n_cfo_samps = n_cfo_samps + 1
                             if n_cfo_samps > 0:
                                 cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = cfo_sample / n_cfo_samps
