@@ -143,8 +143,8 @@ void RecorderThread::HandleEvent(Event_data event) {
       char* cur_ptr_buffer = event.buffer[buffer_id].buffer.data() +
                              (buffer_offset * packet_length);
 
-      this->worker_.record(this->id_,
-                           reinterpret_cast<Packet*>(cur_ptr_buffer));
+      this->worker_.record(this->id_, reinterpret_cast<Packet*>(cur_ptr_buffer),
+                           event.node_type);
       /* Free up the buffer memory */
       int bit = 1 << (buffer_offset % sizeof(std::atomic_int));
       int offs = (buffer_offset / sizeof(std::atomic_int));

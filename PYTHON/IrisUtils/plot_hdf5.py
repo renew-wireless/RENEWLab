@@ -12,9 +12,10 @@
 
 
 ---------------------------------------------------------------------
- Copyright © 2018-2020. Rice University.
+ Copyright © 2018-2022. Rice University.
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
 ---------------------------------------------------------------------
+
 """
 
 import sys
@@ -29,10 +30,11 @@ from channel_analysis import *
 import hdf5_lib
 from hdf5_lib import *
 import matplotlib
+from plot_lib import *
 #matplotlib.use("Agg")
 
 def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
-                user_i=0, ul_sf_i=0, subcarrier_i=10, offset=-1,
+                user_i=0, ul_slot_i=0, dl_slot_i=0, subcarrier_i=10, offset=-1,
                 dn_calib_offset=0, up_calib_offset=0, thresh=0.001,
                 deep_inspect=False, corr_thresh=0.00, exclude_bs_nodes=[],
                 demodulate=False):
@@ -86,56 +88,56 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         ul_slot_num = int(metadata['UL_SYMS'])
     elif 'UL_SLOTS' in metadata:
         ul_slot_num = int(metadata['UL_SLOTS'])
+    num_bs_ant = int(metadata['BS_ANT_NUM_PER_CELL'][cell_i])
+    all_bs_nodes = set(range(num_bs_ant))
+    plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
     n_ue = num_cl
+    ofdm_len = fft_size + cp
 
-    all_bs_nodes = []
-    plot_bs_nodes = []
-    num_frames = 0
     pilot_data_avail = len(hdf5.pilot_samples) > 0
+    ul_data_avail = len(hdf5.uplink_samples) > 0
+    noise_avail = len(hdf5.noise_samples) > 0
+    dl_data_avail = len(hdf5.downlink_samples) > 0
+
+    # Plot DL data symbols
+    if dl_data_avail > 0:
+        # DL Samps: #Frames, #Cell, #Uplink Symbol, #Antennas, #Samples
+        downlink_samples = hdf5.downlink_samples
+        frm_plt = min(frame_i, downlink_samples.shape[0] + n_frm_st)
+        # Verify frame_i does not exceed max number of collected frames
+        ref_frame = min(frame_i - n_frm_st, downlink_samples.shape[0])
+        samps_mat = np.reshape(
+                downlink_samples, (downlink_samples.shape[0], downlink_samples.shape[1], downlink_samples.shape[2], downlink_samples.shape[3], samps_per_slot, 2))
+        dl_samps = (samps_mat[:, :, :, :, :, 0] +
+                samps_mat[:, :, :, :, :, 1]*1j)*2**-15
+
+        plot_iq_samps(dl_samps, n_frm_st, ref_frame, [cell_i], [dl_slot_i], [user_i], data_str="Downlink Data")
+
     if pilot_data_avail:
-        all_bs_nodes = set(range(hdf5.pilot_samples.shape[3]))
-        plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
         pilot_samples = hdf5.pilot_samples[:, :, :, plot_bs_nodes, :]
 
         frm_plt = min(frame_i, pilot_samples.shape[0] + n_frm_st)
         # Verify frame_i does not exceed max number of collected frames
         ref_frame = min(frame_i - n_frm_st, pilot_samples.shape[0])
 
-    ul_data_avail = len(hdf5.uplink_samples) > 0
-    if ul_data_avail:
-        uplink_samples = hdf5.uplink_samples[:, :, :, plot_bs_nodes, :]
-    noise_avail = len(hdf5.noise_samples) > 0
-    if noise_avail:
-        noise_samples = hdf5.noise_samples[:, :, :, plot_bs_nodes, :]
-    dl_data_avail = len(hdf5.downlink_samples) > 0
-    if dl_data_avail:
-        downlink_samples = hdf5.downlink_samples
-        if not pilot_data_avail:
-            frm_plt = min(frame_i, downlink_samples.shape[0] + n_frm_st)
-            # Verify frame_i does not exceed max number of collected frames
-            ref_frame = min(frame_i - n_frm_st, downlink_samples.shape[0])
-
-
-    if pilot_data_avail:
-
         print("samps_per_slot = {}, offset = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}, pilot_rep = {}".format(samps_per_slot, offset, cp, prefix_len, postfix_len, z_padding, symbol_per_slot))
 
         # pilot_samples dimensions:
         # ( #frames, #cells, #pilot subframes or cl ant sending pilots, #bs nodes or # bs ant, #samps per frame * 2 for IQ )
-        num_cl_tmp = num_pilots  # number of UEs to plot data for
         num_frames = pilot_samples.shape[0]
         num_cells = pilot_samples.shape[1]
-        num_bs_ants = pilot_samples.shape[3]
+        num_cl_tmp = pilot_samples.shape[2]
+        num_ants = pilot_samples.shape[3]
 
         samps_mat = np.reshape(
-                pilot_samples, (num_frames, num_cells, num_cl_tmp, num_bs_ants, samps_per_slot, 2))
+                pilot_samples, (num_frames, num_cells, num_cl_tmp, num_ants, samps_per_slot, 2))
         samps = (samps_mat[:, :, :, :, :, 0] +
                 samps_mat[:, :, :, :, :, 1]*1j)*2**-15
 
         # Correlation (Debug plot useful for checking sync)
         good_ants = []
         insp_ants = [] # antennas to be inspected
-        if ant_i > num_bs_ants - 1:
+        if ant_i > num_bs_ant - 1:
             insp_ants = range(samps.shape[3])
         else:
             insp_ants = [ant_i]
@@ -150,159 +152,108 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             print("no valid frames found in data belonging to user %d. Exitting ..." % user_i)
             return 
 
-        # Compute CSI from IQ samples
-        # Samps: #Frames, #Cell, #Users, #Antennas, #Samples
-        # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
-        # For correlation use a fft size of 64
-        print("*verify_hdf5(): Calling samps2csi with fft_size = {}, offset = {}, bound = {}, cp = {} *".format(fft_size, offset, z_padding, cp))
-        csi, _ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, samps_per_slot, fft_size=fft_size,
-                                        offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
-
-        cellCSI = csi[:, cell_i, :, :, :, :]
-        if corr_thresh > 0.0: 
-            bad_nodes = find_bad_nodes(cellCSI, corr_thresh=corr_thresh,
-                                       user=user_i)
-            if bad_nodes:
-                print(">>> Warning! List of bad nodes (1-based): {bad_nodes}".
-                      format(bad_nodes=bad_nodes))
-            else:
-                print(">>> All Iris nodes are good!")
-
-        if ofdm_sym_i >= symbol_per_slot:  # if out of range index, do average
-            userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
-        else:
-            userCSI = cellCSI[:, :, ofdm_sym_i, :, :]
-        corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2) ) )
-
         # Plotter
         # Plot pilots
-        for i in insp_ants:
-            fig1, axes1 = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
-            axes1[0, 0].set_title('Pilots IQ - Cell %d - Antenna %d - User %d'%(cell_i, i, user_i))
-            # Samps Dimensions: (Frame, Cell, User, Pilot Rep, Antenna, Sample)
-            axes1[0, 0].set_ylabel('Frame %d (IQ)' %( (ref_frame + n_frm_st)) )
-            axes1[0, 0].plot(np.real(samps[ref_frame, cell_i, user_i, i, :]))
-            axes1[0, 0].plot(np.imag(samps[ref_frame, cell_i, user_i, i, :]))
+        if not reciprocal_calib:
+            # Compute CSI from IQ samples
+            # Samps: #Frames, #Cell, #Users, #Antennas, #Samples
+            # CSI:   #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
+            # For correlation use a fft size of 64
+            print("*verify_hdf5(): Calling samps2csi with fft_size = {}, offset = {}, bound = {}, cp = {} *".format(fft_size, offset, z_padding, cp))
+            csi, _ = hdf5_lib.samps2csi(pilot_samples, num_pilots, samps_per_slot, fft_size=fft_size,
+                                            offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
 
-            axes1[1, 0].set_ylabel('All Frames (I)')
-            axes1[1, 0].plot(np.real(samps[:, cell_i, user_i, i, :]).flatten())
-            axes1[1, 0].plot(np.imag(samps[:, cell_i, user_i, i, :]).flatten())
+            cellCSI = csi[:, cell_i, :, :, :, :]
+            if corr_thresh > 0.0: 
+                bad_nodes = find_bad_nodes(cellCSI, corr_thresh=corr_thresh,
+                                           user=user_i)
+                if bad_nodes:
+                    print(">>> Warning! List of bad nodes (1-based): {bad_nodes}".
+                          format(bad_nodes=bad_nodes))
+                else:
+                    print(">>> All Iris nodes are good!")
 
-        fig2, axes2 = plt.subplots(nrows=3, ncols=1, squeeze=False, figsize=(10, 8))
-        axes2[0, 0].set_title('Pilot CSI Stats Across Frames- Cell %d - User %d - Subcarrier %d' % (cell_i, user_i, subcarrier_i))
-        axes2[0, 0].set_ylabel('Magnitude')
-        for i in range(csi.shape[4]):
-            axes2[0, 0].plot(np.abs(userCSI[:, user_i, i, subcarrier_i]).flatten(), label="ant %d" % plot_bs_nodes[i])
-        axes2[0, 0].legend(loc='lower right', frameon=False)
-        axes2[0, 0].set_xlabel('Frame')
+            if ofdm_sym_i >= symbol_per_slot:  # if out of range index, do average
+                userCSI = np.mean(cellCSI[:, :, :, :, :], 2)
+            else:
+                userCSI = cellCSI[:, :, ofdm_sym_i, :, :]
+            corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2) ) )
 
-        axes2[1, 0].set_ylabel('Phase')
-        for i in range(csi.shape[4]):
-            axes2[1, 0].plot(np.angle(userCSI[:, user_i, i, subcarrier_i]).flatten(), label="ant %d" % plot_bs_nodes[i])
-        axes2[1, 0].legend(loc='lower right', frameon=False)
-        axes2[1, 0].set_ylim(-np.pi, np.pi)
-        axes2[1, 0].set_xlabel('Frame')
+            for i in insp_ants:
+                plot_iq_samps(samps, n_frm_st, ref_frame, [cell_i], [user_i], [ant_i])
+            plot_csi(userCSI, corr_total, plot_bs_nodes, pilot_frames, ref_frame, cell_i, user_i, subcarrier_i, offset)
+        else:
+            calib_plot_bs_nodes = list(set(plot_bs_nodes) - set([num_bs_ant - 1]))
+            if plot_bs_nodes[-1] == num_bs_ant - 1:
+                calib_plot_bs_nodes = plot_bs_nodes[:-1]
+                calib_pilot_samples = pilot_samples[:, :, :, :-1, :]
+            else:
+                calib_plot_bs_nodes = plot_bs_nodes
+                calib_pilot_samples = pilot_samples
+            print(calib_plot_bs_nodes)
+            for i in insp_ants:
+                plot_iq_samps(samps, n_frm_st, ref_frame, [cell_i], [0, 1, 2 + user_i], [ant_i])
 
-        axes2[2, 0].set_ylabel('Correlation with Frame %d' % ref_frame)
-        axes2[2, 0].set_ylim([0, 1.1])
-        axes2[2, 0].set_title('Cell %d offset %d' % (0, offset))
-        for u in range(num_cl_tmp):
-            axes2[2, 0].plot(corr_total[pilot_frames, u], label="user %d"%u)
-        axes2[2, 0].legend(loc='lower right', frameon=False)
-        axes2[2, 0].set_xlabel('Frame')
-
-    if reciprocal_calib:
-        # frame, downlink(0)-uplink(1), antennas, subcarrier
-        csi_u = csi
-        csi_d = csi
-        if up_calib_offset != offset:
-            csi_u,_ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, samps_per_slot, fft_size=fft_size,
+            # frame, downlink(0)-uplink(1), antennas, subcarrier
+            csi_u,_ = hdf5_lib.samps2csi(calib_pilot_samples[:, :, 1:2, :, :], 1, samps_per_slot, fft_size=fft_size,
                                           offset=up_calib_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
-        if dn_calib_offset != offset:
-            csi_d,_ = hdf5_lib.samps2csi(pilot_samples, num_cl_tmp, samps_per_slot, fft_size=fft_size,
+            csi_d,_ = hdf5_lib.samps2csi(calib_pilot_samples[:, :, 0:1, :, :], 1, samps_per_slot, fft_size=fft_size,
                                           offset=dn_calib_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
-        calib_corrected_csi = np.zeros(csi_d.shape, dtype='complex64')
-        calib_corrected_csi[:, :, 0, :, :, :] = csi_d[:, :, 0, :, :, :]
-        calib_corrected_csi[:, :, 1, :, :, :] = csi_u[:, :, 1, :, :, :]
-        calib_corrected_csi_cell0 = calib_corrected_csi[:, 0, :, :, :, :]
-        # TODO: add option for averaging across repeated pilots vs individual pilots
-        #calibCSI = np.mean(calib_corrected_csi_cell0, 2) # average several csi copies
-        calibCSI = calib_corrected_csi_cell0[:, :, 0, :, :] # take first csi
-        calib_mat = np.divide(calibCSI[:, 0, :, :], calibCSI[:, 1, :, :])
-        if (ant_i > num_bs_ants - 1):
-            ant_i = num_bs_ants - 1
-        fig3, axes3 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
-        axes3[0, 0].set_title('Reciprocity Calibration Factor Across Frames - Cell 0 - Subcarrier %d' % subcarrier_i)
+            calib_mat = np.divide(csi_d[:, cell_i, 0, ofdm_sym_i, :, :], csi_u[:, cell_i, 0, ofdm_sym_i, :, :])
+            try:
+                ant_id = calib_plot_bs_nodes.index(ant_i)
+            except:
+                ant_id = calib_plot_bs_nodes[0]
+            plot_calib(calib_mat, range(len(calib_plot_bs_nodes)), ref_frame, ant_id, subcarrier_i)
+            if num_cl > 0:
+                csi, _ = hdf5_lib.samps2csi(calib_pilot_samples[:, :, 2:, :, :], num_cl, samps_per_slot, fft_size=fft_size,
+                                                offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
+                uplink_csi = csi[:, cell_i, :, ofdm_sym_i, :, :]
+                corr_total, sig_sc = calCorr(uplink_csi, np.transpose(np.conj(uplink_csi[ref_frame, :, :, :]), (1, 0, 2) ) )
+                plot_csi(uplink_csi, corr_total, calib_plot_bs_nodes, pilot_frames, ref_frame, cell_i, user_i, subcarrier_i, offset)
+                # imp: Frames, #Antennas, #Users, Subcarrier
+                implicit_dl_csi = np.empty((uplink_csi.shape[0], uplink_csi.shape[2], uplink_csi.shape[1], uplink_csi.shape[3]), dtype='complex64')
+                for i in range(uplink_csi.shape[0]):
+                    for j in range(uplink_csi.shape[3]):
+                        implicit_dl_csi[i, :, :, j] = np.transpose(uplink_csi[i, :, :, j] * calib_mat[i, :, j])
+                # downlink_samples: #Frames, #Cell, #Bs Antenna, #Users, #Samples
+                # CSI:              #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
+                dl_offset = 288 # make a param
+                dl_csi, _ = hdf5_lib.samps2csi(downlink_samples[:, :, calib_plot_bs_nodes, :, :], len(calib_plot_bs_nodes), samps_per_slot, fft_size=fft_size,
+                                                offset=dl_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
+                # exp: Frames, #Antennas, #Users, Subcarrier
+                explicit_dl_csi = np.transpose(dl_csi[:, cell_i, :, ofdm_sym_i, :, :], (0, 2, 1, 3))
+                corr_dl, _ = calCorr(explicit_dl_csi, np.transpose(np.conj(explicit_dl_csi[ref_frame, :, :, :]), (1, 0, 2) ) )
+                plot_csi(explicit_dl_csi, corr_dl, range(len(calib_plot_bs_nodes)), range(explicit_dl_csi.shape[0]), ref_frame, cell_i, user_i, subcarrier_i, dl_offset, "Downlink")
 
-        axes3[0, 0].set_ylabel('Magtinute (ant %d)' % (ant_i))
-        axes3[0, 0].plot(np.abs(calib_mat[:, ant_i, subcarrier_i]).flatten(), label='')
-        axes3[0, 0].set_xlabel('Frame')
-        axes3[0, 0].legend(frameon=False)
+                dl_csi_err_mag = np.abs(explicit_dl_csi - implicit_dl_csi)
+                dl_csi_err_phs = np.angle(explicit_dl_csi - implicit_dl_csi)
+                fig3, axes3 = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
+                axes3[0, 0].set_title('Implicit vs Explicit DL CSI - Cell 0 - Subcarrier %d' % subcarrier_i)
 
-        axes3[1, 0].set_ylabel('Phase (ant %d)' % (ant_i))
-        axes3[1, 0].plot(np.angle(calib_mat[:, ant_i, subcarrier_i]).flatten())
-        axes3[1, 0].set_ylim(-np.pi, np.pi)
-        axes3[1, 0].set_xlabel('Frame')
-        axes3[1, 0].legend(frameon=False)
-        axes3[1, 0].grid()
+                axes3[0, 0].set_ylabel('magtinute (ant %d)' % (ant_i))
+                axes3[0, 0].plot(dl_csi_err_mag[:, ant_id, user_i, subcarrier_i].flatten(), label='')
+                axes3[0, 0].set_xlabel('frame')
+                axes3[0, 0].legend(frameon=False)
 
-        axes3[2, 0].set_ylabel('Magnitude')
-        for i in range(calib_mat.shape[1]):
-            axes3[2, 0].plot(np.abs(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d" % plot_bs_nodes[i])
-        axes3[2, 0].set_xlabel('Frame')
-        axes3[2, 0].legend(loc='lower right', frameon=False)
+                axes3[1, 0].set_ylabel('Phase (ant %d)' % (ant_i))
+                axes3[1, 0].plot(dl_csi_err_phs[:, ant_id, user_i, subcarrier_i].flatten(), label='')
+                axes3[1, 0].set_xlabel('frame')
+                axes3[1, 0].set_ylim(-np.pi, np.pi)
+                axes3[1, 0].legend(frameon=False)
 
-        axes3[3, 0].set_ylabel('Phase')
-        for i in range(calib_mat.shape[1]):
-            axes3[3, 0].plot(np.angle(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d" % plot_bs_nodes[i])
-        axes3[3, 0].set_xlabel('Frame')
-        axes3[3, 0].set_ylim(-np.pi, np.pi)
-        axes3[3, 0].legend(loc='lower right', frameon=False)
-        axes3[3, 0].grid()
-
-        fig4, axes4 = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
-        axes4[0, 0].set_title('Reciprocity Calibration Factor Across Subcarriers - Cell 0 - Frame %d' % ref_frame)
-        axes4[0, 0].set_ylabel('Magnitude ant %d' % (ant_i))
-        axes4[0, 0].plot(np.abs(calib_mat[ref_frame, ant_i, :]).flatten())
-        axes4[0, 0].set_xlabel('Subcarrier')
-
-        axes4[1, 0].set_ylabel('Phase ant %d' % (ant_i))
-        axes4[1, 0].plot(np.angle(calib_mat[ref_frame, ant_i, :]).flatten())
-        axes4[1, 0].set_ylim(-np.pi, np.pi)
-        axes4[1, 0].set_xlabel('Subcarrier')
-
-        axes4[2, 0].set_ylabel('Magnitude')
-        for i in range(calib_mat.shape[1]):
-            axes4[2, 0].plot(np.abs(calib_mat[ref_frame, i, :]).flatten(), label="ant %d" % plot_bs_nodes[i])
-        axes4[2, 0].set_xlabel('Subcarrier')
-        axes4[2, 0].legend(loc='lower right', frameon=False)
-
-        axes4[3, 0].set_ylabel('Phase')
-        for i in range(calib_mat.shape[1]):
-            axes4[3, 0].plot(np.angle(calib_mat[ref_frame, i, :]).flatten(), label="ant %d" % plot_bs_nodes[i])
-        axes4[3, 0].set_xlabel('Subcarrier')
-        axes4[3, 0].set_ylim(-np.pi, np.pi)
-        axes4[3, 0].legend(loc='lower right', frameon=False)
 
     # Plot UL data symbols
     if ul_data_avail > 0:
-        fig4, axes4 = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
-
         # UL Samps: #Frames, #Cell, #Uplink Symbol, #Antennas, #Samples
+        uplink_samples = hdf5.uplink_samples[:, :, :, plot_bs_nodes, :]
+        ref_frame = min(frame_i - n_frm_st, uplink_samples.shape[0])
         samps_mat = np.reshape(
                 uplink_samples, (uplink_samples.shape[0], uplink_samples.shape[1], uplink_samples.shape[2], uplink_samples.shape[3], samps_per_slot, 2))
         ul_samps = (samps_mat[:, :, :, :, :, 0] +
                 samps_mat[:, :, :, :, :, 1]*1j)*2**-15
 
-
-        axes4[0, 0].set_title('Uplink Data IQ - Cell %d - Antenna %d - Symbol %d' % (cell_i, ant_i, ul_sf_i))
-        axes4[0, 0].set_ylabel('Frame %d (IQ)' % ref_frame)
-        axes4[0, 0].plot(np.real(ul_samps[ref_frame, cell_i, ul_sf_i, ant_i, :]))
-        axes4[0, 0].plot(np.imag(ul_samps[ref_frame, cell_i, ul_sf_i, ant_i, :]))
-
-        axes4[1, 0].set_ylabel('All Frames (IQ)')
-        axes4[1, 0].plot(np.real(ul_samps[:, cell_i, ul_sf_i, ant_i, :]).flatten())
-        axes4[1, 0].plot(np.imag(ul_samps[:, cell_i, ul_sf_i, ant_i, :]).flatten())
+        plot_iq_samps(ul_samps, n_frm_st, ref_frame, [cell_i], [ul_slot_i], [ant_i], data_str="Uplink Data")
 
         if demodulate:
             cl_ch_num = int(metadata['CL_CH_PER_RADIO'])
@@ -314,16 +265,16 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             nonzero_sc_ind = np.setdiff1d(range(fft_size), zero_sc_ind)
 
 
-            # UL Samps: #Frames, #Uplink SF, #Antennas, #Samples
+            # UL Samps: #Frames, #Uplink SLOTS, #Antennas, #Samples
             ul_samps = ul_samps[:, cell_i, :, :, :]
 
             n_frames = ul_samps.shape[0]
             ul_syms = np.empty((ul_samps.shape[0], ul_samps.shape[1],
                            ul_samps.shape[2], symbol_per_slot, fft_size), dtype='complex64')
-            # UL Syms: #Frames, #Uplink SF, #Antennas, #OFDM Symbols, #Samples
+            # UL Syms: #Frames, #Uplink SLOTS, #Antennas, #OFDM Symbols, #Samples
             for i in range(symbol_per_slot):
-                ul_syms[:, :, :, i, :] = ul_samps[:, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size]
-            # UL Syms: #Frames, #OFDM Symbols, #Uplink SF, #Antennas, #Samples
+                ul_syms[:, :, :, i, :] = ul_samps[:, :, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len]
+            # UL Syms: #Frames, #OFDM Symbols, #Uplink SLOTS, #Antennas, #Samples
             ul_syms = np.transpose(ul_syms, (0, 3, 1, 2, 4))
             # UL Syms: #Frames, # Frame All OFDM Symbols, #Antennas, #Samples
             num_ul_sym = ul_syms.shape[1] * ul_syms.shape[2]
@@ -339,20 +290,19 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             phase_corr = ul_demult_exp[:, :, :, pilot_sc_ind] * np.conj(pilot_sc_val)
             phase_err = np.angle(np.mean(phase_corr, 3))
             phase_comp = np.exp(-1j*phase_err)
+            phase_comp_exp = np.tile(np.expand_dims(phase_comp, axis= 3), (1, 1, 1, len(data_sc_ind)))
             ul_data = ul_demult_exp[:, :, :, data_sc_ind]
-            phase_comp_exp = np.empty(ul_data.shape, dtype='complex64')
-            for i in range(len(data_sc_ind)):
-                phase_comp_exp[:, :, :, i] = phase_comp
             ul_data = np.multiply(ul_data, phase_comp_exp)
             # UL DATA: #Frames, #User, # Frame OFDM Symbols, #DATA SCs
             ul_data = np.transpose(ul_data, (0, 2, 1, 3))
-            # UL DATA: #Frames, #User, # Frame DATA SCs
-            # ul_data = np.reshape(ul_data, (ul_data.shape[0], ul_data.shape[1], ul_data.shape[2] * ul_data.shape[3]))
+            # UL DATA: #Frames, #User, #Uplink SLOTS, SLOT DATA SCs
+            ul_data = np.reshape(ul_data, (ul_data.shape[0], ul_data.shape[1], ul_slot_num, symbol_per_slot * ul_data.shape[3]))
             evm = np.empty((ul_data.shape[0], ul_data.shape[1]), dtype='complex64')
+            evm_snr = np.empty((ul_data.shape[0], ul_data.shape[1]), dtype='complex64')
 
             ul_data_frame_num = int(metadata['UL_DATA_FRAME_NUM'])
             txdata = np.empty((ul_data_frame_num, num_cl_tmp, ul_slot_num,
-                         symbol_per_slot, fft_size), dtype='complex64')
+                         symbol_per_slot,  fft_size), dtype='complex64')
             tx_file_names = metadata['TX_FD_DATA_FILENAMES'].astype(str)
             read_size = 2 * ul_data_frame_num * ul_slot_num * cl_ch_num * symbol_per_slot * fft_size
             cl = 0
@@ -373,52 +323,12 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             if frac_fr > 0:
                 frac = txdata[frac_fr:, :, :, :, :]
                 txdata_ext = np.concatenate((txdata_ext, frac), axis=0)
-            txdata_ext = txdata_ext[:, :, :, :, data_sc_ind]
+            txdata_ext = np.reshape(txdata_ext[:, :, :, :, data_sc_ind], (txdata_ext.shape[0], txdata_ext.shape[1], ul_slot_num, symbol_per_slot * len(data_sc_ind)))
+            slot_evm = np.linalg.norm(ul_data[:, :, ul_slot_i, :] - txdata_ext[:, :, ul_slot_i, :], 2, axis=2) / ul_data.shape[3]
+            slot_evm_snr = 10 * np.log10(1 / slot_evm)
 
-            ul_sym_i = ul_sf_i * symbol_per_slot + ofdm_sym_i
-            fig5, axes5 = plt.subplots(nrows=num_cl_tmp//2, ncols=2, squeeze=False, figsize=(10, 8))
-            fig5.suptitle('Uplink User Constellations (ZF) - Frame %d - Cell %d - UL SF %d' % (ref_frame, cell_i, ul_sym_i))
-            fig6, axes6 = plt.subplots(nrows=1, ncols=1, squeeze=False, figsize=(10, 8))
-            fig6.suptitle('Uplink EVM - Cell %d - UL SF %d' % (cell_i, ul_sym_i))
-            axes6[0, 0].set_ylabel('EVM (%)')
-            axes6[0, 0].set_xlabel('Frame Number')
-            for i in range(num_cl_tmp//2):
-                axes5[i, 0].set_title('User %d'%(2 * i))
-                axes5[i, 0].scatter(np.real(ul_data[ref_frame, i * 2, ul_sym_i, :]), np.imag(ul_data[ref_frame, i * 2, ul_sym_i, :]))
-                axes5[i, 0].scatter(np.real(txdata_ext[ref_frame, i * 2, ul_sf_i, ofdm_sym_i, :]), np.imag(txdata_ext[ref_frame, i * 2, ul_sf_i, ofdm_sym_i, :]))
+            plot_constellation_stats(slot_evm, slot_evm_snr, ul_data, txdata_ext, ref_frame, cell_i, ul_slot_i)
 
-                axes5[i, 1].set_title('User %d'%(2 * i + 1))
-                axes5[i, 1].scatter(np.real(ul_data[ref_frame, i * 2 + 1, ul_sym_i, :]), np.imag(ul_data[ref_frame, i * 2 + 1, ul_sym_i, :]))
-                axes5[i, 1].scatter(np.real(txdata_ext[ref_frame, i * 2 + 1, ul_sf_i, ofdm_sym_i, :]), np.imag(txdata_ext[ref_frame, i * 2 + 1, ul_sf_i, ofdm_sym_i, :]))
-
-                for f in range(ul_data.shape[0]):
-                    evm[f, 2 * i] = 100 * np.linalg.norm(ul_data[f, 2 * i, ul_sym_i, :] - txdata_ext[f, 2 * i, ul_sf_i, ofdm_sym_i, :], 2) / ul_data.shape[3]
-                    evm[f, 2 * i + 1] = 100 * np.linalg.norm(ul_data[f, 2 * i + 1, ul_sym_i, :] - txdata_ext[f, 2 * i + 1, ul_sf_i, ofdm_sym_i, :], 2) / ul_data.shape[3]
-                axes6[0, 0].plot(range(ul_data.shape[0]), evm[:, 2 * i], label='User %d'%(2 * i))
-                axes6[0, 0].plot(range(ul_data.shape[0]), evm[:, 2 * i + 1], label='User %d'%(2 * i + 1))
-            axes6[0, 0].legend(loc='upper right', frameon=False)
-
-
-    # Plot DL data symbols
-    if dl_data_avail > 0:
-        fig4, axes4 = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
-        dl_sf_i = 0
-
-        # DL Samps: #Frames, #Cell, #Uplink Symbol, #Antennas, #Samples
-        samps_mat = np.reshape(
-                downlink_samples, (downlink_samples.shape[0], downlink_samples.shape[1], downlink_samples.shape[2], downlink_samples.shape[3], samps_per_slot, 2))
-        dl_samps = (samps_mat[:, :, :, :, :, 0] +
-                samps_mat[:, :, :, :, :, 1]*1j)*2**-15
-
-
-        axes4[0, 0].set_title('Downlink Data IQ - Cell %d - Antenna %d - Symbol %d' % (cell_i, ant_i, dl_sf_i))
-        axes4[0, 0].set_ylabel('Frame %d (IQ)' % ref_frame)
-        axes4[0, 0].plot(np.real(dl_samps[ref_frame, cell_i, dl_sf_i, ant_i, :]))
-        axes4[0, 0].plot(np.imag(dl_samps[ref_frame, cell_i, dl_sf_i, ant_i, :]))
-
-        axes4[1, 0].set_ylabel('All Frames (IQ)')
-        axes4[1, 0].plot(np.real(dl_samps[:, cell_i, dl_sf_i, ant_i, :]).flatten())
-        axes4[1, 0].plot(np.imag(dl_samps[:, cell_i, dl_sf_i, ant_i, :]).flatten())
 
     if deep_inspect:
         filter_pilots_start = time.time()
@@ -438,10 +348,13 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         n_ue = pilot_samples.shape[2]
         n_ant = pilot_samples.shape[3]
         seq_found = np.zeros((n_frame, n_cell, n_ue, n_ant))
+        cfo = np.zeros((n_frame, n_cell, n_ue, n_ant))
 
         td_pwr_dbm_noise = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
         td_pwr_dbm_signal = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
-        snr = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
+        if noise_avail:
+            noise_samples = hdf5.noise_samples[:, :, :, plot_bs_nodes, :]
+            snr = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
 
         for frameIdx in range(n_frame):    # Frame
             for cellIdx in range(n_cell):  # Cell
@@ -453,6 +366,27 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                         IQ = I + (Q * 1j)
                         tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk = pilot_finder(IQ, pilot_type, flip=True,
                                                                                           pilot_seq=ofdm_pilot)
+                        #print("frame %d ue %d ant %d lts_pks_len %d"%(frameIdx, ueIdx, bsAntIdx, lts_pks.size))
+                        #print(lts_pks)
+                        if lts_pks.size < 2:
+                            cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
+                        elif lts_pks[0] < ofdm_len or lts_pks[1] < ofdm_len:
+                            cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
+                        else:
+                            num_pks = lts_pks.size
+                            cfo_sample = 0
+                            n_cfo_samps = 0
+                            for i in range(num_pks - 1):
+                                if lts_pks[i] < samps_per_slot or lts_pks[i + 1] < samps_per_slot:
+                                    sc_first = lts_pks[i] - ofdm_len
+                                    sc_second = lts_pks[i + 1] - ofdm_len
+                                    cfo_sample = cfo_sample + np.mean(np.unwrap(np.angle(np.multiply(IQ[sc_second:sc_second+ofdm_len], np.conj(IQ[sc_first:sc_first+ofdm_len]))))) / (ofdm_len*2*np.pi*(1/rate))
+                                    n_cfo_samps = n_cfo_samps + 1
+                            if n_cfo_samps > 0:
+                                cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = cfo_sample / n_cfo_samps
+                            else:
+                                cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
+
                         # Find percentage of LTS peaks within a symbol
                         # (e.g., in a 4096-sample pilot slot, we expect 64, 64-long sequences... assuming no CP)
                         # seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / symbol_per_slot)
@@ -494,26 +428,6 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         snr_end = time.time()
         print(">>>> compute_snr time: %f \n" % (snr_end - snr_start))
 
-        # Plots:
-        print("Plotting the results:\n")
-        n_cell = match_filt_clr.shape[1]
-        n_ue = match_filt_clr.shape[2]
-
-        # plot a frame:
-        fig, axes = plt.subplots(nrows=n_cell, ncols=n_ue, squeeze=False)
-        fig.suptitle('MF Frame # {} Antenna # {}'.format(ref_frame, ant_i))
-        for n_c in range(n_cell):
-            for n_u in range(n_ue):
-                axes[n_c, n_u].stem(match_filt[ref_frame - n_frm_st, n_c, n_u, ant_i, :])
-                axes[n_c, n_u].set_xlabel('Samples')
-                axes[n_c, n_u].set_title('Cell {} UE {}'.format(n_c, n_u))
-                axes[n_c, n_u].grid(True)
- 
-        # plot frame_map:
-        n_cell = frame_map.shape[1]
-        n_ue = frame_map.shape[2]
-        n_ant = frame_map.shape[3]
-
         # For some damm reason, if one of the subplots has all of the frames in the same state (good/bad/partial)
         # it chooses a random color to paint the whole subplot!
         # Below is some sort of remedy (will fail if SISO!):
@@ -534,96 +448,25 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                     frame_map[-1,n_c,n_u,0] = -1
                     print("No bad frames! Colored the last frame of antenna 0 Bad for cell {} and UE {} to keep plotter happy!".format(n_c,n_u))
 
-        #plot F starts for each antenna
-        sub_fr_strt = f_st
-        n_frame = sub_fr_strt.shape[0]      # no. of captured frames
-        n_cell = sub_fr_strt.shape[1]       # no. of cells
-        n_ue = sub_fr_strt.shape[2]         # no. of UEs
-        n_ant = sub_fr_strt.shape[3]        # no. of BS antennas
-        sf_strts = np.reshape(sub_fr_strt, (n_frame*n_cell*n_ue,n_ant))
+        # Plots:
+        print("Plotting the results:\n")
 
-        fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
-        fig.suptitle('Frames\' starting indices per antenna')
+        # plot a frame:
+        plot_match_filter(match_filt, ref_frame, n_frm_st, ant_i)
         #plot channel analysis
-
         show_plot(cmpx_pilots, seq_orig, match_filt, user_i, ant_i, ref_frame, n_frm_st)
 
-
-        for n_c in range(n_cell):
-            for n_u in range(n_ue):
-                sf_strts = sub_fr_strt[:,n_c,n_u,:]
-                x_pl = np.arange(sf_strts.shape[0]) + n_frm_st
-                for j in range(n_ant):
-                    axes[n_u, n_c].plot(x_pl,sf_strts[:,j].flatten(), label = 'Antenna: {}'.format(j) )
-                axes[n_u, n_c].legend(loc='lower right', ncol=8, frameon=False)
-                axes[n_u, n_c].set_xlabel('Frame no.')
-                axes[n_u, n_c].set_ylabel('Starting index')
-                axes[n_u, n_c].grid(True)
-
-        # PILOT MAP
-        fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
-        c = []
-        fig.suptitle('Pilot Map (Percentage of Detected Pilots Per Symbol) - NOTE: Might exceed 100% due to threshold')
-        for n_c in range(n_cell):
-            for n_u in range(n_ue):
-                c.append(axes[n_u, n_c].imshow(seq_found[:, n_c, n_u, :].T, vmin=0, vmax=100, cmap='Blues',
-                                               interpolation='nearest',
-                                               extent=[n_frm_st, n_frm_end, n_ant, 0],
-                                               aspect="auto"))
-                axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
-                axes[n_u, n_c].set_ylabel('Antenna #')
-                axes[n_u, n_c].set_xlabel('Frame #')
-                axes[n_u, n_c].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
-                axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
-                axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
-        cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, 100, 11), orientation='horizontal')
-        cbar.ax.set_xticklabels(['0%', '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'])
-
-        #fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
-        #c = []
-        #fig.suptitle('Frame Map')
-        #for n_c in range(n_cell):
-        #    for n_u in range(n_ue):
-        #        c.append( axes[n_u, n_c].imshow(frame_map[:,n_c,n_u,:].T, cmap=plt.cm.get_cmap('Blues', 3), interpolation='none',
-        #              extent=[n_frm_st,n_frm_end, n_ant,0],  aspect="auto") )
-        #        axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
-        #        axes[n_u, n_c].set_ylabel('Antenna #')
-        #        axes[n_u, n_c].set_xlabel('Frame #')
-        #        # Minor ticks
-        #        axes[n_u, n_c].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
-        #        axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
-        #        # Gridlines based on minor ticks
-        #        axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
-
-        #cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')
-        #cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])
-        ##plt.show()
+        plot_start_frame(f_st, n_frm_st)
+        plot_cfo(cfo, n_frm_st)
+        plot_pilot_mat(seq_found, n_frm_st, n_frm_end)
 
         #############
         #  SNR MAP  #
         #############
         if noise_avail:
-            fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
-            c = []
-            fig.suptitle('SNR Map')
-            for n_c in range(n_cell):
-                for n_u in range(n_ue):
-                    c.append(
-                        axes[n_u, n_c].imshow(snr[:, n_c, n_u, :].T, vmin=np.min(snr), vmax=np.max(snr), cmap='Blues',
-                                              interpolation='nearest',
-                                              extent=[n_frm_st, n_frm_end, n_ant, 0],
-                                              aspect="auto"))
-                    axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
-                    axes[n_u, n_c].set_ylabel('Antenna #')
-                    axes[n_u, n_c].set_xlabel('Frame #')
-                    axes[n_u, n_c].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
-                    axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
-                    axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
-            cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, np.max(snr), 10),
-                                orientation='horizontal')
+            plot_snr_map(snr, n_frm_st, n_frm_end, n_ant)
 
     plt.show()
-
 
 def analyze_hdf5(hdf5, frame_i=10, cell_i=0, subcarrier_i=7, offset=-1, zoom=0, pl=0):
     '''
@@ -851,112 +694,6 @@ def compute_legacy(hdf5):
     print("Total time: %f" % (endtime - starttime))
 
 
-def show_plot(cmpx_pilots, lts_seq_orig, match_filt, ref_user, ref_ant, ref_frame, frm_st_idx):
-    '''
-    Plot channel analysis
-    '''
-
-    # WZC: fix the hardcode issue
-    frame_to_plot = ref_frame
-    frm_st_idx = frm_st_idx
-    ref_ant = ref_ant
-    ref_user = ref_user
-    test_mf = False
-    debug = False
-
-    fig = plt.figure()
-    ax1 = fig.add_subplot(3, 1, 1)
-    ax1.grid(True)
-    ax1.set_title(
-        'channel_analysis:csi_from_pilots(): Re of Rx pilot - ref frame {} and ref ant. {} (UE {})'.format(
-            frame_to_plot, ref_ant, ref_user))
-
-    if debug:
-        print("cmpx_pilots.shape = {}".format(cmpx_pilots.shape))
-
-    ax1.plot(
-        np.real(cmpx_pilots[frame_to_plot - frm_st_idx, 0, ref_user, ref_ant, :]))
-
-    z_pre = np.zeros(82, dtype='complex64')
-    z_post = np.zeros(68, dtype='complex64')
-    lts_t_rep = lts_seq_orig
-
-    if debug:
-
-        lts_t_rep_tst = np.append(z_pre, lts_t_rep)
-        lts_t_rep_tst = np.append(lts_t_rep_tst, z_post)
-
-        if test_mf:
-            w = np.random.normal(0, 0.1 / 2, len(lts_t_rep_tst)) + \
-                1j * np.random.normal(0, 0.1 / 2, len(lts_t_rep_tst))
-            lts_t_rep_tst = lts_t_rep_tst + w
-            cmpx_pilots = np.tile(
-                lts_t_rep_tst, (n_frame, cmpx_pilots.shape[1], cmpx_pilots.shape[2], cmpx_pilots.shape[3], 1))
-            print("if test_mf: Shape of lts_t_rep_tst: {} , cmpx_pilots.shape = {}".format(
-                lts_t_rep_tst.shape, cmpx_pilots.shape))
-
-        loc_sec = lts_t_rep_tst
-    else:
-        loc_sec = np.append(z_pre, lts_t_rep)
-        loc_sec = np.append(loc_sec, z_post)
-    ax2 = fig.add_subplot(3, 1, 2)
-    ax2.grid(True)
-    ax2.set_title(
-        'channel_analysis:csi_from_pilots(): Local LTS sequence zero padded')
-    ax2.plot(loc_sec)
-
-    ax3 = fig.add_subplot(3, 1, 3)
-    ax3.grid(True)
-    ax3.set_title(
-        'channel_analysis:csi_from_pilots(): MF (uncleared peaks) - ref frame {} and ref ant. {} (UE {})'.format(
-            frame_to_plot, ref_ant, ref_user))
-    ax3.stem(match_filt[frame_to_plot - frm_st_idx, 0, ref_user, ref_ant, :])
-    ax3.set_xlabel('Samples')
-
-
-def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[], seq_length=64,cp=0):
-    """
-    Find pilots from clients to each of the base station antennas
-
-    Input:
-        samples    - Raw samples from pilots and data.
-                     Dimensions: vector [1 x num samples]
-        pilot_type - Type of TX pilot (e.g., 802.11 LTS)
-        flip       - Needed for finding LTS function
-
-    Output:
-        pilot     - Received pilot (from multiple clients)
-        tx_pilot  - Transmitted pilot (same pilot sent by all clients)
-    """
-
-    if pilot_type.find('lts') != -1:
-        # LTS-based pilot
-        lts_thresh = 0.8
-        best_pk, pilot_pks, pilot_corr = find_lts(samples, thresh=lts_thresh, flip=flip, lts_seq=pilot_seq)
-
-        # full lts contains 2.5 64-sample-LTS sequences, we need only one symbol
-        lts, lts_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
-
-        if not (pilot_seq.size == 0):
-            # pilot provided, overwrite the one returned above
-            lts = pilot_seq
-
-        pilot_thresh = lts_thresh * np.max(pilot_corr)
-        # We'll need the transmitted version of the pilot (for channel estimation, for example)
-        tx_pilot = [lts, lts_f]
-
-    elif pilot_type.find('zadoff-chu') != -1:
-        best_pk, pilot_pks, pilot_corr = find_zc_pilot(samples, seq_length=seq_length, cp=cp, pilot_seq=pilot_seq)
-        pilot, pilot_f = generate_training_seq(preamble_type='zadoff-chu', seq_length=seq_length, cp=cp, upsample=1, reps=1)
-        tx_pilot = [pilot, pilot_f]
-        pilot_thresh = 0.8 * np.max(pilot_corr)
-
-    else:
-        raise Exception("Only LTS & Zadoff-Chu Pilots are currently supported!")
-
-    return tx_pilot, pilot_pks, pilot_corr, pilot_thresh, best_pk
-
-
 def main():
     # Tested with inputs: ./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5 300  (for two users)
     #                     ./data_in/Argos-2019-3-30-12-20-50_1x8x1.hdf5 300  (for one user) 
@@ -965,7 +702,8 @@ def main():
     parser.add_option("--deep-inspect", action="store_true", dest="deep_inspect", help="Run script without analysis", default=False)
     parser.add_option("--demodulate", action="store_true", dest="demodulate", help="Demodulate uplink data", default=False)
     parser.add_option("--ref-frame", type="int", dest="ref_frame", help="Frame number to plot", default=1000)
-    parser.add_option("--ref-ul-subframe", type="int", dest="ref_ul_subframe", help="Frame number to plot", default=0)
+    parser.add_option("--ref-ul-slot", type="int", dest="ref_ul_slot", help="UL slot number to plot", default=0)
+    parser.add_option("--ref-dl-slot", type="int", dest="ref_dl_slot", help="DL slot number to plot", default=0)
     parser.add_option("--ref-cell", type="int", dest="ref_cell", help="Cell number to plot", default=0)
     parser.add_option("--legacy", action="store_true", dest="legacy", help="Parse and plot legacy hdf5 file", default=False)
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Reference antenna", default=0)
@@ -997,7 +735,8 @@ def main():
     ref_ant = options.ref_ant
     ref_user = options.ref_user
     ref_subcarrier = options.ref_subcarrier
-    ref_ul_subframe = options.ref_ul_subframe
+    ref_ul_slot = options.ref_ul_slot
+    ref_dl_slot = options.ref_dl_slot
     signal_offset = options.signal_offset
     downlink_calib_offset = options.downlink_calib_offset
     uplink_calib_offset = options.uplink_calib_offset
@@ -1078,13 +817,16 @@ def main():
             dl_data_avail = len(downlink_samples) > 0
 
             if pilots_avail:
-                print("Found Pilots!")
+                print("Found pilot data with shape:")
+                print(pilot_samples.shape)
                 if ul_data_avail:
-                    print("Found Uplink Data")
+                    print("Found uplink data with shape:")
+                    print(uplink_samples.shape)
                 if noise_avail:
                     print("Found Noise Samples!")
                 if dl_data_avail:
-                    print("Found Downlink Data")
+                    print("Found downlink data with shape:")
+                    print(downlink_samples.shape)
             else:
                 if dl_data_avail:
                     print("Found Downlink Data")
@@ -1097,7 +839,7 @@ def main():
 
             if verify:
                 verify_hdf5(hdf5, ref_frame, ref_cell, ref_ofdm_sym, ref_ant,
-                            ref_user, ref_ul_subframe, ref_subcarrier,
+                            ref_user, ref_ul_slot, ref_dl_slot, ref_subcarrier,
                             signal_offset, downlink_calib_offset,
                             uplink_calib_offset, thresh, deep_inspect,
                             corr_thresh, exclude_bs_nodes, demodulate)

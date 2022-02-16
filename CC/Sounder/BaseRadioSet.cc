@@ -236,59 +236,49 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
     // write TDD schedule and beacons to FPFA buffers only for Iris
     for (size_t c = 0; c < _cfg->num_cells(); c++) {
       if (!kUseUHD) {
-        if (_cfg->internal_measurement()) {
-          for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
-            tddConf["frames"] = json::array();
-            tddConf["frames"].push_back(_cfg->calib_frames().at(c).at(i));
-            std::cout << "Cell " << c << ", SDR " << i
-                      << " calibration schedule : "
-                      << _cfg->calib_frames().at(c).at(i) << std::endl;
-            std::string tddConfStr = tddConf.dump();
-            SoapySDR::Device* dev = bsRadios.at(c).at(i)->dev;
-            dev->writeSetting("TDD_CONFIG", tddConfStr);
-            // write pilot to FPGA buffers
+        size_t ndx = 0;
+        for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
+          SoapySDR::Device* dev = bsRadios.at(c).at(i)->dev;
+          tddConf["frames"] = json::array();
+          if (_cfg->internal_measurement() == true) {
             for (char const& c : _cfg->bs_channel()) {
               std::string tx_ram = "TX_RAM_";
               dev->writeRegisters(tx_ram + c, 0, _cfg->pilot());
             }
-          }
-        } else {
-          tddConf["frames"] = json::array();
-          size_t frame_size = _cfg->frames().at(c).size();
-          std::string fw_frame = _cfg->frames().at(c);
-          for (size_t s = 0; s < frame_size; s++) {
-            char sym_type = fw_frame.at(s);
-            if (sym_type == 'P')
-              fw_frame.replace(s, 1, "R");  // uplink pilots
-            else if (sym_type == 'N')
-              fw_frame.replace(s, 1, "R");  // uplink data
-            else if (sym_type == 'U')
-              fw_frame.replace(s, 1, "R");  // uplink data
-            else if (sym_type == 'D')
-              fw_frame.replace(s, 1, "T");  // downlink data
-          }
-          tddConf["frames"].push_back(fw_frame);
-          std::cout << "Cell " << c
-                    << " FPGA schedule: " << _cfg->frames().at(c) << std::endl;
-          tddConf["beacon_start"] = _cfg->prefix();
-          tddConf["beacon_stop"] = _cfg->prefix() + _cfg->beacon_size();
-          std::string tddConfStr = tddConf.dump();
-          for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
-            SoapySDR::Device* dev = bsRadios.at(c).at(i)->dev;
-            dev->writeSetting("TDD_CONFIG", tddConfStr);
-          }
+            tddConf["frames"].push_back(_cfg->calib_frames().at(c).at(i));
+            std::cout << "Cell " << c << ", SDR " << i
+                      << " calibration schedule : "
+                      << _cfg->calib_frames().at(c).at(i) << std::endl;
 
-          // write beacons to FPGA buffers
-          size_t ndx = 0;
-          for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
-            SoapySDR::Device* dev = bsRadios.at(c).at(i)->dev;
+          } else {
+            tddConf["frames"] = json::array();
+            size_t frame_size = _cfg->frames().at(c).size();
+            std::string fw_frame = _cfg->frames().at(c);
+            for (size_t s = 0; s < frame_size; s++) {
+              char sym_type = fw_frame.at(s);
+              if (sym_type == 'P')
+                fw_frame.replace(s, 1, "R");  // uplink pilots
+              else if (sym_type == 'N')
+                fw_frame.replace(s, 1, "R");  // uplink data
+              else if (sym_type == 'U')
+                fw_frame.replace(s, 1, "R");  // uplink data
+              else if (sym_type == 'D')
+                fw_frame.replace(s, 1, "T");  // downlink data
+            }
+            tddConf["frames"].push_back(fw_frame);
+            std::cout << "Cell " << c
+                      << " FPGA schedule: " << _cfg->frames().at(c)
+                      << std::endl;
+          }
+          if (_cfg->internal_measurement() == false ||
+              _cfg->num_cl_antennas() > 0) {
             dev->writeRegisters("BEACON_RAM", 0, _cfg->beacon());
+            std::string tx_ram_wgt = "BEACON_RAM_WGT_";
             for (char const& ch : _cfg->bs_channel()) {
               bool isBeaconAntenna =
                   !_cfg->beam_sweep() && ndx == _cfg->beacon_ant();
               std::vector<unsigned> beacon_weights(num_bs_antenntas[c],
                                                    isBeaconAntenna ? 1 : 0);
-              std::string tx_ram_wgt = "BEACON_RAM_WGT_";
               if (_cfg->beam_sweep()) {
                 for (size_t j = 0; j < num_bs_antenntas[c]; j++)
                   beacon_weights[j] = CommsLib::hadamard2(ndx, j);
@@ -296,12 +286,14 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
               dev->writeRegisters(tx_ram_wgt + ch, 0, beacon_weights);
               ++ndx;
             }
+
             dev->writeSetting("BEACON_START",
                               std::to_string(bsRadios.at(c).size()));
+            tddConf["beacon_start"] = _cfg->prefix();
+            tddConf["beacon_stop"] = _cfg->prefix() + _cfg->beacon_size();
           }
-        }
-        for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
-          SoapySDR::Device* dev = bsRadios.at(c).at(i)->dev;
+          std::string tddConfStr = tddConf.dump();
+          dev->writeSetting("TDD_CONFIG", tddConfStr);
           dev->writeSetting(
               "TX_SW_DELAY",
               "30");  // experimentally good value for dev front-end

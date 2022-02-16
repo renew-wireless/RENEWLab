@@ -97,7 +97,7 @@ Receiver::~Receiver() {
 
 void Receiver::initBuffers() {
   size_t frameTimeLen = config_->samps_per_frame();
-  txFrameDelta = std::ceil(TIME_DELTA / (1e3 * config_->getFrameDurationSec()));
+  txFrameDelta = int(TIME_DELTA / (1e3 * config_->getFrameDurationSec()));
   txTimeDelta = txFrameDelta * frameTimeLen;
 
   zeros.resize(2);
@@ -519,22 +519,20 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
         slot_id = (size_t)((frameTime >> 16) & 0xFFFF);
 
         if (config_->internal_measurement() && config_->ref_node_enable()) {
+          size_t beacon_slot = config_->num_cl_antennas() > 0 ? 1 : 0;
           if (radio_id == config_->cal_ref_sdr_id()) {
-            ant_id = slot_id < radio_id * num_channels ? slot_id
-                                                       : slot_id - num_channels;
+            ant_id = slot_id - beacon_slot;
             slot_id = 0;  // downlink reciprocal pilot
           } else {
-            if (radio_id >= config_->cal_ref_sdr_id()) ant_id -= num_channels;
-            slot_id = 1;  // uplink reciprocal pilot
+            slot_id -= config_->cal_ref_sdr_id();  // uplink pilots
           }
         } else if (config_->internal_measurement() &&
                    !config_->ref_node_enable()) {
           // Mapping (compress schedule to eliminate Gs)
           size_t adv = int(slot_id / (config_->guard_mult() * num_channels));
           slot_id = slot_id - ((config_->guard_mult() - 1) * 2 * adv);
-        }
-        if (config_->getClientId(frame_id, slot_id) ==
-            0) {  // first received pilot
+        } else if (config_->getClientId(frame_id, slot_id) ==
+                   0) {  // first received pilot
           if (config_->dl_data_slot_present() == true) {
             while (-1 != baseTxData(radio_id, cell, frame_id, frameTime))
               ;
@@ -621,16 +619,16 @@ void Receiver::clientTxRx(int tid) {
     ul_txbuff.at(ch) =
         std::calloc(config_->samps_per_slot(), sizeof(int16_t) * 2);
   }
-  size_t slot_byte_size = config_->samps_per_slot() * sizeof(int16_t) * 2;
-  if (tx_slots > 0) {
-    size_t txIndex = tid * config_->cl_sdr_ch();
-    for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
-      std::memcpy(ul_txbuff.at(ch),
-                  config_->txdata_time_dom().at(txIndex + ch).data(),
-                  slot_byte_size);
-    }
-    MLPD_INFO("%zu uplink slots will be sent per frame...\n", tx_slots);
-  }
+  //size_t slot_byte_size = config_->samps_per_slot() * sizeof(int16_t) * 2;
+  //if (tx_slots > 0) {
+  //  size_t txIndex = tid * config_->cl_sdr_ch();
+  //  for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
+  //    std::memcpy(ul_txbuff.at(ch),
+  //                config_->txdata_time_dom().at(txIndex + ch).data(),
+  //                slot_byte_size);
+  //  }
+  //  MLPD_INFO("%zu uplink slots will be sent per frame...\n", tx_slots);
+  //}
 
   int all_trigs = 0;
   struct timespec tv, tv2;
@@ -790,7 +788,8 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   }
 
   MLPD_INFO("Scheduling TX: %zu Frames (%lf ms) in the future!\n",
-            this->txFrameDelta, 1e3 * config_->getFrameDurationSec());
+            this->txFrameDelta,
+            this->txFrameDelta * (1e3 * config_->getFrameDurationSec()));
 
   int SYNC_NUM_SAMPS = config_->samps_per_frame();
   std::vector<std::complex<int16_t>> syncbuff0(SYNC_NUM_SAMPS, 0);
@@ -819,7 +818,8 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   int buffer_chunk_size = 0;
   int buffer_id = tid + config_->bs_rx_thread_num();
   size_t packetLength = sizeof(Packet) + config_->getPacketDataLength();
-  if (config_->dl_slot_per_frame() > 0) {
+  //if (config_->dl_slot_per_frame() > 0) {
+  if (config_->cl_dl_slots().at(0).empty() == false) {
     buffer_chunk_size = rx_buffer[buffer_id].buffer.size() / packetLength;
     // handle two channels at each radio
     // this is assuming buffer_chunk_size is at least 2
@@ -960,7 +960,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
     slot_id++;
 
     for (; slot_id < config_->slot_per_frame(); slot_id++) {
-      if (config_->isDlData(frame_id, slot_id)) {
+      if (config_->isDlData(tid, slot_id)) {
         // Set buffer status(es) to full; fail if full already
         for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
           int bit = 1 << (buffer_offset + ch) % sizeof(std::atomic_int);
