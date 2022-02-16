@@ -85,6 +85,9 @@ void DataGenerator::GenerateData(const std::string& directory) {
             }
             data_time_dom.insert(data_time_dom.end(), postfix_zpad_t.begin(),
                                  postfix_zpad_t.end());
+            for (size_t id = 0; id < data_time_dom.size(); id++) {
+              data_time_dom.at(id) *= cfg_->tx_scale();
+            }
             auto data_time_dom_ci16 = Utils::cfloat_to_cint16(data_time_dom);
             std::fwrite(data_freq_dom.data(),
                         cfg_->fft_size() * cfg_->symbol_per_slot(),

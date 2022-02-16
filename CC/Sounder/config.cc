@@ -23,7 +23,8 @@ static size_t kMinSupportedFFTSize = 64;
 static size_t kMaxSupportedCPSize = 128;
 
 Config::Config(const std::string& jsonfile, const std::string& directory,
-               const bool bs_only, const bool client_only) {
+               const bool bs_only, const bool client_only)
+    : directory_(directory) {
   std::string conf_str;
   Utils::loadTDDConfig(jsonfile, conf_str);
   // Enable comments in json file
@@ -186,7 +187,6 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   prefix_ = tddConf.value("ofdm_tx_zero_prefix", 0);
   postfix_ = tddConf.value("ofdm_tx_zero_postfix", 0);
   symbol_data_subcarrier_num_ = tddConf.value("ofdm_data_num", fft_size_);
-  tx_scale_ = tddConf.value("tx_scale", 0.5);
   pilot_seq_ = tddConf.value("pilot_seq", "lts");
   data_mod_ = tddConf.value("modulation", "QPSK");
   single_gain_ = tddConf.value("single_gain", true);
@@ -531,7 +531,19 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                                          symbol_data_subcarrier_num_);
   }
 
-  auto iq_ci16 = Utils::float_to_cint16(pilot_sym_t_);
+  auto iq_tmp_ci16 = Utils::float_to_cint16(pilot_sym_t_);
+  auto iq_cf = Utils::cint16_to_cfloat(iq_tmp_ci16);
+  float max_amp = 0;
+  for (size_t i = 0; i < iq_cf.size(); i++) {
+    float this_amp = std::abs(iq_cf.at(i));
+    if (this_amp > max_amp) max_amp = this_amp;
+  }
+  std::printf("Max pilot amplitude = %.2f\n", max_amp);
+  tx_scale_ = tddConf.value("tx_scale", 1 / (2 * max_amp));
+  for (size_t i = 0; i < iq_cf.size(); i++) {
+    iq_cf.at(i) *= tx_scale_;
+  }
+  auto iq_ci16 = Utils::cfloat_to_cint16(iq_cf);
   iq_ci16.insert(iq_ci16.begin(), iq_ci16.end() - cp_size_, iq_ci16.end());
 
   pilot_ci16_.clear();
@@ -543,7 +555,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                      postfix_zpad.end());
 
   pilot_ = Utils::cint16_to_uint32(pilot_ci16_, false, "QI");
-  pilot_cf32_ = Utils::uint32tocfloat(pilot_, "QI");
+
   size_t remain_size =
       kFpgaTxRamSize - pilot_.size();  // 4096 is the size of TX_RAM in the FPGA
   for (size_t j = 0; j < remain_size; j++) pilot_.push_back(0);
@@ -567,7 +579,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     std::string filename;
     if (internal_measurement_ && num_cl_antennas_ == 0) {
       filename =
-          directory + "/trace-internal-meas-" +
+          directory_ + "/trace-internal-meas-" +
           std::to_string(1900 + ltm->tm_year) + "-" +
           std::to_string(1 + ltm->tm_mon) + "-" + std::to_string(ltm->tm_mday) +
           "-" + std::to_string(ltm->tm_hour) + "-" +
@@ -576,7 +588,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
           std::to_string(num_bs_antennas_all_) + ".hdf5";
     } else if (internal_measurement_ && num_cl_antennas_ > 0) {
       filename =
-          directory + "/trace-reciprocity-" +
+          directory_ + "/trace-reciprocity-" +
           std::to_string(1900 + ltm->tm_year) + "-" +
           std::to_string(1 + ltm->tm_mon) + "-" + std::to_string(ltm->tm_mday) +
           "-" + std::to_string(ltm->tm_hour) + "-" +
@@ -588,7 +600,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
       std::string ul_present_str = (ul_data_slot_present_ ? "uplink-" : "");
       std::string dl_present_str = (dl_data_slot_present_ ? "downlink-" : "");
       filename =
-          directory + "/trace-" + ul_present_str + dl_present_str +
+          directory_ + "/trace-" + ul_present_str + dl_present_str +
           std::to_string(1900 + ltm->tm_year) + "-" +
           std::to_string(1 + ltm->tm_mon) + "-" + std::to_string(ltm->tm_mday) +
           "-" + std::to_string(ltm->tm_hour) + "-" +
@@ -665,11 +677,9 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   running_.store(true);
 }
 
-void Config::loadULData(const std::string& directory) {
+void Config::loadULData() {
   // compose data slot
   if (client_present_ && ul_data_slot_present_) {
-    std::vector<std::complex<float>> prefix_zpad_t(prefix_, 0);
-    std::vector<std::complex<float>> postfix_zpad_t(postfix_, 0);
     txdata_time_dom_.resize(num_cl_antennas_);
     txdata_freq_dom_.resize(num_cl_antennas_);
     // For now, we're reading one frame worth of data
@@ -681,7 +691,8 @@ void Config::loadULData(const std::string& directory) {
           std::to_string(ul_data_frame_num_) + "_" + cl_channel_ + "_" +
           std::to_string(i) + ".bin";
 
-      std::string filename_ul_data_f = directory + "/ul_data_f_" + filename_tag;
+      std::string filename_ul_data_f =
+          directory_ + "/ul_data_f_" + filename_tag;
       std::printf("Loading UL frequency-domain data for radio %zu to %s\n", i,
                   filename_ul_data_f.c_str());
       ul_tx_fd_data_files_.push_back("ul_data_f_" + filename_tag);
@@ -691,60 +702,18 @@ void Config::loadULData(const std::string& directory) {
                                  std::string(" not found!"));
       }
 
-      std::string filename_ul_data_t = directory + "/ul_data_t_" + filename_tag;
+      std::string filename_ul_data_t =
+          directory_ + "/ul_data_t_" + filename_tag;
       std::printf("Loading UL time-domain data for radio %zu to %s\n", i,
                   filename_ul_data_t.c_str());
       ul_tx_td_data_files_.push_back(filename_ul_data_t);
-      FILE* fp_tx_t = std::fopen(filename_ul_data_t.c_str(), "rb");
-      if (!fp_tx_t) {
-        throw std::runtime_error(filename_ul_data_t +
-                                 std::string(" not found!"));
-      }
-
-      // Frame * UL Slots * Channel * Samples
-      for (size_t u = 0; u < cl_ul_slots_[i].size(); u++) {
-        for (size_t h = 0; h < cl_sdr_ch_; h++) {
-          size_t ant_i = i * cl_sdr_ch_ + h;
-
-          std::vector<std::complex<float>> data_freq_dom(fft_size_ *
-                                                         symbol_per_slot_);
-          size_t read_num = std::fread(data_freq_dom.data(), 2 * sizeof(float),
-                                       fft_size_ * symbol_per_slot_, fp_tx_f);
-          if (read_num != (fft_size_ * symbol_per_slot_)) {
-            MLPD_WARN(
-                "BAD Read of Uplink Freq-Domain Data: "
-                "%zu/%zu\n",
-                read_num, fft_size_ * symbol_per_slot_);
-          }
-          txdata_freq_dom_[ant_i].insert(txdata_freq_dom_[ant_i].end(),
-                                         data_freq_dom.begin(),
-                                         data_freq_dom.end());
-
-          std::vector<std::complex<int16_t>> data_time_dom(samps_per_slot_);
-          read_num = std::fread(data_time_dom.data(), 2 * sizeof(int16_t),
-                                samps_per_slot_, fp_tx_t);
-          if (read_num != samps_per_slot_) {
-            MLPD_WARN(
-                "BAD Read of Uplink Time-Domain Data: "
-                "%zu/%zu\n",
-                read_num, samps_per_slot_);
-          }
-          txdata_time_dom_[ant_i].insert(txdata_time_dom_[ant_i].end(),
-                                         data_time_dom.begin(),
-                                         data_time_dom.end());
-        }
-      }
-      std::fclose(fp_tx_f);
-      std::fclose(fp_tx_t);
     }
   }
 }
 
-void Config::loadDLData(const std::string& directory) {
+void Config::loadDLData() {
   // compose data slot
   if (bs_present_ && dl_data_slot_present_) {
-    std::vector<std::complex<float>> prefix_zpad_t(prefix_, 0);
-    std::vector<std::complex<float>> postfix_zpad_t(postfix_, 0);
     dl_txdata_time_dom_.resize(num_bs_antennas_all_);
     dl_txdata_freq_dom_.resize(num_bs_antennas_all_);
     // For now, we're reading one frame worth of data
@@ -756,7 +725,8 @@ void Config::loadDLData(const std::string& directory) {
           std::to_string(dl_data_frame_num_) + "_" + bs_channel_ + "_" +
           std::to_string(i) + ".bin";
 
-      std::string filename_dl_data_f = directory + "/dl_data_f_" + filename_tag;
+      std::string filename_dl_data_f =
+          directory_ + "/dl_data_f_" + filename_tag;
       std::printf("Loading DL frequency-domain data to %s\n",
                   filename_dl_data_f.c_str());
       dl_tx_fd_data_files_.push_back("dl_data_f_" + filename_tag);
@@ -766,51 +736,11 @@ void Config::loadDLData(const std::string& directory) {
                                  std::string(" not found!"));
       }
 
-      std::string filename_dl_data_t = directory + "/dl_data_t_" + filename_tag;
+      std::string filename_dl_data_t =
+          directory_ + "/dl_data_t_" + filename_tag;
       std::printf("Loading DL time-domain data to %s\n",
                   filename_dl_data_t.c_str());
       dl_tx_td_data_files_.push_back(filename_dl_data_t);
-      FILE* fp_tx_t = std::fopen(filename_dl_data_t.c_str(), "rb");
-      if (!fp_tx_t) {
-        throw std::runtime_error(filename_dl_data_t +
-                                 std::string(" not found!"));
-      }
-
-      // UL Slots * Channel * Samples
-      for (size_t u = 0; u < dl_slot_per_frame_; u++) {
-        for (size_t h = 0; h < bs_sdr_ch_; h++) {
-          size_t ant_i = i * bs_sdr_ch_ + h;
-
-          std::vector<std::complex<float>> data_freq_dom(fft_size_ *
-                                                         symbol_per_slot_);
-          size_t read_num = std::fread(data_freq_dom.data(), 2 * sizeof(float),
-                                       fft_size_ * symbol_per_slot_, fp_tx_f);
-          if (read_num != (fft_size_ * symbol_per_slot_)) {
-            MLPD_WARN(
-                "BAD Read of Downlink Freq-Domain Data: "
-                "%zu/%zu\n",
-                read_num, fft_size_ * symbol_per_slot_);
-          }
-          dl_txdata_freq_dom_[ant_i].insert(dl_txdata_freq_dom_[ant_i].end(),
-                                            data_freq_dom.begin(),
-                                            data_freq_dom.end());
-
-          std::vector<std::complex<int16_t>> data_time_dom(samps_per_slot_);
-          read_num = std::fread(data_time_dom.data(), 2 * sizeof(int16_t),
-                                samps_per_slot_, fp_tx_t);
-          if (read_num != samps_per_slot_) {
-            MLPD_WARN(
-                "BAD Read of Downlink Time-Domain Data: "
-                "%zu/%zu\n",
-                read_num, samps_per_slot_);
-          }
-          dl_txdata_time_dom_[ant_i].insert(dl_txdata_time_dom_[ant_i].end(),
-                                            data_time_dom.begin(),
-                                            data_time_dom.end());
-        }
-      }
-      std::fclose(fp_tx_f);
-      std::fclose(fp_tx_t);
     }
   }
 }

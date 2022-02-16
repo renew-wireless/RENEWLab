@@ -619,16 +619,16 @@ void Receiver::clientTxRx(int tid) {
     ul_txbuff.at(ch) =
         std::calloc(config_->samps_per_slot(), sizeof(int16_t) * 2);
   }
-  size_t slot_byte_size = config_->samps_per_slot() * sizeof(int16_t) * 2;
-  if (tx_slots > 0) {
-    size_t txIndex = tid * config_->cl_sdr_ch();
-    for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
-      std::memcpy(ul_txbuff.at(ch),
-                  config_->txdata_time_dom().at(txIndex + ch).data(),
-                  slot_byte_size);
-    }
-    MLPD_INFO("%zu uplink slots will be sent per frame...\n", tx_slots);
-  }
+  //size_t slot_byte_size = config_->samps_per_slot() * sizeof(int16_t) * 2;
+  //if (tx_slots > 0) {
+  //  size_t txIndex = tid * config_->cl_sdr_ch();
+  //  for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
+  //    std::memcpy(ul_txbuff.at(ch),
+  //                config_->txdata_time_dom().at(txIndex + ch).data(),
+  //                slot_byte_size);
+  //  }
+  //  MLPD_INFO("%zu uplink slots will be sent per frame...\n", tx_slots);
+  //}
 
   int all_trigs = 0;
   struct timespec tv, tv2;

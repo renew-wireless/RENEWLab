@@ -497,7 +497,6 @@ void BaseRadioSet::collectCSI(bool& adjust) {
               << std::endl;
     return;
   }
-  //std::vector<std::complex<float>> pilot_cf32;
   int seqLen = 160;  // Sequence length
   std::vector<std::vector<float>> pilot =
       CommsLib::getSequence(CommsLib::LTS_SEQ, seqLen);
@@ -518,11 +517,11 @@ void BaseRadioSet::collectCSI(bool& adjust) {
   int ch = (_cfg->bs_channel() == "B") ? 1 : 0;
   std::vector<void*> txbuff(2);
   if (ch == 0) {
-    txbuff[0] = pilot_cint16.data();  //pilot_cf32.data();
-    txbuff[1] = dummy_cint16.data();  //zero_vec.data();
+    txbuff[0] = pilot_cint16.data();
+    txbuff[1] = dummy_cint16.data();
   } else {
-    txbuff[0] = dummy_cint16.data();  //zero_vec.data();
-    txbuff[1] = pilot_cint16.data();  //pilot_cf32.data();
+    txbuff[0] = dummy_cint16.data();
+    txbuff[1] = pilot_cint16.data();
   }
 
   //std::vector<std::vector<std::complex<float>>> buff;
