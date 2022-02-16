@@ -37,7 +37,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 user_i=0, ul_slot_i=0, dl_slot_i=0, subcarrier_i=10, offset=-1,
                 dn_calib_offset=0, up_calib_offset=0, thresh=0.001,
                 deep_inspect=False, corr_thresh=0.00, exclude_bs_nodes=[],
-                demodulate=False):
+                demodulate=False, analyze=False):
     """Plot data in the hdf5 file to verify contents.
 
     Args:
@@ -242,6 +242,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 axes3[1, 0].set_ylim(-np.pi, np.pi)
                 axes3[1, 0].legend(frameon=False)
 
+    if analyze:
+        analyze_hdf5(hdf5, frame_i, cell_i, subcarrier_i, offset)
 
     # Plot UL data symbols
     if ul_data_avail > 0:
@@ -497,8 +499,8 @@ def analyze_hdf5(hdf5, frame_i=10, cell_i=0, subcarrier_i=7, offset=-1, zoom=0, 
         offset = int(prefix_len)
     fft_size = int(metadata['FFT_SIZE'])
     cp = int(metadata['CP_LEN'])
-    nonzero_sc_size = metadata['DATA_SUBCARRIER_NUM']
     ofdm_pilot_f = np.array(metadata['OFDM_PILOT_F'])
+    sched = metadata['BS_FRAME_SCHED'].astype(str)[0]
 
     num_noise_slots = noise_samples.shape[2]
     n_frame = pilot_samples.shape[0]
@@ -549,53 +551,15 @@ def analyze_hdf5(hdf5, frame_i=10, cell_i=0, subcarrier_i=7, offset=-1, zoom=0, 
 
     _, demmel = calDemmel(userCSI)
 
-    # plot stuff
     subf_conj = conj[-2]
     subf_zf = zf[-2]
     mubf_conj = conj[1]
     mubf_zf = zf[1]
-    fig1, axes1 = plt.subplots(nrows=2, ncols=2, squeeze=False, figsize=(10, 8))
-    axes1[0, 0].set_title('Subcarrier-Mean Spectral Efficiency Using Beamforming Weights at Frame %d'%frame_i)
-    for j in range(num_cl_tmp):
-        axes1[0, 0].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], mubf_conj[:,j], label = 'Conj User: {}'.format(j) )
-    for j in range(num_cl_tmp):
-        axes1[0, 1].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], mubf_zf[:,j], label = 'ZF User: {}'.format(j) )
-    axes1[0,0].legend(loc='upper right', ncol=1, frameon=False)
-    axes1[0,0].set_xlabel('Time (s)', fontsize=14)
-    axes1[0,0].set_ylabel('MUBF %dx%d (bps/Hz)'%(n_ant, n_ue), fontsize=14)
-    axes1[0,1].legend(loc='upper right', ncol=1, frameon=False)
-    axes1[0,1].set_xlabel('Time (s)', fontsize=14)
-    for j in range(num_cl_tmp):
-        axes1[1, 0].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], subf_conj[:,j], label = 'Conj User: {}'.format(j) )
-    for j in range(num_cl_tmp):
-        axes1[1, 1].plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], subf_zf[:,j], label = 'ZF User: {}'.format(j) )
-    axes1[1,0].legend(loc='upper right', ncol=1, frameon=False)
-    axes1[1,0].set_xlabel('Time (s)', fontsize=14)
-    axes1[1,0].set_ylabel('SUBF %dx1 (bps/Hz)'%n_ant, fontsize=14)
-    axes1[1,1].legend(loc='upper right', ncol=1, frameon=False)
-    axes1[1,1].set_xlabel('Time (s)', fontsize=14)
 
-
-    # demmel number
-    plt.figure(pl+2, figsize=(10, 8))
-    plt.plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], demmel[:, subcarrier_i])
-    plt.xlabel('Time (s)', fontsize=14)
-    plt.ylabel('Condition Number', fontsize=14)
-    plt.title('CSI Matrix Demmel condition number across time, Subcarrier %d'%subcarrier_i)
-    #pl += 1
-
-    # SNR 
-    #snr_linear = np.mean(zf[-1], axis = -1)
-    #snr_dB = 10 * np.log10(snr_linear)
-    #plt.figure(pl+2, figsize=(10, 8))
-    #for i in range(num_cl_tmp):
-    #    plt.plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], snr_dB[:, i], label = 'User: {}'.format(i))
-    ## plt.ylim([0,2])
-    #plt.xlabel('Time (s)', fontsize=14)
-    #plt.ylabel('ZF SNR (dB)', fontsize=14)
-    #plt.title('ZF SNR Across Frames')
-    #plt.legend()
-    plt.show()
+    # plot stuff
+    time_vector = np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]]
+    plot_spectral_efficiency(subf_conj, subf_zf, mubf_conj, mubf_zf, time_vector, num_cl_tmp, n_ant, n_ue, frame_i) 
+    #plot_demmel_snr(demmel, timestamp, subcarrier_i)
 
     del csi  # free the memory
     del noise
@@ -842,9 +806,9 @@ def main():
                             ref_user, ref_ul_slot, ref_dl_slot, ref_subcarrier,
                             signal_offset, downlink_calib_offset,
                             uplink_calib_offset, thresh, deep_inspect,
-                            corr_thresh, exclude_bs_nodes, demodulate)
-            if analyze:
-                analyze_hdf5(hdf5, ref_frame, ref_cell, ref_subcarrier, signal_offset)
+                            corr_thresh, exclude_bs_nodes, demodulate, analyze)
+            #if analyze:
+            #    analyze_hdf5(hdf5, ref_frame, ref_cell, ref_subcarrier, signal_offset)
     scrpt_end = time.time()
     print(">>>> Script Duration: time: %f \n" % ( scrpt_end - scrpt_strt) )
 

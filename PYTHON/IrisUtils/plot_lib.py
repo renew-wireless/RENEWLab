@@ -294,3 +294,45 @@ def plot_match_filter(match_filt, ref_frame, n_frm_st, ant_i):
             axes[n_c, n_u].set_xlabel('Samples')
             axes[n_c, n_u].set_title('Cell {} UE {}'.format(n_c, n_u))
             axes[n_c, n_u].grid(True)
+
+def plot_spectral_efficiency(subf_conj, subf_zf, mubf_conj, mubf_zf, timestamp, num_cl, n_ant, n_ue, frame_i):
+    fig1, axes1 = plt.subplots(nrows=2, ncols=2, squeeze=False, figsize=(10, 8))
+    axes1[0, 0].set_title('Subcarrier-Mean Spectral Efficiency Using Beamforming Weights at Frame %d'%frame_i)
+    for j in range(num_cl):
+        axes1[0, 0].plot(timestamp, mubf_conj[:,j], label = 'Conj User: {}'.format(j) )
+    for j in range(num_cl):
+        axes1[0, 1].plot(timestamp, mubf_zf[:,j], label = 'ZF User: {}'.format(j) )
+    axes1[0,0].legend(loc='upper right', ncol=1, frameon=False)
+    axes1[0,0].set_xlabel('Time (s)', fontsize=14)
+    axes1[0,0].set_ylabel('MUBF %dx%d (bps/Hz)'%(n_ant, n_ue), fontsize=14)
+    axes1[0,1].legend(loc='upper right', ncol=1, frameon=False)
+    axes1[0,1].set_xlabel('Time (s)', fontsize=14)
+    for j in range(num_cl):
+        axes1[1, 0].plot(timestamp, subf_conj[:,j], label = 'Conj User: {}'.format(j) )
+    for j in range(num_cl):
+        axes1[1, 1].plot(timestamp, subf_zf[:,j], label = 'ZF User: {}'.format(j) )
+    axes1[1,0].legend(loc='upper right', ncol=1, frameon=False)
+    axes1[1,0].set_xlabel('Time (s)', fontsize=14)
+    axes1[1,0].set_ylabel('SUBF %dx1 (bps/Hz)'%n_ant, fontsize=14)
+    axes1[1,1].legend(loc='upper right', ncol=1, frameon=False)
+    axes1[1,1].set_xlabel('Time (s)', fontsize=14)
+
+def plot_demmel_snr(demmel, timestamp, subcarrier_i):
+    plt.figure(pl+2, figsize=(10, 8))
+    plt.plot(timestamp, demmel[:, subcarrier_i])
+    plt.xlabel('Time (s)', fontsize=14)
+    plt.ylabel('Condition Number', fontsize=14)
+    plt.title('CSI Matrix Demmel condition number across time, Subcarrier %d'%subcarrier_i)
+    #pl += 1
+
+    # SNR
+    #snr_linear = np.mean(zf[-1], axis = -1)
+    #snr_dB = 10 * np.log10(snr_linear)
+    #plt.figure(pl+2, figsize=(10, 8))
+    #for i in range(num_cl_tmp):
+    #    plt.plot(np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]], snr_dB[:, i], label = 'User: {}'.format(i))
+    ## plt.ylim([0,2])
+    #plt.xlabel('Time (s)', fontsize=14)
+    #plt.ylabel('ZF SNR (dB)', fontsize=14)
+    #plt.title('ZF SNR Across Frames')
+    #plt.legend()
