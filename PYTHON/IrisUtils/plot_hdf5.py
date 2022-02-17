@@ -180,6 +180,9 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             for i in insp_ants:
                 plot_iq_samps(samps, n_frm_st, ref_frame, [cell_i], [user_i], [ant_i])
             plot_csi(userCSI, corr_total, plot_bs_nodes, pilot_frames, ref_frame, cell_i, user_i, subcarrier_i, offset)
+            if analyze and noise_avail:
+                analyze_hdf5(hdf5, ref_frame, cell_i, subcarrier_i, offset)
+
         else:
             calib_plot_bs_nodes = list(set(plot_bs_nodes) - set([num_bs_ant - 1]))
             if plot_bs_nodes[-1] == num_bs_ant - 1:
@@ -239,9 +242,6 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 axes3[1, 0].set_xlabel('frame')
                 axes3[1, 0].set_ylim(-np.pi, np.pi)
                 axes3[1, 0].legend(frameon=False)
-
-    if analyze:
-        analyze_hdf5(hdf5, frame_i, cell_i, subcarrier_i, offset)
 
     # Plot UL data symbols
     if ul_data_avail > 0:
@@ -416,11 +416,7 @@ def analyze_hdf5(hdf5, frame_i=10, cell_i=0, subcarrier_i=7, offset=-1, zoom=0, 
     fft_size = int(metadata['FFT_SIZE'])
     cp = int(metadata['CP_LEN'])
     ofdm_pilot_f = np.array(metadata['OFDM_PILOT_F'])
-    sched = metadata['BS_FRAME_SCHED'].astype(str)[0]
 
-    num_noise_slots = noise_samples.shape[2]
-    n_frame = pilot_samples.shape[0]
-    n_cell = pilot_samples.shape[1]
     n_ue = pilot_samples.shape[2]
     n_ant = pilot_samples.shape[3]
 
@@ -432,6 +428,7 @@ def analyze_hdf5(hdf5, frame_i=10, cell_i=0, subcarrier_i=7, offset=-1, zoom=0, 
                                 offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
     csi = csi[:, cell_i, :, :, :, :]
 
+    num_noise_slots = noise_samples.shape[2]
     noise,_ = hdf5_lib.samps2csi(noise_samples, num_noise_slots, samps_per_slot, fft_size=fft_size,
                                 offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
     noise = noise[:, cell_i, :, :, :, :]
@@ -444,7 +441,7 @@ def analyze_hdf5(hdf5, frame_i=10, cell_i=0, subcarrier_i=7, offset=-1, zoom=0, 
         frame = zoom
     # don't include noise, average over all pilot repetitions
     userCSI = np.mean(csi, 2)
-    noise = np.mean(noise, 2)
+    noise_mean = np.mean(noise, 2)
 
     # compute beamweights based on the specified frame.
     conjbws = np.transpose(
@@ -461,9 +458,9 @@ def analyze_hdf5(hdf5, frame_i=10, cell_i=0, subcarrier_i=7, offset=-1, zoom=0, 
     #    SINR, single-user capacity(no inter-user interference), and SNR
 
     # conjcap_total,conjcap_u,conjcap_sc,conjSINR,conjcap_su_sc,conjcap_su_u,conjSNR
-    conj = calCapacity(userCSI, noise, conjbws, downlink=downlink)
+    conj = calCapacity(userCSI, noise_mean, conjbws, downlink=downlink)
     # zfcap_total,zfcap_u,zfcap_sc,zfSINR,zfcap_su_sc,zfcap_su_u,zfSNR
-    zf = calCapacity(userCSI, noise, zfbws, downlink=downlink)
+    zf = calCapacity(userCSI, noise_mean, zfbws, downlink=downlink)
 
     _, demmel = calDemmel(userCSI)
 
@@ -474,12 +471,22 @@ def analyze_hdf5(hdf5, frame_i=10, cell_i=0, subcarrier_i=7, offset=-1, zoom=0, 
 
     # plot stuff
     time_vector = np.arange(0, csi.shape[0]*timestep, timestep)[:csi.shape[0]]
-    plot_spectral_efficiency(subf_conj, subf_zf, mubf_conj, mubf_zf, time_vector, num_cl_tmp, n_ant, n_ue, frame_i) 
+    plot_spectral_efficiency(subf_conj, subf_zf, mubf_conj, mubf_zf, time_vector, num_cl_tmp, n_ant, n_ue, frame_i, "Frame %d"%frame_i)
     #plot_demmel_snr(demmel, timestamp, subcarrier_i)
+
+    csi_plus_noise = np.concatenate((csi, noise), axis=1)
+    conj = calContCapacity(csi_plus_noise, downlink=downlink, offset=0)
+    # zfcap_total,zfcap_u,zfcap_sc,zfSINR,zfcap_su_sc,zfcap_su_u,zfSNR
+    zf = calContCapacity(csi_plus_noise, conj=False, downlink=downlink, offset=0)
+
+    subf_conj = conj[-2]
+    subf_zf = zf[-2]
+    mubf_conj = conj[1]
+    mubf_zf = zf[1]
+    plot_spectral_efficiency(subf_conj, subf_zf, mubf_conj, mubf_zf, time_vector, num_cl_tmp, n_ant, n_ue, frame_i)
 
     del csi  # free the memory
     del noise
-
 
 def compute_legacy(hdf5):
     '''
