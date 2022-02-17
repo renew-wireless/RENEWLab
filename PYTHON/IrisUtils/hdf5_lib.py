@@ -25,6 +25,7 @@ from optparse import OptionParser
 from channel_analysis import *
 import multiprocessing as mp
 import extract_pilots_data as epd
+from find_lts import *
 
 #@staticmethod
 def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0, frame_to_plot=0, ref_ant=0, ref_user = 0):
@@ -766,3 +767,81 @@ class hdf5_lib:
 
         return match_filt, frame_map, f_st, peak_map
         # WZC: added peak_map for peak_number analysis
+
+    @staticmethod
+    def measure_snr(pilot_samples, noise_samples, peak_map, pilot_type, pilot_seq, ofdm_len, z_padding, rate, selected_ants):
+        n_frame = pilot_samples.shape[0]
+        n_cell = pilot_samples.shape[1]
+        n_ue = pilot_samples.shape[2]
+        n_ant = pilot_samples.shape[3]
+        samps_per_slot = pilot_samples.shape[4] // 2
+        symbol_per_slot = (samps_per_slot - z_padding) // ofdm_len
+        seq_found = np.zeros((n_frame, n_cell, n_ue, n_ant))
+        cfo = np.zeros((n_frame, n_cell, n_ue, n_ant))
+        noise_avail = len(noise_samples) > 0
+
+        td_pwr_dbm_noise = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
+        td_pwr_dbm_signal = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
+        if noise_avail:
+            noise_samples = noise_samples[:, :, :, selected_ants, :]
+            snr = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
+
+        for frameIdx in range(n_frame):    # Frame
+            for cellIdx in range(n_cell):  # Cell
+                for ueIdx in range(n_ue):  # UE
+                    for bsAntIdx in range(n_ant):  # BS ANT
+
+                        I = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 0:samps_per_slot * 2:2] / 2 ** 15
+                        Q = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 1:samps_per_slot * 2:2] / 2 ** 15
+                        IQ = I + (Q * 1j)
+                        tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk = pilot_finder(IQ, pilot_type, flip=True,
+                                                                                          pilot_seq=pilot_seq)
+                        #print("frame %d ue %d ant %d lts_pks_len %d"%(frameIdx, ueIdx, bsAntIdx, lts_pks.size))
+                        #print(lts_pks)
+                        if lts_pks.size < 2:
+                            cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
+                        elif lts_pks[0] < ofdm_len or lts_pks[1] < ofdm_len:
+                            cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
+                        else:
+                            num_pks = lts_pks.size
+                            cfo_sample = 0
+                            n_cfo_samps = 0
+                            for i in range(num_pks - 1):
+                                if lts_pks[i] < samps_per_slot or lts_pks[i + 1] < samps_per_slot:
+                                    sc_first = lts_pks[i] - ofdm_len
+                                    sc_second = lts_pks[i + 1] - ofdm_len
+                                    cfo_sample = cfo_sample + np.mean(np.unwrap(np.angle(np.multiply(IQ[sc_second:sc_second+ofdm_len], np.conj(IQ[sc_first:sc_first+ofdm_len]))))) / (ofdm_len*2*np.pi*(1/rate))
+                                    n_cfo_samps = n_cfo_samps + 1
+                            if n_cfo_samps > 0:
+                                cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = cfo_sample / n_cfo_samps
+                            else:
+                                cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
+
+                        # Find percentage of LTS peaks within a symbol
+                        # (e.g., in a 4096-sample pilot slot, we expect 64, 64-long sequences... assuming no CP)
+                        # seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / symbol_per_slot)
+                        seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (peak_map[frameIdx, cellIdx, ueIdx, bsAntIdx] / symbol_per_slot)  # use matched filter analysis output
+
+                        # Compute Power of Time Domain Signal
+                        rms = np.sqrt(np.mean(IQ * np.conj(IQ)))
+                        td_pwr_lin = np.real(rms) ** 2
+                        td_pwr_dbm_s = 10 * np.log10(td_pwr_lin / 1e-3)
+                        td_pwr_dbm_signal[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_s
+
+                        # Compute SNR
+                        # Noise
+                        if noise_avail:
+                            # noise_samples
+                            In = noise_samples[frameIdx, cellIdx, 0, bsAntIdx, 0:samps_per_slot * 2:2] / 2 ** 15
+                            Qn = noise_samples[frameIdx, cellIdx, 0, bsAntIdx, 1:samps_per_slot * 2:2] / 2 ** 15
+                            IQn = In + (Qn * 1j)
+                            # sio.savemat('test_pwr.mat', {'pilot_t': IQn})
+
+                            # Compute Noise Power (Time Domain)
+                            rms = np.sqrt(np.mean(IQn * np.conj(IQn)))
+                            td_pwr_lin = np.real(rms) ** 2
+                            td_pwr_dbm_n = 10 * np.log10(td_pwr_lin / 1e-3)
+                            td_pwr_dbm_noise[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_n
+                            # SNR
+                            snr[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_s - td_pwr_dbm_n
+        return snr, seq_found, cfo

@@ -24,7 +24,6 @@ import h5py
 import matplotlib.pyplot as plt
 import collections
 import time
-from find_lts import *
 from optparse import OptionParser
 from channel_analysis import *
 import hdf5_lib
@@ -82,8 +81,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             _, pilot_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
         ofdm_pilot_f = pilot_f
     reciprocal_calib = np.array(metadata['RECIPROCAL_CALIB'])
-    samps_per_slot_no_pad = samps_per_slot - z_padding
-    symbol_per_slot = ((samps_per_slot_no_pad) // (cp + fft_size))
+    ofdm_len = fft_size + cp
+    symbol_per_slot = (samps_per_slot - z_padding) // ofdm_len
     if 'UL_SYMS' in metadata:
         ul_slot_num = int(metadata['UL_SYMS'])
     elif 'UL_SLOTS' in metadata:
@@ -92,7 +91,6 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     all_bs_nodes = set(range(num_bs_ant))
     plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
     n_ue = num_cl
-    ofdm_len = fft_size + cp
 
     pilot_data_avail = len(hdf5.pilot_samples) > 0
     ul_data_avail = len(hdf5.uplink_samples) > 0
@@ -343,98 +341,16 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         print(">>>> filter_pilots time: %f \n" % ( filter_pilots_end - filter_pilots_start) )
         print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
 
-        # Find LTS peaks across frame
         snr_start = time.time()
-        n_frame = pilot_samples.shape[0]
-        n_cell = pilot_samples.shape[1]
-        n_ue = pilot_samples.shape[2]
-        n_ant = pilot_samples.shape[3]
-        seq_found = np.zeros((n_frame, n_cell, n_ue, n_ant))
-        cfo = np.zeros((n_frame, n_cell, n_ue, n_ant))
-
-        td_pwr_dbm_noise = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
-        td_pwr_dbm_signal = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
-        if noise_avail:
-            noise_samples = hdf5.noise_samples[:, :, :, plot_bs_nodes, :]
-            snr = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
-
-        for frameIdx in range(n_frame):    # Frame
-            for cellIdx in range(n_cell):  # Cell
-                for ueIdx in range(n_ue):  # UE
-                    for bsAntIdx in range(n_ant):  # BS ANT
-
-                        I = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 0:samps_per_slot * 2:2] / 2 ** 15
-                        Q = pilot_samples[frameIdx, cellIdx, ueIdx, bsAntIdx, 1:samps_per_slot * 2:2] / 2 ** 15
-                        IQ = I + (Q * 1j)
-                        tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk = pilot_finder(IQ, pilot_type, flip=True,
-                                                                                          pilot_seq=ofdm_pilot)
-                        #print("frame %d ue %d ant %d lts_pks_len %d"%(frameIdx, ueIdx, bsAntIdx, lts_pks.size))
-                        #print(lts_pks)
-                        if lts_pks.size < 2:
-                            cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
-                        elif lts_pks[0] < ofdm_len or lts_pks[1] < ofdm_len:
-                            cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
-                        else:
-                            num_pks = lts_pks.size
-                            cfo_sample = 0
-                            n_cfo_samps = 0
-                            for i in range(num_pks - 1):
-                                if lts_pks[i] < samps_per_slot or lts_pks[i + 1] < samps_per_slot:
-                                    sc_first = lts_pks[i] - ofdm_len
-                                    sc_second = lts_pks[i + 1] - ofdm_len
-                                    cfo_sample = cfo_sample + np.mean(np.unwrap(np.angle(np.multiply(IQ[sc_second:sc_second+ofdm_len], np.conj(IQ[sc_first:sc_first+ofdm_len]))))) / (ofdm_len*2*np.pi*(1/rate))
-                                    n_cfo_samps = n_cfo_samps + 1
-                            if n_cfo_samps > 0:
-                                cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = cfo_sample / n_cfo_samps
-                            else:
-                                cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
-
-                        # Find percentage of LTS peaks within a symbol
-                        # (e.g., in a 4096-sample pilot slot, we expect 64, 64-long sequences... assuming no CP)
-                        # seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / symbol_per_slot)
-                        seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (peak_map[frameIdx, cellIdx, ueIdx, bsAntIdx] / symbol_per_slot)  # use matched filter analysis output
-
-                        # Compute Power of Time Domain Signal
-                        rms = np.sqrt(np.mean(IQ * np.conj(IQ)))
-                        td_pwr_lin = np.real(rms) ** 2
-                        td_pwr_dbm_s = 10 * np.log10(td_pwr_lin / 1e-3)
-                        td_pwr_dbm_signal[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_s
-
-                        # Compute SNR
-                        # Noise
-                        if noise_avail:
-                            # noise_samples
-                            In = noise_samples[frameIdx, cellIdx, 0, bsAntIdx, 0:samps_per_slot * 2:2] / 2 ** 15
-                            Qn = noise_samples[frameIdx, cellIdx, 0, bsAntIdx, 1:samps_per_slot * 2:2] / 2 ** 15
-                            IQn = In + (Qn * 1j)
-                            # sio.savemat('test_pwr.mat', {'pilot_t': IQn})
-
-                            # Compute Noise Power (Time Domain)
-                            rms = np.sqrt(np.mean(IQn * np.conj(IQn)))
-                            td_pwr_lin = np.real(rms) ** 2
-                            td_pwr_dbm_n = 10 * np.log10(td_pwr_lin / 1e-3)
-                            td_pwr_dbm_noise[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_n
-                            # SNR
-                            snr[frameIdx, cellIdx, ueIdx, bsAntIdx] = td_pwr_dbm_s - td_pwr_dbm_n
-
-                        dbg2 = False
-                        if dbg2:
-                            fig = plt.figure(1234)
-                            ax1 = fig.add_subplot(2, 1, 1)
-                            ax1.plot(np.abs(IQ))
-                            ax2 = fig.add_subplot(2, 1, 2)
-                            ax2.stem(np.abs(lts_corr))
-                            ax2.scatter(np.linspace(0.0, len(lts_corr), num=1000), pilot_thresh * np.ones(1000), color='r')
-                            plt.show()
-
+        snr, seq_found, cfo = hdf5_lib.measure_snr(pilot_samples, hdf5.noise_samples, peak_map, pilot_type, ofdm_pilot, ofdm_len, z_padding, rate, plot_bs_nodes)
         snr_end = time.time()
         print(">>>> compute_snr time: %f \n" % (snr_end - snr_start))
 
-        # For some damm reason, if one of the subplots has all of the frames in the same state (good/bad/partial)
+        # For some reason, if one of the subplots has all of the frames in the same state (good/bad/partial)
         # it chooses a random color to paint the whole subplot!
         # Below is some sort of remedy (will fail if SISO!):
-        for n_c in range(n_cell):
-            for n_u in range(n_ue):
+        for n_c in range(frame_map.shape[1]):
+            for n_u in range(frame_map.shape[2]):
                 f_map = frame_map[:,n_c,n_u,:]
                 n_gf = f_map[f_map == 1].size
                 n_bf = f_map[f_map == -1].size
@@ -459,14 +375,14 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         show_plot(cmpx_pilots, seq_orig, match_filt, user_i, ant_i, ref_frame, n_frm_st)
 
         plot_start_frame(f_st, n_frm_st)
-        plot_cfo(cfo, n_frm_st)
+        #plot_cfo(cfo, n_frm_st)
         plot_pilot_mat(seq_found, n_frm_st, n_frm_end)
 
         #############
         #  SNR MAP  #
         #############
         if noise_avail:
-            plot_snr_map(snr, n_frm_st, n_frm_end, n_ant)
+            plot_snr_map(snr, n_frm_st, n_frm_end, num_bs_ant)
 
     plt.show()
 
