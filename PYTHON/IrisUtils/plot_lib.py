@@ -241,6 +241,26 @@ def plot_pilot_mat(seq_found, n_frm_st, n_frm_end):
     cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, 100, 11), orientation='horizontal')
     cbar.ax.set_xticklabels(['0%', '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'])
 
+    ## For some reason, if one of the subplots has all of the frames in the same state (good/bad/partial)
+    ## it chooses a random color to paint the whole subplot!
+    ## Below is some sort of remedy (will fail if SISO!):
+    #for n_c in range(frame_map.shape[1]):
+    #    for n_u in range(frame_map.shape[2]):
+    #        f_map = frame_map[:,n_c,n_u,:]
+    #        n_gf = f_map[f_map == 1].size
+    #        n_bf = f_map[f_map == -1].size
+    #        n_pr = f_map[f_map == 0].size
+    #        if n_gf == 0:
+    #            frame_map[-1,n_c,n_u,-1] = 1
+    #            print("No good frames! Colored the last frame of the last antenna Good for cell {} and UE {} to keep plotter happy!".format(n_c,n_u))
+
+    #        if n_pr == 0:
+    #            frame_map[0,n_c,n_u,-1] = 0
+    #            print("No partial frames! Colored frame 0 of the last antenna for cell {} and UE {} Partial to keep plotter happy!".format(n_c,n_u))
+    #        if n_bf == 0:
+    #            frame_map[-1,n_c,n_u,0] = -1
+    #            print("No bad frames! Colored the last frame of antenna 0 Bad for cell {} and UE {} to keep plotter happy!".format(n_c,n_u))
+
     #fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
     #c = []
     #fig.suptitle('Frame Map')
