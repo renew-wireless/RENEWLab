@@ -891,6 +891,12 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   size_t resync_retry_cnt(0);
   size_t resync_retry_max(100);
   size_t resync_success(0);
+  // TODO: measure CFO from the first beacon and apply here
+  const size_t max_cfo = 100;  // in ppb, For Iris
+  size_t resync_period = static_cast<size_t>(
+      std::floor(1e9 / (max_cfo * config_->samps_per_frame())));
+  size_t last_resync = frame_id;
+  std::printf("Using resync period of %zu\n", resync_period);
   int r = 0;
   rx_offset = 0;
 
@@ -911,10 +917,9 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
                          tx_buffer_size);  // Notify new frame
     }
 
-    // resync every X=1000 frames:
-    // TODO: X should be a function of sample rate and max CFO
-    if (((frame_id / 1000) > 0) && ((frame_id % 1000) == 0)) {
+    if (frame_id - last_resync >= resync_period) {
       resync = resync_enable;
+      last_resync = frame_id;
       MLPD_TRACE("Enable resyncing at frame %zu\n", frame_id);
     }
     rx_offset = 0;
