@@ -167,12 +167,12 @@ ClientRadioSet::ClientRadioSet(Config* cfg) : _cfg(cfg) {
         std::string tddSched = _cfg->cl_frames().at(i);
         for (size_t s = 0; s < _cfg->cl_frames().at(i).size(); s++) {
           char c = _cfg->cl_frames().at(i).at(s);
-          if (c == 'B')
-            tddSched.replace(s, 1, "G");
-          else if (c == 'U')
+          if (c == 'U')
             tddSched.replace(s, 1, "T");
           else if (c == 'D')
             tddSched.replace(s, 1, "R");
+          else
+            tddSched.replace(s, 1, "G");
         }
         std::cout << "Client " << i << " schedule: " << tddSched << std::endl;
         nlohmann::json tddConf;
