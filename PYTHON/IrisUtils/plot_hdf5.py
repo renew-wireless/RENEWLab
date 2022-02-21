@@ -178,7 +178,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2) ) )
 
             for i in insp_ants:
-                plot_iq_samps(samps, n_frm_st, ref_frame, [cell_i], [user_i], [ant_i])
+                user_amps = np.mean(np.abs(samps[:, cell_i, :, insp_ants[i], :]), axis=2)
+                plot_iq_samps(samps, user_amps, n_frm_st, ref_frame, [cell_i], [user_i], [insp_ants[i]])
             plot_csi(userCSI, corr_total, plot_bs_nodes, pilot_frames, ref_frame, cell_i, user_i, subcarrier_i, offset)
             if analyze and noise_avail:
                 analyze_hdf5(hdf5, ref_frame, cell_i, subcarrier_i, offset)

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 # Plots IQ samples in one single frame as well as all frames for
 # selected cell,  BS ant, and user
-def plot_iq_samps(samps, frm_st, frame_i, cells, users, ants, data_str="Pilots"):
+def plot_iq_samps(samps, amps, frm_st, frame_i, cells, users, ants, data_str="Pilots"):
     # Samps Dimensions: (Frame, Cell, User, Antenna, Sample)
     for i in cells:
         for j in users:
@@ -12,7 +12,7 @@ def plot_iq_samps(samps, frm_st, frame_i, cells, users, ants, data_str="Pilots")
                 cell_i = i
                 user_i = j
                 ant_i = k
-                fig, axes = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
+                fig, axes = plt.subplots(nrows=3, ncols=1, squeeze=False, figsize=(10, 8))
                 axes[0, 0].set_title(data_str + " IQ - Cell %d - Antenna %d - User %d"%(cell_i, ant_i, user_i))
                 axes[0, 0].set_ylabel('Frame %d (IQ)' %( (frame_i + frm_st)) )
                 axes[0, 0].plot(np.real(samps[frame_i, cell_i, user_i, ant_i, :]))
@@ -21,6 +21,12 @@ def plot_iq_samps(samps, frm_st, frame_i, cells, users, ants, data_str="Pilots")
                 axes[1, 0].set_ylabel('All Frames (IQ)')
                 axes[1, 0].plot(np.real(samps[:, cell_i, user_i, ant_i, :]).flatten())
                 axes[1, 0].plot(np.imag(samps[:, cell_i, user_i, ant_i, :]).flatten())
+
+                axes[2, 0].set_ylabel('magtinute (ant %d)' % (0))
+                for i in range(amps.shape[1]):
+                    axes[2, 0].plot(amps[:, i].flatten(), label='user %d'%i)
+                axes[2, 0].set_xlabel('frame')
+                axes[2, 0].legend(frameon=False)
 
 def plot_csi(csi, corr, bs_nodes, good_frames, frame_i, cell_i, user_i, subcarrier_i, offset, data_str="Uplink"):
     fig, axes = plt.subplots(nrows=3, ncols=1, squeeze=False, figsize=(10, 8))
