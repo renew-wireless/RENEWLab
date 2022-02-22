@@ -48,11 +48,11 @@
 
 class Radio {
 private:
-    uhd::usrp::multi_usrp::sptr* dev;
-    uhd::rx_streamer::sptr* rxs;
-    uhd::tx_streamer::sptr* txs;
-    uhd::stream_cmd_t stream_cmd_rx;
-    uhd::stream_cmd_t stream_cmd_tx;
+    uhd::usrp::multi_usrp::sptr dev;
+    uhd::rx_streamer::sptr rxs;
+    uhd::tx_streamer::sptr txs;
+//    uhd::stream_cmd_t stream_cmd_rx;
+//    uhd::stream_cmd_t stream_cmd_tx;
     uhd::rx_metadata_t rmd;
     uhd::tx_metadata_t tmd;
 
@@ -66,7 +66,6 @@ public:
     Radio(const std::map< std::string, std::string >& args, const char uhdFmt[],
           const std::vector<size_t>& channels, double rate);
     void activateXmit(void);
-
 
     ~Radio(void);
     int recv(void* const* buffs, int samples, long long& frameTime);
