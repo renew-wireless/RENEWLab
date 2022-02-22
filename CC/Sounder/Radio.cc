@@ -15,6 +15,13 @@
 #include <iostream>
 #include <complex>
 
+#include <uhd/transport/udp_simple.hpp>
+#include <fstream>
+#include <sstream>
+#include <string.h>
+
+
+
 void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
 {
     // these params are sufficient to set before DC offset and IQ imbalance calibration
@@ -27,11 +34,12 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
 
         // update for UHD multi USRP
         dev->set_tx_antenna ("TX/RX", ch);
-        dev->set_rx_bandwidth (_cfg->bw_filter()), ch);
-        dev->set_tx_bandwidth (_cfg->bw_filter()), ch);
+        dev->set_rx_bandwidth (_cfg->bw_filter(), ch);
+        dev->set_tx_bandwidth (_cfg->bw_filter(), ch);
         uhd::tune_request_t tune_request(_cfg->nco(),ch);
         dev->set_rx_freq(tune_request,ch);
         dev->set_tx_freq(tune_request,ch);
+
     } else {
         MLPD_INFO("Init USRP channel: %d\n", ch);
 //        dev->setAntenna(SOAPY_SDR_TX, ch, "TX/RX");
@@ -66,6 +74,7 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
             dev->set_rx_gain(rxgain, ch);
             dev->set_tx_gain(rxgain, ch);
             MLPD_INFO("Tx gain: %lf, Rx gain: %lf\n", dev->get_tx_gain(ch), dev->get_rx_gain(ch));
+
         } else {
 //            dev->setGain(SOAPY_SDR_RX, ch, "LNA", std::min(30.0, rxgain)); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
 //            dev->setGain(SOAPY_SDR_RX, ch, "TIA", 0);
@@ -128,20 +137,20 @@ void Radio::drain_buffers(std::vector<void*> buffs, int symSamp)
 
     // update for UHD multi USRP
 //    const size_t samps_per_buff = rxs->get_max_num_samps();
-    r = rxs->recv(buffs, sysSamp, rmd);
-    if (rmd.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT)
-        break;
+    r = rxs->recv(buffs, symSamp, rmd);
+//    if (rmd.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT){
+//        break;
+//    }
     if (rmd.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE) {
         throw std::runtime_error(
-                str(boost::format("Receiver error %s") % md.strerror()));
+                str(boost::format("Receiver error %s") % rmd.strerror()));
     }
 //    i = r/samps_per_buff;
     i = r/symSamp;
     MLPD_TRACE("Number of reads needed to drain: %d\n", i);
 }
 
-Radio::Radio(const std::map< std::string, std::string >& args, const char uhdFmt[],
-    const std::vector<size_t>& channels, double rate)
+Radio::Radio(const std::map< std::string, std::string >& args, const char uhdFmt[], const std::vector<size_t>& channels, double rate)
 {
 //    dev = SoapySDR::Device::make(args);
     dev = uhd::usrp::multi_usrp::make(args);
@@ -160,8 +169,13 @@ Radio::Radio(const std::map< std::string, std::string >& args, const char uhdFmt
 //    txs = dev->setupStream(SOAPY_SDR_TX, soapyFmt, channels);
 
     rxs = dev->get_rx_stream(stream_args);
-    txs = dev->get_tx_stream(strem_args);
+    txs = dev->get_tx_stream(stream_args);
 
+//    uhd::stream_cmd_t stream_cmd_1(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+//    stream_cmd_rx = stream_cmd_1;
+////
+//    uhd::stream_cmd_t stream_cmd_2(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+//    stream_cmd_tx = stream_cmd_2;
     // initial consideration,
 // not necessary, can be calimed in activate or deac
     // rx
@@ -178,7 +192,6 @@ Radio::Radio(const std::map< std::string, std::string >& args, const char uhdFmt
         reset_DATA_clk_domain();
 }
 
-
 int Radio::activateRecv(
         const long long rxTime, const size_t numSamps, int flags)
 {
@@ -191,17 +204,17 @@ int Radio::activateRecv(
         // the following probabaly not going to be called, considered deleting, but decied to rewrite it to use UHD same
         // as the else condition
         uhd::stream_cmd_t stream_cmd_1(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-        stream_cmd_rx = stream_cmd_1;
-        stream_cmd_rx.stream_now = true;
-        rxs->issue_stream_cmd(stream_cmd_rx);
+//        stream_cmd_rx = stream_cmd_1;
+        stream_cmd_1.stream_now = true;
+        rxs->issue_stream_cmd(stream_cmd_1);
         return 0;
     }
 //        dev->activateStream(rxs, flag_args, rxTime, numSamps);
     else {
         uhd::stream_cmd_t stream_cmd_1(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-        stream_cmd_rx = stream_cmd_1;
-        stream_cmd_rx.stream_now = true;
-        rxs->issue_stream_cmd(stream_cmd_rx);
+//        stream_cmd_rx = stream_cmd_1;
+        stream_cmd_1.stream_now = true;
+        rxs->issue_stream_cmd(stream_cmd_1);
         return 0;
     }
 //        dev->activateStream(
@@ -210,23 +223,39 @@ int Radio::activateRecv(
 
 void Radio::activateXmit(void) {
     // for USRP device start tx stream UHD_INIT_TIME_SEC sec in the future
-    if (!kUseUHD) {
-//        dev->activateStream(txs);
-    // update for UHD multi USRP
-        uhd::stream_cmd_t stream_cmd_2(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-        stream_cmd_tx = stream_cmd_2;
-        stream_cmd_tx.stream_now = true;
-        txs->issue_stream_cmd(stream_cmd_tx);
-    }
-    else {
-//        dev->activateStream(c
-//            txs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC * 1e9, 0);
-        // update for UHD multi USRP
-        uhd::stream_cmd_t stream_cmd_2(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-        stream_cmd_tx = stream_cmd_2;
-        stream_cmd_tx.stream_now = true;
-        txs->issue_stream_cmd(stream_cmd_tx);
-    }
+//    if (!kUseUHD) {
+////        dev->activateStream(txs);
+//    // update for UHD multi USRP
+//        uhd::stream_cmd_t stream_cmd_2(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+////        stream_cmd_tx = stream_cmd_2;
+//        stream_cmd_2.stream_now = true;
+//        txs->issue_stream_cmd(stream_cmd_2);
+//    }
+//    else {
+////        dev->activateStream(c
+////            txs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC * 1e9, 0);
+//        // update for UHD multi USRP
+//        uhd::stream_cmd_t stream_cmd_2(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+////        stream_cmd_tx = stream_cmd_2;
+//        stream_cmd_2.stream_now = true;
+//        txs->issue_stream_cmd(stream_cmd_2);
+//    }
+    std::cout << "no input yet, from example, seems no issue command is needed" << std::endl;
+}
+
+void Radio::deactivateRecv(void) {
+//    dev->deactivateStream(rxs);
+    uhd::stream_cmd_t stream_cmd_1(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
+//    stream_cmd_rx = stream_cmd_1;
+    rxs->issue_stream_cmd(stream_cmd_1);
+}
+
+void Radio::deactivateXmit(void) {
+//    dev->deactivateStream(txs);
+//    uhd::stream_cmd_t stream_cmd_2(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
+//    stream_cmd_tx = stream_cmd_2;
+//    txs->issue_stream_cmd(stream_cmd_2);
+    std::cout << "no input yet, from example, seems no issue command is needed" << std::endl;
 }
 
 Radio::~Radio(void)
@@ -262,11 +291,11 @@ int Radio::recv(void* const* buffs, int samples, long long& frameTime)
 //                  "samples: %d : %d, flags: %d\n",
 //            frameTime, r, samples, flags);
 //    }
-    if (rmd.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT)
-        break;
+//    if (rmd.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT)
+//        break;
     if (rmd.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE) {
         throw std::runtime_error(
-                str(boost::format("Receiver error %s") % md.strerror()));
+                str(boost::format("Receiver error %s") % rmd.strerror()));
     }
     return r;
 }
@@ -292,7 +321,7 @@ int Radio::xmit(
 int Radio::getTriggers(void) const
 {
 //    return std::stoi(dev->readSetting("TRIGGER_COUNT"));
-    return 0; 
+    return 0;
 }
 
 void Radio::reset_DATA_clk_domain(void)
