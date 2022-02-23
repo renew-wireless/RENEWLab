@@ -178,9 +178,9 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2) ) )
 
             for i in insp_ants:
-                user_amps = np.mean(np.abs(samps[:, cell_i, :, insp_ants[i], :]), axis=2)
-                plot_iq_samps(samps, user_amps, n_frm_st, ref_frame, [cell_i], [user_i], [insp_ants[i]])
-            plot_csi(userCSI, corr_total, plot_bs_nodes, pilot_frames, ref_frame, cell_i, user_i, subcarrier_i, offset)
+                user_amps = np.mean(np.abs(samps[:, cell_i, :, i, :]), axis=2)
+                plot_iq_samps(samps, user_amps, n_frm_st, ref_frame, [cell_i], [user_i], [i])
+            plot_csi(userCSI, corr_total, plot_bs_nodes, pilot_frames, ref_frame, cell_i, ant_i, subcarrier_i, offset)
             if analyze and noise_avail:
                 analyze_hdf5(hdf5, ref_frame, cell_i, subcarrier_i, offset)
 
@@ -212,7 +212,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                                                 offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
                 uplink_csi = csi[:, cell_i, :, ofdm_sym_i, :, :]
                 corr_total, sig_sc = calCorr(uplink_csi, np.transpose(np.conj(uplink_csi[ref_frame, :, :, :]), (1, 0, 2) ) )
-                plot_csi(uplink_csi, corr_total, calib_plot_bs_nodes, pilot_frames, ref_frame, cell_i, user_i, subcarrier_i, offset)
+                plot_csi(uplink_csi, corr_total, calib_plot_bs_nodes, pilot_frames, ref_frame, cell_i, ant_i, subcarrier_i, offset)
                 # imp: Frames, #Antennas, #Users, Subcarrier
                 implicit_dl_csi = np.empty((uplink_csi.shape[0], uplink_csi.shape[2], uplink_csi.shape[1], uplink_csi.shape[3]), dtype='complex64')
                 for i in range(uplink_csi.shape[0]):
@@ -226,7 +226,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 # exp: Frames, #Antennas, #Users, Subcarrier
                 explicit_dl_csi = np.transpose(dl_csi[:, cell_i, :, ofdm_sym_i, :, :], (0, 2, 1, 3))
                 corr_dl, _ = calCorr(explicit_dl_csi, np.transpose(np.conj(explicit_dl_csi[ref_frame, :, :, :]), (1, 0, 2) ) )
-                plot_csi(explicit_dl_csi, corr_dl, range(len(calib_plot_bs_nodes)), range(explicit_dl_csi.shape[0]), ref_frame, cell_i, user_i, subcarrier_i, dl_offset, "Downlink")
+                plot_csi(explicit_dl_csi, corr_dl, range(len(calib_plot_bs_nodes)), range(explicit_dl_csi.shape[0]), ref_frame, cell_i, ant_i, subcarrier_i, dl_offset, "Downlink")
 
                 dl_csi_err_mag = np.abs(explicit_dl_csi - implicit_dl_csi)
                 dl_csi_err_phs = np.angle(explicit_dl_csi - implicit_dl_csi)

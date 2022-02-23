@@ -28,18 +28,18 @@ def plot_iq_samps(samps, amps, frm_st, frame_i, cells, users, ants, data_str="Pi
                 axes[2, 0].set_xlabel('frame')
                 axes[2, 0].legend(frameon=False)
 
-def plot_csi(csi, corr, bs_nodes, good_frames, frame_i, cell_i, user_i, subcarrier_i, offset, data_str="Uplink"):
+def plot_csi(csi, corr, bs_nodes, good_frames, frame_i, cell_i, ant_i, subcarrier_i, offset, data_str="Uplink"):
     fig, axes = plt.subplots(nrows=3, ncols=1, squeeze=False, figsize=(10, 8))
-    axes[0, 0].set_title(data_str + " Pilot CSI Stats Across Frames- Cell %d - User %d - Subcarrier %d" % (cell_i, user_i, subcarrier_i))
+    axes[0, 0].set_title(data_str + " Pilot CSI Stats Across Frames- Cell %d - Antenna %d - Subcarrier %d" % (cell_i, ant_i, subcarrier_i))
     axes[0, 0].set_ylabel('Magnitude')
-    for i in range(csi.shape[2]):
-        axes[0, 0].plot(np.abs(csi[:, user_i, i, subcarrier_i]).flatten(), label="ant %d" % bs_nodes[i])
+    for i in range(csi.shape[1]):
+        axes[0, 0].plot(np.abs(csi[:, i, ant_i, subcarrier_i]).flatten(), label="user %d" % bs_nodes[i])
     axes[0, 0].legend(loc='lower right', frameon=False)
     axes[0, 0].set_xlabel('Frame')
 
     axes[1, 0].set_ylabel('Phase')
-    for i in range(csi.shape[2]):
-        axes[1, 0].plot(np.angle(csi[:, user_i, i, subcarrier_i]).flatten(), label="ant %d" % bs_nodes[i])
+    for i in range(csi.shape[1]):
+        axes[1, 0].plot(np.angle(csi[:, i, ant_i, subcarrier_i]).flatten(), label="user %d" % bs_nodes[i])
     axes[1, 0].legend(loc='lower right', frameon=False)
     axes[1, 0].set_ylim(-np.pi, np.pi)
     axes[1, 0].set_xlabel('Frame')
