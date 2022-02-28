@@ -97,20 +97,6 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     noise_avail = len(hdf5.noise_samples) > 0
     dl_data_avail = len(hdf5.downlink_samples) > 0
 
-    # Plot DL data symbols
-    if dl_data_avail > 0:
-        # DL Samps: #Frames, #Cell, #Uplink Symbol, #Antennas, #Samples
-        downlink_samples = hdf5.downlink_samples
-        frm_plt = min(frame_i, downlink_samples.shape[0] + n_frm_st)
-        # Verify frame_i does not exceed max number of collected frames
-        ref_frame = min(frame_i - n_frm_st, downlink_samples.shape[0])
-        samps_mat = np.reshape(
-                downlink_samples, (downlink_samples.shape[0], downlink_samples.shape[1], downlink_samples.shape[2], downlink_samples.shape[3], samps_per_slot, 2))
-        dl_samps = (samps_mat[:, :, :, :, :, 0] +
-                samps_mat[:, :, :, :, :, 1]*1j)*2**-15
-
-        plot_iq_samps(dl_samps, n_frm_st, ref_frame, [cell_i], [dl_slot_i], [user_i], data_str="Downlink Data")
-
     if pilot_data_avail:
         pilot_samples = hdf5.pilot_samples[:, :, :, plot_bs_nodes, :]
 
@@ -131,7 +117,6 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 pilot_samples, (num_frames, num_cells, num_cl_tmp, num_ants, samps_per_slot, 2))
         samps = (samps_mat[:, :, :, :, :, 0] +
                 samps_mat[:, :, :, :, :, 1]*1j)*2**-15
-
         # Correlation (Debug plot useful for checking sync)
         good_ants = []
         insp_ants = [] # antennas to be inspected
@@ -162,7 +147,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                                             offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
 
             cellCSI = csi[:, cell_i, :, :, :, :]
-            if corr_thresh > 0.0: 
+            if corr_thresh > 0.0:
                 bad_nodes = find_bad_nodes(cellCSI, corr_thresh=corr_thresh,
                                            user=user_i)
                 if bad_nodes:
@@ -179,7 +164,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
             for i in insp_ants:
                 user_amps = np.mean(np.abs(samps[:, cell_i, :, i, :]), axis=2)
-                plot_iq_samps(samps, user_amps, n_frm_st, ref_frame, [cell_i], [user_i], [i])
+                plot_iq_samps(samps[:, cell_i, :, :, :], user_amps, n_frm_st, ref_frame, [user_i], [i])
             plot_csi(userCSI, corr_total, plot_bs_nodes, pilot_frames, ref_frame, cell_i, ant_i, subcarrier_i, offset)
             if analyze and noise_avail:
                 analyze_hdf5(hdf5, ref_frame, cell_i, subcarrier_i, offset)
@@ -194,7 +179,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 calib_pilot_samples = pilot_samples
             print(calib_plot_bs_nodes)
             for i in insp_ants:
-                plot_iq_samps(samps, n_frm_st, ref_frame, [cell_i], [0, 1, 2 + user_i], [ant_i])
+                user_amps = np.mean(np.abs(samps[:, cell_i, :, i, :]), axis=2)
+                plot_iq_samps(samps[:, cell_i, :, :, :], user_amps, n_frm_st, ref_frame, [0, 1, 2 + user_i], [i])
 
             # frame, downlink(0)-uplink(1), antennas, subcarrier
             csi_u,_ = hdf5_lib.samps2csi(calib_pilot_samples[:, :, 1:2, :, :], 1, samps_per_slot, fft_size=fft_size,
@@ -213,36 +199,73 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 uplink_csi = csi[:, cell_i, :, ofdm_sym_i, :, :]
                 corr_total, sig_sc = calCorr(uplink_csi, np.transpose(np.conj(uplink_csi[ref_frame, :, :, :]), (1, 0, 2) ) )
                 plot_csi(uplink_csi, corr_total, calib_plot_bs_nodes, pilot_frames, ref_frame, cell_i, ant_i, subcarrier_i, offset)
-                # imp: Frames, #Antennas, #Users, Subcarrier
-                implicit_dl_csi = np.empty((uplink_csi.shape[0], uplink_csi.shape[2], uplink_csi.shape[1], uplink_csi.shape[3]), dtype='complex64')
-                for i in range(uplink_csi.shape[0]):
-                    for j in range(uplink_csi.shape[3]):
-                        implicit_dl_csi[i, :, :, j] = np.transpose(uplink_csi[i, :, :, j] * calib_mat[i, :, j])
-                # downlink_samples: #Frames, #Cell, #Bs Antenna, #Users, #Samples
-                # CSI:              #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
-                dl_offset = 288 # make a param
-                dl_csi, _ = hdf5_lib.samps2csi(downlink_samples[:, :, calib_plot_bs_nodes, :, :], len(calib_plot_bs_nodes), samps_per_slot, fft_size=fft_size,
-                                                offset=dl_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
-                # exp: Frames, #Antennas, #Users, Subcarrier
-                explicit_dl_csi = np.transpose(dl_csi[:, cell_i, :, ofdm_sym_i, :, :], (0, 2, 1, 3))
-                corr_dl, _ = calCorr(explicit_dl_csi, np.transpose(np.conj(explicit_dl_csi[ref_frame, :, :, :]), (1, 0, 2) ) )
-                plot_csi(explicit_dl_csi, corr_dl, range(len(calib_plot_bs_nodes)), range(explicit_dl_csi.shape[0]), ref_frame, cell_i, ant_i, subcarrier_i, dl_offset, "Downlink")
 
-                dl_csi_err_mag = np.abs(explicit_dl_csi - implicit_dl_csi)
-                dl_csi_err_phs = np.angle(explicit_dl_csi - implicit_dl_csi)
-                fig3, axes3 = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
-                axes3[0, 0].set_title('Implicit vs Explicit DL CSI - Cell 0 - Subcarrier %d' % subcarrier_i)
+                ## Compare implicit downlink csi with explicit csi
+                ## imp: Frames, #Antennas, #Users, Subcarrier
+                #implicit_dl_csi = np.empty((uplink_csi.shape[0], uplink_csi.shape[2], uplink_csi.shape[1], uplink_csi.shape[3]), dtype='complex64')
+                #for i in range(uplink_csi.shape[0]):
+                #    for j in range(uplink_csi.shape[3]):
+                #        implicit_dl_csi[i, :, :, j] = np.transpose(uplink_csi[i, :, :, j] * calib_mat[i, :, j])
+                ## downlink_samples: #Frames, #Cell, #Bs Antenna, #Users, #Samples
+                ## CSI:              #Frames, #Cell, #Users, #Pilot Rep, #Antennas, #Subcarrier
+                #dl_offset = 288 # make a param
+                #dl_csi, _ = hdf5_lib.samps2csi(downlink_samples[:, :, calib_plot_bs_nodes, :, :], len(calib_plot_bs_nodes), samps_per_slot, fft_size=fft_size,
+                #                                offset=dl_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
+                ## exp: Frames, #Antennas, #Users, Subcarrier
+                #explicit_dl_csi = np.transpose(dl_csi[:, cell_i, :, ofdm_sym_i, :, :], (0, 2, 1, 3))
+                #corr_dl, _ = calCorr(explicit_dl_csi, np.transpose(np.conj(explicit_dl_csi[ref_frame, :, :, :]), (1, 0, 2) ) )
+                #plot_csi(explicit_dl_csi, corr_dl, range(len(calib_plot_bs_nodes)), range(explicit_dl_csi.shape[0]), ref_frame, cell_i, ant_i, subcarrier_i, dl_offset, "Downlink")
 
-                axes3[0, 0].set_ylabel('magtinute (ant %d)' % (ant_i))
-                axes3[0, 0].plot(dl_csi_err_mag[:, ant_id, user_i, subcarrier_i].flatten(), label='')
-                axes3[0, 0].set_xlabel('frame')
-                axes3[0, 0].legend(frameon=False)
+                #dl_csi_err_mag = np.abs(explicit_dl_csi - implicit_dl_csi)
+                #dl_csi_err_phs = np.angle(explicit_dl_csi - implicit_dl_csi)
+                #fig3, axes3 = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
+                #axes3[0, 0].set_title('Implicit vs Explicit DL CSI - Cell 0 - Subcarrier %d' % subcarrier_i)
 
-                axes3[1, 0].set_ylabel('Phase (ant %d)' % (ant_i))
-                axes3[1, 0].plot(dl_csi_err_phs[:, ant_id, user_i, subcarrier_i].flatten(), label='')
-                axes3[1, 0].set_xlabel('frame')
-                axes3[1, 0].set_ylim(-np.pi, np.pi)
-                axes3[1, 0].legend(frameon=False)
+                #axes3[0, 0].set_ylabel('magtinute (ant %d)' % (ant_i))
+                #axes3[0, 0].plot(dl_csi_err_mag[:, ant_id, user_i, subcarrier_i].flatten(), label='')
+                #axes3[0, 0].set_xlabel('frame')
+                #axes3[0, 0].legend(frameon=False)
+
+                #axes3[1, 0].set_ylabel('Phase (ant %d)' % (ant_i))
+                #axes3[1, 0].plot(dl_csi_err_phs[:, ant_id, user_i, subcarrier_i].flatten(), label='')
+                #axes3[1, 0].set_xlabel('frame')
+                #axes3[1, 0].set_ylim(-np.pi, np.pi)
+                #axes3[1, 0].legend(frameon=False)
+
+        if deep_inspect:
+            filter_pilots_start = time.time()
+            match_filt, seq_num, seq_len, cmpx_pilots, seq_orig = hdf5_lib.filter_pilots(samps, z_padding, fft_size, cp, pilot_type, nonzero_sc_size)
+            filter_pilots_end = time.time()
+
+            frame_sanity_start = time.time()
+            match_filt_clr, frame_map, f_st, peak_map = hdf5_lib.frame_sanity(match_filt, seq_num, seq_len, n_frm_st, frame_to_plot=frame_i, plt_ant=ant_i, cp=cp)
+            frame_sanity_end = time.time()
+            print(">>>> filter_pilots time: %f \n" % ( filter_pilots_end - filter_pilots_start) )
+            print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
+
+            snr_start = time.time()
+            snr, seq_found, cfo = hdf5_lib.measure_snr(pilot_samples, hdf5.noise_samples, peak_map, pilot_type, ofdm_pilot, ofdm_len, z_padding, rate, plot_bs_nodes)
+            snr_end = time.time()
+            print(">>>> compute_snr time: %f \n" % (snr_end - snr_start))
+
+            # Plots:
+            print("Plotting the results:\n")
+
+            # plot a frame:
+            plot_match_filter(match_filt, ref_frame, n_frm_st, ant_i)
+            #plot channel analysis
+            show_plot(cmpx_pilots, seq_orig, match_filt, user_i, ant_i, ref_frame, n_frm_st)
+
+            plot_start_frame(f_st, n_frm_st)
+            #plot_cfo(cfo, n_frm_st)
+            plot_pilot_mat(seq_found, n_frm_st, n_frm_end)
+
+            #############
+            #  SNR MAP  #
+            #############
+            if noise_avail:
+                plot_snr_map(snr, n_frm_st, n_frm_end, num_bs_ant)
+
 
     # Plot UL data symbols
     if ul_data_avail > 0:
@@ -254,46 +277,29 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         ul_samps = (samps_mat[:, :, :, :, :, 0] +
                 samps_mat[:, :, :, :, :, 1]*1j)*2**-15
 
-        plot_iq_samps(ul_samps, n_frm_st, ref_frame, [cell_i], [ul_slot_i], [ant_i], data_str="Uplink Data")
+        user_amps = np.mean(np.abs(ul_samps[:, cell_i, :, ant_i, :]), axis=2)
+        plot_iq_samps(ul_samps[:, cell_i, :, :, :], user_amps, n_frm_st, ref_frame, [user_i], [ant_i], data_str="Uplink Data")
 
         if demodulate:
-            equalized_symbols, tx_symbols, slot_evm, slot_evm_snr = hdf5_lib.demodulate(ul_samps[:, cell_i, :, :, :], userCSI, metadata, hdf5.dirpath, offset, ul_slot_i)
+            equalized_symbols, tx_symbols, slot_evm, slot_evm_snr = hdf5_lib.demodulate(ul_samps[:, cell_i, :, -2:, :], userCSI[:, :, -2:, :], metadata, hdf5.dirpath, offset, ul_slot_i)
             plot_constellation_stats(slot_evm, slot_evm_snr, equalized_symbols, tx_symbols, ref_frame, cell_i, ul_slot_i)
 
+    # Plot DL data symbols
+    if dl_data_avail > 0:
+        # DL Samps: #Frames, #Cell, #Downlink Symbol, #Antennas, #Samples
+        downlink_samples = hdf5.downlink_samples
+        frm_plt = min(frame_i, downlink_samples.shape[0] + n_frm_st)
+        # Verify frame_i does not exceed max number of collected frames
+        ref_frame = min(frame_i - n_frm_st, downlink_samples.shape[0])
+        samps_mat = np.reshape(
+                downlink_samples, (downlink_samples.shape[0], downlink_samples.shape[1], downlink_samples.shape[2], downlink_samples.shape[3], samps_per_slot, 2))
+        dl_samps = (samps_mat[:, :, :, :, :, 0] +
+                samps_mat[:, :, :, :, :, 1]*1j)*2**-15
 
-    if deep_inspect:
-        filter_pilots_start = time.time()
-        match_filt, seq_num, seq_len, cmpx_pilots, seq_orig = hdf5_lib.filter_pilots(samps, z_padding, fft_size, cp, pilot_type, nonzero_sc_size)
-        filter_pilots_end = time.time()
+        user_amps = np.mean(np.abs(dl_samps[:, cell_i, :, ant_i, :]), axis=2)
+        plot_iq_samps(dl_samps[:, cell_i, :, :, :], user_amps, n_frm_st, ref_frame, [user_i], [ant_i], data_str="Downlink Data")
 
-        frame_sanity_start = time.time()
-        match_filt_clr, frame_map, f_st, peak_map = hdf5_lib.frame_sanity(match_filt, seq_num, seq_len, n_frm_st, frame_to_plot=frame_i, plt_ant=ant_i, cp = cp)
-        frame_sanity_end = time.time()
-        print(">>>> filter_pilots time: %f \n" % ( filter_pilots_end - filter_pilots_start) )
-        print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
 
-        snr_start = time.time()
-        snr, seq_found, cfo = hdf5_lib.measure_snr(pilot_samples, hdf5.noise_samples, peak_map, pilot_type, ofdm_pilot, ofdm_len, z_padding, rate, plot_bs_nodes)
-        snr_end = time.time()
-        print(">>>> compute_snr time: %f \n" % (snr_end - snr_start))
-
-        # Plots:
-        print("Plotting the results:\n")
-
-        # plot a frame:
-        plot_match_filter(match_filt, ref_frame, n_frm_st, ant_i)
-        #plot channel analysis
-        show_plot(cmpx_pilots, seq_orig, match_filt, user_i, ant_i, ref_frame, n_frm_st)
-
-        plot_start_frame(f_st, n_frm_st)
-        #plot_cfo(cfo, n_frm_st)
-        plot_pilot_mat(seq_found, n_frm_st, n_frm_end)
-
-        #############
-        #  SNR MAP  #
-        #############
-        if noise_avail:
-            plot_snr_map(snr, n_frm_st, n_frm_end, num_bs_ant)
 
     plt.show()
 

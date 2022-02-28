@@ -499,7 +499,7 @@ class hdf5_lib:
         print("finished log2csi")
 
     @staticmethod
-    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False, pilot_f=[]):
+    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False, pilot_f=[], offset_array=None):
         """Convert an Argos HDF5 log file with raw IQ in to CSI.
         Asumes 802.11 style LTS used for trace collection.
     
@@ -782,9 +782,9 @@ class hdf5_lib:
 
         td_pwr_dbm_noise = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
         td_pwr_dbm_signal = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
+        snr = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
         if noise_avail:
             noise_samples = noise_samples[:, :, :, selected_ants, :]
-            snr = np.empty_like(pilot_samples[:, :, :, :, 0], dtype=float)
 
         for frameIdx in range(n_frame):    # Frame
             for cellIdx in range(n_cell):  # Cell
