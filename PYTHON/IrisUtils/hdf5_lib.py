@@ -4,11 +4,6 @@
 
  Library handling recorded hdf5 file from channel sounding (see Sounder/).
 
- Author(s):
-             C. Nicolas Barati: nicobarati@rice.edu
-             Oscar Bejarano: obejarano@rice.edu
-             Rahman Doost-Mohammady: doost@rice.edu
-
 ---------------------------------------------------------------------
  Copyright © 2018-2019. Rice University.
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
@@ -499,7 +494,7 @@ class hdf5_lib:
         print("finished log2csi")
 
     @staticmethod
-    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False, pilot_f=[], offset_array=None):
+    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False, pilot_f=[]):
         """Convert an Argos HDF5 log file with raw IQ in to CSI.
         Asumes 802.11 style LTS used for trace collection.
     
@@ -798,24 +793,24 @@ class hdf5_lib:
                                                                                           pilot_seq=pilot_seq)
                         #print("frame %d ue %d ant %d lts_pks_len %d"%(frameIdx, ueIdx, bsAntIdx, lts_pks.size))
                         #print(lts_pks)
-                        if lts_pks.size < 2:
-                            cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
-                        elif lts_pks[0] < ofdm_len or lts_pks[1] < ofdm_len:
-                            cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
-                        else:
-                            num_pks = lts_pks.size
-                            cfo_sample = 0
-                            n_cfo_samps = 0
-                            for i in range(num_pks - 1):
-                                if lts_pks[i] < samps_per_slot or lts_pks[i + 1] < samps_per_slot:
-                                    sc_first = lts_pks[i] - ofdm_len
-                                    sc_second = lts_pks[i + 1] - ofdm_len
-                                    cfo_sample = cfo_sample + np.mean(np.unwrap(np.angle(np.multiply(IQ[sc_second:sc_second+ofdm_len], np.conj(IQ[sc_first:sc_first+ofdm_len]))))) / (ofdm_len*2*np.pi*(1/rate))
-                                    n_cfo_samps = n_cfo_samps + 1
-                            if n_cfo_samps > 0:
-                                cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = cfo_sample / n_cfo_samps
-                            else:
-                                cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
+                        #if lts_pks.size < 2:
+                        #    cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
+                        #elif lts_pks[0] < ofdm_len or lts_pks[1] < ofdm_len:
+                        #    cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
+                        #else:
+                        #    num_pks = lts_pks.size
+                        #    cfo_sample = 0
+                        #    n_cfo_samps = 0
+                        #    for i in range(num_pks - 1):
+                        #        if lts_pks[i] < samps_per_slot or lts_pks[i + 1] < samps_per_slot:
+                        #            sc_first = lts_pks[i] - ofdm_len
+                        #            sc_second = lts_pks[i + 1] - ofdm_len
+                        #            cfo_sample = cfo_sample + np.mean(np.unwrap(np.angle(np.multiply(IQ[sc_second:sc_second+ofdm_len], np.conj(IQ[sc_first:sc_first+ofdm_len]))))) / (ofdm_len*2*np.pi*(1/rate))
+                        #            n_cfo_samps = n_cfo_samps + 1
+                        #    if n_cfo_samps > 0:
+                        #        cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = cfo_sample / n_cfo_samps
+                        #    else:
+                        #        cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
 
                         # Find percentage of LTS peaks within a symbol
                         # (e.g., in a 4096-sample pilot slot, we expect 64, 64-long sequences... assuming no CP)
@@ -879,6 +874,7 @@ class hdf5_lib:
         n_frames = ul_samps.shape[0]
         ul_syms = np.empty((ul_samps.shape[0], ul_samps.shape[1],
                        ul_samps.shape[2], symbol_per_slot, fft_size), dtype='complex64')
+
         # UL Syms: #Frames, #Uplink SLOTS, #Antennas, #OFDM Symbols, #Samples
         for i in range(symbol_per_slot):
             ul_syms[:, :, :, i, :] = ul_samps[:, :, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len]

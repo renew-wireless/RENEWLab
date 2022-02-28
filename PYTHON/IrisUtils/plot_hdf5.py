@@ -135,6 +135,40 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             print("no valid frames found in data belonging to user %d. Exitting ..." % user_i)
             return 
 
+        if deep_inspect:
+            filter_pilots_start = time.time()
+            match_filt, seq_num, seq_len, cmpx_pilots, seq_orig = hdf5_lib.filter_pilots(samps, z_padding, fft_size, cp, pilot_type, nonzero_sc_size)
+            filter_pilots_end = time.time()
+
+            frame_sanity_start = time.time()
+            match_filt_clr, frame_map, f_st, peak_map = hdf5_lib.frame_sanity(match_filt, seq_num, seq_len, n_frm_st, frame_to_plot=frame_i, plt_ant=ant_i, cp=cp)
+            frame_sanity_end = time.time()
+            print(">>>> filter_pilots time: %f \n" % ( filter_pilots_end - filter_pilots_start) )
+            print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
+
+            snr_start = time.time()
+            snr, seq_found, cfo = hdf5_lib.measure_snr(pilot_samples, hdf5.noise_samples, peak_map, pilot_type, ofdm_pilot, ofdm_len, z_padding, rate, plot_bs_nodes)
+            snr_end = time.time()
+            print(">>>> compute_snr time: %f \n" % (snr_end - snr_start))
+
+            # Plots:
+            print("Plotting the results:\n")
+
+            # plot a frame:
+            plot_match_filter(match_filt, ref_frame, n_frm_st, ant_i)
+            #plot channel analysis
+            show_plot(cmpx_pilots, seq_orig, match_filt, user_i, ant_i, ref_frame, n_frm_st)
+
+            plot_start_frame(f_st, n_frm_st)
+            #plot_cfo(cfo, n_frm_st)
+            plot_pilot_mat(seq_found, n_frm_st, n_frm_end)
+
+            #############
+            #  SNR MAP  #
+            #############
+            if noise_avail:
+                plot_snr_map(snr, n_frm_st, n_frm_end, num_bs_ant)
+
         # Plotter
         # Plot pilots
         if not reciprocal_calib:
@@ -232,40 +266,6 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 #axes3[1, 0].set_ylim(-np.pi, np.pi)
                 #axes3[1, 0].legend(frameon=False)
 
-        if deep_inspect:
-            filter_pilots_start = time.time()
-            match_filt, seq_num, seq_len, cmpx_pilots, seq_orig = hdf5_lib.filter_pilots(samps, z_padding, fft_size, cp, pilot_type, nonzero_sc_size)
-            filter_pilots_end = time.time()
-
-            frame_sanity_start = time.time()
-            match_filt_clr, frame_map, f_st, peak_map = hdf5_lib.frame_sanity(match_filt, seq_num, seq_len, n_frm_st, frame_to_plot=frame_i, plt_ant=ant_i, cp=cp)
-            frame_sanity_end = time.time()
-            print(">>>> filter_pilots time: %f \n" % ( filter_pilots_end - filter_pilots_start) )
-            print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
-
-            snr_start = time.time()
-            snr, seq_found, cfo = hdf5_lib.measure_snr(pilot_samples, hdf5.noise_samples, peak_map, pilot_type, ofdm_pilot, ofdm_len, z_padding, rate, plot_bs_nodes)
-            snr_end = time.time()
-            print(">>>> compute_snr time: %f \n" % (snr_end - snr_start))
-
-            # Plots:
-            print("Plotting the results:\n")
-
-            # plot a frame:
-            plot_match_filter(match_filt, ref_frame, n_frm_st, ant_i)
-            #plot channel analysis
-            show_plot(cmpx_pilots, seq_orig, match_filt, user_i, ant_i, ref_frame, n_frm_st)
-
-            plot_start_frame(f_st, n_frm_st)
-            #plot_cfo(cfo, n_frm_st)
-            plot_pilot_mat(seq_found, n_frm_st, n_frm_end)
-
-            #############
-            #  SNR MAP  #
-            #############
-            if noise_avail:
-                plot_snr_map(snr, n_frm_st, n_frm_end, num_bs_ant)
-
 
     # Plot UL data symbols
     if ul_data_avail > 0:
@@ -281,7 +281,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         plot_iq_samps(ul_samps[:, cell_i, :, :, :], user_amps, n_frm_st, ref_frame, [user_i], [ant_i], data_str="Uplink Data")
 
         if demodulate:
-            equalized_symbols, tx_symbols, slot_evm, slot_evm_snr = hdf5_lib.demodulate(ul_samps[:, cell_i, :, -2:, :], userCSI[:, :, -2:, :], metadata, hdf5.dirpath, offset, ul_slot_i)
+            equalized_symbols, tx_symbols, slot_evm, slot_evm_snr = hdf5_lib.demodulate(ul_samps[:, cell_i, :, :, :], userCSI, metadata, hdf5.dirpath, offset, ul_slot_i)
             plot_constellation_stats(slot_evm, slot_evm_snr, equalized_symbols, tx_symbols, ref_frame, cell_i, ul_slot_i)
 
     # Plot DL data symbols
