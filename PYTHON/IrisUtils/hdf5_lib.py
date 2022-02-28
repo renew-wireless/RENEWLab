@@ -873,19 +873,16 @@ class hdf5_lib:
         # UL Samps: #Frames, #Uplink SLOTS, #Antennas, #Samples
         n_frames = ul_samps.shape[0]
         ul_syms = np.empty((ul_samps.shape[0], ul_samps.shape[1],
-                       ul_samps.shape[2], symbol_per_slot, fft_size), dtype='complex64')
+                       symbol_per_slot, fft_size), dtype='complex64')
 
-        # UL Syms: #Frames, #Uplink SLOTS, #Antennas, #OFDM Symbols, #Samples
+        # UL Syms: #Frames, #Antennas, #OFDM Symbols, #Samples
         for i in range(symbol_per_slot):
-            ul_syms[:, :, :, i, :] = ul_samps[:, :, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len]
-        # UL Syms: #Frames, #OFDM Symbols, #Uplink SLOTS, #Antennas, #Samples
-        ul_syms = np.transpose(ul_syms, (0, 3, 1, 2, 4))
-        # UL Syms: #Frames, # Frame All OFDM Symbols, #Antennas, #Samples
-        num_ul_sym = ul_syms.shape[1] * ul_syms.shape[2]
-        ul_syms = np.reshape(ul_syms, (ul_syms.shape[0], num_ul_sym, ul_syms.shape[3], ul_syms.shape[4]))
+            ul_syms[:, :, i, :] = ul_samps[:, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len]
+        # UL Syms: #Frames, #OFDM Symbols, #Antennas, #Samples
+        ul_syms = np.transpose(ul_syms, (0, 2, 1, 3))
         ul_syms_f = np.fft.fft(ul_syms, fft_size, 3)
         ul_syms_f = np.delete(ul_syms_f, zero_sc_ind, 3)
-        # UL DEMULT: #Frames, # Frame OFDM Symbols, #User, #Sample (DATA + PILOT SCs)
+        # UL DEMULT: #Frames, #OFDM Symbols, #User, #Sample (DATA + PILOT SCs)
         ul_demult = demult(userCSI, ul_syms_f)
         dims = ul_demult.shape
         ul_demult_exp = np.empty((dims[0], dims[1], dims[2], fft_size), dtype='complex64')
@@ -897,10 +894,10 @@ class hdf5_lib:
         phase_comp_exp = np.tile(np.expand_dims(phase_comp, axis= 3), (1, 1, 1, len(data_sc_ind)))
         ul_equal_syms = ul_demult_exp[:, :, :, data_sc_ind]
         ul_equal_syms = np.multiply(ul_equal_syms, phase_comp_exp)
-        # UL DATA: #Frames, #User, # Frame OFDM Symbols, #DATA SCs
+        # UL DATA: #Frames, #User, #OFDM Symbols, #DATA SCs
         ul_equal_syms = np.transpose(ul_equal_syms, (0, 2, 1, 3))
-        # UL DATA: #Frames, #User, #Uplink SLOTS, SLOT DATA SCs
-        ul_equal_syms = np.reshape(ul_equal_syms, (ul_equal_syms.shape[0], ul_equal_syms.shape[1], ul_slot_num, symbol_per_slot * ul_equal_syms.shape[3]))
+        # UL DATA: #Frames, #User, SLOT DATA SCs
+        ul_equal_syms = np.reshape(ul_equal_syms, (ul_equal_syms.shape[0], ul_equal_syms.shape[1], symbol_per_slot * len(data_sc_ind)))
         evm = np.empty((ul_equal_syms.shape[0], ul_equal_syms.shape[1]), dtype='complex64')
         evm_snr = np.empty((ul_equal_syms.shape[0], ul_equal_syms.shape[1]), dtype='complex64')
 
@@ -926,7 +923,7 @@ class hdf5_lib:
             frac = txdata[frac_fr:, :, :, :, :]
             tx_symbols = np.concatenate((tx_symbols, frac), axis=0)
         tx_symbols = np.reshape(tx_symbols[:, :, :, :, data_sc_ind], (tx_symbols.shape[0], tx_symbols.shape[1], ul_slot_num, symbol_per_slot * len(data_sc_ind)))
-        slot_evm = np.linalg.norm(ul_equal_syms[:, :, ul_slot_i, :] - tx_symbols[:, :, ul_slot_i, :], 2, axis=2) / ul_equal_syms.shape[3]
+        slot_evm = np.linalg.norm(ul_equal_syms - tx_symbols[:, :, ul_slot_i, :], 2, axis=2) / ul_equal_syms.shape[2]
         slot_evm_snr = 10 * np.log10(1 / slot_evm)
 
         return ul_equal_syms, tx_symbols, slot_evm, slot_evm_snr

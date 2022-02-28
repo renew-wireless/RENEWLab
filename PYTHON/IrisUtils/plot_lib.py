@@ -120,7 +120,7 @@ def plot_constellation_stats(evm, evm_snr, ul_data, txdata, frame_i, cell_i, ul_
         y_i = int(i // plt_x_len)
         x_i = i % plt_x_len
         axes5[y_i, x_i].set_title('User %d'%(i))
-        axes5[y_i, x_i].scatter(np.real(ul_data[frame_i, i, ul_slot_i, :]), np.imag(ul_data[frame_i, i, ul_slot_i, :]))
+        axes5[y_i, x_i].scatter(np.real(ul_data[frame_i, i, :]), np.imag(ul_data[frame_i, i, :]))
         axes5[y_i, x_i].scatter(np.real(txdata[frame_i, i, ul_slot_i, :]), np.imag(txdata[frame_i, i, ul_slot_i, :]))
 
         axes6[0, 0].plot(range(ul_data.shape[0]), 100 * evm[:, i], label='User %d'%(i))
