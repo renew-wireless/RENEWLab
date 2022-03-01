@@ -163,6 +163,10 @@ class Iris_py:
                 '''enable the correlator, with inputs from adc'''
                 self.sdr.writeSetting("CORR_START", "A")
 
+        def set_num_samps(self, num_samps):
+                print("Setting number of samples to {}".format(num_samps))
+                self.n_samp = num_samps
+
         # Beacon detected?
         def sdr_gettriggers(self):
                 #time.sleep(1)

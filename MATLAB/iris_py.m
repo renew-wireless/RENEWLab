@@ -115,6 +115,12 @@ classdef iris_py < handle
              end
          end
 
+         function set_num_samps(obj, num_samps)
+            for ipy = 1:obj.n_sdrs
+                obj.py_obj_array{ipy}.set_num_samps(num_samps);
+            end
+         end
+
          function [trig_vec] = sdr_gettriggers(obj)
             if obj.is_bs
                 fprintf('sdr_gettriggers: Wrong function call on BS!');
@@ -304,15 +310,19 @@ classdef iris_py < handle
             if obj.is_bs
                 fprintf('uesdrrx: Wrong function call on BS!');
             end
-            data_raw = zeros(obj.n_sdrs, n_samp);  % Change this to max frame!
+
+            if length(obj.tdd_sched) > 1
+                numRs = count(obj.tdd_sched{1}, "R");   % Assuming all schedules have the same number of R slots
+            else
+                numRs = count(obj.tdd_sched, "R");
+            end
+            data_raw = zeros(obj.n_sdrs, n_samp * numRs);  % Change this to max frame!
 
             for ipy = 1:obj.n_sdrs
                 rcv_data = obj.py_obj_array{ipy}.recv_stream_tdd();
                 data_raw(ipy, :) = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(rcv_data) ) ) ) + ...
                     1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(rcv_data) ) ) );
             end
-            figure; plot(abs(data_raw(1,:)))
-            figure; plot(abs(data_raw(2,:)))
             data = data_raw.';
             len = length(data);
         end

@@ -30,42 +30,41 @@ WRITE_PNG_FILES    = 0;                                      % Enable writing pl
 %Iris params:
 USE_HUB                 = 1;
 WIRED_UE                = 0;
-TX_FRQ                    = 3.6e9;    
-RX_FRQ                    = TX_FRQ;
-TX_GN                      = 80;
-RX_GN                      = 70;
-SMPL_RT                   = 5e6;  
-N_FRM                      = 1;
-bs_ids                       = string.empty();
-bs_sched                  = string.empty();
-ue_sched                  = string.empty();
+TX_FRQ                  = 3.6e9;    
+RX_FRQ                  = TX_FRQ;
+TX_GN                   = 80;
+RX_GN                   = 70;
+SMPL_RT                 = 5e6;  
+N_FRM                   = 1;
+bs_ids                  = string.empty();
+bs_sched                = string.empty();
+ue_sched                = string.empty();
 
 % Waveform params
 TX_SCALE                = 1;                                      % Scale for Tx waveform ([0:1])
 
 % OFDM params
-SC_IND_PILOTS         = [8 22 44 58];                    % Pilot subcarrier indices
-SC_IND_DATA           = [2:7 9:21 23:27 39:43 45:57 59:64];     % Data subcarrier indices
-SC_IND_DATA_PILOT = [2:27 39:64]';
-N_SC                       = 64;                                    % Number of subcarriers
-CP_LEN                    = 16;                                    % Cyclic prefix length
-N_SYM_SAMP           = N_SC + CP_LEN;                % Number of samples that will go over the air
-N_SAMP                   = 4096;                               % N_ZPAD_PRE + data_len + N_ZPAD_POST;
-N_ZPAD_PRE            = 160;                                 % Zero-padding prefix for Iris
-N_ZPAD_POST          = 160;                                 % Zero-padding postfix for Iris
-N_OFDM_SYMS         = floor((N_SAMP - N_ZPAD_PRE - N_ZPAD_POST - 160) / N_SYM_SAMP);  % Number of OFDM symbols for burst, it needs to be less than 47
-N_PILOTS_SYMS        = 2;
-N_DATA_SYMS          = (N_OFDM_SYMS - N_PILOTS_SYMS);       % Number of data symbols (one per data-bearing subcarrier per OFDM symbol)
+SC_IND_PILOTS           = [8 22 44 58];                       % Pilot subcarrier indices
+SC_IND_DATA             = [2:7 9:21 23:27 39:43 45:57 59:64]; % Data subcarrier indices
+SC_IND_DATA_PILOT       = [2:27 39:64]';
+N_SC                    = 64;                                 % Number of subcarriers
+CP_LEN                  = 16;                                 % Cyclic prefix length
+N_SYM_SAMP              = N_SC + CP_LEN;                      % Number of samples that will go over the air
+N_SAMP                  = 4096;                               % N_ZPAD_PRE + data_len + N_ZPAD_POST;
+N_ZPAD_PRE              = 160;                                % Zero-padding prefix for Iris
+N_ZPAD_POST             = 160;                                % Zero-padding postfix for Iris
+N_OFDM_SYMS             = floor((N_SAMP - N_ZPAD_PRE - N_ZPAD_POST - 160) / N_SYM_SAMP);  % Number of OFDM symbols for burst, it needs to be less than 47
+N_PILOTS_SYMS           = 2;
+N_DATA_SYMS             = (N_OFDM_SYMS - N_PILOTS_SYMS);      % Number of data symbols (one per data-bearing subcarrier per OFDM symbol)
 N_DATA_SC               = N_DATA_SYMS * length(SC_IND_DATA);
-MOD_ORDER             = 4;                                    % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
+MOD_ORDER               = 4;                                  % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
 
 % Rx processing params         
 RECIP_PLOT              = 0;
 PILOT_PLOT              = 1;
-DOWNLINK_PLOT      = 1;
-AUTO_OFFSET          = 1;
-
-FFT_OFFSET            = 0;                                      % Number of CP samples to use in FFT (on average)
+DOWNLINK_PLOT           = 1;
+AUTO_OFFSET             = 1;
+FFT_OFFSET              = 0;                                      % Number of CP samples to use in FFT (on average)
 
 %% Define the preamble
 % LTS for fine CFO and channel estimation
@@ -197,7 +196,7 @@ node_ue = iris_py(ue_sdr_params, []);    % initialize UE
 
 node_bs.sdrsync();                 % Synchronize delays only for BS
 node_bs.sdrrxsetup();
-node_bs.sdr_setupbeacon();   % Burn beacon to the BS RAM
+node_bs.sdr_setupbeacon();         % Burn beacon to the BS RAM
 
 node_ue.sdr_configgainctrl();
 node_ue.sdrrxsetup();
