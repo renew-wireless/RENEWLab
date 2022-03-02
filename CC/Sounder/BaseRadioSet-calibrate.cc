@@ -19,6 +19,7 @@
 #include "include/utils.h"
 
 //namespace plt = matplotlibcpp;
+static constexpr int kMaxOffsetDiff = 6;
 
 static std::vector<std::complex<float>> snoopSamples(SoapySDR::Device* dev,
                                                      size_t channel,
@@ -490,12 +491,12 @@ void BaseRadioSet::dciqCalibrationProc(size_t channel) {
   std::cout << "****************************************************\n";
 }
 
-void BaseRadioSet::collectCSI(bool& adjust) {
+int BaseRadioSet::syncTimeOffset(bool adjust) {
   int R = bsRadios[0].size();
   if (R < 2) {
     std::cout << "No need to sample calibrate with one Iris! skipping ..."
               << std::endl;
-    return;
+    return -1;
   }
   int seqLen = 160;  // Sequence length
   std::vector<std::vector<float>> pilot =
@@ -514,25 +515,18 @@ void BaseRadioSet::collectCSI(bool& adjust) {
   std::vector<std::complex<int16_t>> dummy_cint16(pilot_cint16.size(), 0);
   size_t num_samps = _cfg->samps_per_slot();
 
-  int ch = (_cfg->bs_channel() == "B") ? 1 : 0;
   std::vector<void*> txbuff(2);
-  if (ch == 0) {
-    txbuff[0] = pilot_cint16.data();
-    txbuff[1] = dummy_cint16.data();
-  } else {
-    txbuff[0] = dummy_cint16.data();
-    txbuff[1] = pilot_cint16.data();
-  }
+  txbuff[0] = pilot_cint16.data();
+  if (_cfg->bs_sdr_ch() == 2) txbuff[1] = dummy_cint16.data();
 
   //std::vector<std::vector<std::complex<float>>> buff;
   std::vector<std::vector<std::complex<int16_t>>> buff;
   //int ant = _cfg->bsChannel.length();
   //int M = bsRadios[0].size() * ant;
-  buff.resize(R * R);
-  for (int i = 0; i < R; i++) {
-    for (int j = 0; j < R; j++) {
-      buff[i * R + j].resize(num_samps);
-    }
+  int num_radios = _cfg->n_bs_sdrs().at(0) - 1;
+  buff.resize(num_radios);
+  for (int i = 0; i < num_radios; i++) {
+    buff[i].resize(num_samps);
   }
 
   std::vector<std::complex<int16_t>> dummyBuff0(num_samps);
@@ -541,66 +535,51 @@ void BaseRadioSet::collectCSI(bool& adjust) {
   dummybuffs[0] = dummyBuff0.data();
   dummybuffs[1] = dummyBuff1.data();
 
-  for (int i = 0; i < R; i++)
+  for (int i = 0; i < num_radios; i++)
     bsRadios[0][i]->drain_buffers(dummybuffs, num_samps);
 
-  for (int i = 0; i < R; i++) {
-    Radio* bsRadio = bsRadios[0][i];
-    SoapySDR::Device* dev = bsRadio->dev;
-    dev->setGain(SOAPY_SDR_TX, ch, "PAD", _cfg->cal_tx_gain().at(ch));
-    dev->writeSetting("TDD_CONFIG", "{\"tdd_enabled\":false}");
-    dev->writeSetting("TDD_MODE", "false");
-    bsRadios[0][i]->activateXmit();
-  }
+  Radio* ref_radio = bsRadios.at(0).back();
+  SoapySDR::Device* ref_dev = ref_radio->dev;
+  ref_dev->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->cal_tx_gain().at(0));
 
   long long txTime(0);
   long long rxTime(0);
-  for (int i = 0; i < R; i++) {
-    // All write, or prepare to receive.
-    for (int j = 0; j < R; j++) {
-      if (j == i) {
-        int ret = bsRadios[0][j]->xmit(txbuff.data(), num_samps, 3, txTime);
-        if (ret < 0) std::cout << "bad write" << std::endl;
-      } else {
-        int ret = bsRadios[0][j]->activateRecv(rxTime, num_samps, 3);
-        if (ret < 0) std::cout << "bad activate at node " << j << std::endl;
-      }
-    }
+  ref_radio->activateXmit();
+  int ret = ref_radio->xmit(txbuff.data(), num_samps, 3, txTime);
+  if (ret < 0) std::cout << "bad write" << std::endl;
 
-    radioTrigger();
-
-    // All but one receive.
-    for (int j = 0; j < R; j++) {
-      if (j == i) continue;
-      std::vector<void*> rxbuff(2);
-      rxbuff[0] = buff[(i * R + j)].data();
-      //rxbuff[1] = ant == 2 ? buff[(i*M+j)*ant+1].data() : dummyBuff.data();
-      rxbuff[1] = dummyBuff0.data();
-      int ret = bsRadios[0][j]->recv(rxbuff.data(), num_samps, rxTime);
-      if (ret < 0) std::cout << "bad read at node " << j << std::endl;
-    }
+  // All write, or prepare to receive.
+  for (int j = 0; j < num_radios; j++) {
+    ret = bsRadios.at(0).at(j)->activateRecv(rxTime, num_samps, 3);
+    if (ret < 0) std::cout << "bad activate at node " << j << std::endl;
   }
 
-  int ref_ant = _cfg->cal_ref_sdr_id();
+  radioTrigger();
+
+  for (int i = 0; i < num_radios; i++) {
+    std::vector<void*> rxbuff(2);
+    rxbuff[0] = buff[i].data();
+    //rxbuff[1] = ant == 2 ? buff[(i*M+j)*ant+1].data() : dummyBuff.data();
+    if (_cfg->bs_sdr_ch() == 2) rxbuff[1] = dummyBuff0.data();
+    int ret = bsRadios.at(0).at(i)->recv(rxbuff.data(), num_samps, rxTime);
+    if (ret < 0) std::cout << "bad read at node " << i << std::endl;
+  }
+
   int min_offset = num_samps;
   int max_offset = 0;
-  std::vector<int> offset(R, 0);
+  std::vector<int> offset(num_radios, 0);
 
-  bool good_csi = true;
-  for (int i = 0; i < R; i++) {
-    int k = i * R + ref_ant;
+  for (int i = 0; i < num_radios; i++) {
     // std::cout << "s" << i << "=[";
     // for (size_t s = 0; s < num_samps; s++)
-    //     std::cout << buff[k].at(s).real() << "+1j*" << buff[k].at(s).imag()
+    //     std::cout << buff[i].at(s).real() << "+1j*" << buff[i].at(s).imag()
     //               << " ";
     // std::cout << "];" << std::endl;
-    auto rx = Utils::cint16_to_cfloat(buff[k]);
+    auto rx = Utils::cint16_to_cfloat(buff[i]);
     int peak = CommsLib::findLTS(rx, seqLen);
     offset[i] = peak < seqLen ? 0 : peak - seqLen;
     //std::cout << i << " " << offset[i] << std::endl;
-    if (i != ref_ant && offset[i] == 0)
-      good_csi = false;
-    else if (i != ref_ant) {
+    if (offset[i] != 0) {
       min_offset = std::min(offset[i], min_offset);
       max_offset = std::max(offset[i], max_offset);
     }
@@ -618,36 +597,37 @@ void BaseRadioSet::collectCSI(bool& adjust) {
     plt::save(std::to_string(i) + ".png");
 #endif
   }
-  // adjusting trigger delays based on lts peak index
-  adjust &= good_csi;
-  if (adjust) {
-    std::cout << "Min/Max offset is " << min_offset << "/" << max_offset << "."
-              << std::endl;
-    for (int i = 0; i < R; i++) {
-      if (i == ref_ant) continue;
-      Radio* bsRadio = bsRadios[0][i];
+  std::cout << "Min/Max offset is " << min_offset << "/" << max_offset << "."
+            << std::endl;
+  int offset_diff = max_offset - min_offset;
+  if (std::abs(offset_diff) > kMaxOffsetDiff) {
+    std::cout << "Offset Diff is " << max_offset - min_offset
+              << ". Likely bad receive!" << std::endl;
+  } else if (adjust && offset_diff > 1) {
+    // adjusting trigger delays based on lts peak index
+    std::vector<int> offset_sorted(offset.begin(), offset.end());
+    std::sort(offset_sorted.begin(), offset_sorted.end());
+    int median_offset = offset_sorted.at(num_radios / 2);
+    for (int i = 0; i < num_radios; i++) {
+      Radio* bsRadio = bsRadios.at(0).at(i);
       SoapySDR::Device* dev = bsRadio->dev;
-      // if offset[i] == 0, then good_csi is false and we never get here???
-      int delta = min_offset - offset[i];
+      int delta = median_offset - offset[i];
       std::cout << "adjusting delay of node " << i << " by " << delta
                 << std::endl;
-      while (delta < 0) {
-        dev->writeSetting("ADJUST_DELAYS", "-1");
-        ++delta;
-      }
-      while (delta > 0) {
-        dev->writeSetting("ADJUST_DELAYS", "1");
-        --delta;
+      int abs_delta = std::abs(delta);
+      while (abs_delta > 0) {
+        dev->writeSetting("ADJUST_DELAYS", delta > 0 ? "1" : "-1");
+        --abs_delta;
       }
     }
   }
 
-  for (int i = 0; i < R; i++) {
-    Radio* bsRadio = bsRadios[0][i];
-    SoapySDR::Device* dev = bsRadio->dev;
+  ref_radio->deactivateXmit();
+  ref_dev->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->tx_gain().at(0));
+  for (int i = 0; i < num_radios; i++) {
+    Radio* bsRadio = bsRadios.at(0).at(i);
     bsRadio->deactivateRecv();
-    bsRadio->deactivateXmit();
-    dev->setGain(SOAPY_SDR_TX, ch, "PAD", _cfg->tx_gain().at(ch));  //[0,30]
     bsRadio->drain_buffers(dummybuffs, num_samps);
   }
+  return offset_diff;
 }

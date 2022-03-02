@@ -210,21 +210,24 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
               << std::endl;
   } else {
     if (_cfg->sample_cal_en() == true) {
-      bool adjust = false;
+      bool adjust = true;
       int cal_cnt = 0;
-      while (!adjust) {
+      int offset_diff = 10;
+      while (offset_diff > 1) {
         if (++cal_cnt > 10) {
           std::cout << "10 attemps of sample offset calibration, "
                        "stopping..."
                     << std::endl;
           break;
         }
-        adjust = true;
-        collectCSI(adjust);  // run 1: find offsets and adjust
+        offset_diff = syncTimeOffset(adjust);  // run 1: find offsets and adjust
       }
-      collectCSI(adjust);  // run 2: verify adjustments
       usleep(100000);
-      std::cout << "sample offset calibration done!" << std::endl;
+      if (offset_diff > 1)
+        std::cout << "Failed ";
+      else
+        std::cout << "Successful ";
+      std::cout << "sample offset calibration!" << std::endl;
     }
 
     nlohmann::json tddConf;
