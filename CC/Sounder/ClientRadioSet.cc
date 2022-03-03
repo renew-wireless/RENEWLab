@@ -164,7 +164,10 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
                 (radios->dev->get_tx_antenna(ch).c_str()));
         }
     }
+    std::cout << "ClientRadioSet Init Check" << std::endl;
     std::cout << std::endl;
+
+
 //    }
 
     // Update for UHD multi USRP
@@ -261,6 +264,8 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
         }
 //        }
 //        }
+        std::cout << "sync check" << std::endl;
+        std::cout << std::endl;
         MLPD_INFO("%s done!\n", __func__);
     }
 }
@@ -397,6 +402,7 @@ int ClientRadioSet::radioTx(size_t radio_id, const void* const* buffs,
 //    }
 //    else {
     long long frameTimeNs = SoapySDR::ticksToTimeNs(frameTime, _cfg->rate());
+//    std::cout<<"clientTX being called"<<std::endl;
     return radios->xmit(buffs, numSamps, flags, frameTimeNs);
 //    }
 }
