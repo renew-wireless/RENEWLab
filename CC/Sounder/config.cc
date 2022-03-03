@@ -209,8 +209,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
   rx_gain_.push_back(tddConf.value("rx_gain_a", 20));
   rx_gain_.push_back(tddConf.value("rx_gain_b", 20));
-  cal_tx_gain_.push_back(tddConf.value("cal_tx_gain_a", 10));
-  cal_tx_gain_.push_back(tddConf.value("cal_tx_gain_b", 10));
+  cal_tx_gain_.push_back(tddConf.value("cal_tx_gain_a", tx_gain_.at(0)));
+  cal_tx_gain_.push_back(tddConf.value("cal_tx_gain_b", tx_gain_.at(1)));
   tx_gain_.shrink_to_fit();
   rx_gain_.shrink_to_fit();
   cal_tx_gain_.shrink_to_fit();

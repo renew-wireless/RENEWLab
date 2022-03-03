@@ -15,10 +15,8 @@
 #include "include/Radio.h"
 #include "include/comms-lib.h"
 #include "include/macros.h"
-//#include "include/matplotlibcpp.h"
 #include "include/utils.h"
 
-//namespace plt = matplotlibcpp;
 static constexpr int kMaxOffsetDiff = 6;
 
 static std::vector<std::complex<float>> snoopSamples(SoapySDR::Device* dev,
@@ -491,9 +489,9 @@ void BaseRadioSet::dciqCalibrationProc(size_t channel) {
   std::cout << "****************************************************\n";
 }
 
-int BaseRadioSet::syncTimeOffset(bool adjust) {
-  int R = bsRadios[0].size();
-  if (R < 2) {
+int BaseRadioSet::syncTimeOffset(bool measure_ref_radio, bool adjust_trigger) {
+  int num_radios = _cfg->n_bs_sdrs().at(0) - 1;
+  if (num_radios < 1) {
     std::cout << "No need to sample calibrate with one Iris! skipping ..."
               << std::endl;
     return -1;
@@ -519,115 +517,152 @@ int BaseRadioSet::syncTimeOffset(bool adjust) {
   txbuff[0] = pilot_cint16.data();
   if (_cfg->bs_sdr_ch() == 2) txbuff[1] = dummy_cint16.data();
 
-  //std::vector<std::vector<std::complex<float>>> buff;
-  std::vector<std::vector<std::complex<int16_t>>> buff;
-  //int ant = _cfg->bsChannel.length();
-  //int M = bsRadios[0].size() * ant;
-  int num_radios = _cfg->n_bs_sdrs().at(0) - 1;
-  buff.resize(num_radios);
-  for (int i = 0; i < num_radios; i++) {
-    buff[i].resize(num_samps);
-  }
-
   std::vector<std::complex<int16_t>> dummyBuff0(num_samps);
   std::vector<std::complex<int16_t>> dummyBuff1(num_samps);
   std::vector<void*> dummybuffs(2);
   dummybuffs[0] = dummyBuff0.data();
   dummybuffs[1] = dummyBuff1.data();
 
-  for (int i = 0; i < num_radios; i++)
-    bsRadios[0][i]->drain_buffers(dummybuffs, num_samps);
+  long long txTime(0);
+  long long rxTime(0);
 
   Radio* ref_radio = bsRadios.at(0).back();
   SoapySDR::Device* ref_dev = ref_radio->dev;
-  ref_dev->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->cal_tx_gain().at(0));
 
-  long long txTime(0);
-  long long rxTime(0);
-  ref_radio->activateXmit();
-  int ret = ref_radio->xmit(txbuff.data(), num_samps, 3, txTime);
-  if (ret < 0) std::cout << "bad write" << std::endl;
+  int offset_diff = num_samps;
+  if (measure_ref_radio == true) {
+    std::vector<std::complex<int16_t>> rx_buff_ref;
+    rx_buff_ref.resize(num_samps);
 
-  // All write, or prepare to receive.
-  for (int j = 0; j < num_radios; j++) {
-    ret = bsRadios.at(0).at(j)->activateRecv(rxTime, num_samps, 3);
-    if (ret < 0) std::cout << "bad activate at node " << j << std::endl;
-  }
-
-  radioTrigger();
-
-  for (int i = 0; i < num_radios; i++) {
-    std::vector<void*> rxbuff(2);
-    rxbuff[0] = buff[i].data();
-    //rxbuff[1] = ant == 2 ? buff[(i*M+j)*ant+1].data() : dummyBuff.data();
-    if (_cfg->bs_sdr_ch() == 2) rxbuff[1] = dummyBuff0.data();
-    int ret = bsRadios.at(0).at(i)->recv(rxbuff.data(), num_samps, rxTime);
-    if (ret < 0) std::cout << "bad read at node " << i << std::endl;
-  }
-
-  int min_offset = num_samps;
-  int max_offset = 0;
-  std::vector<int> offset(num_radios, 0);
-
-  for (int i = 0; i < num_radios; i++) {
-    // std::cout << "s" << i << "=[";
-    // for (size_t s = 0; s < num_samps; s++)
-    //     std::cout << buff[i].at(s).real() << "+1j*" << buff[i].at(s).imag()
-    //               << " ";
-    // std::cout << "];" << std::endl;
-    auto rx = Utils::cint16_to_cfloat(buff[i]);
+    ref_radio->drain_buffers(dummybuffs, num_samps);
+    Radio* front_radio = bsRadios.at(0).front();
+    SoapySDR::Device* front_dev = front_radio->dev;
+    front_dev->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->cal_tx_gain().at(0));
+    front_radio->activateXmit();
+    int ret = front_radio->xmit(txbuff.data(), num_samps, 3, txTime);
+    if (ret < 0) std::cout << "bad write" << std::endl;
+    ret = ref_radio->activateRecv(rxTime, num_samps, 3);
+    if (ret < 0) std::cout << "bad activate at front node" << std::endl;
+    radioTrigger();
+    std::vector<void*> rxbuffref(2);
+    rxbuffref[0] = rx_buff_ref.data();
+    if (_cfg->bs_sdr_ch() == 2) rxbuffref[1] = dummyBuff0.data();
+    ret = ref_radio->recv(rxbuffref.data(), num_samps, rxTime);
+    auto rx = Utils::cint16_to_cfloat(rx_buff_ref);
+    //std::cout << "ref=[";
+    //for (size_t s = 0; s < num_samps; s++)
+    //  std::cout << rx_buff_ref.at(s).real() << "+1j*"
+    //            << rx_buff_ref.at(s).imag() << " ";
+    //std::cout << "];" << std::endl;
     int peak = CommsLib::findLTS(rx, seqLen);
-    offset[i] = peak < seqLen ? 0 : peak - seqLen;
-    //std::cout << i << " " << offset[i] << std::endl;
-    if (offset[i] != 0) {
-      min_offset = std::min(offset[i], min_offset);
-      max_offset = std::max(offset[i], max_offset);
-    }
-
-#if DEBUG_PLOT
-    std::vector<double> rx_I(num_samps);
-    std::transform(rx.begin(), rx.end(), rx_I.begin(),
-                   [](std::complex<double> cf) { return cf.real(); });
-    plt::figure_size(1200, 780);
-    plt::plot(rx_I);
-    plt::xlim(0, num_samps);
-    plt::ylim(-1, 1);
-    plt::title("Sample figure");
-    plt::legend();
-    plt::save(std::to_string(i) + ".png");
-#endif
-  }
-  std::cout << "Min/Max offset is " << min_offset << "/" << max_offset << "."
-            << std::endl;
-  int offset_diff = max_offset - min_offset;
-  if (std::abs(offset_diff) > kMaxOffsetDiff) {
-    std::cout << "Offset Diff is " << max_offset - min_offset
-              << ". Likely bad receive!" << std::endl;
-  } else if (adjust && offset_diff > 1) {
-    // adjusting trigger delays based on lts peak index
-    std::vector<int> offset_sorted(offset.begin(), offset.end());
-    std::sort(offset_sorted.begin(), offset_sorted.end());
-    int median_offset = offset_sorted.at(num_radios / 2);
-    for (int i = 0; i < num_radios; i++) {
-      Radio* bsRadio = bsRadios.at(0).at(i);
-      SoapySDR::Device* dev = bsRadio->dev;
-      int delta = median_offset - offset[i];
-      std::cout << "adjusting delay of node " << i << " by " << delta
+    int offset = peak < seqLen ? 0 : peak - seqLen;
+    if (offset > 0) {
+      offset_diff = _cfg->prefix() - offset;
+      std::cout << "Ref offset from prefix is " << offset_diff << "."
                 << std::endl;
-      int abs_delta = std::abs(delta);
-      while (abs_delta > 0) {
-        dev->writeSetting("ADJUST_DELAYS", delta > 0 ? "1" : "-1");
-        --abs_delta;
+      /*std::cout << "adjusting delay of ref node by " << offset_diff
+                << std::endl;*/
+      if (adjust_trigger) {
+        int abs_delta = std::abs(offset_diff);
+        if (abs_delta > _cfg->prefix())
+          std::cout << "Likely bad receive!" << std::endl;
+        else {
+          while (abs_delta > 0) {
+            ref_dev->writeSetting("ADJUST_DELAYS",
+                                  offset_diff > 0 ? "1" : "-1");
+            --abs_delta;
+          }
+        }
       }
     }
-  }
+    front_radio->deactivateXmit();
+    front_dev->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->tx_gain().at(0));
+    ref_radio->deactivateRecv();
+    ref_radio->drain_buffers(dummybuffs, num_samps);
+  } else {
+    std::vector<std::vector<std::complex<int16_t>>> buff;
+    buff.resize(num_radios);
+    for (int i = 0; i < num_radios; i++) {
+      buff[i].resize(num_samps);
+    }
 
-  ref_radio->deactivateXmit();
-  ref_dev->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->tx_gain().at(0));
-  for (int i = 0; i < num_radios; i++) {
-    Radio* bsRadio = bsRadios.at(0).at(i);
-    bsRadio->deactivateRecv();
-    bsRadio->drain_buffers(dummybuffs, num_samps);
+    ref_dev->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->cal_tx_gain().at(0));
+    for (int i = 0; i < num_radios; i++)
+      bsRadios.at(0).at(i)->drain_buffers(dummybuffs, num_samps);
+
+    ref_radio->activateXmit();
+    int ret = ref_radio->xmit(txbuff.data(), num_samps, 3, txTime);
+    if (ret < 0) std::cout << "bad write" << std::endl;
+
+    // All write, or prepare to receive.
+    for (int j = 0; j < num_radios; j++) {
+      ret = bsRadios.at(0).at(j)->activateRecv(rxTime, num_samps, 3);
+      if (ret < 0) std::cout << "bad activate at node " << j << std::endl;
+    }
+
+    radioTrigger();
+
+    for (int i = 0; i < num_radios; i++) {
+      std::vector<void*> rxbuff(2);
+      rxbuff[0] = buff[i].data();
+      //rxbuff[1] = ant == 2 ? buff[(i*M+j)*ant+1].data() : dummyBuff.data();
+      if (_cfg->bs_sdr_ch() == 2) rxbuff[1] = dummyBuff0.data();
+      int ret = bsRadios.at(0).at(i)->recv(rxbuff.data(), num_samps, rxTime);
+      if (ret < 0) std::cout << "bad read at node " << i << std::endl;
+    }
+
+    int min_offset = num_samps;
+    int max_offset = 0;
+    std::vector<int> offset(num_radios, 0);
+
+    for (int i = 0; i < num_radios; i++) {
+      // std::cout << "s" << i << "=[";
+      // for (size_t s = 0; s < num_samps; s++)
+      //     std::cout << buff[i].at(s).real() << "+1j*" << buff[i].at(s).imag()
+      //               << " ";
+      // std::cout << "];" << std::endl;
+      auto rx = Utils::cint16_to_cfloat(buff[i]);
+      int peak = CommsLib::findLTS(rx, seqLen);
+      offset[i] = peak < seqLen ? 0 : peak - seqLen;
+      //std::cout << i << " " << offset[i] << std::endl;
+      if (offset[i] != 0) {
+        min_offset = std::min(offset[i], min_offset);
+        max_offset = std::max(offset[i], max_offset);
+      }
+    }
+    std::cout << "Min/Max offset is " << min_offset << "/" << max_offset << "."
+              << std::endl;
+    offset_diff = max_offset - min_offset;
+    if (std::abs(offset_diff) > kMaxOffsetDiff) {
+      std::cout << "Offset Diff is " << max_offset - min_offset
+                << ". Likely bad receive!" << std::endl;
+    } else if (adjust_trigger && offset_diff > 1) {
+      // adjusting trigger delays based on lts peak index
+      std::vector<int> offset_sorted(offset.begin(), offset.end());
+      std::sort(offset_sorted.begin(), offset_sorted.end());
+      int median_offset = offset_sorted.at(num_radios / 2);
+      for (int i = 0; i < num_radios; i++) {
+        Radio* bsRadio = bsRadios.at(0).at(i);
+        SoapySDR::Device* dev = bsRadio->dev;
+        //int delta = median_offset - offset[i];
+        int delta = median_offset - offset[i];
+        /*std::cout << "adjusting delay of node " << i << " by " << delta
+                  << std::endl;*/
+        int abs_delta = std::abs(delta);
+        while (abs_delta > 0) {
+          dev->writeSetting("ADJUST_DELAYS", delta > 0 ? "1" : "-1");
+          --abs_delta;
+        }
+      }
+    }
+
+    ref_radio->deactivateXmit();
+    ref_dev->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->tx_gain().at(0));
+    for (int i = 0; i < num_radios; i++) {
+      Radio* bsRadio = bsRadios.at(0).at(i);
+      bsRadio->deactivateRecv();
+      bsRadio->drain_buffers(dummybuffs, num_samps);
+    }
   }
   return offset_diff;
 }

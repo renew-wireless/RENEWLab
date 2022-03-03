@@ -210,24 +210,45 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
               << std::endl;
   } else {
     if (_cfg->sample_cal_en() == true) {
-      bool adjust = true;
       int cal_cnt = 0;
-      int offset_diff = 10;
-      while (offset_diff > 1) {
+      int offset_diff = 1;
+      // array radios delay adjust
+      while (offset_diff > 0) {
         if (++cal_cnt > 10) {
           std::cout << "10 attemps of sample offset calibration, "
                        "stopping..."
                     << std::endl;
           break;
         }
-        offset_diff = syncTimeOffset(adjust);  // run 1: find offsets and adjust
+        offset_diff =
+            syncTimeOffset(false, true);  // run 1: find offsets and adjust
       }
       usleep(100000);
+      offset_diff = syncTimeOffset(false, false);  // run 2: verify
       if (offset_diff > 1)
         std::cout << "Failed ";
       else
         std::cout << "Successful ";
       std::cout << "sample offset calibration!" << std::endl;
+      // ref node delay adjust
+      /*cal_cnt = 0;
+      offset_diff = 1;
+      while (offset_diff > 0) {
+        if (++cal_cnt > 10) {
+          std::cout << "10 attemps of sample offset calibration for ref node, "
+                       "stopping..."
+                    << std::endl;
+          break;
+        }
+        offset_diff =
+            syncTimeOffset(true, true);  // run 1: find offsets and adjust
+      }
+      offset_diff = syncTimeOffset(true, false);  // run 2: verify
+      if (offset_diff > 0)
+        std::cout << "Failed ";
+      else
+        std::cout << "Successful ";
+      std::cout << "ref node sample offset calibration!" << std::endl;*/
     }
 
     nlohmann::json tddConf;
