@@ -88,8 +88,6 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     elif 'UL_SLOTS' in metadata:
         ul_slot_num = int(metadata['UL_SLOTS'])
     num_bs_ant = int(metadata['BS_ANT_NUM_PER_CELL'][cell_i])
-    all_bs_nodes = set(range(num_bs_ant))
-    plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
     n_ue = num_cl
 
     pilot_data_avail = len(hdf5.pilot_samples) > 0
@@ -97,7 +95,10 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     noise_avail = len(hdf5.noise_samples) > 0
     dl_data_avail = len(hdf5.downlink_samples) > 0
 
+
     if pilot_data_avail:
+        all_bs_nodes = set(range(hdf5.pilot_samples.shape[3]))
+        plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
         pilot_samples = hdf5.pilot_samples[:, :, :, plot_bs_nodes, :]
 
         frm_plt = min(frame_i, pilot_samples.shape[0] + n_frm_st)
@@ -214,7 +215,10 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             print(calib_plot_bs_nodes)
             for i in insp_ants:
                 user_amps = np.mean(np.abs(samps[:, cell_i, :, i, :]), axis=2)
-                plot_iq_samps(samps[:, cell_i, :, :, :], user_amps, n_frm_st, ref_frame, [0, 1, 2 + user_i], [i])
+                if num_cl > 0:
+                    plot_iq_samps(samps[:, cell_i, :, :, :], user_amps, n_frm_st, ref_frame, [0, 1, 2 + user_i], [i])
+                else:
+                    plot_iq_samps(samps[:, cell_i, :, :, :], user_amps, n_frm_st, ref_frame, [0, 1], [i])
 
             # frame, downlink(0)-uplink(1), antennas, subcarrier
             csi_u,_ = hdf5_lib.samps2csi(calib_pilot_samples[:, :, 1:2, :, :], 1, samps_per_slot, fft_size=fft_size,
@@ -270,6 +274,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     # Plot UL data symbols
     if ul_data_avail > 0:
         # UL Samps: #Frames, #Cell, #Uplink Symbol, #Antennas, #Samples
+        all_bs_nodes = set(range(hdf5.uplink_samples.shape[3]))
+        plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
         uplink_samples = hdf5.uplink_samples[:, :, :, plot_bs_nodes, :]
         ref_frame = min(frame_i - n_frm_st, uplink_samples.shape[0])
         samps_mat = np.reshape(
