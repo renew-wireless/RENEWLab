@@ -27,9 +27,9 @@ def plot_iq_samps(samps, amps, frm_st, frame_i, users, ants, data_str="Pilots"):
             axes[2, 0].set_xlabel('frame')
             axes[2, 0].legend(frameon=False)
 
-def plot_csi(csi, corr, bs_nodes, good_frames, frame_i, cell_i, ant_i, subcarrier_i, offset, data_str="Uplink"):
+def plot_csi(csi, corr, bs_nodes, good_frames, frame_i, ant_i, subcarrier_i, offset, data_str="Uplink"):
     fig, axes = plt.subplots(nrows=3, ncols=1, squeeze=False, figsize=(10, 8))
-    axes[0, 0].set_title(data_str + " Pilot CSI Stats Across Frames- Cell %d - Antenna %d - Subcarrier %d" % (cell_i, ant_i, subcarrier_i))
+    axes[0, 0].set_title(data_str + " Pilot CSI Stats Across Frames- Antenna %d - Subcarrier %d" % (ant_i, subcarrier_i))
     axes[0, 0].set_ylabel('Magnitude')
     for i in range(csi.shape[1]):
         axes[0, 0].plot(np.abs(csi[:, i, ant_i, subcarrier_i]).flatten(), label="user %d" % bs_nodes[i])
@@ -61,8 +61,8 @@ def plot_calib(calib_mat, bs_nodes, frame_i, ant_i, subcarrier_i):
     axes[0, 0].legend(frameon=False)
 
     axes[1, 0].set_ylabel('Phase (ant %d)' % (ant_i))
-    axes[1, 0].plot(np.angle(calib_mat[:, ant_i, subcarrier_i]).flatten())
-    axes[1, 0].set_ylim(-np.pi, np.pi)
+    axes[1, 0].plot(np.unwrap(np.angle(calib_mat[:, ant_i, subcarrier_i])).flatten())
+    #axes[1, 0].set_ylim(-np.pi, np.pi)
     axes[1, 0].set_xlabel('Frame')
     axes[1, 0].legend(frameon=False)
     axes[1, 0].grid()
@@ -75,9 +75,9 @@ def plot_calib(calib_mat, bs_nodes, frame_i, ant_i, subcarrier_i):
 
     axes[3, 0].set_ylabel('Phase')
     for i in range(calib_mat.shape[1]):
-        axes[3, 0].plot(np.angle(calib_mat[:, i, subcarrier_i]).flatten(), label="ant %d" % bs_nodes[i])
+        axes[3, 0].plot(np.unwrap(np.angle(calib_mat[:, i, subcarrier_i])).flatten(), label="ant %d" % bs_nodes[i])
     axes[3, 0].set_xlabel('Frame')
-    axes[3, 0].set_ylim(-np.pi, np.pi)
+    #axes[3, 0].set_ylim(-np.pi, np.pi)
     axes[3, 0].legend(loc='lower right', frameon=False)
     axes[3, 0].grid()
 
@@ -88,8 +88,8 @@ def plot_calib(calib_mat, bs_nodes, frame_i, ant_i, subcarrier_i):
     axes[0, 0].set_xlabel('Subcarrier')
 
     axes[1, 0].set_ylabel('Phase ant %d' % (ant_i))
-    axes[1, 0].plot(np.angle(calib_mat[frame_i, ant_i, :]).flatten())
-    axes[1, 0].set_ylim(-np.pi, np.pi)
+    axes[1, 0].plot(np.unwrap(np.angle(calib_mat[frame_i, ant_i, :])).flatten())
+    #axes[1, 0].set_ylim(-np.pi, np.pi)
     axes[1, 0].set_xlabel('Subcarrier')
 
     axes[2, 0].set_ylabel('Magnitude')
@@ -100,19 +100,19 @@ def plot_calib(calib_mat, bs_nodes, frame_i, ant_i, subcarrier_i):
 
     axes[3, 0].set_ylabel('Phase')
     for i in range(calib_mat.shape[1]):
-        axes[3, 0].plot(np.angle(calib_mat[frame_i, i, :]).flatten(), label="ant %d" % bs_nodes[i])
+        axes[3, 0].plot(np.unwrap(np.angle(calib_mat[frame_i, i, :])).flatten(), label="ant %d" % bs_nodes[i])
     axes[3, 0].set_xlabel('Subcarrier')
-    axes[3, 0].set_ylim(-np.pi, np.pi)
+    #axes[3, 0].set_ylim(-np.pi, np.pi)
     axes[3, 0].legend(loc='lower right', frameon=False)
 
-def plot_constellation_stats(evm, evm_snr, ul_data, txdata, frame_i, cell_i, ul_slot_i, data_str = "Uplink"):
+def plot_constellation_stats(evm, evm_snr, ul_data, txdata, frame_i, ul_slot_i, data_str = "Uplink"):
     n_users = ul_data.shape[1]
     plt_x_len = int(np.ceil(np.sqrt(n_users)))
     plt_y_len = int(np.ceil(n_users / plt_x_len))
     fig5, axes5 = plt.subplots(nrows=plt_y_len, ncols=plt_x_len, squeeze=False, figsize=(10, 8))
-    fig5.suptitle(data_str+" User Constellations (ZF) - Frame %d - Cell %d - UL SF %d" % (frame_i, cell_i, ul_slot_i))
+    fig5.suptitle(data_str+" User Constellations (ZF) - Frame %d - UL SF %d" % (frame_i, ul_slot_i))
     fig6, axes6 = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
-    fig6.suptitle('Uplink EVM/SNR - Cell %d - UL SF %d' % (cell_i, ul_slot_i))
+    fig6.suptitle('Uplink EVM/SNR - UL SF %d' % (ul_slot_i))
     axes6[0, 0].set_ylabel('EVM (%)')
     axes6[1, 0].set_ylabel('EVM-SNR (dB)')
     axes6[0, 0].set_xlabel('Frame Number')
@@ -151,7 +151,7 @@ def show_plot(cmpx_pilots, lts_seq_orig, match_filt, ref_user, ref_ant, ref_fram
         print("cmpx_pilots.shape = {}".format(cmpx_pilots.shape))
 
     ax1.plot(
-        np.real(cmpx_pilots[frame_to_plot - frm_st_idx, 0, ref_user, ref_ant, :]))
+        np.real(cmpx_pilots[frame_to_plot - frm_st_idx, ref_user, ref_ant, :]))
 
     z_pre = np.zeros(82, dtype='complex64')
     z_post = np.zeros(68, dtype='complex64')
@@ -167,7 +167,7 @@ def show_plot(cmpx_pilots, lts_seq_orig, match_filt, ref_user, ref_ant, ref_fram
                 1j * np.random.normal(0, 0.1 / 2, len(lts_t_rep_tst))
             lts_t_rep_tst = lts_t_rep_tst + w
             cmpx_pilots = np.tile(
-                lts_t_rep_tst, (n_frame, cmpx_pilots.shape[1], cmpx_pilots.shape[2], cmpx_pilots.shape[3], 1))
+                lts_t_rep_tst, (n_frame, cmpx_pilots.shape[1], cmpx_pilots.shape[2], 1))
             print("if test_mf: Shape of lts_t_rep_tst: {} , cmpx_pilots.shape = {}".format(
                 lts_t_rep_tst.shape, cmpx_pilots.shape))
 
@@ -186,63 +186,57 @@ def show_plot(cmpx_pilots, lts_seq_orig, match_filt, ref_user, ref_ant, ref_fram
     ax3.set_title(
         'channel_analysis:csi_from_pilots(): MF (uncleared peaks) - ref frame {} and ref ant. {} (UE {})'.format(
             frame_to_plot, ref_ant, ref_user))
-    ax3.stem(match_filt[frame_to_plot - frm_st_idx, 0, ref_user, ref_ant, :])
+    ax3.stem(match_filt[frame_to_plot - frm_st_idx, ref_user, ref_ant, :])
     ax3.set_xlabel('Samples')
 
 def plot_cfo(cfo, n_frm_st, ant_i = -1):
-    n_cell = cfo.shape[1]
-    n_ue = cfo.shape[2]
-    n_ant = cfo.shape[3]
-    fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+    n_ue = cfo.shape[1]
+    n_ant = cfo.shape[2]
+    fig, axes = plt.subplots(nrows=n_ue, ncols=1, squeeze=False)
     fig.suptitle('Frames\' CFO dices per antenna')
-    for n_c in range(n_cell):
-        for n_u in range(n_ue):
-            cfo_u = cfo[:,n_c,n_u,:]
-            x_pl = np.arange(cfo_u.shape[0]) + n_frm_st
-            for j in range(n_ant):
-                if ant_i == -1 or j == ant_i:
-                    axes[n_u, n_c].plot(x_pl,cfo_u[:,j].flatten(), label = 'Antenna: {}'.format(j) )
-            axes[n_u, n_c].legend(loc='lower right', ncol=2, frameon=False)
-            axes[n_u, n_c].set_xlabel('Frame no.')
-            axes[n_u, n_c].set_ylabel('CFO (Hz)')
-            axes[n_u, n_c].grid(True)
+    for n_u in range(n_ue):
+        cfo_u = cfo[:, n_u, :]
+        x_pl = np.arange(cfo_u.shape[0]) + n_frm_st
+        for j in range(n_ant):
+            if ant_i == -1 or j == ant_i:
+                axes[n_u, 0].plot(x_pl,cfo_u[:,j].flatten(), label = 'Antenna: {}'.format(j) )
+        axes[n_u, 0].legend(loc='lower right', ncol=2, frameon=False)
+        axes[n_u, 0].set_xlabel('Frame no.')
+        axes[n_u, 0].set_ylabel('CFO (Hz)')
+        axes[n_u, 0].grid(True)
 
 def plot_start_frame(sub_fr_strt, n_frm_st):
-    n_cell = sub_fr_strt.shape[1]
-    n_ue = sub_fr_strt.shape[2]
-    n_ant = sub_fr_strt.shape[3]
-    fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+    n_ue = sub_fr_strt.shape[1]
+    n_ant = sub_fr_strt.shape[2]
+    fig, axes = plt.subplots(nrows=n_ue, ncols=1, squeeze=False)
     fig.suptitle('Frames\' starting indices per antenna')
-    for n_c in range(n_cell):
-        for n_u in range(n_ue):
-            sf_strts = sub_fr_strt[:,n_c,n_u,:]
-            x_pl = np.arange(sf_strts.shape[0]) + n_frm_st
-            for j in range(n_ant):
-                axes[n_u, n_c].plot(x_pl,sf_strts[:,j].flatten(), label = 'Antenna: {}'.format(j) )
-            axes[n_u, n_c].legend(loc='lower right', ncol=2, frameon=False)
-            axes[n_u, n_c].set_xlabel('Frame no.')
-            axes[n_u, n_c].set_ylabel('Starting index')
-            axes[n_u, n_c].grid(True)
+    for n_u in range(n_ue):
+        sf_strts = sub_fr_strt[:,n_u,:]
+        x_pl = np.arange(sf_strts.shape[0]) + n_frm_st
+        for j in range(n_ant):
+            axes[n_u, 0].plot(x_pl,sf_strts[:,j].flatten(), label = 'Antenna: {}'.format(j) )
+        axes[n_u, 0].legend(loc='lower right', ncol=2, frameon=False)
+        axes[n_u, 0].set_xlabel('Frame no.')
+        axes[n_u, 0].set_ylabel('Starting index')
+        axes[n_u, 0].grid(True)
 
 def plot_pilot_mat(seq_found, n_frm_st, n_frm_end):
-    n_cell = seq_found.shape[1]
-    n_ue = seq_found.shape[2]
-    n_ant = seq_found.shape[3]
-    fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+    n_ue = seq_found.shape[1]
+    n_ant = seq_found.shape[2]
+    fig, axes = plt.subplots(nrows=n_ue, ncols=1, squeeze=False)
     c = []
     fig.suptitle('Pilot Map (Percentage of Detected Pilots Per Symbol) - NOTE: Might exceed 100% due to threshold')
-    for n_c in range(n_cell):
-        for n_u in range(n_ue):
-            c.append(axes[n_u, n_c].imshow(seq_found[:, n_c, n_u, :].T, vmin=0, vmax=100, cmap='Blues',
-                                           interpolation='nearest',
-                                           extent=[n_frm_st, n_frm_end, n_ant, 0],
-                                           aspect="auto"))
-            axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
-            axes[n_u, n_c].set_ylabel('Antenna #')
-            axes[n_u, n_c].set_xlabel('Frame #')
-            axes[n_u, n_c].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
-            axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
-            axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
+    for n_u in range(n_ue):
+        c.append(axes[n_u, 0].imshow(seq_found[:, n_u, :].T, vmin=0, vmax=100, cmap='Blues',
+                                       interpolation='nearest',
+                                       extent=[n_frm_st, n_frm_end, n_ant, 0],
+                                       aspect="auto"))
+        axes[n_u, 0].set_title('UE {}'.format(n_u))
+        axes[n_u, 0].set_ylabel('Antenna #')
+        axes[n_u, 0].set_xlabel('Frame #')
+        axes[n_u, 0].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
+        axes[n_u, 0].set_yticks(np.arange(0, n_ant, 1), minor=True)
+        axes[n_u, 0].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
     cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, 100, 11), orientation='horizontal')
     cbar.ax.set_xticklabels(['0%', '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'])
 
@@ -285,57 +279,55 @@ def plot_pilot_mat(seq_found, n_frm_st, n_frm_end):
     #cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')
     #cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])
 def plot_snr_map(snr, n_frm_st, n_frm_end, n_ant):
-    n_cell = snr.shape[1]
-    n_ue = snr.shape[2]
-    fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+    n_ue = snr.shape[1]
+    fig, axes = plt.subplots(nrows=n_ue, ncols=1, squeeze=False)
     c = []
     fig.suptitle('SNR Map')
-    for n_c in range(n_cell):
-        for n_u in range(n_ue):
-            c.append(
-                axes[n_u, n_c].imshow(snr[:, n_c, n_u, :].T, vmin=np.min(snr), vmax=np.max(snr), cmap='Blues',
-                                      interpolation='nearest',
-                                      extent=[n_frm_st, n_frm_end, n_ant, 0],
-                                      aspect="auto"))
-            axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
-            axes[n_u, n_c].set_ylabel('Antenna #')
-            axes[n_u, n_c].set_xlabel('Frame #')
-            axes[n_u, n_c].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
-            axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
-            axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
+    for n_u in range(n_ue):
+        c.append(
+            axes[n_u, 0].imshow(snr[:, n_u, :].T, vmin=np.min(snr), vmax=np.max(snr), cmap='Blues',
+                                  interpolation='nearest',
+                                  extent=[n_frm_st, n_frm_end, n_ant, 0],
+                                  aspect="auto"))
+        axes[n_u, 0].set_title('UE {}'.format(n_u))
+        axes[n_u, 0].set_ylabel('Antenna #')
+        axes[n_u, 0].set_xlabel('Frame #')
+        axes[n_u, 0].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
+        axes[n_u, 0].set_yticks(np.arange(0, n_ant, 1), minor=True)
+        axes[n_u, 0].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
     cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, np.max(snr), 10),
                         orientation='horizontal')
 
 def plot_match_filter(match_filt, ref_frame, n_frm_st, ant_i):
-    n_cell = match_filt.shape[1]
-    n_ue = match_filt.shape[2]
+    n_ue = match_filt.shape[1]
 
     # plot a frame:
-    fig, axes = plt.subplots(nrows=n_cell, ncols=n_ue, squeeze=False)
+    fig, axes = plt.subplots(nrows=n_ue, ncols=1, squeeze=False)
     fig.suptitle('MF Frame # {} Antenna # {}'.format(ref_frame, ant_i))
-    for n_c in range(n_cell):
-        for n_u in range(n_ue):
-            axes[n_c, n_u].stem(match_filt[ref_frame - n_frm_st, n_c, n_u, ant_i, :])
-            axes[n_c, n_u].set_xlabel('Samples')
-            axes[n_c, n_u].set_title('Cell {} UE {}'.format(n_c, n_u))
-            axes[n_c, n_u].grid(True)
+    for n_u in range(n_ue):
+        axes[n_u, 0].stem(match_filt[ref_frame - n_frm_st, n_u, ant_i, :])
+        axes[n_u, 0].set_xlabel('Samples')
+        axes[n_u, 0].set_title('UE {}'.format(n_u))
+        axes[n_u, 0].grid(True)
 
-def plot_spectral_efficiency(subf_conj, subf_zf, mubf_conj, mubf_zf, timestamp, num_cl, n_ant, n_ue, frame_i, data_str="Current Frame"):
+def plot_spectral_efficiency(subf_conj, subf_zf, mubf_conj, mubf_zf, timestamp, n_ant, n_ue, frame_i, data_str="Current Frame"):
     fig1, axes1 = plt.subplots(nrows=2, ncols=2, squeeze=False, figsize=(10, 8))
     fig1.suptitle("Per-subcarrier Mean Spectral Eff. using BF Weights from " + data_str)
-    for j in range(num_cl):
+    for j in range(n_ue):
         axes1[0, 0].plot(timestamp, mubf_conj[:,j], label = 'Conj User: {}'.format(j) )
-    for j in range(num_cl):
+    for j in range(n_ue):
         axes1[0, 1].plot(timestamp, mubf_zf[:,j], label = 'ZF User: {}'.format(j) )
     axes1[0,0].legend(loc='upper right', ncol=1, frameon=False)
     axes1[0,0].set_xlabel('Time (s)', fontsize=14)
     axes1[0,0].set_ylabel('MUBF %dx%d (bps/Hz)'%(n_ant, n_ue), fontsize=14)
     axes1[0,1].legend(loc='upper right', ncol=1, frameon=False)
     axes1[0,1].set_xlabel('Time (s)', fontsize=14)
-    for j in range(num_cl):
+    for j in range(n_ue):
         axes1[1, 0].plot(timestamp, subf_conj[:,j], label = 'Conj User: {}'.format(j) )
-    for j in range(num_cl):
+    axes1[1, 0].plot(timestamp, np.sum(mubf_conj, axis=1), label = 'SUM Conj MUBF: {}x{}'.format(n_ant,n_ue))
+    for j in range(n_ue):
         axes1[1, 1].plot(timestamp, subf_zf[:,j], label = 'ZF User: {}'.format(j) )
+    axes1[1, 1].plot(timestamp, np.sum(mubf_zf, axis=1), label = 'SUM ZF MUBF: {}x{}'.format(n_ant, n_ue))
     axes1[1,0].legend(loc='upper right', ncol=1, frameon=False)
     axes1[1,0].set_xlabel('Time (s)', fontsize=14)
     axes1[1,0].set_ylabel('SUBF %dx1 (bps/Hz)'%n_ant, fontsize=14)
