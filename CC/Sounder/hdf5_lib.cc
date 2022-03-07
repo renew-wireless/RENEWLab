@@ -203,17 +203,17 @@ herr_t Hdf5Lib::writeDataset(std::string dataset_name,
 
     std::stringstream ss;
     ss.str(std::string());
-    ss << "Dataset Dimension is: " << ndims;
+    ss << "\nDataset Dimension is: " << ndims;
     for (size_t i = 0; i < (kDsDimsNum - 1); ++i) {
-      ss << dims_.at(ds_id)[i] << ",";
+      ss << dims_.at(ds_id)[i] << ", ";
     }
     ss << dims_.at(ds_id)[kDsDimsNum - 1];
-    ss << "Requested Write Dimension is: " << ndims;
+    ss << "\nRequested Write Dimension is: " << ndims;
     for (size_t i = 0; i < (kDsDimsNum - 1); ++i) {
-      ss << target_id[i] << ",";
+      ss << target_id[i] << ", ";
     }
     ss << target_id[kDsDimsNum - 1];
-    MLPD_TRACE("%s", ss.str().c_str());
+    MLPD_TRACE("%s\n", ss.str().c_str());
     ret = -1;
     throw;
   }

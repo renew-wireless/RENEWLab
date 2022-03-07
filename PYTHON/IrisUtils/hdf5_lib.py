@@ -4,11 +4,6 @@
 
  Library handling recorded hdf5 file from channel sounding (see Sounder/).
 
- Author(s):
-             C. Nicolas Barati: nicobarati@rice.edu
-             Oscar Bejarano: obejarano@rice.edu
-             Rahman Doost-Mohammady: doost@rice.edu
-
 ---------------------------------------------------------------------
  Copyright © 2018-2019. Rice University.
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
@@ -16,6 +11,7 @@
 """
 
 import sys
+import gc
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
@@ -25,6 +21,7 @@ from optparse import OptionParser
 from channel_analysis import *
 import multiprocessing as mp
 import extract_pilots_data as epd
+from find_lts import *
 
 #@staticmethod
 def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0, frame_to_plot=0, ref_ant=0, ref_user = 0):
@@ -43,16 +40,15 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
 
     # dimensions of pilots_dump
     n_frame = pilots_dump.shape[0]      # no. of captured frames
-    n_cell = pilots_dump.shape[1]       # no. of cells
-    n_ue = pilots_dump.shape[2]         # no. of UEs
-    n_ant = pilots_dump.shape[3]        # no. of BS antennas
-    n_iq = pilots_dump.shape[4]         # no. of IQ samples per frame
+    n_ue = pilots_dump.shape[1]         # no. of UEs
+    n_ant = pilots_dump.shape[2]        # no. of BS antennas
+    n_iq = pilots_dump.shape[3]         # no. of IQ samples per frame
 
     if debug:
         print("input : z_padding = {}, fft_size={}, cp={}, frm_st_idx = {}, frame_to_plot = {}, ref_ant={}, ref_user = {}".format(
             z_padding, fft_size, cp, frm_st_idx, frame_to_plot, ref_ant, ref_user))
-        print("n_frame = {}, n_cell = {}, n_ue = {}, n_ant = {}, n_iq = {}".format(
-            n_frame, n_cell, n_ue, n_ant, n_iq))
+        print("n_frame = {}, n_ue = {}, n_ant = {}, n_iq = {}".format(
+            n_frame, n_ue, n_ant, n_iq))
 
     if ((n_iq % 2) != 0):
         print("Size of iq samples:".format(n_iq))
@@ -73,8 +69,8 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
         idx_o = np.arange(1, n_iq, 2)
 
     # make a new data structure where the iq samples become complex numbers
-    cmpx_pilots = (pilots_dump[:, :, :, :, idx_e] +
-                   1j*pilots_dump[:, :, :, :, idx_o])*2**-15
+    cmpx_pilots = (pilots_dump[:, :, :, idx_e] +
+                   1j*pilots_dump[:, :, :, idx_o])*2**-15
 
     # take a time-domain lts sequence, concatenate more copies, flip, conjugate
     lts_t, lts_f = generate_training_seq(preamble_type='lts', seq_length=[
@@ -112,7 +108,7 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
                 1j*np.random.normal(0, 0.1/2, len(lts_t_rep_tst))
             lts_t_rep_tst = lts_t_rep_tst + w
             cmpx_pilots = np.tile(
-                lts_t_rep_tst, (n_frame, cmpx_pilots.shape[1], cmpx_pilots.shape[2], cmpx_pilots.shape[3], 1))
+                lts_t_rep_tst, (n_frame, cmpx_pilots.shape[1], cmpx_pilots.shape[2], 1))
             print("if test_mf: Shape of lts_t_rep_tst: {} , cmpx_pilots.shape = {}".format(
                 lts_t_rep_tst.shape, cmpx_pilots.shape))
 
@@ -158,18 +154,17 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
 
     pool = mp.Pool(mp.cpu_count())
     m_filt = np.empty(
-        [n_frame, n_cell, n_ue, n_ant, n_cmpx], dtype='complex64')
+        [n_frame, n_ue, n_ant, n_cmpx], dtype='complex64')
     pilots_rx_t = np.empty(
-        [n_frame, n_cell, n_ue, n_ant, k_lts * n_lts], dtype='complex64')
+        [n_frame, n_ue, n_ant, k_lts * n_lts], dtype='complex64')
     sf_start = np.empty(
-        [n_frame, n_cell, n_ue, n_ant], dtype='int')
+        [n_frame, n_ue, n_ant], dtype='int')
     indexing_start = time.time()
-    for j in range(n_cell):
-        result_objects = [pool.apply_async(epd.extract_pilots_data, args=(cmpx_pilots[i, j, :, :, :], lts_seq_conj, k_lts, n_lts, i)) for i in range(n_frame)]
-        for i in range(n_frame):
-            pilots_rx_t[i, j, :, :, :] = result_objects[i].get()[1]
-            m_filt[i, j, :, :, :] = result_objects[i].get()[2]
-            sf_start[i, j, :, :] = result_objects[i].get()[3]
+    result_objects = [pool.apply_async(epd.extract_pilots_data, args=(cmpx_pilots[i, :, :, :], lts_seq_conj, k_lts, n_lts, i)) for i in range(n_frame)]
+    for i in range(n_frame):
+        pilots_rx_t[i, :, :, :] = result_objects[i].get()[1]
+        m_filt[i, :, :, :] = result_objects[i].get()[2]
+        sf_start[i, :, :] = result_objects[i].get()[3]
     indexing_end = time.time()
     pool.close()
 
@@ -196,8 +191,8 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
             pilots_rx_t.shape))
 
     pilots_rx_t = np.reshape(
-        pilots_rx_t, (n_frame, n_cell, n_ue, n_ant, k_lts, n_lts))
-    pilots_rx_t = np.delete(pilots_rx_t, range(fft_size, n_lts), 5)
+        pilots_rx_t, (n_frame, n_ue, n_ant, k_lts, n_lts))
+    pilots_rx_t = np.delete(pilots_rx_t, range(fft_size, n_lts), 4)
 
     if debug:
         print("Indexing time: %f \n" % (indexing_end - indexing_start))
@@ -210,17 +205,17 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
     # take fft and get the raw CSI matrix (no averaging)
     # align SCs based on how they were Tx-ec
     lts_f_shft = np.fft.fftshift(lts_f)
-    pilots_rx_f = np.fft.fft(pilots_rx_t, fft_size, 5)      # take FFT
+    pilots_rx_f = np.fft.fft(pilots_rx_t, fft_size, 4)      # take FFT
     # find the zero SCs corresponding to lts_f_shft
     zero_sc = np.where(lts_f_shft == 0)[0]
     # remove zero subcarriers
     lts_f_nzsc = np.delete(lts_f_shft, zero_sc)
     # remove zero subcarriers
-    pilots_rx_f = np.delete(pilots_rx_f, zero_sc, 5)
+    pilots_rx_f = np.delete(pilots_rx_f, zero_sc, 4)
     # take channel estimate by dividing with the non-zero elements of lts_f_shft
     csi = pilots_rx_f / lts_f_nzsc
     # unecessary step: just to make it in accordance to lts_f as returned by generate_training_seq()
-    csi = np.fft.fftshift(csi, 5)
+    csi = np.fft.fftshift(csi, 4)
 
     if debug:
         # # WZC: rho_max might not be defined in current version
@@ -239,7 +234,7 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
             print("cmpx_pilots.shape = {}".format(cmpx_pilots.shape))
 
         ax1.plot(
-            np.real(cmpx_pilots[frame_to_plot - frm_st_idx, 0, ref_user, ref_ant, :]))
+            np.real(cmpx_pilots[frame_to_plot - frm_st_idx, ref_user, ref_ant, :]))
 
         if debug:
             loc_sec = lts_t_rep_tst
@@ -259,7 +254,7 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
         ax3.grid(True)
         ax3.set_title(
             'channel_analysis:csi_from_pilots(): MF (uncleared peaks) - ref frame {} ref ant {} ref user {}'.format(frame_to_plot, ref_ant, ref_user))
-        ax3.stem(m_filt[frame_to_plot - frm_st_idx, 0, ref_user, ref_ant, :])
+        ax3.stem(m_filt[frame_to_plot - frm_st_idx, ref_user, ref_ant, :])
         ax3.set_xlabel('Samples')
         # plt.show()
 
@@ -269,7 +264,6 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
     # WZC: add pilots_rx_t_btc
 
 class hdf5_lib:
-
     def __init__(self, filename, n_frames_to_inspect=0, n_fr_insp_st = 0, sub_sample = 0):
         self.h5file = None
         self.filename = filename
@@ -419,15 +413,14 @@ class hdf5_lib:
 
         return self.metadata
 
-    def filter_pilots(cmpx_pilots, z_padding=150, fft_size=64, cp=16, pilot_type='lts',seq_length=[]):
+    def filter_pilots(cmpx_pilots, z_padding=150, fft_size=64, cp=16, pilot_type='lts', seq_length=[]):
         """
         """
         # dimensions of cmpx_pilots
         n_frame = cmpx_pilots.shape[0]  # no. of captured frames
-        n_cell = cmpx_pilots.shape[1]  # no. of cells
-        n_ue = cmpx_pilots.shape[2]  # no. of UEs
-        n_ant = cmpx_pilots.shape[3]  # no. of BS antennas
-        n_cmpx = cmpx_pilots.shape[4]  # no. of IQ samples per frame
+        n_ue = cmpx_pilots.shape[1]  # no. of UEs
+        n_ant = cmpx_pilots.shape[2]  # no. of BS antennas
+        n_cmpx = cmpx_pilots.shape[3]  # no. of IQ samples per frame
 
         # no. of complex samples in a P subframe without pre- and post- fixes
         n_csamp = n_cmpx - z_padding
@@ -448,14 +441,13 @@ class hdf5_lib:
 
         pool = mp.Pool(mp.cpu_count())
         m_filt = np.empty(
-            [n_frame, n_cell, n_ue, n_ant, n_cmpx], dtype='complex64')
+            [n_frame, n_ue, n_ant, n_cmpx], dtype='complex64')
         indexing_start = time.time()
-        for j in range(n_cell):
-            result_objects = [pool.apply_async(epd.extract_pilots_data,
-                                               args=(cmpx_pilots[i, j, :, :, :], seq_conj, seq_num, seq_len, i)) for i
-                              in range(n_frame)]
-            for i in range(n_frame):
-                m_filt[i, j, :, :, :] = result_objects[i].get()[2]
+        result_objects = [pool.apply_async(epd.extract_pilots_data,
+                                           args=(cmpx_pilots[i, :, :, :], seq_conj, seq_num, seq_len, i)) for i
+                          in range(n_frame)]
+        for i in range(n_frame):
+            m_filt[i, :, :, :] = result_objects[i].get()[2]
         indexing_end = time.time()
         pool.close()
 
@@ -498,7 +490,36 @@ class hdf5_lib:
         print("finished log2csi")
 
     @staticmethod
-    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, sub=1, legacy=False, pilot_f=[]):
+    def samps2csi_large(samps, num_users, chunk_size=1000, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, pilot_f=[], legacy=False):
+        """Wrapper function for samps2csi_main for to speed up large logs by leveraging data-locality. Chunk_size may need to be adjusted based on your computer."""
+
+        print("starting samps2csi")
+        samps2csi_large_start = time.time()
+        if samps.shape[0] > chunk_size:
+                    # rather than memmap let's just increase swap... should be just as fast.
+                    #csi = np.memmap(os.path.join(_here,'temp1.mymemmap'), dtype='complex64', mode='w+', shape=(samps.shape[0], num_users, 2, samps.shape[1],52))
+                    #iq = np.memmap(os.path.join(_here,'temp2.mymemmap'), dtype='complex64', mode='w+', shape=(samps.shape[0], num_users, 2, samps.shape[1],64))
+            chunk_num = samps.shape[0]//chunk_size
+            csi0 = hdf5_lib.samps2csi(
+                    samps[:chunk_size, :, :, :], num_users, samps_per_user, fft_size, offset, bound, cp, pilot_f, legacy, 0)
+            csi = np.empty(
+                (samps.shape[0], csi0.shape[1], csi0.shape[2], csi0.shape[3], csi0.shape[4]), dtype='complex64')
+            csi[:chunk_size] = csi0
+            for i in range(1, chunk_num):
+                csi[i*chunk_size:i*chunk_size+chunk_size] = hdf5_lib.samps2csi(
+                        samps[i*chunk_size:(i*chunk_size+chunk_size), :, :, :], num_users, samps_per_user, fft_size, offset, bound, cp, pilot_f, legacy, i)
+            if samps.shape[0] > chunk_num*chunk_size:
+                csi[chunk_num*chunk_size:] = hdf5_lib.samps2csi(
+                    samps[chunk_num*chunk_size:, :, :, :], num_users, samps_per_user, fft_size, offset, bound, cp, pilot_f, legacy, chunk_num)
+        else:
+            csi = hdf5_lib.samps2csi(
+                samps, num_users, samps_per_user, fft_size, offset, bound, cp, pilot_f, legacy)
+
+        print("samps2csi_large took %f seconds" % (time.time() - samps2csi_large_start))
+        return csi
+
+    @staticmethod
+    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, pilot_f=[], legacy=False, chunk_id=-1):
         """Convert an Argos HDF5 log file with raw IQ in to CSI.
         Asumes 802.11 style LTS used for trace collection.
     
@@ -516,7 +537,6 @@ class hdf5_lib:
             h5log = h5py.File(filename,'r')
             csi,iq = samps2csi(h5log['Pilot_Samples'], h5log.attrs['num_mob_ant']+1, h5log.attrs['samples_per_user'])
         """
-        print("starting samps2csi")
         debug = False
         chunkstart = time.time()
         samps2csi_start = time.time()
@@ -563,23 +583,23 @@ class hdf5_lib:
             print("Chunk time: %f fft time: %f" % (fftstart - chunkstart, endtime - fftstart))
             csi = np.delete(csi, [0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63], 4)  # remove zero subcarriers
             # print("samps2csi took %f seconds" % (samps2csi_start - time.time()))
+            del iq
 
         else:
-            samps = samps[::sub]
             usersamps = np.reshape(
-                samps, (samps.shape[0], samps.shape[1], num_users, samps.shape[3], samps_per_user, 2))
-            pilot_rep = (samps_per_user-bound)//(fft_size+cp)
+                samps, (samps.shape[0], num_users, samps.shape[2], samps_per_user, 2))
+            ofdm_len = fft_size+cp
+            pilot_rep = (samps_per_user-bound)//ofdm_len
             #pilot_rep = min([(samps_per_user-bound)//(fft_size+cp), 2]) # consider min. 2 pilot reps
-            iq = np.empty((samps.shape[0], samps.shape[1], num_users,
-                           samps.shape[3], pilot_rep, fft_size), dtype='complex64')
+            iq = np.empty((samps.shape[0], num_users, samps.shape[2], pilot_rep, fft_size), dtype='complex64')
             if debug:
                 print("chunkstart = {}, usersamps.shape = {}, samps.shape = {}, samps_per_user = {}, iq.shape = {}".format(
                     chunkstart, usersamps.shape, samps.shape, samps_per_user, iq.shape))
             for i in range(pilot_rep):
-                iq[:, :, :, :, i, :] = (usersamps[:, :, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size, 0] +
-                                        usersamps[:, :, :, :, offset + cp + i*fft_size:offset+cp+(i+1)*fft_size, 1]*1j)*2**-15
+                iq[:, :, :, i, :] = (usersamps[:, :, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len, 0] +
+                                        usersamps[:, :, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len, 1]*1j)*2**-15
 
-            iq = iq.swapaxes(3, 4)
+            iq = iq.swapaxes(2, 3)
             if debug:
                 print("iq.shape after axes swapping: {}".format(iq.shape))
 
@@ -595,9 +615,9 @@ class hdf5_lib:
             #start_i = int((fft_length - nonzero_sc_size) // 2)
             #stop_i = int(start_i + nonzero_sc_size)
             nonzero_sc = np.setdiff1d(range(fft_size), zero_sc)
-            iq_fft = np.fft.fft(iq, fft_size, 5)
+            iq_fft = np.fft.fft(iq, fft_size, 4)
             seq_freq_inv = 1 / pilot_f[nonzero_sc]
-            csi = iq_fft[:, : , :, :, :, nonzero_sc] * seq_freq_inv
+            csi = iq_fft[:, :, :, :, nonzero_sc] * seq_freq_inv
             endtime = time.time()
             if debug:
                 print("csi.shape:{} lts_freq.shape: {}, pre_csi.shape = {}".format(
@@ -607,35 +627,13 @@ class hdf5_lib:
                       (fftstart - chunkstart, endtime - fftstart))
             if debug:
                 print("csi.shape:{}".format(csi.shape))
-            print("samps2csi took %f seconds" % (time.time() - samps2csi_start))
-
-        return csi, iq
-
-    @staticmethod
-    def samps2csi_large(samps, num_users, samps_per_user=224, offset=47, chunk_size=1000, legacy=False):
-        """Wrapper function for samps2csi_main for to speed up large logs by leveraging data-locality. Chunk_size may need to be adjusted based on your computer."""
-
-        samps2csi_start = time.time()
-        if samps.shape[0] > chunk_size:
-                    # rather than memmap let's just increase swap... should be just as fast.
-                    #csi = np.memmap(os.path.join(_here,'temp1.mymemmap'), dtype='complex64', mode='w+', shape=(samps.shape[0], num_users, 2, samps.shape[1],52))
-                    #iq = np.memmap(os.path.join(_here,'temp2.mymemmap'), dtype='complex64', mode='w+', shape=(samps.shape[0], num_users, 2, samps.shape[1],64))
-            csi = np.empty(
-                (samps.shape[0], num_users, 2, samps.shape[1], 52), dtype='complex64')
-            iq = np.empty(
-                (samps.shape[0], num_users, 2, samps.shape[1], 64), dtype='complex64')
-            chunk_num = samps.shape[0]//chunk_size
-            for i in range(chunk_num):
-                csi[i*chunk_size:i*chunk_size+chunk_size], iq[i*chunk_size:i*chunk_size+chunk_size] = samps2csi(
-                    samps[i*chunk_size:(i*chunk_size+chunk_size), :, :, :], num_users, samps_per_user=samps_per_user)
-            csi[chunk_num*chunk_size:], iq[chunk_num*chunk_size:] = samps2csi(
-                samps[chunk_num*chunk_size:, :, :, :], num_users, samps_per_user=samps_per_user)
-        else:
-            csi, iq = samps2csi(
-                samps, num_users, samps_per_user=samps_per_user, offset=offset)
-
-        print("samps2csi took %f seconds" % (samps2csi_start - time.time()))
-        return csi, iq
+            if chunk_id == -1:
+                print("samps2csi took %f seconds" % (time.time() - samps2csi_start))
+            else:
+                print("samps2csi chunk %d took %f seconds" % (chunk_id, time.time() - samps2csi_start))
+            del iq
+            gc.collect()
+        return csi
 
     @staticmethod
     def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_ant=0, cp=16):
@@ -654,75 +652,73 @@ class hdf5_lib:
         debug = False
         dtct_eal_tx = True                  # Detect early transmission: further processing if this is desired
         n_frame = match_filt.shape[0]       # no. of captured frames
-        n_cell = match_filt.shape[1]        # no. of cells
-        n_ue = match_filt.shape[2]          # no. of UEs
-        n_ant = match_filt.shape[3]         # no. of BS antennas
-        n_corr = match_filt.shape[4]        # no. of corr. samples
+        n_ue = match_filt.shape[1]          # no. of UEs
+        n_ant = match_filt.shape[2]         # no. of BS antennas
+        n_corr = match_filt.shape[3]        # no. of corr. samples
 
         if debug:
-            print("frame_sanity(): n_frame = {}, n_cell = {}, n_ue = {}, n_ant = {}, n_corr = {}, k_lts = {}".format(
-            n_frame, n_cell, n_ue, n_ant, n_corr, k_lts) )
+            print("frame_sanity(): n_frame = {}, n_ue = {}, n_ant = {}, n_corr = {}, k_lts = {}".format(
+            n_frame, n_ue, n_ant, n_corr, k_lts) )
 
 
         # clean up the matched filter of extra peaks:
         mf_amax = np.argmax(match_filt, axis = -1)
         base_arr = np.arange(0,k_lts*n_lts, n_lts)
         for i in range(n_frame):
-            for j in range(n_cell):
-                for k in range(n_ue):
-                    for l in range(n_ant):
-                        mfa = mf_amax[i,j,k,l]
+            for k in range(n_ue):
+                for l in range(n_ant):
+                    mfa = mf_amax[i,k,l]
 
-                        # WZC: indexs where side peaks might be
-                        side_idx = np.delete(np.arange(n_corr), (mfa - base_arr))
+                    # WZC: indexs where side peaks might be
+                    side_idx = np.delete(np.arange(n_corr), (mfa - base_arr))
 
-                       # NB: addition: try to detect early packets: TEST it!
-                        if dtct_eal_tx:
-                            sim_thrsh  = 0.95 # similarity threshold bewtween two consequitive peaks
-                            for ik in range(k_lts):
-                                mf_prev = match_filt[i,j,k,l, (mfa - n_lts) if (mfa - n_lts) >= 0 else 0]
-                                if 1 - np.abs(match_filt[i,j,k,l, mfa] -  mf_prev)/match_filt[i,j,k,l, mfa] >= sim_thrsh:
-                                    mfa = (mfa - n_lts) if (mfa - n_lts) >= 0 else 0
-                                else:
-                                    break
-                        # NB: addition: Clean everything right of the largest peak.
-                        match_filt[i,j,k,l, mfa+1:] = 0         # we don't care about the peaks after the largest.
-                        # misleading peaks seem to apear at +- argmax and argmax -1/+1/+2 CP and 29-30
-                        for m in range(base_arr.shape[0]):
-                            adj_idx1 = (mfa - 1) - base_arr[m]
-                            adj_idx2 = (mfa + 1) - base_arr[m]
-                            cp_idx1 = (mfa + cp) - base_arr[m]
-                            cp_idx2 = (mfa + 1  + cp) - base_arr[m]
-                            cp_idx3 = (mfa + -1  + cp) - base_arr[m]
-                            idx_30 = (mfa + 30) - base_arr[m]
-                            idx_29 = (mfa + 29) - base_arr[m]
+                   # NB: addition: try to detect early packets: TEST it!
+                    if dtct_eal_tx:
+                        sim_thrsh  = 0.95 # similarity threshold bewtween two consequitive peaks
+                        for ik in range(k_lts):
+                            mf_prev = match_filt[i,k,l, (mfa - n_lts) if (mfa - n_lts) >= 0 else 0]
+                            if 1 - np.abs(match_filt[i,k,l, mfa] -  mf_prev)/match_filt[i,k,l, mfa] >= sim_thrsh:
+                                mfa = (mfa - n_lts) if (mfa - n_lts) >= 0 else 0
+                            else:
+                                break
+                    # NB: addition: Clean everything right of the largest peak.
+                    match_filt[i,k,l, mfa+1:] = 0         # we don't care about the peaks after the largest.
+                    # misleading peaks seem to apear at +- argmax and argmax -1/+1/+2 CP and 29-30
+                    for m in range(base_arr.shape[0]):
+                        adj_idx1 = (mfa - 1) - base_arr[m]
+                        adj_idx2 = (mfa + 1) - base_arr[m]
+                        cp_idx1 = (mfa + cp) - base_arr[m]
+                        cp_idx2 = (mfa + 1  + cp) - base_arr[m]
+                        cp_idx3 = (mfa + -1  + cp) - base_arr[m]
+                        idx_30 = (mfa + 30) - base_arr[m]
+                        idx_29 = (mfa + 29) - base_arr[m]
 
-                            idx_tot = [adj_idx1, adj_idx2, cp_idx1, cp_idx2, cp_idx3, idx_30, idx_29]
+                        idx_tot = [adj_idx1, adj_idx2, cp_idx1, cp_idx2, cp_idx3, idx_30, idx_29]
 
-                            # WZC: removing possible side peaks
-                            for idx in idx_tot:
-                                if idx in side_idx:
-                                    match_filt[i,j,k,l, idx] = 0
+                        # WZC: removing possible side peaks
+                        for idx in idx_tot:
+                            if idx in side_idx:
+                                match_filt[i,k,l, idx] = 0
 
-                            # if adj_idx1 >= 0 and adj_idx2 >=0 and adj_idx2 < n_corr:
-                            #     match_filt[i,j,k,l, adj_idx1 ] = 0
-                            #     match_filt[i,j,k,l, adj_idx2 ] = 0
-                            # if (cp_idx1 >=0) and (cp_idx1 < n_corr) and (cp_idx2 < n_corr) and (cp_idx3 < n_corr):
-                            #     match_filt[i,j,k,l, cp_idx1 ] = 0
-                            #     match_filt[i,j,k,l, cp_idx2 ] = 0
-                            #     match_filt[i,j,k,l, cp_idx3 ] = 0
-                            # if (idx_30 >=0) and (idx_30 < n_corr) and (idx_29 >=0) and (idx_29 < n_corr):
-                            #     match_filt[i,j,k,l,idx_30] = 0
-                            #     match_filt[i,j,k,l,idx_29] = 0
+                        # if adj_idx1 >= 0 and adj_idx2 >=0 and adj_idx2 < n_corr:
+                        #     match_filt[i,j,k,l, adj_idx1 ] = 0
+                        #     match_filt[i,j,k,l, adj_idx2 ] = 0
+                        # if (cp_idx1 >=0) and (cp_idx1 < n_corr) and (cp_idx2 < n_corr) and (cp_idx3 < n_corr):
+                        #     match_filt[i,j,k,l, cp_idx1 ] = 0
+                        #     match_filt[i,j,k,l, cp_idx2 ] = 0
+                        #     match_filt[i,j,k,l, cp_idx3 ] = 0
+                        # if (idx_30 >=0) and (idx_30 < n_corr) and (idx_29 >=0) and (idx_29 < n_corr):
+                        #     match_filt[i,j,k,l,idx_30] = 0
+                        #     match_filt[i,j,k,l,idx_29] = 0
 
         # get the k_lts largest peaks and their position
-        k_max = np.sort(match_filt, axis = -1)[:,:,:,:, -k_lts:]
-        k_amax =np.argsort(match_filt, axis = -1)[:,:,:,:, -k_lts:]
+        k_max = np.sort(match_filt, axis = -1)[:,:,:, -k_lts:]
+        k_amax =np.argsort(match_filt, axis = -1)[:,:,:, -k_lts:]
         # If the frame is good, the largerst peak is at the last place of k_amax
-        lst_pk_idx = np.expand_dims(k_amax[:,:,:,:,-1], axis = 4)
-        lst_pk_idx = np.tile(lst_pk_idx, (1,1,1,1,base_arr.shape[0]))
+        lst_pk_idx = np.expand_dims(k_amax[:,:,:,-1], axis = 4)
+        lst_pk_idx = np.tile(lst_pk_idx, (1,1,1,base_arr.shape[0]))
         # create an array with indices n_lts apart from each other relative to lst_pk_idx
-        pk_idx = lst_pk_idx - np.tile(base_arr[::-1], (n_frame, n_cell, n_ue, n_ant,1))
+        pk_idx = lst_pk_idx - np.tile(base_arr[::-1], (n_frame, n_ue, n_ant,1))
         #subtract. In case of a good frame their should only be zeros in every postion
         idx_diff = k_amax - pk_idx
         frame_map = (idx_diff == 0).astype(np.int)
@@ -765,3 +761,181 @@ class hdf5_lib:
 
         return match_filt, frame_map, f_st, peak_map
         # WZC: added peak_map for peak_number analysis
+
+    @staticmethod
+    def measure_snr(pilot_samples, noise_samples, peak_map, pilot_type, pilot_seq, ofdm_len, z_padding):
+        n_frame = pilot_samples.shape[0]
+        n_ue = pilot_samples.shape[1]
+        n_ant = pilot_samples.shape[2]
+        samps_per_slot = pilot_samples.shape[3] // 2
+        symbol_per_slot = (samps_per_slot - z_padding) // ofdm_len
+        seq_found = np.zeros((n_frame, n_ue, n_ant))
+
+        td_pwr_dbm_noise = np.empty_like(pilot_samples[:, :, :, 0], dtype=float)
+        td_pwr_dbm_signal = np.empty_like(pilot_samples[:, :, :, 0], dtype=float)
+        snr = np.empty_like(pilot_samples[:, :, :, 0], dtype=float)
+
+        for frameIdx in range(n_frame):    # Frame
+            for ueIdx in range(n_ue):  # UE
+                for bsAntIdx in range(n_ant):  # BS ANT
+
+                    I = pilot_samples[frameIdx, ueIdx, bsAntIdx, 0:samps_per_slot * 2:2] / 2 ** 15
+                    Q = pilot_samples[frameIdx, ueIdx, bsAntIdx, 1:samps_per_slot * 2:2] / 2 ** 15
+                    IQ = I + (Q * 1j)
+                    tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk = pilot_finder(IQ, pilot_type, flip=True,
+                                                                                      pilot_seq=pilot_seq)
+                    # Find percentage of LTS peaks within a symbol
+                    # (e.g., in a 4096-sample pilot slot, we expect 64, 64-long sequences... assuming no CP)
+                    # seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / symbol_per_slot)
+                    seq_found[frameIdx, ueIdx, bsAntIdx] = 100 * (peak_map[frameIdx, ueIdx, bsAntIdx] / symbol_per_slot)  # use matched filter analysis output
+
+                    # Compute Power of Time Domain Signal
+                    rms = np.sqrt(np.mean(IQ * np.conj(IQ)))
+                    td_pwr_lin = np.real(rms) ** 2
+                    td_pwr_dbm_s = 10 * np.log10(td_pwr_lin / 1e-3)
+                    td_pwr_dbm_signal[frameIdx, ueIdx, bsAntIdx] = td_pwr_dbm_s
+
+                    # Compute SNR
+                    # noise_samples
+                    In = noise_samples[frameIdx, bsAntIdx, 0:samps_per_slot * 2:2] / 2 ** 15
+                    Qn = noise_samples[frameIdx, bsAntIdx, 1:samps_per_slot * 2:2] / 2 ** 15
+                    IQn = In + (Qn * 1j)
+                    # sio.savemat('test_pwr.mat', {'pilot_t': IQn})
+
+                    # Compute Noise Power (Time Domain)
+                    rms = np.sqrt(np.mean(IQn * np.conj(IQn)))
+                    td_pwr_lin = np.real(rms) ** 2
+                    td_pwr_dbm_n = 10 * np.log10(td_pwr_lin / 1e-3)
+                    td_pwr_dbm_noise[frameIdx, ueIdx, bsAntIdx] = td_pwr_dbm_n
+                    # SNR
+                    snr[frameIdx, ueIdx, bsAntIdx] = td_pwr_dbm_s - td_pwr_dbm_n
+        return snr, seq_found
+
+    @staticmethod
+    def measure_cfo(pilot_samples, peak_map, pilot_type, pilot_seq, ofdm_len, z_padding, rate):
+        n_frame = pilot_samples.shape[0]
+        n_ue = pilot_samples.shape[1]
+        n_ant = pilot_samples.shape[2]
+        samps_per_slot = pilot_samples.shape[3] // 2
+        symbol_per_slot = (samps_per_slot - z_padding) // ofdm_len
+        seq_found = np.zeros((n_frame, n_ue, n_ant))
+        cfo = np.zeros((n_frame, n_ue, n_ant))
+        for frameIdx in range(n_frame):    # Frame
+            for ueIdx in range(n_ue):  # UE
+                for bsAntIdx in range(n_ant):  # BS ANT
+
+                    I = pilot_samples[frameIdx, ueIdx, bsAntIdx, 0:samps_per_slot * 2:2] / 2 ** 15
+                    Q = pilot_samples[frameIdx, ueIdx, bsAntIdx, 1:samps_per_slot * 2:2] / 2 ** 15
+                    IQ = I + (Q * 1j)
+                    tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk = pilot_finder(IQ, pilot_type, flip=True,
+                                                                                      pilot_seq=pilot_seq)
+                    print("frame %d ue %d ant %d lts_pks_len %d"%(frameIdx, ueIdx, bsAntIdx, lts_pks.size))
+                    print(lts_pks)
+                    if lts_pks.size < 2:
+                        cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
+                    elif lts_pks[0] < ofdm_len or lts_pks[1] < ofdm_len:
+                        cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
+                    else:
+                        num_pks = lts_pks.size
+                        cfo_sample = 0
+                        n_cfo_samps = 0
+                        for i in range(num_pks - 1):
+                            if lts_pks[i] < samps_per_slot or lts_pks[i + 1] < samps_per_slot:
+                                sc_first = lts_pks[i] - ofdm_len
+                                sc_second = lts_pks[i + 1] - ofdm_len
+                                cfo_sample = cfo_sample + np.mean(np.unwrap(np.angle(np.multiply(IQ[sc_second:sc_second+ofdm_len], np.conj(IQ[sc_first:sc_first+ofdm_len]))))) / (ofdm_len*2*np.pi*(1/rate))
+                                n_cfo_samps = n_cfo_samps + 1
+                        if n_cfo_samps > 0:
+                            cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = cfo_sample / n_cfo_samps
+                        else:
+                            cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
+        return cfo
+
+
+    @staticmethod
+    def demodulate(ul_samps, userCSI, metadata, dirpath, offset, ul_slot_i):
+        if 'SYMBOL_LEN' in metadata: # to support older datasets
+            samps_per_slot = int(metadata['SYMBOL_LEN'])
+        elif 'SLOT_SAMP_LEN' in metadata:
+            samps_per_slot = int(metadata['SLOT_SAMP_LEN'])
+        prefix_len = int(metadata['PREFIX_LEN'])
+        postfix_len = int(metadata['POSTFIX_LEN'])
+        z_padding = prefix_len + postfix_len
+        fft_size = int(metadata['FFT_SIZE'])
+        cp = int(metadata['CP_LEN'])
+        ofdm_len = fft_size + cp
+        symbol_per_slot = (samps_per_slot - z_padding) // ofdm_len
+        if 'UL_SYMS' in metadata:
+            ul_slot_num = int(metadata['UL_SYMS'])
+        elif 'UL_SLOTS' in metadata:
+            ul_slot_num = int(metadata['UL_SLOTS'])
+        cl_ch_num = int(metadata['CL_CH_PER_RADIO'])
+        num_cl_tmp = int(metadata['CL_NUM'])
+        data_sc_ind = np.array(metadata['OFDM_DATA_SC'])
+        pilot_sc_ind = np.array(metadata['OFDM_PILOT_SC'])
+        pilot_sc_val = np.array(metadata['OFDM_PILOT_SC_VALS'])
+        zero_sc_ind = np.setdiff1d(range(fft_size), data_sc_ind)
+        zero_sc_ind = np.setdiff1d(zero_sc_ind, pilot_sc_ind)
+        nonzero_sc_ind = np.setdiff1d(range(fft_size), zero_sc_ind)
+        ul_equal_syms_frame_num = int(metadata['UL_DATA_FRAME_NUM'])
+        tx_file_names = metadata['TX_FD_DATA_FILENAMES'].astype(str)
+
+
+        # UL Samps: #Frames, #Uplink SLOTS, #Antennas, #Samples
+        n_frames = ul_samps.shape[0]
+        ul_syms = np.empty((ul_samps.shape[0], ul_samps.shape[1],
+                       symbol_per_slot, fft_size), dtype='complex64')
+
+        # UL Syms: #Frames, #Antennas, #OFDM Symbols, #Samples
+        for i in range(symbol_per_slot):
+            ul_syms[:, :, i, :] = ul_samps[:, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len]
+        # UL Syms: #Frames, #OFDM Symbols, #Antennas, #Samples
+        ul_syms = np.transpose(ul_syms, (0, 2, 1, 3))
+        ul_syms_f = np.fft.fft(ul_syms, fft_size, 3)
+        ul_syms_f = np.delete(ul_syms_f, zero_sc_ind, 3)
+        # UL DEMULT: #Frames, #OFDM Symbols, #User, #Sample (DATA + PILOT SCs)
+        ul_demult = demult(userCSI, ul_syms_f)
+        dims = ul_demult.shape
+        ul_demult_exp = np.empty((dims[0], dims[1], dims[2], fft_size), dtype='complex64')
+        ul_demult_exp[:, :, :, nonzero_sc_ind] = ul_demult
+        # Phase offset tracking and correction
+        phase_corr = ul_demult_exp[:, :, :, pilot_sc_ind] * np.conj(pilot_sc_val)
+        phase_err = np.angle(np.mean(phase_corr, 3))
+        phase_comp = np.exp(-1j*phase_err)
+        phase_comp_exp = np.tile(np.expand_dims(phase_comp, axis= 3), (1, 1, 1, len(data_sc_ind)))
+        ul_equal_syms = ul_demult_exp[:, :, :, data_sc_ind]
+        ul_equal_syms = np.multiply(ul_equal_syms, phase_comp_exp)
+        # UL DATA: #Frames, #User, #OFDM Symbols, #DATA SCs
+        ul_equal_syms = np.transpose(ul_equal_syms, (0, 2, 1, 3))
+        # UL DATA: #Frames, #User, SLOT DATA SCs
+        ul_equal_syms = np.reshape(ul_equal_syms, (ul_equal_syms.shape[0], ul_equal_syms.shape[1], symbol_per_slot * len(data_sc_ind)))
+        evm = np.empty((ul_equal_syms.shape[0], ul_equal_syms.shape[1]), dtype='complex64')
+        evm_snr = np.empty((ul_equal_syms.shape[0], ul_equal_syms.shape[1]), dtype='complex64')
+
+        txdata = np.empty((ul_equal_syms_frame_num, num_cl_tmp, ul_slot_num,
+                     symbol_per_slot,  fft_size), dtype='complex64')
+        read_size = 2 * ul_equal_syms_frame_num * ul_slot_num * cl_ch_num * symbol_per_slot * fft_size
+        cl = 0
+        for fn in tx_file_names:
+            tx_file_path = dirpath + '/' + fn
+            print('Opening source TX data file %s'%tx_file_path)
+            with open(tx_file_path, mode='rb') as f:
+                txdata0 = list(struct.unpack('f'*read_size, f.read(4*read_size)))
+                I = np.array(txdata0[0::2])
+                Q = np.array(txdata0[1::2])
+                IQ = I + Q * 1j
+                txdata[:, cl:cl+cl_ch_num, :, :, :] = np.transpose(np.reshape(IQ, (ul_equal_syms_frame_num, ul_slot_num,
+                    cl_ch_num, symbol_per_slot, fft_size)), (0, 2, 1, 3, 4))
+            cl = cl + cl_ch_num
+        rep = n_frames // ul_equal_syms_frame_num
+        tx_symbols = np.tile(txdata, (rep, 1, 1, 1, 1))
+        frac_fr = n_frames % ul_equal_syms_frame_num
+        if frac_fr > 0:
+            frac = txdata[frac_fr:, :, :, :, :]
+            tx_symbols = np.concatenate((tx_symbols, frac), axis=0)
+        tx_symbols = np.reshape(tx_symbols[:, :, :, :, data_sc_ind], (tx_symbols.shape[0], tx_symbols.shape[1], ul_slot_num, symbol_per_slot * len(data_sc_ind)))
+        slot_evm = np.linalg.norm(ul_equal_syms - tx_symbols[:, :, ul_slot_i, :], 2, axis=2) / ul_equal_syms.shape[2]
+        slot_evm_snr = 10 * np.log10(1 / slot_evm)
+
+        return ul_equal_syms, tx_symbols, slot_evm, slot_evm_snr
+

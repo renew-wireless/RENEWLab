@@ -46,7 +46,7 @@ class BaseRadioSet {
   void radioTrigger(void);
   void sync_delays(size_t cellIdx);
   SoapySDR::Device* baseRadio(size_t cellId);
-  void collectCSI(bool&);
+  int syncTimeOffset(bool, bool);
   void dciqCalibrationProc(size_t);
   void readSensors(void);
 
