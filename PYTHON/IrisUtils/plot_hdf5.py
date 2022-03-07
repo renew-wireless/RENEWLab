@@ -153,10 +153,13 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             print(">>>> filter_pilots time: %f \n" % ( filter_pilots_end - filter_pilots_start) )
             print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
 
-            snr_start = time.time()
-            snr, seq_found, cfo = hdf5_lib.measure_snr(pilot_samples, hdf5.noise_samples, peak_map, pilot_type, ofdm_pilot, ofdm_len, z_padding, rate, plot_bs_nodes)
-            snr_end = time.time()
-            print(">>>> compute_snr time: %f \n" % (snr_end - snr_start))
+            if noise_avail:
+                snr_start = time.time()
+                noise_samples = hdf5.noise_samples[:, cell_i, :, :, :]
+                noise_samples = noise_samples[:, 0, plot_bs_nodes, :]
+                snr, seq_found = hdf5_lib.measure_snr(pilot_samples, noise_samples, peak_map, pilot_type, ofdm_pilot, ofdm_len, z_padding)
+                snr_end = time.time()
+                print(">>>> compute_snr time: %f \n" % (snr_end - snr_start))
 
             # Plots:
             print("Plotting the results:\n")
@@ -168,7 +171,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
             plot_start_frame(f_st, n_frm_st)
             #plot_cfo(cfo, n_frm_st)
-            plot_pilot_mat(seq_found, n_frm_st, n_frm_end)
+            plot_pilot_mat(frame_map, seq_found, n_frm_st, n_frm_end)
 
             #############
             #  SNR MAP  #
@@ -209,7 +212,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             if analyze:
                 if noise_avail:
                     noise_samples = hdf5.noise_samples[:, cell_i, :, :, :]
-                    noise = hdf5_lib.samps2csi_large(noise_samples, num_noise_slots, chunk_size, samps_per_slot, fft_size=fft_size,
+                    noise = hdf5_lib.samps2csi_large(noise_samples, noise_samples.shape[1], chunk_size, samps_per_slot, fft_size=fft_size,
                                                 offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
                     analyze_hdf5(csi, noise, metadata, ref_frame, subcarrier_i, offset)
                 else:
@@ -516,6 +519,7 @@ def main():
     parser.add_option("--ref-cell", type="int", dest="ref_cell", help="Cell number to plot", default=0)
     parser.add_option("--legacy", action="store_true", dest="legacy", help="Parse and plot legacy hdf5 file", default=False)
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Reference antenna", default=0)
+    parser.add_option("--ants", type="string", dest="bs_nodes", help="Bs antennas to be included in plotting", default="")
     parser.add_option("--exclude-bs-ants", type="string", dest="exclude_bs_nodes", help="Bs antennas to be excluded in plotting", default="")
     parser.add_option("--ref-ofdm-sym", type="int", dest="ref_ofdm_sym", help="Reference ofdm symbol within a pilot", default=0)
     parser.add_option("--ref-user", type="int", dest="ref_user", help="Reference User", default=0)
@@ -556,11 +560,8 @@ def main():
     sub_sample = options.sub_sample
     legacy = options.legacy
     corr_thresh = options.corr_thresh
+    bs_nodes_str = options.bs_nodes
     exclude_bs_nodes_str = options.exclude_bs_nodes
-    exclude_bs_nodes = []
-    if len(exclude_bs_nodes_str) > 0:
-        exclude_ant_ids = exclude_bs_nodes_str.split(',')
-        exclude_bs_nodes = [int(i) for i in exclude_ant_ids]
 
     filename = sys.argv[1]
     scrpt_strt = time.time()
@@ -595,6 +596,16 @@ def main():
         noise_samples = hdf5.noise_samples
         downlink_samples = hdf5.downlink_samples
 
+        num_bs_ants = pilot_samples.shape[4]
+        if len(bs_nodes_str) > 0:
+            ant_ids = bs_nodes_str.split(',')
+            bs_nodes = [int(i) for i in ant_ids]
+            exclude_bs_nodes = list(set(range(num_bs_ants)) - set(bs_nodes))
+        else:
+            exclude_bs_nodes = []
+            if len(exclude_bs_nodes_str) > 0:
+                exclude_ant_ids = exclude_bs_nodes_str.split(',')
+                exclude_bs_nodes = [int(i) for i in exclude_ant_ids]
         # Check which data we have available
         pilots_avail = len(pilot_samples) > 0
         ul_data_avail = len(uplink_samples) > 0

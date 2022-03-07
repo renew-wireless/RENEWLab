@@ -50,6 +50,8 @@ def plot_csi(csi, corr, bs_nodes, good_frames, frame_i, ant_i, subcarrier_i, off
         axes[2, 0].plot(corr[good_frames, u], label="user %d"%u)
     axes[2, 0].legend(loc='lower right', frameon=False)
     axes[2, 0].set_xlabel('Frame')
+    lines, labels = axes[-1, 0].get_legend_handles_labels()
+    fig.legend(lines, labels, loc = 'upper right', frameon=False)
 
 def plot_calib(calib_mat, bs_nodes, frame_i, ant_i, subcarrier_i):
     fig, axes = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
@@ -215,12 +217,14 @@ def plot_start_frame(sub_fr_strt, n_frm_st):
         x_pl = np.arange(sf_strts.shape[0]) + n_frm_st
         for j in range(n_ant):
             axes[n_u, 0].plot(x_pl,sf_strts[:,j].flatten(), label = 'Antenna: {}'.format(j) )
-        axes[n_u, 0].legend(loc='lower right', ncol=2, frameon=False)
+        #axes[n_u, 0].legend(loc='lower right', ncol=2, frameon=False)
         axes[n_u, 0].set_xlabel('Frame no.')
         axes[n_u, 0].set_ylabel('Starting index')
         axes[n_u, 0].grid(True)
+    lines, labels = axes[-1, 0].get_legend_handles_labels()
+    fig.legend(lines, labels, loc = 'upper right', frameon=False)
 
-def plot_pilot_mat(seq_found, n_frm_st, n_frm_end):
+def plot_pilot_mat(frame_map, seq_found, n_frm_st, n_frm_end):
     n_ue = seq_found.shape[1]
     n_ant = seq_found.shape[2]
     fig, axes = plt.subplots(nrows=n_ue, ncols=1, squeeze=False)
@@ -243,41 +247,40 @@ def plot_pilot_mat(seq_found, n_frm_st, n_frm_end):
     ## For some reason, if one of the subplots has all of the frames in the same state (good/bad/partial)
     ## it chooses a random color to paint the whole subplot!
     ## Below is some sort of remedy (will fail if SISO!):
-    #for n_c in range(frame_map.shape[1]):
-    #    for n_u in range(frame_map.shape[2]):
-    #        f_map = frame_map[:,n_c,n_u,:]
-    #        n_gf = f_map[f_map == 1].size
-    #        n_bf = f_map[f_map == -1].size
-    #        n_pr = f_map[f_map == 0].size
-    #        if n_gf == 0:
-    #            frame_map[-1,n_c,n_u,-1] = 1
-    #            print("No good frames! Colored the last frame of the last antenna Good for cell {} and UE {} to keep plotter happy!".format(n_c,n_u))
+    #for n_u in range(n_ue):
+    #    f_map = frame_map[:,n_u,:]
+    #    n_gf = f_map[f_map == 1].size
+    #    n_bf = f_map[f_map == -1].size
+    #    n_pr = f_map[f_map == 0].size
+    #    if n_gf == 0:
+    #        frame_map[-1,n_u,-1] = 1
+    #        print("No good frames! Colored the last frame of the last antenna Good for and UE {} to keep plotter happy!".format(n_u))
 
-    #        if n_pr == 0:
-    #            frame_map[0,n_c,n_u,-1] = 0
-    #            print("No partial frames! Colored frame 0 of the last antenna for cell {} and UE {} Partial to keep plotter happy!".format(n_c,n_u))
-    #        if n_bf == 0:
-    #            frame_map[-1,n_c,n_u,0] = -1
-    #            print("No bad frames! Colored the last frame of antenna 0 Bad for cell {} and UE {} to keep plotter happy!".format(n_c,n_u))
+    #    if n_pr == 0:
+    #        frame_map[0,n_u,-1] = 0
+    #        print("No partial frames! Colored frame 0 of the last antenna for and UE {} Partial to keep plotter happy!".format(n_u))
+    #    if n_bf == 0:
+    #        frame_map[-1,n_u,0] = -1
+    #        print("No bad frames! Colored the last frame of antenna 0 Bad for and UE {} to keep plotter happy!".format(n_u))
 
-    #fig, axes = plt.subplots(nrows=n_ue, ncols=n_cell, squeeze=False)
+    #fig, axes = plt.subplots(nrows=n_ue, ncols=1, squeeze=False)
     #c = []
     #fig.suptitle('Frame Map')
-    #for n_c in range(n_cell):
-    #    for n_u in range(n_ue):
-    #        c.append( axes[n_u, n_c].imshow(frame_map[:,n_c,n_u,:].T, cmap=plt.cm.get_cmap('Blues', 3), interpolation='none',
-    #              extent=[n_frm_st,n_frm_end, n_ant,0],  aspect="auto") )
-    #        axes[n_u, n_c].set_title('Cell {} UE {}'.format(n_c, n_u))
-    #        axes[n_u, n_c].set_ylabel('Antenna #')
-    #        axes[n_u, n_c].set_xlabel('Frame #')
-    #        # Minor ticks
-    #        axes[n_u, n_c].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
-    #        axes[n_u, n_c].set_yticks(np.arange(0, n_ant, 1), minor=True)
-    #        # Gridlines based on minor ticks
-    #        axes[n_u, n_c].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
+    #for n_u in range(n_ue):
+    #    c.append( axes[n_u, 0].imshow(frame_map[:,n_u,:].T, cmap=plt.cm.get_cmap('Blues', 3), interpolation='none',
+    #          extent=[n_frm_st,n_frm_end, n_ant,0],  aspect="auto") )
+    #    axes[n_u, 0].set_title('UE {}'.format(n_u))
+    #    axes[n_u, 0].set_ylabel('Antenna #')
+    #    axes[n_u, 0].set_xlabel('Frame #')
+    #    # Minor ticks
+    #    axes[n_u, 0].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
+    #    axes[n_u, 0].set_yticks(np.arange(0, n_ant, 1), minor=True)
+    #    # Gridlines based on minor ticks
+    #    axes[n_u, 0].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
 
     #cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')
     #cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])
+
 def plot_snr_map(snr, n_frm_st, n_frm_end, n_ant):
     n_ue = snr.shape[1]
     fig, axes = plt.subplots(nrows=n_ue, ncols=1, squeeze=False)
@@ -324,10 +327,8 @@ def plot_spectral_efficiency(subf_conj, subf_zf, mubf_conj, mubf_zf, timestamp, 
     axes1[0,1].set_xlabel('Time (s)', fontsize=14)
     for j in range(n_ue):
         axes1[1, 0].plot(timestamp, subf_conj[:,j], label = 'Conj User: {}'.format(j) )
-    axes1[1, 0].plot(timestamp, np.sum(mubf_conj, axis=1), label = 'SUM Conj MUBF: {}x{}'.format(n_ant,n_ue))
     for j in range(n_ue):
         axes1[1, 1].plot(timestamp, subf_zf[:,j], label = 'ZF User: {}'.format(j) )
-    axes1[1, 1].plot(timestamp, np.sum(mubf_zf, axis=1), label = 'SUM ZF MUBF: {}x{}'.format(n_ant, n_ue))
     axes1[1,0].legend(loc='upper right', ncol=1, frameon=False)
     axes1[1,0].set_xlabel('Time (s)', fontsize=14)
     axes1[1,0].set_ylabel('SUBF %dx1 (bps/Hz)'%n_ant, fontsize=14)
