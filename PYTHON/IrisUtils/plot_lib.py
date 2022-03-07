@@ -33,13 +33,11 @@ def plot_csi(csi, corr, bs_nodes, good_frames, frame_i, ant_i, subcarrier_i, off
     axes[0, 0].set_ylabel('Magnitude')
     for i in range(csi.shape[1]):
         axes[0, 0].plot(np.abs(csi[:, i, ant_i, subcarrier_i]).flatten(), label="user %d" % bs_nodes[i])
-    axes[0, 0].legend(loc='lower right', frameon=False)
     axes[0, 0].set_xlabel('Frame')
 
     axes[1, 0].set_ylabel('Phase')
     for i in range(csi.shape[1]):
         axes[1, 0].plot(np.angle(csi[:, i, ant_i, subcarrier_i]).flatten(), label="user %d" % bs_nodes[i])
-    axes[1, 0].legend(loc='lower right', frameon=False)
     axes[1, 0].set_ylim(-np.pi, np.pi)
     axes[1, 0].set_xlabel('Frame')
 
@@ -48,12 +46,16 @@ def plot_csi(csi, corr, bs_nodes, good_frames, frame_i, ant_i, subcarrier_i, off
     axes[2, 0].set_title('Cell %d offset %d' % (0, offset))
     for u in range(corr.shape[1]):
         axes[2, 0].plot(corr[good_frames, u], label="user %d"%u)
-    axes[2, 0].legend(loc='lower right', frameon=False)
     axes[2, 0].set_xlabel('Frame')
     lines, labels = axes[-1, 0].get_legend_handles_labels()
     fig.legend(lines, labels, loc = 'upper right', frameon=False)
 
-def plot_calib(calib_mat, bs_nodes, frame_i, ant_i, subcarrier_i):
+def plot_calib(calib_mat, bs_nodes, frame_i, ant_i, subcarrier_i, unwrap=True):
+    if unwrap:
+        calib_mat_phase = np.unwrap(np.angle(calib_mat))
+    else:
+        calib_mat_phase = np.angle(calib_mat)
+
     fig, axes = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
     axes[0, 0].set_title('Reciprocity Calibration Factor Across Frames - Cell 0 - Subcarrier %d' % subcarrier_i)
 
@@ -63,8 +65,9 @@ def plot_calib(calib_mat, bs_nodes, frame_i, ant_i, subcarrier_i):
     axes[0, 0].legend(frameon=False)
 
     axes[1, 0].set_ylabel('Phase (ant %d)' % (ant_i))
-    axes[1, 0].plot(np.unwrap(np.angle(calib_mat[:, ant_i, subcarrier_i])).flatten())
-    #axes[1, 0].set_ylim(-np.pi, np.pi)
+    axes[1, 0].plot(calib_mat_phase[:, ant_i, subcarrier_i].flatten())
+    if unwrap == False:
+        axes[1, 0].set_ylim(-np.pi, np.pi)
     axes[1, 0].set_xlabel('Frame')
     axes[1, 0].legend(frameon=False)
     axes[1, 0].grid()
@@ -77,9 +80,10 @@ def plot_calib(calib_mat, bs_nodes, frame_i, ant_i, subcarrier_i):
 
     axes[3, 0].set_ylabel('Phase')
     for i in range(calib_mat.shape[1]):
-        axes[3, 0].plot(np.unwrap(np.angle(calib_mat[:, i, subcarrier_i])).flatten(), label="ant %d" % bs_nodes[i])
+        axes[3, 0].plot(calib_mat_phase[:, i, subcarrier_i].flatten(), label="ant %d" % bs_nodes[i])
     axes[3, 0].set_xlabel('Frame')
-    #axes[3, 0].set_ylim(-np.pi, np.pi)
+    if unwrap == False:
+        axes[3, 0].set_ylim(-np.pi, np.pi)
     axes[3, 0].legend(loc='lower right', frameon=False)
     axes[3, 0].grid()
 
@@ -90,8 +94,9 @@ def plot_calib(calib_mat, bs_nodes, frame_i, ant_i, subcarrier_i):
     axes[0, 0].set_xlabel('Subcarrier')
 
     axes[1, 0].set_ylabel('Phase ant %d' % (ant_i))
-    axes[1, 0].plot(np.unwrap(np.angle(calib_mat[frame_i, ant_i, :])).flatten())
-    #axes[1, 0].set_ylim(-np.pi, np.pi)
+    axes[1, 0].plot(calib_mat_phase[frame_i, ant_i, :].flatten())
+    if unwrap == False:
+        axes[1, 0].set_ylim(-np.pi, np.pi)
     axes[1, 0].set_xlabel('Subcarrier')
 
     axes[2, 0].set_ylabel('Magnitude')
@@ -102,9 +107,10 @@ def plot_calib(calib_mat, bs_nodes, frame_i, ant_i, subcarrier_i):
 
     axes[3, 0].set_ylabel('Phase')
     for i in range(calib_mat.shape[1]):
-        axes[3, 0].plot(np.unwrap(np.angle(calib_mat[frame_i, i, :])).flatten(), label="ant %d" % bs_nodes[i])
+        axes[3, 0].plot(calib_mat_phase[frame_i, i, :].flatten(), label="ant %d" % bs_nodes[i])
     axes[3, 0].set_xlabel('Subcarrier')
-    #axes[3, 0].set_ylim(-np.pi, np.pi)
+    if unwrap == False:
+        axes[3, 0].set_ylim(-np.pi, np.pi)
     axes[3, 0].legend(loc='lower right', frameon=False)
 
 def plot_constellation_stats(evm, evm_snr, ul_data, txdata, frame_i, ul_slot_i, data_str = "Uplink"):
@@ -153,7 +159,7 @@ def show_plot(cmpx_pilots, lts_seq_orig, match_filt, ref_user, ref_ant, ref_fram
         print("cmpx_pilots.shape = {}".format(cmpx_pilots.shape))
 
     ax1.plot(
-        np.real(cmpx_pilots[frame_to_plot - frm_st_idx, ref_user, ref_ant, :]))
+        np.real(cmpx_pilots[frame_to_plot, ref_user, ref_ant, :]))
 
     z_pre = np.zeros(82, dtype='complex64')
     z_post = np.zeros(68, dtype='complex64')
@@ -188,7 +194,7 @@ def show_plot(cmpx_pilots, lts_seq_orig, match_filt, ref_user, ref_ant, ref_fram
     ax3.set_title(
         'channel_analysis:csi_from_pilots(): MF (uncleared peaks) - ref frame {} and ref ant. {} (UE {})'.format(
             frame_to_plot, ref_ant, ref_user))
-    ax3.stem(match_filt[frame_to_plot - frm_st_idx, ref_user, ref_ant, :])
+    ax3.stem(match_filt[frame_to_plot, ref_user, ref_ant, :])
     ax3.set_xlabel('Samples')
 
 def plot_cfo(cfo, n_frm_st, ant_i = -1):
@@ -224,7 +230,7 @@ def plot_start_frame(sub_fr_strt, n_frm_st):
     lines, labels = axes[-1, 0].get_legend_handles_labels()
     fig.legend(lines, labels, loc = 'upper right', frameon=False)
 
-def plot_pilot_mat(frame_map, seq_found, n_frm_st, n_frm_end):
+def plot_pilot_mat(frame_map, seq_found, n_frm_st, n_frm_end, sub_sample=1):
     n_ue = seq_found.shape[1]
     n_ant = seq_found.shape[2]
     fig, axes = plt.subplots(nrows=n_ue, ncols=1, squeeze=False)
@@ -238,7 +244,7 @@ def plot_pilot_mat(frame_map, seq_found, n_frm_st, n_frm_end):
         axes[n_u, 0].set_title('UE {}'.format(n_u))
         axes[n_u, 0].set_ylabel('Antenna #')
         axes[n_u, 0].set_xlabel('Frame #')
-        axes[n_u, 0].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
+        axes[n_u, 0].set_xticks(np.arange(n_frm_st, n_frm_end, sub_sample), minor=True)
         axes[n_u, 0].set_yticks(np.arange(0, n_ant, 1), minor=True)
         axes[n_u, 0].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
     cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, 100, 11), orientation='horizontal')
@@ -273,7 +279,7 @@ def plot_pilot_mat(frame_map, seq_found, n_frm_st, n_frm_end):
     #    axes[n_u, 0].set_ylabel('Antenna #')
     #    axes[n_u, 0].set_xlabel('Frame #')
     #    # Minor ticks
-    #    axes[n_u, 0].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
+    #    axes[n_u, 0].set_xticks(np.arange(n_frm_st, n_frm_end, sub_sample), minor=True)
     #    axes[n_u, 0].set_yticks(np.arange(0, n_ant, 1), minor=True)
     #    # Gridlines based on minor ticks
     #    axes[n_u, 0].grid(which='minor', color='0.75', linestyle='-', linewidth=0.1)
@@ -281,7 +287,7 @@ def plot_pilot_mat(frame_map, seq_found, n_frm_st, n_frm_end):
     #cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=[-1, 0, 1], orientation = 'horizontal')
     #cbar.ax.set_xticklabels(['Bad Frame', 'Probably partial/corrupt', 'Good Frame'])
 
-def plot_snr_map(snr, n_frm_st, n_frm_end, n_ant):
+def plot_snr_map(snr, n_frm_st, n_frm_end, n_ant, sub_sample=1):
     n_ue = snr.shape[1]
     fig, axes = plt.subplots(nrows=n_ue, ncols=1, squeeze=False)
     c = []
@@ -295,7 +301,7 @@ def plot_snr_map(snr, n_frm_st, n_frm_end, n_ant):
         axes[n_u, 0].set_title('UE {}'.format(n_u))
         axes[n_u, 0].set_ylabel('Antenna #')
         axes[n_u, 0].set_xlabel('Frame #')
-        axes[n_u, 0].set_xticks(np.arange(n_frm_st, n_frm_end, 1), minor=True)
+        axes[n_u, 0].set_xticks(np.arange(n_frm_st, n_frm_end, sub_sample), minor=True)
         axes[n_u, 0].set_yticks(np.arange(0, n_ant, 1), minor=True)
         axes[n_u, 0].grid(which='minor', color='0.75', linestyle='-', linewidth=0.05)
     cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, np.max(snr), 10),
@@ -308,7 +314,7 @@ def plot_match_filter(match_filt, ref_frame, n_frm_st, ant_i):
     fig, axes = plt.subplots(nrows=n_ue, ncols=1, squeeze=False)
     fig.suptitle('MF Frame # {} Antenna # {}'.format(ref_frame, ant_i))
     for n_u in range(n_ue):
-        axes[n_u, 0].stem(match_filt[ref_frame - n_frm_st, n_u, ant_i, :])
+        axes[n_u, 0].stem(match_filt[ref_frame, n_u, ant_i, :])
         axes[n_u, 0].set_xlabel('Samples')
         axes[n_u, 0].set_title('UE {}'.format(n_u))
         axes[n_u, 0].grid(True)

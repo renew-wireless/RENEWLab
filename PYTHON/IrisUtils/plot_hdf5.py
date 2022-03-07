@@ -106,9 +106,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
         pilot_samples = pilot_samples[:, :, plot_bs_nodes, :]
 
-        frm_plt = min(frame_i, pilot_samples.shape[0] + n_frm_st)
         # Verify frame_i does not exceed max number of collected frames
-        ref_frame = min(frame_i - n_frm_st, pilot_samples.shape[0])
+        ref_frame = min(frame_i, pilot_samples.shape[0])
 
         # pilot_samples dimensions:
         # ( #frames, #cells, #pilot subframes or cl ant sending pilots, #bs nodes or # bs ant, #samps per frame * 2 for IQ )
@@ -569,17 +568,11 @@ def main():
     if n_frames == 0:
         print("WARNING: No frames_to_inspect given. Will process the whole dataset.") 
 
-    if ref_frame > n_frames:
-        print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames: ref_frame:{} >  n_frames:{}. ".format(
-                ref_frame, n_frames))
-        print("Setting the frame to inspect to 0")
-        ref_frame = 0
- 
-    if (ref_frame > fr_strt + n_frames) or (ref_frame < fr_strt) :
+    if (ref_frame > n_frames):
         print("WARNING: Attempted to inspect a frame at an index larger than the no. of requested frames +  or at an index smaller than the required start of the frames: ref_frame:{} > n_frames:{} or ref_frame:{} <  fr_strt:{}. ".format(
                 ref_frame, n_frames, ref_frame, fr_strt))
         print("Setting the frame to inspect/plot to {}".format(fr_strt))
-        ref_frame = fr_strt
+        ref_frame = 0
 
     print(">> frame to plot = {}, ref. ant = {}, ref. user = {}, no. of frames to inspect = {}, starting frame = {} <<".format(ref_frame, ref_ant, ref_user, n_frames, fr_strt))
 
