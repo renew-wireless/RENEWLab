@@ -684,12 +684,13 @@ void Config::loadULData() {
     txdata_freq_dom_.resize(num_cl_antennas_);
     // For now, we're reading one frame worth of data
     for (size_t i = 0; i < num_cl_sdrs_; i++) {
-      std::string filename_tag =
-          data_mod_ + "_" + std::to_string(symbol_data_subcarrier_num_) + "_" +
-          std::to_string(fft_size_) + "_" + std::to_string(symbol_per_slot_) +
-          "_" + std::to_string(cl_ul_slots_[i].size()) + "_" +
-          std::to_string(ul_data_frame_num_) + "_" + cl_channel_ + "_" +
-          std::to_string(i) + ".bin";
+      std::string filename_tag = cl_data_mod_ + "_" +
+                                 std::to_string(symbol_data_subcarrier_num_) +
+                                 "_" + std::to_string(fft_size_) + "_" +
+                                 std::to_string(symbol_per_slot_) + "_" +
+                                 std::to_string(cl_ul_slots_[i].size()) + "_" +
+                                 std::to_string(ul_data_frame_num_) + "_" +
+                                 cl_channel_ + "_" + std::to_string(i) + ".bin";
 
       std::string filename_ul_data_f =
           directory_ + "/ul_data_f_" + filename_tag;
