@@ -311,7 +311,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         plot_iq_samps(ul_samps, user_amps, n_frm_st, ref_frame, [user_i], [ant_i], data_str="Uplink Data")
 
         if demodulate:
-            equalized_symbols, tx_symbols, slot_evm, slot_evm_snr = hdf5_lib.demodulate(ul_samps[:, ul_slot_i, :, :], userCSI, metadata, hdf5.dirpath, offset, ul_slot_i)
+            tx_data = hdf5_lib.load_tx_data(metadata, hdf5.dirpath)
+            equalized_symbols, tx_symbols, slot_evm, slot_evm_snr = hdf5_lib.demodulate(ul_samps[:, ul_slot_i, :, :], userCSI, tx_data, metadata, offset, ul_slot_i)
             plot_constellation_stats(slot_evm, slot_evm_snr, equalized_symbols, tx_symbols, ref_frame, ul_slot_i)
 
     # Plot DL data symbols
