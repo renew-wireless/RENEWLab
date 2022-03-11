@@ -1,3 +1,4 @@
+#include "config.h"
 #include <SoapySDR/Device.hpp>
 #include <chrono>
 #include <complex>
@@ -9,49 +10,66 @@
 #include <iostream>
 #include <string>
 
-#include "config.h"
+
+
+#include <SoapySDR/Time.hpp>
+#include <uhd/usrp/multi_usrp.hpp>
+#include <uhd/stream.hpp>
+#include <uhd/utils/thread_priority.hpp>
+#include <uhd/utils/safe_main.hpp>
+#include <uhd/usrp/multi_usrp.hpp>
+#include <boost/program_options.hpp>
+#include <boost/format.hpp>
+#include <boost/thread.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/algorithm/string.hpp>
+#include <iostream>
+#include <complex>
 
 class Radio;
 
 class BaseRadioSet {
- public:
-  BaseRadioSet(Config* cfg);
-  ~BaseRadioSet(void);
-  void radioTx(const void* const* buffs);
-  void radioRx(void* const* buffs);
-  int radioTx(size_t radio_id, size_t cell_id, const void* const* buffs,
-              int flags, long long& frameTime);
-  int radioRx(size_t radio_id, size_t cell_id, void* const* buffs,
-              long long& frameTime);
-  int radioRx(size_t radio_id, size_t cell_id, void* const* buffs, int numSamps,
-              long long& frameTime);
-  void radioStart(void);
-  void radioStop(void);
-  bool getRadioNotFound() { return radioNotFound; }
+public:
+    BaseRadioSet(Config* cfg);
+    ~BaseRadioSet(void);
+    void radioTx(const void* const* buffs);
+    void radioRx(void* const* buffs);
+    int radioTx(size_t radio_id, size_t cell_id, const void* const* buffs,
+        int flags, long long& frameTime);
+    int radioRx(size_t radio_id, size_t cell_id, void* const* buffs,
+        long long& frameTime);
+    int radioRx(size_t radio_id, size_t cell_id, void* const* buffs,
+        int numSamps, long long& frameTime);
+    void radioStart(void);
+    void radioStop(void);
+    bool getRadioNotFound() { return radioNotFound; }
 
- private:
-  // use for create pthread
-  struct BaseRadioContext {
-    BaseRadioSet* brs;
-    std::atomic_ulong* thread_count;
-    size_t tid;
-    size_t cell;
-  };
-  void init(BaseRadioContext* context);
-  void configure(BaseRadioContext* context);
+private:
+    // use for create pthread
+    struct BaseRadioContext {
+        BaseRadioSet* brs;
+        std::atomic_ulong* thread_count;
+        size_t tid;
+        size_t cell;
+    };
+    void init(BaseRadioContext* context);
+    void configure(BaseRadioContext* context);
 
-  static void* init_launch(void* in_context);
-  static void* configure_launch(void* in_context);
+    static void* init_launch(void* in_context);
+    static void* configure_launch(void* in_context);
 
-  void radioTrigger(void);
-  void sync_delays(size_t cellIdx);
-  SoapySDR::Device* baseRadio(size_t cellId);
-  void collectCSI(bool&);
-  void dciqCalibrationProc(size_t);
-  void readSensors(void);
+    void radioTrigger(void);
+    void sync_delays(size_t cellIdx);
+//    SoapySDR::Device* baseRadio(size_t cellId);
+    uhd::usrp::multi_usrp::sptr baseRadio(size_t cellId);
+    void collectCSI(bool&){};
+    void dciqCalibrationProc(size_t){};
+    void readSensors(void);
 
-  Config* _cfg;
-  std::vector<SoapySDR::Device*> hubs;
-  std::vector<std::vector<Radio*>> bsRadios;  // [cell, iris]
-  bool radioNotFound;
+    Config* _cfg;
+//    std::vector<SoapySDR::Device*> hubs;
+    uhd::usrp::multi_usrp::sptr hubs;
+//    std::vector<std::vector<Radio*>> bsRadios; // [cell, iris]
+    Radio* bsRadios;
+    bool radioNotFound;
 };
