@@ -39,7 +39,7 @@ end
 % Params
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 WRITE_PNG_FILES         = 0;                % Enable writing plots to PNG
-SIM_MODE                = 0;
+SIM_MODE                = 1;
 DEBUG                   = 0;
 PLOT                    = 0;
 
@@ -199,6 +199,7 @@ if SIM_MODE
     y = y0 + W_ul;
     numRxSyms = N_UE+1;    % Pilots plus data slots
     rx_vec_iris = reshape(y, [N_FRM, N_BS_NODE, n_samp, numRxSyms]);
+    numGoodFrames = N_FRM;
 else
 
     disp("Running: HARDWARE MODE");
@@ -241,7 +242,6 @@ for iframe = 1:numGoodFrames
     % Data shape: (# good frames, # BS antenna, # number samps, # numRxSyms)  SWAPPED last two
     rx_vec_iris_tmp = squeeze(rx_vec_iris(iframe, :, :, :));
 
-    figure; plot(abs(squeeze(rx_vec_iris_tmp(1,:,3))));
     %% Correlate for LTS
     % Complex cross correlation of Rx waveform with time-domain LTS
     data_len = (N_OFDM_SYM)*(N_SC +CP_LEN);
