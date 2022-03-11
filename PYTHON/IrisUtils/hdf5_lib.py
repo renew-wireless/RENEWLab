@@ -896,7 +896,7 @@ class hdf5_lib:
         return txdata
 
     @staticmethod
-    def demodulate(ul_samps, userCSI, txdata, metadata, offset, ul_slot_i):
+    def demodulate(ul_samps, userCSI, txdata, metadata, offset, ul_slot_i, method='zf'):
         if 'SYMBOL_LEN' in metadata: # to support older datasets
             samps_per_slot = int(metadata['SYMBOL_LEN'])
         elif 'SLOT_SAMP_LEN' in metadata:
@@ -937,7 +937,7 @@ class hdf5_lib:
         ul_syms_f = np.fft.fft(ul_syms, fft_size, 3)
         ul_syms_f = np.delete(ul_syms_f, zero_sc_ind, 3)
         # UL DEMULT: #Frames, #OFDM Symbols, #User, #Sample (DATA + PILOT SCs)
-        ul_demult = demult(userCSI, ul_syms_f)
+        ul_demult = demult(userCSI, ul_syms_f, method=method)
         dims = ul_demult.shape
         ul_demult_exp = np.empty((dims[0], dims[1], dims[2], fft_size), dtype='complex64')
         ul_demult_exp[:, :, :, nonzero_sc_ind] = ul_demult

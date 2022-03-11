@@ -308,7 +308,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 samps_mat[:, :, :, :, 1]*1j)*2**-15
 
         user_amps = np.mean(np.abs(ul_samps[:, :, ant_i, :]), axis=2)
-        plot_iq_samps(ul_samps, user_amps, n_frm_st, ref_frame, [user_i], [ant_i], data_str="Uplink Data")
+        plot_iq_samps(ul_samps, user_amps, n_frm_st, ref_frame, [ul_slot_i], [ant_i], data_str="Uplink Data")
 
         if demodulate:
             tx_data = hdf5_lib.load_tx_data(metadata, hdf5.dirpath)
