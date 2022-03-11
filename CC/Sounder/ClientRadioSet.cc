@@ -29,6 +29,11 @@
 #include <iostream>
 #include <complex>
 
+#include <SoapySDR/Time.hpp>
+#include <atomic>
+#include <random>
+#include <unistd.h>
+
 using json = nlohmann::json;
 
 
@@ -381,12 +386,21 @@ int ClientRadioSet::radioRx(
 //        else {
         long long frameTimeNs(0);
         ret = radios->recv(buffs, numSamps, frameTimeNs);
-//        frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate());
-//#if DEBUG_RADIO
-//        if (frameTimeNs < 2e9)
-//            std::cout << "client " << radio_id << " received " << ret
-//                      << " at " << frameTimeNs << std::endl;
-//#endif
+        std::cout << "frame time in client.cc before conversion is " << frameTimeNs << std::endl;
+
+        frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate());
+        std::cout << "frame time in client.cc is " << frameTime << std::endl;
+
+#if DEBUG_RADIO
+        if (frameTimeNs < 2e9)
+            std::cout << "client " << radio_id << " received " << ret
+                      << " at " << frameTimeNs << std::endl;
+#endif
+        double a = radios->dev->get_time_now().get_real_secs();
+        std::cout << "time: " << a <<std::endl;
+        std::cout << "full seconds: " << radios->dev->get_time_now().get_full_secs() << std::endl;
+        std::cout << "frac seconds: " << radios->dev->get_time_now().get_frac_secs() << std::endl;
+
 //        }
         return ret;
     }
