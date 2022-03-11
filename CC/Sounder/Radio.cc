@@ -29,6 +29,22 @@
 #include <SoapySDR/Formats.hpp>
 #include <SoapySDR/Time.hpp>
 
+#include <SoapySDR/Device.hpp>
+#include <SoapySDR/Registry.hpp>
+#include <SoapySDR/Logger.hpp>
+#include <uhd/version.hpp>
+#include <uhd/device.hpp>
+#ifdef UHD_HAS_MSG_HPP
+#include <uhd/utils/msg.hpp>
+#else
+#include <uhd/utils/log_add.hpp>
+#endif
+#include <uhd/usrp/multi_usrp.hpp>
+#include <uhd/property_tree.hpp>
+#include <uhd/version.hpp>
+#include <cctype>
+#include <iostream>
+
 
 
 void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
@@ -147,17 +163,23 @@ void Radio::drain_buffers(std::vector<void*> buffs, int symSamp)
 
     // update for UHD multi USRP
 //    const size_t samps_per_buff = rxs->get_max_num_samps();
-    r = rxs->recv(buffs, symSamp, rmd);
+    while (r != -1) {
+        uhd::rx_streamer::buffs_type stream_buffs(buffs.data(), rxs->get_num_channels());
+        uhd::rx_metadata_t md;
+        r = rxs->recv(stream_buffs, symSamp, md, 0, (flags & SOAPY_SDR_ONE_PACKET) != 0);
+        if (rmd.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE) {
+            std::cout<<"in drain_buffer"<<std::endl;
+            throw std::runtime_error(
+                    str(boost::format("Receiver error %s") % rmd.strerror()));
+        }
+        i++;
+    }
 //    if (rmd.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT){
 //        break;
 //    }
-    if (rmd.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE) {
-        std::cout<<"in drain_buffer"<<std::endl;
-        throw std::runtime_error(
-                str(boost::format("Receiver error %s") % rmd.strerror()));
-    }
+
 //    i = r/samps_per_buff;
-    i = r/symSamp;
+//    i = r/symSamp;
     MLPD_TRACE("Number of reads needed to drain: %d\n", i);
 }
 
@@ -177,7 +199,7 @@ Radio::Radio(const std::map< std::string, std::string >& args, const char uhdFmt
         dev->set_tx_rate(rate, ch);
     }
 //    std::string hostFormat;
-//    for(const char ch : uhdFmt)
+//    for(const char ch : uhdFmt[])
 //    {
 //        if (ch == 'C') hostFormat += "c";
 //        else if (ch == 'F') hostFormat = "f" + hostFormat;
@@ -185,17 +207,17 @@ Radio::Radio(const std::map< std::string, std::string >& args, const char uhdFmt
 //        else if (std::isdigit(ch)) hostFormat += ch;
 ////        else throw std::runtime_error("SoapyUHDDevice::setupStream("+uhdFmt+") unknown format");
 //    }
-
+//    uhd::stream_args_t stream_args(hostFormat);
     uhd::stream_args_t stream_args("fc32");
 //    stream_args.channels = channels;
-//    stream_args.args = kwargsToDict(args);
+    stream_args.args = args;
     if (args.count("WIRE") != 0) stream_args.otw_format = args.at("WIRE");
 
 //    rxs = dev->setupStream(SOAPY_SDR_RX, soapyFmt, channels);
 //    txs = dev->setupStream(SOAPY_SDR_TX, soapyFmt, channels);
 
     rxs = dev->get_rx_stream(stream_args);
-//    txs = dev->get_tx_stream(stream_args);
+    txs = dev->get_tx_stream(stream_args);
 
 //    txs = dev->get_tx_stream(stream_args);
 
@@ -229,39 +251,29 @@ int Radio::activateRecv(
                 SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST };
     int flag_args = soapyFlags[flags];
     // for USRP device start rx stream UHD_INIT_TIME_SEC sec in the future
-    if (!kUseUHD) {
-        // the following probabaly not going to be called, considered deleting, but decied to rewrite it to use UHD same
-        // as the else condition
-        uhd::stream_cmd_t stream_cmd_1(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-//        stream_cmd_rx = stream_cmd_1;
-        stream_cmd_1.stream_now = true;
-        rxs->issue_stream_cmd(stream_cmd_1);
-        return 0;
+//    if (not rxs) return 0; //NOP, does nothing, but not an error
+    uhd::stream_cmd_t::stream_mode_t mode;
+    const size_t numElems = 0 ;
+    if (numElems == 0){
+        mode = uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS;
     }
-//        dev->activateStream(rxs, flag_args, rxTime, numSamps);
-    else {
-        uhd::stream_cmd_t::stream_mode_t mode;
-        if (numSamps == 0){
-            mode = uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS;
-        }
-        else if ((flags & SOAPY_SDR_END_BURST) != 0) {
-            mode = uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_DONE;
-        }
-        else {mode = uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_MORE;}
+    else if ((flag_args & SOAPY_SDR_END_BURST) != 0) {
+        mode = uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_DONE;
+    }
+    else {mode = uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_MORE;}
 
-        uhd::stream_cmd_t cmd(mode);
-        cmd.stream_now = (flags & SOAPY_SDR_HAS_TIME) == 0;
-        cmd.time_spec = uhd::time_spec_t::from_ticks(rxTime, 1e9);
-        cmd.num_samps = numSamps;
+    uhd::stream_cmd_t cmd(mode);
+    cmd.stream_now = (flag_args & SOAPY_SDR_HAS_TIME) == 0;
+    cmd.time_spec = uhd::time_spec_t::from_ticks(UHD_INIT_TIME_SEC * 1e9, 1e9);
+    cmd.num_samps = 0;
 
-        rxs->issue_stream_cmd(cmd);
+    rxs->issue_stream_cmd(cmd);
 
 //        uhd::stream_cmd_t stream_cmd_1(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
 ////        stream_cmd_rx = stream_cmd_1;
 //        stream_cmd_1.stream_now = true;
 //        rxs->issue_stream_cmd(stream_cmd_1);
-        return 0;
-    }
+    return 0;
 //        dev->activateStream(
 //            rxs, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC * 1e9, 0);
 }
@@ -286,27 +298,51 @@ void Radio::activateXmit(void) {
 //        stream_cmd_2.stream_now = true;
 //        txs->issue_stream_cmd(stream_cmd_2);
 //    }
-    uhd::stream_args_t stream_args("fc32");
-    txs = dev->get_tx_stream(stream_args);
+//    uhd::stream_args_t stream_args("fc32");
+//    txs = dev->get_tx_stream(stream_args);
 
 //    _cfg(cfg);
 //    auto channels_num = Utils::strToChannels(_cfg->cl_channel());
 //    stream_args.channels = channels_num;
-    std::cout << "no input yet, from example, seems no issue command is needed" << std::endl;
-    std::cout << "init txmd" << std::endl;
-    tmd.start_of_burst = true;
-    tmd.end_of_burst = false;
-    tmd.has_time_spec =true;
-    auto delay = 0.1;
-    tmd.time_spec = dev->get_time_now() + uhd::time_spec_t(delay);
-//    tmd.time_spec = dev->get_time_now();
 
+
+
+    std::cout << "no input yet, from example, seems no issue command is needed" << std::endl;
+//    std::cout << "init txmd" << std::endl;
+//    tmd.start_of_burst = true;
+//    tmd.end_of_burst = false;
+//    tmd.has_time_spec =true;
+//    auto delay = 0.1;
+//    tmd.time_spec = dev->get_time_now() + uhd::time_spec_t(delay);
+////    tmd.time_spec = dev->get_time_now();
+
+//    //determine stream mode
+//    uhd::stream_cmd_t::stream_mode_t mode;
+//    size_t numElems = 0;
+//    const int flags = SOAPY_SDR_HAS_TIME;
+//    if (numElems == 0) mode = uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS;
+//    else if ((flags & SOAPY_SDR_END_BURST) != 0) mode = uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_DONE;
+//    else mode = uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_MORE;
+//
+//    //fill in the command
+//    uhd::stream_cmd_t cmd(mode);
+//    cmd.stream_now = (flags & SOAPY_SDR_HAS_TIME) == 0;
+//    cmd.time_spec = uhd::time_spec_t::from_ticks(UHD_INIT_TIME_SEC * 1e9, 1e9);
+//    cmd.num_samps = numElems;
+//
+//    //issue command
+//    txs->issue_stream_cmd(cmd);
 }
 
 void Radio::deactivateRecv(void) {
 //    dev->deactivateStream(rxs);
     uhd::stream_cmd_t stream_cmd_1(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
+    const int flags = 0;
+
 //    stream_cmd_rx = stream_cmd_1;
+//    stream_cmd_1.stream_now =  0;
+    stream_cmd_1.stream_now = (flags & SOAPY_SDR_HAS_TIME) == 0;
+    stream_cmd_1.time_spec = uhd::time_spec_t::from_ticks(0, 1e9);
     rxs->issue_stream_cmd(stream_cmd_1);
 }
 
@@ -315,8 +351,9 @@ void Radio::deactivateXmit(void) {
 //    uhd::stream_cmd_t stream_cmd_2(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
 //    stream_cmd_tx = stream_cmd_2;
 //    txs->issue_stream_cmd(stream_cmd_2);
-    tmd.end_of_burst=true;
-    txs->send("", 0,tmd);
+
+//    tmd.end_of_burst = true;
+//    txs->send("", 0,tmd);
     std::cout << "no input yet, from example, seems no issue command is needed" << std::endl;
 }
 
@@ -341,14 +378,30 @@ Radio::~Radio(void)
 int Radio::recv(void* const* buffs, int samples, long long& frameTime)
 {
     int flags(0);
+    uhd::rx_streamer::buffs_type stream_buffs(buffs, rxs->get_num_channels());
+    uhd::rx_metadata_t md;
+
 //    int r = dev->readStream(rxs, buffs, samples, flags, frameTime, 1000000);
-    int r = rxs->recv(buffs, samples, rmd, 1, (flags & SOAPY_SDR_ONE_PACKET) != 0);
+//    int r = rxs->recv(buffs, samples, rmd, 1, (flags & SOAPY_SDR_ONE_PACKET) != 0);
+    int r = rxs->recv(stream_buffs, samples, md, 1, (flags & SOAPY_SDR_ONE_PACKET) != 0);
 
     flags = 0;
-    if (rmd.has_time_spec) flags |= SOAPY_SDR_HAS_TIME;
-    if (rmd.end_of_burst) flags |= SOAPY_SDR_END_BURST;
-    if (rmd.more_fragments) flags |= SOAPY_SDR_MORE_FRAGMENTS;
-//    timeNs = rmd.time_spec.to_ticks(1e9);
+    if (md.has_time_spec) flags |= SOAPY_SDR_HAS_TIME;
+    if (md.end_of_burst) flags |= SOAPY_SDR_END_BURST;
+    if (md.more_fragments) flags |= SOAPY_SDR_MORE_FRAGMENTS;
+    frameTime = md.time_spec.to_ticks(1e9);
+    std::cout << "frame time in radio.cc is " << frameTime << std::endl;
+
+    switch (rmd.error_code)
+    {
+        case uhd::rx_metadata_t::ERROR_CODE_NONE: return r;
+        case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW: return SOAPY_SDR_OVERFLOW;
+        case uhd::rx_metadata_t::ERROR_CODE_TIMEOUT: return SOAPY_SDR_TIMEOUT;
+        case uhd::rx_metadata_t::ERROR_CODE_BAD_PACKET: return SOAPY_SDR_CORRUPTION;
+        case uhd::rx_metadata_t::ERROR_CODE_ALIGNMENT: return SOAPY_SDR_CORRUPTION;
+        case uhd::rx_metadata_t::ERROR_CODE_LATE_COMMAND: return SOAPY_SDR_STREAM_ERROR;
+        case uhd::rx_metadata_t::ERROR_CODE_BROKEN_CHAIN: return SOAPY_SDR_STREAM_ERROR;
+    }
 
 //    if (r < 0) {
 //        MLPD_ERROR("Time: %lld, readStream error: %d - %s, flags: %d\n",
@@ -362,6 +415,7 @@ int Radio::recv(void* const* buffs, int samples, long long& frameTime)
 //    if (rmd.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT)
 //        break;
     if (rmd.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE) {
+        std::cout<<"Radio recv error"<<std::endl;
         throw std::runtime_error(
                 str(boost::format("Receiver error %s") % rmd.strerror()));
     }
@@ -376,19 +430,24 @@ int Radio::xmit(
 //    tmd.has_time_spec =true;
 //    auto delay = 0.1;
 //    tmd.time_spec = dev->get_time_now() + uhd::time_spec_t(delay);
-//    int soapyFlags[]
-//        = { 0, SOAPY_SDR_HAS_TIME, SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST,
-//              SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST };
-//    int flag_args = soapyFlags[flags];
+    int soapyFlags[]
+        = { 0, SOAPY_SDR_HAS_TIME, SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST,
+              SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST };
+    int flag_args = soapyFlags[flags];
 //    int r
 //        = dev->writeStream(txs, buffs, samples, flag_args, frameTime, 1000000);
 //    std::cout<<"sending_before"<<std::endl;
-    tmd.has_time_spec = (flags & SOAPY_SDR_HAS_TIME) != 0;
-    tmd.end_of_burst = (flags & SOAPY_SDR_END_BURST) != 0;
-    tmd.time_spec = uhd::time_spec_t::from_ticks(frameTime, 1e9);
-    int r = txs-> send (buffs, samples, tmd, 1);
+    uhd::tx_metadata_t md;
 
-//    flags = 0;
+    md.has_time_spec = (flag_args & SOAPY_SDR_HAS_TIME) != 0;
+    md.end_of_burst = (flag_args & SOAPY_SDR_END_BURST) != 0;
+    md.time_spec = uhd::time_spec_t::from_ticks(frameTime, 1e9);
+
+    uhd::tx_streamer::buffs_type stream_buffs(buffs, txs->get_num_channels());
+    int r = txs-> send (stream_buffs, samples, md, 1);
+
+    if (r == 0) return SOAPY_SDR_TIMEOUT;
+    flag_args = 0;
 //    tmd.start_of_burst = false;
 //    tmd.has_time_spec=false;
 //    std::cout<<"sending_after"<<std::endl;
@@ -398,7 +457,6 @@ int Radio::xmit(
                   << std::endl;
     return (r);
 }
-
 
 int Radio::getTriggers(void) const
 {
