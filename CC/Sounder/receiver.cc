@@ -370,6 +370,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                 }
 
                 if (r != rx_len) {
+                    std::cout<<"Check Place 1"<<std::endl;
                     std::cerr << "BAD Receive(" << r << "/" << rx_len
                               << ") at Time " << rxTimeBs << ", frame count "
                               << frame_id << std::endl;
@@ -695,14 +696,18 @@ void Receiver::clientSyncTxRx(int tid)
             int rx_len = (sf == 0) ? (NUM_SAMPS + rx_offset) : NUM_SAMPS;
             assert((rx_len > 0) && (rx_len < SYNC_NUM_SAMPS));
 //            std::cout<<"cp1"<<std::endl;
+            std::cout << "usrp time" << std::endl;
+
             int r = clientRadioSet_->radioRx(
                 tid, syncrxbuff.data(), rx_len, rxTime);
             std::cout<< "r is: " << r <<std::endl;
+//            r = 1120;
             if (r < 0) {
                 config_->running(false);
                 break;
             }
             if (r != rx_len) {
+                std::cout<<"Check Place 2"<<std::endl;
                 MLPD_WARN("BAD Receive(%d/%d) at Time %lld, frame count %zu\n",
                     r, rx_len, rxTime, frame_cnt);
             }
