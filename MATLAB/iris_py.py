@@ -153,6 +153,7 @@ class Iris_py:
                         self.sdr.setDCOffsetMode(SOAPY_SDR_RX, chan, True)
 
                 self.tx_stream = None  # Burst mode
+                self.rx_stream = None  # Burst mode
 
                 self.sdr.writeSetting("RESET_DATA_LOGIC", "")
 
@@ -172,7 +173,7 @@ class Iris_py:
         def sdr_gettriggers(self):
                 #time.sleep(1)
                 t = SoapySDR.timeNsToTicks(self.sdr.getHardwareTime(""),self.sample_rate) >> 32 #trigger count is top 32 bits.
-                print("%d new triggers" % (t))
+                #print("%d new triggers at node %s" % (t, self.serial_id))
                 return t
 
         def unset_corr(self):
@@ -180,15 +181,29 @@ class Iris_py:
                 self.sdr.writeRegister("IRIS30", 60, 
                     self.sdr.readRegister("IRIS30", 60) & 0xFFFE)
 
+        def sdr_setrxfreq(self, rx_freq):
+                for chan in [0, 1]:
+                    self.sdr.setFrequency(SOAPY_SDR_RX, chan, 'RF', rx_freq - .75*self.sample_rate)
+
+        def sdr_settxfreq(self, tx_freq):
+                for chan in [0, 1]:
+                    self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'RF', tx_freq - .75*self.sample_rate)
+
         def sdr_settxgain(self, tx_gain):
                 for chan in [0, 1]:
                     self.sdr.setGain(SOAPY_SDR_TX, chan, min(tx_gain, 81.0))
 
-        def config_sdr_tdd(self, is_bs=True, tdd_sched="G", prefix_len=0, max_frames=1):
+        def sdr_setrxgain(self, rx_gain):
+                for chan in [0, 1]:
+                    self.sdr.setGain(SOAPY_SDR_RX, chan, rx_gain)
+
+        def config_sdr_tdd(self, is_bs=True, tdd_sched="G", nsamps=4096, prefix_len=0, max_frames=1):
                 '''Configure the TDD schedule and functionality when unchained. Set up the correlator.'''
+                self.n_samp = nsamps
                 global corr_threshold, beacon
                 coe = cfloat2uint32(np.conj(beacon), order='QI')
                 self.tdd_sched = tdd_sched
+                print(self.tdd_sched)
                 self.max_frames = int(max_frames)
                 if bool(is_bs):
                         conf_str = {"tdd_enabled": True,
@@ -242,6 +257,10 @@ class Iris_py:
                 # NB: This should be called for the BS
                 self.sdr.writeSetting("SYNC_DELAYS", "")
 
+        def reset_hw_time(self):
+                # NB: This should be called for the BS
+                self.sdr.setHardwareTime(0)
+
         # Setup and activate RX streams
         def setup_stream_rx(self):
                 print("Setting up RX stream \n")
@@ -252,10 +271,9 @@ class Iris_py:
                 if r1 < 0:
                     print("Problem activating stream\n")
 
-        def burn_beacon(self):
+        def burn_beacon(self, beacon_weights = [[1, 1], [1, 1]]):
                 '''Write beacon to the FPGA ram'''
                 buf_a = cfloat2uint32(beacon, order='QI')
-                beacon_weights = [[1, 1], [1, 1]]
                 self.sdr.writeRegisters("BEACON_RAM", 0, buf_a.tolist())
                 self.sdr.writeRegisters(
                     "BEACON_RAM_WGT_A", 0, beacon_weights[0])
@@ -265,6 +283,17 @@ class Iris_py:
                 print("burnt beacon to node {} FPGA RAM".format(self.serial_id))
 
         # Write data to FPGA RAM
+        def burn_data_complex(self, data_a, data_b=None, replay_addr=0):
+                '''Write data to FPGA RAM. A pilot for example. Need to compose a complex vector out of data_r and data_i'''
+
+                buf_a = cfloat2uint32(data_a, order='QI')
+
+                self.sdr.writeRegisters("TX_RAM_A", replay_addr, buf_a.tolist())
+                if data_b is not None:
+                    buf_b = cfloat2uint32(data_b, order='QI')
+                    self.sdr.writeRegisters("TX_RAM_B", replay_addr, buf_b.tolist() )
+                print("burnt data on to node {} FPGA RAM".format(self.serial_id))
+
         def burn_data(self, data_r, data_i=None, replay_addr=0):
                 '''Write data to FPGA RAM. A pilot for example. Need to compose a complex vector out of data_r and data_i'''
 
@@ -285,9 +314,9 @@ class Iris_py:
                 in_len = int(self.n_samp)
                 wave_rx_a = np.zeros((in_len), dtype=np.complex64)
                 wave_rx_b = np.zeros((in_len), dtype=np.complex64)
-                rx_frames_a = np.zeros((in_len*max_frames), dtype=np.complex64)
-
                 n_R = self.tdd_sched.count("R")  # How many Read frames in the tdd schedule
+                rx_frames_a = np.zeros((in_len*n_R*max_frames), dtype=np.complex64)
+
                 print("n_samp is: %d  \n" % self.n_samp)
 
                 for m in range(max_frames):
@@ -295,7 +324,8 @@ class Iris_py:
                         r1 = self.sdr.readStream(
                             self.rx_stream, [wave_rx_a, wave_rx_b], int(self.n_samp))
                         print("reading stream: ({})".format(r1))
-                    rx_frames_a[m*in_len: (m*in_len + in_len)] = wave_rx_a
+                        data_id = m*n_R+k
+                        rx_frames_a[data_id*in_len: (data_id*in_len + in_len)] = wave_rx_a
 
                 return(rx_frames_a)
 
