@@ -21,6 +21,7 @@
 #include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
+static constexpr int kMaxTOSyncRetry = 10;
 
 BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
   std::vector<size_t> num_bs_antenntas(_cfg->num_cells());
@@ -214,8 +215,9 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
       int offset_diff = 1;
       // array radios delay adjust
       while (offset_diff > 0) {
-        if (++cal_cnt > 10) {
-          std::cout << "10 attemps of sample offset calibration, "
+        if (++cal_cnt > kMaxTOSyncRetry) {
+          std::cout << kMaxTOSyncRetry
+                    << " attemps of sample offset calibration, "
                        "stopping..."
                     << std::endl;
           break;
@@ -234,8 +236,9 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
       /*cal_cnt = 0;
       offset_diff = 1;
       while (offset_diff > 0) {
-        if (++cal_cnt > 10) {
-          std::cout << "10 attemps of sample offset calibration for ref node, "
+        if (++cal_cnt > kMaxTOSyncRetry) {
+          std::cout << kMaxTOSyncRetry
+                    << " attemps of sample offset calibration for ref node, "
                        "stopping..."
                     << std::endl;
           break;

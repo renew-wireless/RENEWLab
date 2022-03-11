@@ -76,6 +76,8 @@ class Receiver {
   void clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer);
   int syncSearch(std::vector<std::complex<int16_t>> sync_buff,
                  size_t sync_num_samps);
+  float estimateCFO(std::vector<std::complex<int16_t>> sync_buff,
+                    int sync_index);
   void initBuffers();
   void clientTxPilots(size_t user_id, long long base_time);
   int clientTxData(int tid, int frame_id, long long base_time);

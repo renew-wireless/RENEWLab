@@ -33,6 +33,8 @@ static constexpr size_t kQueueSize = 36;
 #define UHD_INIT_TIME_SEC (3)  // radio init time for UHD devices
 #define BEACON_INTERVAL (20)   // frames
 
+#define PI_CONST 3.14159265358979323846
+
 enum SchedulerEventType {
   kEventRxSymbol = 0,
   kEventTxSymbol = 1,

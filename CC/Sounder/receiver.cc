@@ -775,6 +775,43 @@ int Receiver::syncSearch(std::vector<std::complex<int16_t>> sync_buff,
   return sync_index;
 }
 
+float Receiver::estimateCFO(std::vector<std::complex<int16_t>> sync_buff,
+                            int sync_index) {
+  float cfo_phase_est = 0;
+  int beacon_start = sync_index - config_->beacon_size();
+  int beacon_half_size = config_->beacon_size() / 2;
+  std::vector<std::complex<float>> beacon0(beacon_half_size);
+  std::vector<std::complex<float>> beacon1(beacon_half_size);
+  for (int i = 0; i < beacon_half_size; i++) {
+    size_t beacon0_id = i + beacon_start;
+    size_t beacon1_id = i + beacon_start + beacon_half_size;
+    beacon0[i] = std::complex<float>(sync_buff[beacon0_id].real() / 32768.0,
+                                     sync_buff[beacon0_id].imag() / 32768.0);
+    beacon1[i] = std::complex<float>(sync_buff[beacon1_id].real() / 32768.0,
+                                     sync_buff[beacon1_id].imag() / 32768.0);
+  }
+  auto cfo_mult = CommsLib::complex_mult_avx(beacon1, beacon0, true);
+  float phase = 0, prev_phase = 0;
+  for (size_t i = 0; i < cfo_mult.size(); i++) {
+    phase = std::arg(cfo_mult.at(i));
+    float unwrapped_phase = 0;
+    if (i == 0) {
+      unwrapped_phase = phase;
+    } else {
+      float diff = phase - prev_phase;
+      if (diff > PI_CONST)
+        diff = diff - 2 * PI_CONST;
+      else if (diff < -PI_CONST)
+        diff = diff + 2 * PI_CONST;
+      unwrapped_phase = prev_phase + diff;
+    }
+    prev_phase = phase;
+    cfo_phase_est += unwrapped_phase;
+  }
+  cfo_phase_est /= (PI_CONST * cfo_mult.size() * config_->beacon_size());
+  return cfo_phase_est;
+}
+
 void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   if (config_->core_alloc() == true) {
     int core = tid + core_id;
@@ -836,6 +873,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   long long rxTime(0);
   int sync_index(-1);
   int rx_offset = 0;
+  float cfo_phase_est = 0;
 
   // For USRP clients skip UHD_INIT_TIME_SEC to avoid late packets
   if (kUseUHD == true) {
@@ -865,6 +903,10 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
     MLPD_INFO("Beacon detected at Time %lld, sync_index: %d\n", rxTime,
               sync_index);
     rx_offset = sync_index - config_->beacon_size() - config_->prefix();
+    cfo_phase_est = estimateCFO(syncbuff0, sync_index);
+    std::cout << "Client " << tid
+              << " Estimated CFO (Hz): " << cfo_phase_est * config_->rate()
+              << std::endl;
   }
 
   // Read rx_offset to align with the begining of a frame
@@ -938,6 +980,12 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
             "Re-syncing with offset: %d, after %zu "
             "tries, index: %d, tid %d\n",
             rx_offset, resync_retry_cnt + 1, sync_index, tid);
+        //float cfo_phase_est_inst = estimateCFO(syncbuff0, sync_index);
+        //cfo_phase_est = cfo_phase_est_inst * 0.2 + cfo_phase_est * 0.8;
+        //std::cout << "Client " << tid << " Estimated CFO (Hz): "
+        //          << cfo_phase_est_inst * config_->rate()
+        //          << ", Estimated Mean CFO (Hz): "
+        //          << cfo_phase_est * config_->rate() << std::endl;
       } else {
         resync_retry_cnt++;
       }
