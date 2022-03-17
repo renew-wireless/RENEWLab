@@ -312,7 +312,14 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
         if demodulate:
             tx_data = hdf5_lib.load_tx_data(metadata, hdf5.dirpath)
-            equalized_symbols, tx_symbols, slot_evm, slot_evm_snr = hdf5_lib.demodulate(ul_samps[:, ul_slot_i, :, :], userCSI, tx_data, metadata, offset, ul_slot_i)
+            if noise_avail:
+                noise_samples = hdf5.noise_samples[:, cell_i, :, :, :]
+                noise = hdf5_lib.samps2csi_large(noise_samples, noise_samples.shape[1], chunk_size, samps_per_slot, fft_size=fft_size,
+                                            offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
+                noise_f = noise[:, ul_slot_i, :, :, :]
+                equalized_symbols, tx_symbols, slot_evm, slot_evm_snr = hdf5_lib.demodulate(ul_samps[:, ul_slot_i, :, :], userCSI, tx_data, metadata, offset, ul_slot_i, noise_f, 'mmse')
+            else:
+                equalized_symbols, tx_symbols, slot_evm, slot_evm_snr = hdf5_lib.demodulate(ul_samps[:, ul_slot_i, :, :], userCSI, tx_data, metadata, offset, ul_slot_i)
             plot_constellation_stats(slot_evm, slot_evm_snr, equalized_symbols, tx_symbols, ref_frame, ul_slot_i)
 
     # Plot DL data symbols

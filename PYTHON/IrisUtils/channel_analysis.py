@@ -359,7 +359,7 @@ def calCorr(userCSI, corr_vec):
     return corr_total, sig_sc
 
 
-def demult(csi, data, method='zf'):
+def demult(csi, data, noise=None, method='zf'):
     # TODO include cell dimension for both csi and data and symbol num for data
     """csi: Frame, User, Antenna, Subcarrier"""
     """data: Frame, Uplink Syms, Antenna, Subcarrier"""
@@ -373,6 +373,11 @@ def demult(csi, data, method='zf'):
         for sc in range(csi.shape[3]):
             if method == 'zf':
                 bmf_w[frame, sc, :, :] = np.linalg.pinv(csi[frame, :, :, sc])
+            elif method == 'mmse' and noise is not None:
+                sigma = np.mean(np.mean(np.power(np.abs(noise[frame, :, :, sc]), 2), axis=0))
+                H = csi[frame, :, :, sc]
+                w_mmse = np.matmul(np.linalg.inv(np.matmul(H, np.transpose(np.conj(H))) + sigma*np.eye(H.shape[0])), H)
+                bmf_w[frame, sc, :, :] = np.transpose(np.conj(w_mmse))
             else:
                 bmf_w[frame, sc, :, :] = np.transpose(
                     np.conj(csi[frame, :, :, sc]), (1, 0))

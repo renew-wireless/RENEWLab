@@ -896,7 +896,10 @@ class hdf5_lib:
         return txdata
 
     @staticmethod
-    def demodulate(ul_samps, userCSI, txdata, metadata, offset, ul_slot_i, method='zf'):
+    def demodulate(ul_samps_f, csi, txdata, metadata, offset, ul_slot_i, noise_samps_f=None, method='zf'):
+        if method.lower() == 'mmse' and noise_samps_f is None:
+            print("%s requires noise samples"%(method))
+            return None
         if 'SYMBOL_LEN' in metadata: # to support older datasets
             samps_per_slot = int(metadata['SYMBOL_LEN'])
         elif 'SLOT_SAMP_LEN' in metadata:
@@ -925,19 +928,19 @@ class hdf5_lib:
 
 
         # UL Samps: #Frames, #Uplink SLOTS, #Antennas, #Samples
-        n_frames = ul_samps.shape[0]
-        ul_syms = np.empty((ul_samps.shape[0], ul_samps.shape[1],
+        n_frames = ul_samps_f.shape[0]
+        ul_syms = np.empty((ul_samps_f.shape[0], ul_samps_f.shape[1],
                        symbol_per_slot, fft_size), dtype='complex64')
 
         # UL Syms: #Frames, #Antennas, #OFDM Symbols, #Samples
         for i in range(symbol_per_slot):
-            ul_syms[:, :, i, :] = ul_samps[:, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len]
+            ul_syms[:, :, i, :] = ul_samps_f[:, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len]
         # UL Syms: #Frames, #OFDM Symbols, #Antennas, #Samples
         ul_syms = np.transpose(ul_syms, (0, 2, 1, 3))
         ul_syms_f = np.fft.fft(ul_syms, fft_size, 3)
         ul_syms_f = np.delete(ul_syms_f, zero_sc_ind, 3)
         # UL DEMULT: #Frames, #OFDM Symbols, #User, #Sample (DATA + PILOT SCs)
-        ul_demult = demult(userCSI, ul_syms_f, method=method)
+        ul_demult = demult(csi, ul_syms_f, noise_samps_f, method=method)
         dims = ul_demult.shape
         ul_demult_exp = np.empty((dims[0], dims[1], dims[2], fft_size), dtype='complex64')
         ul_demult_exp[:, :, :, nonzero_sc_ind] = ul_demult
