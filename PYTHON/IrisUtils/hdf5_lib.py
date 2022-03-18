@@ -832,9 +832,9 @@ class hdf5_lib:
                     print("frame %d ue %d ant %d lts_pks_len %d"%(frameIdx, ueIdx, bsAntIdx, lts_pks.size))
                     print(lts_pks)
                     if lts_pks.size < 2:
-                        cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
+                        cfo[frameIdx, ueIdx, bsAntIdx] = 0
                     elif lts_pks[0] < ofdm_len or lts_pks[1] < ofdm_len:
-                        cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
+                        cfo[frameIdx, ueIdx, bsAntIdx] = 0
                     else:
                         num_pks = lts_pks.size
                         cfo_sample = 0
@@ -846,9 +846,9 @@ class hdf5_lib:
                                 cfo_sample = cfo_sample + np.mean(np.unwrap(np.angle(np.multiply(IQ[sc_second:sc_second+ofdm_len], np.conj(IQ[sc_first:sc_first+ofdm_len]))))) / (ofdm_len*2*np.pi*(1/rate))
                                 n_cfo_samps = n_cfo_samps + 1
                         if n_cfo_samps > 0:
-                            cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = cfo_sample / n_cfo_samps
+                            cfo[frameIdx, ueIdx, bsAntIdx] = cfo_sample / n_cfo_samps
                         else:
-                            cfo[frameIdx, cellIdx, ueIdx, bsAntIdx] = 0
+                            cfo[frameIdx, ueIdx, bsAntIdx] = 0
         return cfo
 
     @staticmethod
@@ -883,7 +883,10 @@ class hdf5_lib:
         read_size = 2 * ul_equal_syms_frame_num * ul_slot_num * cl_ch_num * symbol_per_slot * fft_size
         cl = 0
         for fn in tx_file_names:
-            tx_file_path = dirpath + '/' + fn
+            if dirpath == "":
+                tx_file_path = fn
+            else:
+                tx_file_path = dirpath + '/' + fn
             print('Opening source TX data file %s'%tx_file_path)
             with open(tx_file_path, mode='rb') as f:
                 txdata0 = list(struct.unpack('f'*read_size, f.read(4*read_size)))
