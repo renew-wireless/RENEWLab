@@ -60,6 +60,8 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
         std::atomic_ulong thread_count = ATOMIC_VAR_INIT(num_radios);
 
         MLPD_TRACE("Init base radios: %zu\n", num_radios);
+//        std::cout<<"check aaaa "<<std::endl;
+
         for (size_t i = 0; i < num_radios; i++) {
             BaseRadioContext* context = new BaseRadioContext;
             context->brs = this;
@@ -143,73 +145,72 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
 
         auto channels = Utils::strToChannels(_cfg->bs_channel());
 
-//        for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
-        auto dev = bsRadios->dev;
-//            std::cout << _cfg->bs_sdr_ids().at(c).at(i) << ": Front end " <<std::endl;
-//                      << dev->HardwareInfo()["frontend"] << std::endl;
-        for (auto ch : channels) {
-            if (ch < dev->get_rx_num_channels()) {
-                printf("RX Channel %zu\n", ch);
-                printf("Actual RX sample rate: %fMSps...\n",
-                    (dev->get_rx_rate(ch) / 1e6));
-                printf("Actual RX frequency: %fGHz...\n",
-                    (dev->get_rx_freq(ch) / 1e9));
-                printf("Actual RX gain: %f...\n",
-                    (dev->get_rx_gain(ch)));
-                if (!kUseUHD) {
-                    printf("Actual RX LNA gain: %f...\n",
+        for (size_t i = 0; i <bsRadios->dev->get_num_mboards(); i++) {
+            auto dev = bsRadios->dev;
+            std::cout << _cfg->bs_sdr_ids().at(c).at(i) << ": Front end "<< dev->get_usrp_rx_info()["frontend"] << std::endl;
+            for (auto ch : channels) {
+                if (ch < dev->get_rx_num_channels()) {
+                    printf("RX Channel %zu\n", ch);
+                    printf("Actual RX sample rate: %fMSps...\n",
+                        (dev->get_rx_rate(ch) / 1e6));
+                    printf("Actual RX frequency: %fGHz...\n",
+                        (dev->get_rx_freq(ch) / 1e9));
+                    printf("Actual RX gain: %f...\n",
                         (dev->get_rx_gain(ch)));
-                    printf("Actual RX PGA gain: %f...\n",
-                        (dev->get_rx_gain(ch)));
-                    printf("Actual RX TIA gain: %f...\n",
-                        (dev->get_rx_gain(ch)));
-                    if (dev->get_usrp_rx_info(ch)["frontend"].find("CBRS")
-                        != std::string::npos) {
-                        printf("Actual RX LNA1 gain: %f...\n",
+                    if (!kUseUHD) {
+                        printf("Actual RX LNA gain: %f...\n",
                             (dev->get_rx_gain(ch)));
-                        printf("Actual RX LNA2 gain: %f...\n",
+                        printf("Actual RX PGA gain: %f...\n",
                             (dev->get_rx_gain(ch)));
+                        printf("Actual RX TIA gain: %f...\n",
+                            (dev->get_rx_gain(ch)));
+                        if (dev->get_usrp_rx_info(ch)["frontend"].find("CBRS")
+                            != std::string::npos) {
+                            printf("Actual RX LNA1 gain: %f...\n",
+                                (dev->get_rx_gain(ch)));
+                            printf("Actual RX LNA2 gain: %f...\n",
+                                (dev->get_rx_gain(ch)));
+                        }
                     }
+                    printf("Actual RX bandwidth: %fM...\n",
+                        (dev->get_rx_bandwidth(ch) / 1e6));
+                    printf("Actual RX antenna: %s...\n",
+                        (dev->get_rx_antenna(ch).c_str()));
                 }
-                printf("Actual RX bandwidth: %fM...\n",
-                    (dev->get_rx_bandwidth(ch) / 1e6));
-                printf("Actual RX antenna: %s...\n",
-                    (dev->get_rx_antenna(ch).c_str()));
             }
-        }
 
-        for (auto ch : channels) {
-            if (ch < dev->get_tx_num_channels()) {
-                printf("TX Channel %zu\n", ch);
-                printf("Actual TX sample rate: %fMSps...\n",
-                    (dev->get_tx_rate(ch) / 1e6));
-                printf("Actual TX frequency: %fGHz...\n",
-                    (dev->get_tx_freq(ch) / 1e9));
-                printf("Actual TX gain: %f...\n",
-                    (dev->get_tx_gain(ch)));
-                if (!kUseUHD) {
-                    printf("Actual TX PAD gain: %f...\n",
+            for (auto ch : channels) {
+                if (ch < dev->get_tx_num_channels()) {
+                    printf("TX Channel %zu\n", ch);
+                    printf("Actual TX sample rate: %fMSps...\n",
+                        (dev->get_tx_rate(ch) / 1e6));
+                    printf("Actual TX frequency: %fGHz...\n",
+                        (dev->get_tx_freq(ch) / 1e9));
+                    printf("Actual TX gain: %f...\n",
                         (dev->get_tx_gain(ch)));
-                    printf("Actual TX IAMP gain: %f...\n",
-                        (dev->get_tx_gain(ch)));
-                    if (dev->get_usrp_tx_info(ch)["frontend"].find("CBRS")
-                        != std::string::npos) {
-                        printf("Actual TX PA1 gain: %f...\n",
+                    if (!kUseUHD) {
+                        printf("Actual TX PAD gain: %f...\n",
                             (dev->get_tx_gain(ch)));
-                        printf("Actual TX PA2 gain: %f...\n",
+                        printf("Actual TX IAMP gain: %f...\n",
                             (dev->get_tx_gain(ch)));
-                        printf("Actual TX PA3 gain: %f...\n",
-                            (dev->get_tx_gain(ch)));
+                        if (dev->get_usrp_tx_info(ch)["frontend"].find("CBRS")
+                            != std::string::npos) {
+                            printf("Actual TX PA1 gain: %f...\n",
+                                (dev->get_tx_gain(ch)));
+                            printf("Actual TX PA2 gain: %f...\n",
+                                (dev->get_tx_gain(ch)));
+                            printf("Actual TX PA3 gain: %f...\n",
+                                (dev->get_tx_gain(ch)));
+                        }
                     }
+                    printf("Actual TX bandwidth: %fM...\n",
+                        (dev->get_tx_bandwidth(ch) / 1e6));
+                    printf("Actual TX antenna: %s...\n",
+                        (dev->get_tx_antenna(ch).c_str()));
                 }
-                printf("Actual TX bandwidth: %fM...\n",
-                    (dev->get_tx_bandwidth(ch) / 1e6));
-                printf("Actual TX antenna: %s...\n",
-                    (dev->get_tx_antenna(ch).c_str()));
             }
-        }
             std::cout << std::endl;
-//        }
+        }
         // Measure Sync Delays now!
 //        if (kUseUHD == false) {
 //            sync_delays(c);
@@ -341,9 +342,16 @@ BaseRadioSet::BaseRadioSet(Config* cfg)
 //            for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
 //            uhd::usrp::multi_usrp::sptr dev = bsRadios->dev;
 //                SoapySDR::Device* dev = bsRadios.at(c).at(i)->dev;
-            bsRadios->dev->set_time_source("external");
-            bsRadios->dev->set_clock_source("external");
-            bsRadios->dev->set_time_unknown_pps(uhd::time_spec_t(0.0));
+            bsRadios->dev->set_time_source("external", 0);
+            bsRadios->dev->set_clock_source("external", 0);
+            uhd::time_spec_t time = uhd::time_spec_t::from_ticks(0, 1e9);
+            bsRadios->dev->set_time_next_pps(time);
+
+//            bsRadios->dev->set_time_source("internal", 0);
+//            bsRadios->dev->set_clock_source("internal", 0);
+//            uhd::time_spec_t time = uhd::time_spec_t::from_ticks(0, 1e9);
+//            bsRadios->dev->set_time_unknown_pps(time);
+//            bsRadios->dev->set_time_unknown_pps(uhd::time_spec_t(0.0));
 //            }
             // Wait for pps sync pulse
             std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -460,6 +468,7 @@ uhd::usrp::multi_usrp::sptr BaseRadioSet::baseRadio(size_t cellId)
 
     // update for UHD multi USRP
     return NULL;
+//    return bsRadios->dev;
 }
 
 void BaseRadioSet::sync_delays(size_t cellIdx){
@@ -533,6 +542,7 @@ void BaseRadioSet::radioTx(const void* const* buffs)
     long long frameTime(0);
 //    for (size_t c = 0; c < _cfg->num_cells(); c++) {
 //        for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
+    std::cout<<"running tx 1" << std::endl;
     bsRadios->xmit(buffs, _cfg->samps_per_symbol(), 0, frameTime);
 //        }
 //    }
@@ -559,6 +569,8 @@ int BaseRadioSet::radioTx(size_t radio_id, size_t cell_id,
 //    std::cout << "cell " << cell_id << " radio " << radio_id << " tx returned "
 //              << w << " and status " << s << std::endl;
 #endif
+//    std::cout<<"running tx 2" << std::endl;
+
     return w;
 }
 
@@ -588,10 +600,13 @@ int BaseRadioSet::radioRx(size_t radio_id, size_t cell_id, void* const* buffs,
 {
     int ret = 0;
 
+//    std::cout<< "radio id is "<<radio_id<<std::endl;
     if (radio_id < bsRadios->dev->get_num_mboards()) {
         long long frameTimeNs = 0;
         ret = bsRadios->recv(buffs, numSamps, frameTimeNs);
-        // for UHD device recv using ticks
+//        std::cout<<"bsRadios->dev->get_num_mboards() " << bsRadios->dev->get_num_mboards() << std::endl;
+
+// for UHD device recv using ticks
         frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate());
 #if DEBUG_RADIO
         if (ret != numSamps)
