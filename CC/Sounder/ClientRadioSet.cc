@@ -51,7 +51,11 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
 {
     size_t num_radios = _cfg->num_cl_sdrs();
 
+//    const std::string arg1 = "addr0=192.168.10.2";
+//    check_dev = SoapySDR::Device::make(arg1);
+
     //load channels
+    std::cout<<"channel is: " << _cfg->cl_channel()<<std::endl;
     auto channels = Utils::strToChannels(_cfg->cl_channel());
     // Update for UHD multi USRP
 //    radios.clear();
@@ -104,10 +108,11 @@ ClientRadioSet::ClientRadioSet(Config* cfg)
     }
 
     // update for UHD multi USRP
-//    for (size_t i = 0; i < radios.get; i++) {
-//        auto dev = radios.at(i)->dev;
-//        std::cout << _cfg->cl_sdr_ids().at(i) << ": Front end "
-//                  << dev->getHardwareInfo()["frontend"] << std::endl;
+    for (size_t i = 0; i < radios->dev->get_num_mboards(); i++) {
+        auto dev = radios->dev;
+        std::cout << _cfg->cl_sdr_ids().at(i) << ": Front end "<< dev->get_usrp_rx_info()["frontend"] << std::endl;
+    }
+
     for (auto ch : channels) {
         if (ch < radios->dev->get_rx_num_channels()) {
             printf("RX Channel %zu\n", ch);
@@ -301,6 +306,8 @@ void ClientRadioSet::init(ClientRadioContext* context)
     args["timeout"] = "1000000";
     args["driver"] = "uhd";
     args["addr"] = _cfg->cl_sdr_ids().at(i);
+    std::cout<< "address i is " << i << std::endl;
+
     try {
         radios = nullptr;
         radios = new Radio(args, SOAPY_SDR_CF32, channels, _cfg->rate());
@@ -325,6 +332,8 @@ void ClientRadioSet::init(ClientRadioContext* context)
 //        auto dev = radios.at(i)->dev;
 //        SoapySDR::Kwargs info = dev->getHardwareInfo();
         for (auto ch : channels) {
+            std::cout<<"check ch: "<<ch<<std::endl;
+            auto new_ch = _cfg->cl_channel();
             double rxgain = _cfg->cl_rxgain_vec().at(ch).at(
                 i); // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
             double txgain = _cfg->cl_txgain_vec().at(ch).at(
@@ -340,6 +349,8 @@ void ClientRadioSet::init(ClientRadioContext* context)
     MLPD_TRACE("BaseRadioSet: Init complete\n");
     assert(thread_count->load() != 0);
     thread_count->store(thread_count->load() - 1);
+    std::cout << "Client Init success" << std::endl;
+
 }
 
 ClientRadioSet::~ClientRadioSet(void) { freeRadios(radios); }
@@ -386,21 +397,25 @@ int ClientRadioSet::radioRx(
 //        else {
         long long frameTimeNs(0);
         ret = radios->recv(buffs, numSamps, frameTimeNs);
-        std::cout << "frame time in client.cc before conversion is " << frameTimeNs << std::endl;
+//        std::cout << "frame time in client.cc before conversion is " << frameTimeNs << std::endl;
 
         frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate());
-        std::cout << "frame time in client.cc is " << frameTime << std::endl;
+//        std::cout << "frame time in client.cc is " << frameTime << std::endl;
 
 #if DEBUG_RADIO
         if (frameTimeNs < 2e9)
             std::cout << "client " << radio_id << " received " << ret
                       << " at " << frameTimeNs << std::endl;
 #endif
-        double a = radios->dev->get_time_now().get_real_secs();
-        std::cout << "time: " << a <<std::endl;
-        std::cout << "full seconds: " << radios->dev->get_time_now().get_full_secs() << std::endl;
-        std::cout << "frac seconds: " << radios->dev->get_time_now().get_frac_secs() << std::endl;
+//        double a = radios->dev->get_time_now().get_real_secs();
+//        std::cout << "time: " << a <<std::endl;
+//        std::cout << "full seconds: " << radios->dev->get_time_now().get_full_secs() << std::endl;
+//        std::cout << "frac seconds: " << radios->dev->get_time_now().get_frac_secs() << std::endl;
 
+//        long long b = check_dev->getHardwareTime();
+//        double utime = b / 1e9;
+//        std::cout << "sopay way time in ns: " << b << std::endl;
+//        std::cout << "soapy way time: " << utime <<std::endl;
 //        }
         return ret;
     }
