@@ -257,6 +257,9 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
             size_t radio_idx = it - config_->n_bs_sdrs_agg().at(cell);
             bs_sync_ret = -1;
             while (bs_sync_ret < 0) {
+                std::cout<<"dummy read"<<std::endl;
+                std::cout<<"radio id " << radio_idx <<std::endl;
+                std::cout<<"cell "<< cell << std::endl;
                 bs_sync_ret = this->base_radio_set_->radioRx(radio_idx, cell,
                     samp_buffer.data(), config_->samps_per_symbol(), rxTimeBs);
             }
@@ -384,6 +387,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer)
                             * config_->symbols_per_frame() * BEACON_INTERVAL;
                     int r_tx = this->base_radio_set_->radioTx(radio_idx, cell,
                         beaconbuff.data(), kStreamEndBurst, txTimeBs);
+//                    std::cout<<"baseradio tx beacon send"<<std::endl;
+
                     if (r_tx != (int)config_->samps_per_symbol())
                         std::cerr << "BAD Transmit(" << r_tx << "/"
                                   << config_->samps_per_symbol() << ") at Time "
@@ -532,6 +537,7 @@ void Receiver::clientTxRx(int tid)
             for (int i = 0; i < txSyms; i++) {
                 int r = clientRadioSet_->radioTx(
                     tid, txbuff.data(), NUM_SAMPS, 1, txTime);
+                std::cout<<"calling client tx 1"<<std::endl;
                 if (r == NUM_SAMPS) {
                     txTime += 0x10000;
                 }
@@ -596,6 +602,8 @@ void Receiver::clientSyncTxRx(int tid)
     }
 
     std::vector<void*> txbuff(2);
+    std::cout<<"tx buffer cl sdr ch check " << config_->cl_sdr_ch()<<std::endl;
+
     for (size_t ch = 0; ch < config_->cl_sdr_ch(); ch++) {
         txbuff.at(ch)
             = std::calloc(config_->samps_per_symbol(), sizeof(float) * 2);
@@ -691,16 +699,16 @@ void Receiver::clientSyncTxRx(int tid)
     int flagsTxUlData;
 
     while (config_->running() == true) {
-        std::cout<<"running"<<std::endl;
+//        std::cout<<"running"<<std::endl;
         for (size_t sf = 0; sf < config_->symbols_per_frame(); sf++) {
             int rx_len = (sf == 0) ? (NUM_SAMPS + rx_offset) : NUM_SAMPS;
             assert((rx_len > 0) && (rx_len < SYNC_NUM_SAMPS));
 //            std::cout<<"cp1"<<std::endl;
-            std::cout << "usrp time" << std::endl;
+//            std::cout << "usrp time" << std::endl;
 
             int r = clientRadioSet_->radioRx(
                 tid, syncrxbuff.data(), rx_len, rxTime);
-            std::cout<< "r is: " << r <<std::endl;
+//            std::cout<< "r is: " << r <<std::endl;
 //            r = 1120;
             if (r < 0) {
                 config_->running(false);
@@ -712,7 +720,7 @@ void Receiver::clientSyncTxRx(int tid)
                     r, rx_len, rxTime, frame_cnt);
             }
             // schedule all TX subframes
-            std::cout<< "subframe is: " << sf<<std::endl;
+//            std::cout<< "subframe is: " << sf<<std::endl;
 
             if (sf == 0) {
                 // resync every X=1000 frames:
@@ -768,8 +776,10 @@ void Receiver::clientSyncTxRx(int tid)
 
                 r = clientRadioSet_->radioTx(
                     tid, pilotbuffA.data(), NUM_SAMPS, flags, txTime);
-                flags = 0;
-                std::cout<<"condition 1 check"<<std::endl;
+//                std::cout<<"calling client tx 2"<<std::endl;
+
+//                flags = 0;
+//                std::cout<<"condition 1 check"<<std::endl;
 
                 if (r < NUM_SAMPS) {
                     MLPD_WARN("BAD Write: %d/%d\n", r, NUM_SAMPS);
@@ -781,7 +791,9 @@ void Receiver::clientSyncTxRx(int tid)
 
                     r = clientRadioSet_->radioTx(tid, pilotbuffB.data(),
                         NUM_SAMPS, kStreamEndBurst, txTime);
-                    std::cout<<"condition 2 check"<<std::endl;
+//                    std::cout<<"condition 2 check"<<std::endl;
+//                    std::cout<<"calling client tx 3"<<std::endl;
+
 
                     if (r < NUM_SAMPS) {
                         MLPD_WARN("BAD Write: %d/%d\n", r, NUM_SAMPS);
@@ -807,8 +819,9 @@ void Receiver::clientSyncTxRx(int tid)
                             flagsTxUlData = 2; // HAS_TIME & END_BURST, fixme
                         r = clientRadioSet_->radioTx(tid, txbuff.data(),
                             NUM_SAMPS, flagsTxUlData, txTime);
+//                        std::cout<<"calling client tx 4"<<std::endl;
                         flagsTxUlData = 0;
-                        std::cout<<"condition 3 check"<<std::endl;
+//                        std::cout<<"condition 3 check"<<std::endl;
 
                         if (r < NUM_SAMPS) {
                             MLPD_WARN("BAD Write: %d/%d\n", r, NUM_SAMPS);
