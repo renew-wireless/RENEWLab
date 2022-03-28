@@ -500,23 +500,25 @@ class hdf5_lib:
                     #csi = np.memmap(os.path.join(_here,'temp1.mymemmap'), dtype='complex64', mode='w+', shape=(samps.shape[0], num_users, 2, samps.shape[1],52))
                     #iq = np.memmap(os.path.join(_here,'temp2.mymemmap'), dtype='complex64', mode='w+', shape=(samps.shape[0], num_users, 2, samps.shape[1],64))
             chunk_num = samps.shape[0]//chunk_size
-            csi0 = hdf5_lib.samps2csi(
+            csi0, SNR0 = hdf5_lib.samps2csi(
                     samps[:chunk_size, :, :, :], num_users, samps_per_user, fft_size, offset, bound, cp, pilot_f, legacy, 0)
             csi = np.empty(
                 (samps.shape[0], csi0.shape[1], csi0.shape[2], csi0.shape[3], csi0.shape[4]), dtype='complex64')
             csi[:chunk_size] = csi0
+            SNR = np.empty(
+                (samps.shape[0], csi0.shape[1], csi0.shape[2], csi0.shape[3]), dtype='complex64')
             for i in range(1, chunk_num):
-                csi[i*chunk_size:i*chunk_size+chunk_size] = hdf5_lib.samps2csi(
+                csi[i*chunk_size:i*chunk_size+chunk_size], SNR[i*chunk_size:i*chunk_size+chunk_size] = hdf5_lib.samps2csi(
                         samps[i*chunk_size:(i*chunk_size+chunk_size), :, :, :], num_users, samps_per_user, fft_size, offset, bound, cp, pilot_f, legacy, i)
             if samps.shape[0] > chunk_num*chunk_size:
-                csi[chunk_num*chunk_size:] = hdf5_lib.samps2csi(
+                csi[chunk_num*chunk_size:], SNR[chunk_num*chunk_size:] = hdf5_lib.samps2csi(
                     samps[chunk_num*chunk_size:, :, :, :], num_users, samps_per_user, fft_size, offset, bound, cp, pilot_f, legacy, chunk_num)
         else:
-            csi = hdf5_lib.samps2csi(
+            csi, SNR = hdf5_lib.samps2csi(
                 samps, num_users, samps_per_user, fft_size, offset, bound, cp, pilot_f, legacy)
 
         print("samps2csi_large took %f seconds" % (time.time() - samps2csi_large_start))
-        return csi
+        return csi, SNR
 
     @staticmethod
     def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, pilot_f=[], legacy=False, chunk_id=-1):
@@ -574,7 +576,15 @@ class hdf5_lib:
             csi = np.empty(iq.shape, dtype='complex64')
             # pre_csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 4),4)
 
-            csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 4), 4) * lts.lts_freq
+            iq_fft = np.fft.fftshift(np.fft.fft(iq, fft_size, 4), 4) 
+            csi = iq_fft * lts.lts_freq
+
+            zero_sc = [0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63]
+            nonzero_sc = np.setdiff1d(range(64), zero_sc)
+            noise = iq_fft[:, :, :, :, zero_sc]
+            noise_power = np.mean(np.power(np.abs(noise), 2), 4) * len(nonzero_sc)
+            signal_power = np.sum(np.power(np.abs(iq_fft[:, :, :, :, nonzero_sc]), 2), 4)
+            SNR = (signal_power - noise_power) / noise_power
 
             # pyfftw.interfaces.cache.enable()
             # csi = pyfftw.interfaces.numpy_fft.fftshift(pyfftw.interfaces.numpy_fft.fft(iq, fft_size, 4),4)*lts.lts_freq
@@ -618,6 +628,14 @@ class hdf5_lib:
             iq_fft = np.fft.fft(iq, fft_size, 4)
             seq_freq_inv = 1 / pilot_f[nonzero_sc]
             csi = iq_fft[:, :, :, :, nonzero_sc] * seq_freq_inv
+            if len(zero_sc) == 0:
+                noise = None
+            else:
+                noise = iq_fft[:, :, :, :, zero_sc]
+                noise_power = np.mean(np.power(np.abs(noise), 2), 4) * len(nonzero_sc)
+                signal_power = np.sum(np.power(np.abs(iq_fft[:, :, :, :, nonzero_sc]), 2), 4)
+                SNR = signal_power / noise_power
+
             endtime = time.time()
             if debug:
                 print("csi.shape:{} lts_freq.shape: {}, pre_csi.shape = {}".format(
@@ -633,7 +651,7 @@ class hdf5_lib:
                 print("samps2csi chunk %d took %f seconds" % (chunk_id, time.time() - samps2csi_start))
             del iq
             gc.collect()
-        return csi
+        return csi, SNR
 
     @staticmethod
     def frame_sanity(match_filt, k_lts, n_lts, st_frame = 0, frame_to_plot = 0, plt_ant=0, cp=16):
@@ -812,7 +830,7 @@ class hdf5_lib:
         return snr, seq_found
 
     @staticmethod
-    def measure_cfo(pilot_samples, peak_map, pilot_type, pilot_seq, ofdm_len, z_padding, rate):
+    def measure_cfo(pilot_samples, pilot_type, pilot_seq, ofdm_len, z_padding, rate):
         n_frame = pilot_samples.shape[0]
         n_ue = pilot_samples.shape[1]
         n_ant = pilot_samples.shape[2]
@@ -829,9 +847,7 @@ class hdf5_lib:
                     IQ = I + (Q * 1j)
                     tx_pilot, lts_pks, lts_corr, pilot_thresh, best_pk = pilot_finder(IQ, pilot_type, flip=True,
                                                                                       pilot_seq=pilot_seq)
-                    print("frame %d ue %d ant %d lts_pks_len %d"%(frameIdx, ueIdx, bsAntIdx, lts_pks.size))
-                    print(lts_pks)
-                    if lts_pks.size < 2:
+                    if lts_pks.size != symbol_per_slot:
                         cfo[frameIdx, ueIdx, bsAntIdx] = 0
                     elif lts_pks[0] < ofdm_len or lts_pks[1] < ofdm_len:
                         cfo[frameIdx, ueIdx, bsAntIdx] = 0

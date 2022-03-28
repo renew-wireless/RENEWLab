@@ -21,6 +21,7 @@ import math
 import time
 import datetime
 from scipy import signal
+import multiprocessing as mp
 import matplotlib.pyplot as plt
 from generate_sequence import *
 
@@ -364,12 +365,18 @@ def demult(csi, data, noise=None, method='zf'):
     """csi: Frame, User, Antenna, Subcarrier"""
     """data: Frame, Uplink Syms, Antenna, Subcarrier"""
     # Compute beamweights based on the specified frame.
+    demult_start = time.time()
     demul_data = np.empty(
         (csi.shape[0], data.shape[1], csi.shape[1], csi.shape[3]), dtype='complex64')
     bmf_w = np.empty(
         (csi.shape[0], csi.shape[3], csi.shape[2], csi.shape[1]), dtype='complex64')
     data_tp = np.transpose(data, (0, 3, 1, 2))
+    #pool = mp.Pool(mp.cpu_count())
+    #result_objects = [pool.apply_async(calcBW, args=(csi[i, :, :, :], noise[i, :, :, :] if noise is not None else None, method)) for i in range(csi.shape[0])]
+    #for i in range(csi.shape[0]):
+    #    bmf_w[i, :, :, :] = result_objects[i].get()[0]
     for frame in range(csi.shape[0]):
+        #bmf_w = calcBW(csi[frame], None if noise is None else noise[frame], method)
         for sc in range(csi.shape[3]):
             if method == 'zf':
                 bmf_w[frame, sc, :, :] = np.linalg.pinv(csi[frame, :, :, sc])
@@ -379,7 +386,30 @@ def demult(csi, data, noise=None, method='zf'):
                 w_mmse = np.matmul(np.linalg.inv(np.matmul(H, np.transpose(np.conj(H))) + sigma*np.eye(H.shape[0])), H)
                 bmf_w[frame, sc, :, :] = np.transpose(np.conj(w_mmse))
             else:
-                bmf_w[frame, sc, :, :] = np.transpose(
-                    np.conj(csi[frame, :, :, sc]), (1, 0))
+                csi_conj = np.conj(csi[frame, :, :, sc])
+                w_scale = 1 / np.sum(np.multiply(csi_conj, csi[frame, :, :, sc]), 1);
+                bmf_w[frame, sc, :, :] = np.transpose(np.matmul(np.diag(w_scale), csi_conj), (1, 0))
+                #bmf_w[frame, sc, :, :] = np.transpose(
+                #    np.conj(csi[frame, :, :, sc]), (1, 0))
     demul_data = np.transpose(np.matmul(data_tp, bmf_w), (0, 2, 3, 1))
+    print("demult time: %f"%(time.time() - demult_start))
     return demul_data
+
+def calcBW(csi, noise=None, method='zf'):
+    bmf_w = np.empty(
+        (csi.shape[2], csi.shape[1], csi.shape[0]), dtype='complex64')
+    for sc in range(csi.shape[2]):
+        if method == 'zf':
+            bmf_w[sc, :, :] = np.linalg.pinv(csi[:, :, sc])
+        elif method == 'mmse' and noise is not None:
+            sigma = np.mean(np.mean(np.power(np.abs(noise[:, :, sc]), 2), axis=0))
+            H = csi[:, :, sc]
+            w_mmse = np.matmul(np.linalg.inv(np.matmul(H, np.transpose(np.conj(H))) + sigma*np.eye(H.shape[0])), H)
+            bmf_w[sc, :, :] = np.transpose(np.conj(w_mmse))
+        else:
+            csi_conj = np.conj(csi[:, :, sc])
+            w_scale = np.sum(np.multiply(csi_conj, csi[:, :, sc]), 1);
+            bmf_w[sc, :, :] = np.transpose(np.diag(w_scale) * csi_conj, (1, 0))
+    return bmf_w
+
+
