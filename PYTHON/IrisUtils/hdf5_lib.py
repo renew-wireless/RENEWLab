@@ -812,6 +812,25 @@ class hdf5_lib:
         return snr, seq_found
 
     @staticmethod
+    def pilot_map_prep(pilot_samples, peak_map, ofdm_len, z_padding):
+        n_frame = pilot_samples.shape[0]
+        n_ue = pilot_samples.shape[1]
+        n_ant = pilot_samples.shape[2]
+        samps_per_slot = pilot_samples.shape[3] // 2
+        symbol_per_slot = (samps_per_slot - z_padding) // ofdm_len
+        seq_found = np.zeros((n_frame, n_ue, n_ant))
+
+        for frameIdx in range(n_frame):    # Frame
+            for ueIdx in range(n_ue):  # UE
+                for bsAntIdx in range(n_ant):  # BS ANT
+                    # Find percentage of LTS peaks within a symbol
+                    # (e.g., in a 4096-sample pilot slot, we expect 64, 64-long sequences... assuming no CP)
+                    # seq_found[frameIdx, cellIdx, ueIdx, bsAntIdx] = 100 * (lts_pks.size / symbol_per_slot)
+                    seq_found[frameIdx, ueIdx, bsAntIdx] = 100 * (peak_map[frameIdx, ueIdx, bsAntIdx] / symbol_per_slot)  # use matched filter analysis output
+
+        return seq_found
+
+    @staticmethod
     def measure_cfo(pilot_samples, peak_map, pilot_type, pilot_seq, ofdm_len, z_padding, rate):
         n_frame = pilot_samples.shape[0]
         n_ue = pilot_samples.shape[1]
