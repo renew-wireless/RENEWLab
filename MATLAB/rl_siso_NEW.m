@@ -49,12 +49,12 @@ N_BS_NODE               = 1;
 N_UE                    = 1;
 TX_FRQ                  = 3.6e9;
 RX_FRQ                  = TX_FRQ;
-TX_GN                   = 72;
-RX_GN                   = 52;
+TX_GN                   = 81;
+RX_GN                   = 60;
 SMPL_RT                 = 5e6;
 TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
-N_FRM                   = 10;
-
+N_FRM                   = 1;
+          
 bs_ids = string.empty();
 bs_sched = string.empty();
 ue_ids = string.empty();
@@ -77,7 +77,7 @@ N_ZPAD_PRE              = 90;                                     % Zero-padding
 N_ZPAD_POST             = N_ZPAD_PRE - 14;                         % Zero-padding postfix for Iris
 
 % Rx processing params
-FFT_OFFSET                    = 16;          % Number of CP samples to use in FFT (on average)
+FFT_OFFSET                    = 0;          % Number of CP samples to use in FFT (on average)
 DO_APPLY_PHASE_ERR_CORRECTION = 1;           % Enable Residual CFO estimation/correction
 
 %% Define the preamble
@@ -147,14 +147,16 @@ if SIM_MODE
         1i*randn(N_BS_NODE, length(tx_vec_iris)) );
     
     % output vector
-    rx_vec_iris = H_ul.*tx_vec_iris.' + W_ul;
+    rx_vec_iris_tmp = H_ul.*tx_vec_iris.' + W_ul;
+    rx_vec_iris_tmp = rx_vec_iris_tmp.';
 
+    N_FRM = 1;  % Don't care about number of frames in SIM MODE
 else
     % Set up the Iris experiment
     disp("Running: HARDWARE MODE");
 
     % Create two Iris node objects:
-    bs_ids = ["RF3E000356"];
+    bs_ids = ["RF3E000146"];
     ue_ids = ["RF3E000392"];
 
     % Iris nodes' parameters
@@ -180,258 +182,275 @@ else
         mimo_handle.mimo_update_sdr_param('rxgain', rxg_opt);
     end
 
-    rx_vec_iris = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
+    [rx_vec_iris_tmp, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
+    rx_vec_iris_tmp = squeeze(rx_vec_iris_tmp);
     mimo_handle.mimo_close();
 end
 
-if (isempty(rx_vec_iris))
+if (isempty(rx_vec_iris_tmp))
     return;
 end
-rx_vec_iris = rx_vec_iris.';
-l_rx_dec=length(rx_vec_iris);
 
+figure; plot(abs(rx_vec_iris_tmp(1,:)),'-r'); hold on; plot(abs(rx_vec_iris_tmp(2,:)),'--b'); % FIXMEEEEEEEEEEEEEEEE - delayed copy of itself??????
+% Process data
+for frm_idx = 1:numGoodFrames
+    fprintf(' =============================== \n');
+    fprintf('Frame #%d Out of %d Triggered Frames \n', frm_idx, numGoodFrames);
 
-%% Correlate for LTS
-
-% Complex cross correlation of Rx waveform with time-domain LTS
-a = 1;
-unos = ones(size(preamble.'))';
-v0 = filter(flipud(preamble'),a,rx_vec_iris);
-v1 = filter(unos,a,abs(rx_vec_iris).^2);
-m_filt = (abs(v0).^2)./v1; % normalized correlation
-lts_corr = m_filt;
-[rho_max, ipos] = max(lts_corr);
-
-payload_ind = ipos +1;
-lts_ind = payload_ind - N_LTS_SYM*(N_SC + CP_LEN);
-
-% Re-extract LTS for channel estimate
-rx_lts = rx_vec_iris(lts_ind : lts_ind+159);
-rx_lts1 = rx_lts(-64+-FFT_OFFSET + [97:160]);
-rx_lts2 = rx_lts(-FFT_OFFSET + [97:160]);
-
-% Received LTSs
-% Do yourselves: take the FD pilots:
-rx_lts1_f = fft(rx_lts1);
-rx_lts2_f = fft(rx_lts2);
-
-% Do yourselves: Calculate channel estimate from average of 2 training symbols: 
-rx_H_est = mean([rx_lts1_f./lts_f.'   rx_lts2_f./ lts_f.'], 2); 
-
-%% Rx payload processing
-% Extract the payload samples (integer number of OFDM symbols following preamble)
-if( (length(rx_vec_iris) - payload_ind ) > (N_SYM_SAMP * N_OFDM_SYM) )
-    payload_vec = rx_vec_iris(payload_ind : payload_ind + (N_SYM_SAMP * N_OFDM_SYM),:);
-else
-    payload_vec = rx_vec_iris(payload_ind : end,:);
-end
-
-missed_samps = (N_SC+CP_LEN) * N_OFDM_SYM - length(payload_vec); %sometimes it's below 0.
-
-if (missed_samps > 0) 
-    payload_vec = [payload_vec; zeros(missed_samps,1)];
-elseif (missed_samps < 0)
-    payload_vec = payload_vec(1:end+missed_samps,:);
-end
-
-
-payload_mat = reshape(payload_vec, (N_SC+CP_LEN), N_OFDM_SYM);
-
-% Remove the cyclic prefix, keeping FFT_OFFSET samples of CP (on average)
-payload_mat_noCP = payload_mat(CP_LEN-FFT_OFFSET+[1:N_SC], :);
-
-% Do yourselves: bring to frequency domain:
-syms_f_mat = fft(payload_mat_noCP, N_SC, 1);
-
-% Do yourselves: Equalize.
-syms_eq_mat = syms_f_mat ./ repmat(rx_H_est, 1, N_OFDM_SYM);
-
-%% Calculate phase correction
-if DO_APPLY_PHASE_ERR_CORRECTION
-    % Extract the pilots and calculate per-symbol phase error
-    pilots_f_mat = syms_eq_mat(SC_IND_PILOTS, :);
-    pilots_f_mat_comp = pilots_f_mat.*pilots_mat;
-    pilot_phase_err = angle(mean(pilots_f_mat_comp));
-else
-	% Define an empty phase correction vector (used by plotting code below)
-    pilot_phase_err = zeros(1, N_OFDM_SYM);
-end
-pilot_phase_err_corr = repmat(pilot_phase_err, N_SC, 1);
-pilot_phase_corr = exp(-1i*(pilot_phase_err_corr));
-
-%% Apply phase correction
-% Apply the pilot phase correction per symbol
-syms_eq_pc_mat = syms_eq_mat .* pilot_phase_corr;
-payload_syms_mat = syms_eq_pc_mat(SC_IND_DATA, :);
-
-%% Demodulate
-rx_syms = reshape(payload_syms_mat, 1, N_DATA_SYMS);
-
-rx_data = demod_sym(rx_syms ,MOD_ORDER);
-
-bit_errs = length(find(dec2bin(bitxor(tx_data, rx_data),8) == '1'));
-
-ber_SIM = bit_errs/(N_DATA_SYMS * log2(MOD_ORDER));
-
-
-% EVM & SNR
-% Do yourselves. Calculate EVM and effective SNR:
-evm_mat = abs(payload_syms_mat - tx_syms_mat).^2;
-aevms = mean(evm_mat(:)); % needs to be a scalar
-snr = 10*log10(1./aevms); % calculate in dB scale.
-
-
-%% Plot Results
-
-if PLOT
-    cf = 0;
-    fst_clr = [0, 0.4470, 0.7410];
-    sec_clr = [0.8500, 0.3250, 0.0980];
-    % Tx signal
-    cf = cf + 1;
-    figure(cf); clf;
-
-    subplot(2,1,1);
-    plot(real(tx_vec_iris));
-    axis([0 length(tx_vec_iris) -TX_SCALE TX_SCALE])
-    grid on;
-    title('Tx Waveform (I)');
-
-    subplot(2,1,2);
-    plot(imag(tx_vec_iris), 'color' , sec_clr );
-    axis([0 length(tx_vec_iris) -TX_SCALE TX_SCALE])
-    grid on;
-    title('Tx Waveform (Q)');
-
-    if(WRITE_PNG_FILES)
-        print(gcf,sprintf('wl_ofdm_plots_%s_txIQ', example_mode_string), '-dpng', '-r96', '-painters')
+    if numGoodFrames == 1
+        rx_vec_iris = rx_vec_iris_tmp;
+    else
+        rx_vec_iris = rx_vec_iris_tmp(frm_idx, :);
     end
 
-    % Rx signal
-    cf = cf + 1;
-    figure(cf); clf;
-    subplot(2,1,1);
-    plot(real(rx_vec_iris));
-    axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
-    grid on;
-    title('Rx Waveform (I)');
+    %figure; plot(abs(rx_vec_iris));
 
-    subplot(2,1,2);
-    plot(imag(rx_vec_iris), 'color', sec_clr);
-    axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
-    grid on;
-    title('Rx Waveform (Q)');
+    %% Correlate for LTS
+    % Complex cross correlation of Rx waveform with time-domain LTS
+    a = 1;
+    unos = ones(size(preamble.'))';
+    v0 = filter(flipud(preamble'),a,rx_vec_iris);
+    v1 = filter(unos,a,abs(rx_vec_iris).^2);
+    m_filt = (abs(v0).^2)./v1; % normalized correlation
+    lts_corr = m_filt;
+    [rho_max, ipos] = max(lts_corr);
 
-    if(WRITE_PNG_FILES)
-        print(gcf,sprintf('wl_ofdm_plots_%s_rxIQ', example_mode_string), '-dpng', '-r96', '-painters')
+    payload_ind = ipos + 1;
+    lts_ind = payload_ind - N_LTS_SYM*(N_SC + CP_LEN);
+
+    if lts_ind < 1
+        lts_ind = 1;
     end
 
-    % Rx LTS correlation
-    cf = cf + 1;
-    figure(cf); clf;
-    lts_to_plot = lts_corr;
-    plot(lts_to_plot, '.-b', 'LineWidth', 1);
-    hold on;
-    grid on;
-    title('LTS Correlation')
-    xlabel('Sample Index')
-    myAxis = axis();
-    axis([1, 1000, myAxis(3), myAxis(4)])
+    % Re-extract LTS for channel estimate
+    rx_lts = rx_vec_iris(lts_ind : lts_ind+159);
+    rx_lts1 = rx_lts(-64+-FFT_OFFSET + [97:160]);
+    rx_lts2 = rx_lts(-FFT_OFFSET + [97:160]);
 
-    if(WRITE_PNG_FILES)
-        print(gcf,sprintf('wl_ofdm_plots_%s_ltsCorr', example_mode_string), '-dpng', '-r96', '-painters')
+    % Received LTSs
+    % Do yourselves: take the FD pilots:
+    rx_lts1_f = fft(rx_lts1);
+    rx_lts2_f = fft(rx_lts2);
+
+    % Do yourselves: Calculate channel estimate from average of 2 training symbols: 
+    rx_H_est = mean([rx_lts1_f./lts_f.'   rx_lts2_f./ lts_f.'], 2); 
+
+    %% Rx payload processing
+    % Extract the payload samples (integer number of OFDM symbols following preamble)
+    if( (length(rx_vec_iris) - payload_ind ) > (N_SYM_SAMP * N_OFDM_SYM) )
+        payload_vec = rx_vec_iris(payload_ind : payload_ind + (N_SYM_SAMP * N_OFDM_SYM));
+    else
+        payload_vec = rx_vec_iris(payload_ind : end);
     end
 
-    % Channel Estimates
-    cf = cf + 1;
-    figure(cf); clf;
-    rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
-    rx_H_est_plot(SC_IND_DATA) = rx_H_est(SC_IND_DATA);
-    rx_H_est_plot(SC_IND_PILOTS) = rx_H_est(SC_IND_PILOTS);
+    missed_samps = (N_SC+CP_LEN) * N_OFDM_SYM - length(payload_vec); %sometimes it's below 0.
 
-    x = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1));
-
-    figure(cf); clf;
-    bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
-    axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
-    grid on;
-    title('Channel Estimates (Magnitude)')
-    xlabel('Baseband Frequency (MHz)')
-
-    if(WRITE_PNG_FILES)
-        print(gcf,sprintf('wl_ofdm_plots_%s_chanEst', example_mode_string), '-dpng', '-r96', '-painters')
+    if (missed_samps > 0)
+        disp("MEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEGD");
+        payload_vec = [payload_vec zeros(1, missed_samps)];
+    elseif (missed_samps < 0)
+        payload_vec = payload_vec(1:end+missed_samps);
     end
 
-    % Symbol constellation
-    cf = cf + 1;
-    figure(cf); clf;
 
-    plot(payload_syms_mat(:),'o','MarkerSize',2, 'color', sec_clr);
-    axis square; axis(1.5*[-1 1 -1 1]);
-    xlabel('Inphase')
-    ylabel('Quadrature')
-    grid on;
-    hold on;
+    payload_mat = reshape(payload_vec, (N_SC+CP_LEN), N_OFDM_SYM);
 
-    plot(tx_syms_mat(:),'*', 'MarkerSize',16, 'LineWidth',2, 'color', fst_clr);
-    title('Tx and Rx Constellations')
-    legend('Rx','Tx','Location','EastOutside');
+    % Remove the cyclic prefix, keeping FFT_OFFSET samples of CP (on average)
+    payload_mat_noCP = payload_mat(CP_LEN-FFT_OFFSET+[1:N_SC], :);
 
-    if(WRITE_PNG_FILES)
-        print(gcf,sprintf('wl_ofdm_plots_%s_constellations', example_mode_string), '-dpng', '-r96', '-painters')
+    % Do yourselves: bring to frequency domain:
+    syms_f_mat = fft(payload_mat_noCP, N_SC, 1);
+
+    % Do yourselves: Equalize.
+    syms_eq_mat = syms_f_mat ./ repmat(rx_H_est, 1, N_OFDM_SYM);
+
+    %% Calculate phase correction
+    if DO_APPLY_PHASE_ERR_CORRECTION
+        % Extract the pilots and calculate per-symbol phase error
+        pilots_f_mat = syms_eq_mat(SC_IND_PILOTS, :);
+        pilots_f_mat_comp = pilots_f_mat.*pilots_mat;
+        pilot_phase_err = angle(mean(pilots_f_mat_comp));
+    else
+        % Define an empty phase correction vector (used by plotting code below)
+        pilot_phase_err = zeros(1, N_OFDM_SYM);
     end
+    pilot_phase_err_corr = repmat(pilot_phase_err, N_SC, 1);
+    pilot_phase_corr = exp(-1i*(pilot_phase_err_corr));
+
+    %% Apply phase correction
+    % Apply the pilot phase correction per symbol
+    syms_eq_pc_mat = syms_eq_mat .* pilot_phase_corr;
+    payload_syms_mat = syms_eq_pc_mat(SC_IND_DATA, :);
+
+    %% Demodulate
+    rx_syms = reshape(payload_syms_mat, 1, N_DATA_SYMS);
+
+    rx_data = demod_sym(rx_syms ,MOD_ORDER);
+
+    bit_errs = length(find(dec2bin(bitxor(tx_data, rx_data),8) == '1'));
+
+    ber_SIM = bit_errs/(N_DATA_SYMS * log2(MOD_ORDER));
 
 
     % EVM & SNR
-    cf = cf + 1;
-    figure(cf); clf;
-    subplot(2,1,1)
-    plot(100*evm_mat(:),'o','MarkerSize',1)
-    axis tight
-    hold on
-    plot([1 length(evm_mat(:))], 100*[aevms, aevms],'color', sec_clr,'LineWidth',4)
-    myAxis = axis;
-    h = text(round(.05*length(evm_mat(:))), 100*aevms+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', snr));
-    set(h,'Color',[1 0 0])
-    set(h,'FontWeight','bold')
-    set(h,'FontSize',10)
-    set(h,'EdgeColor',[1 0 0])
-    set(h,'BackgroundColor',[1 1 1])
-    hold off
-    xlabel('Data Symbol Index')
-    ylabel('EVM (%)');
-    legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
-    title('EVM vs. Data Symbol Index')
-    grid on
+    % Do yourselves. Calculate EVM and effective SNR:
+    evm_mat = abs(payload_syms_mat - tx_syms_mat).^2;
+    aevms = mean(evm_mat(:)); % needs to be a scalar
+    snr = 10*log10(1./aevms); % calculate in dB scale.
 
-    subplot(2,1,2)
-    imagesc(1:N_OFDM_SYM, (SC_IND_DATA - N_SC/2), 100*fftshift(evm_mat,1))
 
-    grid on
-    xlabel('OFDM Symbol Index')
-    ylabel('Subcarrier Index')
-    title('EVM vs. (Subcarrier & OFDM Symbol)')
-    h = colorbar;
-    set(get(h,'title'),'string','EVM (%)');
-    myAxis = caxis();
-    if (myAxis(2)-myAxis(1)) < 5
-        caxis([myAxis(1), myAxis(1)+5])
+    %% Plot Results
+
+    if PLOT
+        cf = 0;
+        fst_clr = [0, 0.4470, 0.7410];
+        sec_clr = [0.8500, 0.3250, 0.0980];
+        % Tx signal
+        cf = cf + 1;
+        figure(cf); clf;
+
+        subplot(2,1,1);
+        plot(real(tx_vec_iris));
+        axis([0 length(tx_vec_iris) -TX_SCALE TX_SCALE])
+        grid on;
+        title('Tx Waveform (I)');
+
+        subplot(2,1,2);
+        plot(imag(tx_vec_iris), 'color' , sec_clr );
+        axis([0 length(tx_vec_iris) -TX_SCALE TX_SCALE])
+        grid on;
+        title('Tx Waveform (Q)');
+
+        if(WRITE_PNG_FILES)
+            print(gcf,sprintf('wl_ofdm_plots_%s_txIQ', example_mode_string), '-dpng', '-r96', '-painters')
+        end
+
+        % Rx signal
+        cf = cf + 1;
+        figure(cf); clf;
+        subplot(2,1,1);
+        plot(real(rx_vec_iris));
+        axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
+        grid on;
+        title('Rx Waveform (I)');
+
+        subplot(2,1,2);
+        plot(imag(rx_vec_iris), 'color', sec_clr);
+        axis([0 length(rx_vec_iris) -TX_SCALE TX_SCALE])
+        grid on;
+        title('Rx Waveform (Q)');
+
+        if(WRITE_PNG_FILES)
+            print(gcf,sprintf('wl_ofdm_plots_%s_rxIQ', example_mode_string), '-dpng', '-r96', '-painters')
+        end
+
+        % Rx LTS correlation
+        cf = cf + 1;
+        figure(cf); clf;
+        lts_to_plot = lts_corr;
+        plot(lts_to_plot, '.-b', 'LineWidth', 1);
+        hold on;
+        grid on;
+        title('LTS Correlation')
+        xlabel('Sample Index')
+        myAxis = axis();
+        axis([1, 1000, myAxis(3), myAxis(4)])
+
+        if(WRITE_PNG_FILES)
+            print(gcf,sprintf('wl_ofdm_plots_%s_ltsCorr', example_mode_string), '-dpng', '-r96', '-painters')
+        end
+
+        % Channel Estimates
+        cf = cf + 1;
+        figure(cf); clf;
+        rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
+        rx_H_est_plot(SC_IND_DATA) = rx_H_est(SC_IND_DATA);
+        rx_H_est_plot(SC_IND_PILOTS) = rx_H_est(SC_IND_PILOTS);
+
+        x = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1));
+
+        figure(cf); clf;
+        bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
+        axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
+        grid on;
+        title('Channel Estimates (Magnitude)')
+        xlabel('Baseband Frequency (MHz)')
+
+        if(WRITE_PNG_FILES)
+            print(gcf,sprintf('wl_ofdm_plots_%s_chanEst', example_mode_string), '-dpng', '-r96', '-painters')
+        end
+
+        % Symbol constellation
+        cf = cf + 1;
+        figure(cf); clf;
+
+        plot(payload_syms_mat(:),'o','MarkerSize',2, 'color', sec_clr);
+        axis square; axis(1.5*[-1 1 -1 1]);
+        xlabel('Inphase')
+        ylabel('Quadrature')
+        grid on;
+        hold on;
+
+        plot(tx_syms_mat(:),'*', 'MarkerSize',16, 'LineWidth',2, 'color', fst_clr);
+        title('Tx and Rx Constellations')
+        legend('Rx','Tx','Location','EastOutside');
+
+        if(WRITE_PNG_FILES)
+            print(gcf,sprintf('wl_ofdm_plots_%s_constellations', example_mode_string), '-dpng', '-r96', '-painters')
+        end
+
+
+        % EVM & SNR
+        cf = cf + 1;
+        figure(cf); clf;
+        subplot(2,1,1)
+        plot(100*evm_mat(:),'o','MarkerSize',1)
+        axis tight
+        hold on
+        plot([1 length(evm_mat(:))], 100*[aevms, aevms],'color', sec_clr,'LineWidth',4)
+        myAxis = axis;
+        h = text(round(.05*length(evm_mat(:))), 100*aevms+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', snr));
+        set(h,'Color',[1 0 0])
+        set(h,'FontWeight','bold')
+        set(h,'FontSize',10)
+        set(h,'EdgeColor',[1 0 0])
+        set(h,'BackgroundColor',[1 1 1])
+        hold off
+        xlabel('Data Symbol Index')
+        ylabel('EVM (%)');
+        legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
+        title('EVM vs. Data Symbol Index')
+        grid on
+
+        subplot(2,1,2)
+        imagesc(1:N_OFDM_SYM, (SC_IND_DATA - N_SC/2), 100*fftshift(evm_mat,1))
+
+        grid on
+        xlabel('OFDM Symbol Index')
+        ylabel('Subcarrier Index')
+        title('EVM vs. (Subcarrier & OFDM Symbol)')
+        h = colorbar;
+        set(get(h,'title'),'string','EVM (%)');
+        myAxis = caxis();
+        if (myAxis(2)-myAxis(1)) < 5
+            caxis([myAxis(1), myAxis(1)+5])
+        end
+
+
+
+        if(WRITE_PNG_FILES)
+            print(gcf,sprintf('wl_ofdm_plots_%s_evm', example_mode_string), '-dpng', '-r96', '-painters')
+        end
     end
 
+    %% Calculate Rx stats
 
+    sym_errs = sum(tx_data ~= rx_data);
+    bit_errs = length(find(dec2bin(bitxor(tx_data, rx_data),8) == '1'));
+    rx_evm   = sqrt(sum((real(rx_syms) - real(tx_syms)).^2 + (imag(rx_syms) - imag(tx_syms)).^2)/(length(SC_IND_DATA) * N_OFDM_SYM));
 
-    if(WRITE_PNG_FILES)
-        print(gcf,sprintf('wl_ofdm_plots_%s_evm', example_mode_string), '-dpng', '-r96', '-painters')
-    end
+    fprintf('\n Frame %d Results:\n', frm_idx);
+    fprintf('Num Bytes:   %d\n', N_DATA_SYMS * log2(MOD_ORDER) / 8);
+    fprintf('Sym Errors:  %d (of %d total symbols)\n', sym_errs, N_DATA_SYMS);
+    fprintf('Bit Errors:  %d (of %d total bits)\n', bit_errs, N_DATA_SYMS * log2(MOD_ORDER));
 end
-
-%% Calculate Rx stats
-
-sym_errs = sum(tx_data ~= rx_data);
-bit_errs = length(find(dec2bin(bitxor(tx_data, rx_data),8) == '1'));
-rx_evm   = sqrt(sum((real(rx_syms) - real(tx_syms)).^2 + (imag(rx_syms) - imag(tx_syms)).^2)/(length(SC_IND_DATA) * N_OFDM_SYM));
-
-fprintf('\nResults:\n');
-fprintf('Num Bytes:   %d\n', N_DATA_SYMS * log2(MOD_ORDER) / 8);
-fprintf('Sym Errors:  %d (of %d total symbols)\n', sym_errs, N_DATA_SYMS);
-fprintf('Bit Errors:  %d (of %d total bits)\n', bit_errs, N_DATA_SYMS * log2(MOD_ORDER));
