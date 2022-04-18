@@ -156,7 +156,7 @@ else
     disp("Running: HARDWARE MODE");
 
     % Create two Iris node objects:
-    bs_ids = ["RF3E000146"];
+    bs_ids = ["RF3E000356"];
     ue_ids = ["RF3D000016"];
 
     % Iris nodes' parameters
@@ -244,9 +244,10 @@ for frm_idx = 1:numGoodFrames
 
     missed_samps = (N_SC+CP_LEN) * N_OFDM_SYM - length(payload_vec); %sometimes it's below 0.
 
+    fprintf("MISSED SAMPLES: %d", missed_samps);
     if (missed_samps > 0)
-        payload_vec = [payload_vec zeros(1, missed_samps)];
-    elseif (missed_samps < 0)
+        payload_vec = [payload_vec.' zeros(1, missed_samps)];
+    elseif (missed_samps <= 0)
         payload_vec = payload_vec(1:end+missed_samps);
     end
 
