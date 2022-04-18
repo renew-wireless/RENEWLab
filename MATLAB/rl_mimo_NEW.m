@@ -39,7 +39,7 @@ end
 % Params
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 WRITE_PNG_FILES         = 0;                % Enable writing plots to PNG
-SIM_MODE                = 1;
+SIM_MODE                = 0;
 DEBUG                   = 0;
 PLOT                    = 0;
 
@@ -61,7 +61,7 @@ else
     TX_GN                   = 80;
     RX_GN                   = 70;
     SMPL_RT                 = 5e6;
-    N_FRM                   = 20;
+    N_FRM                   = 3;
     bs_ids                  = string.empty();
     ue_ids                  = string.empty();
     ue_scheds               = string.empty();
@@ -70,13 +70,13 @@ else
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
-        bs_ids = ["RF3E000356","RF3E000546","RF3E000620","RF3E000609","RF3E000604","RF3E000612","RF3E000640","RF3E000551"];
+        bs_ids = ["RF3E000356","RF3E000546","RF3E000620","RF3E000609"]; %,"RF3E000604","RF3E000612","RF3E000640","RF3E000551"];
         hub_id = ["FH4B000019"];
     else
         bs_ids = ["RF3E000246","RF3E000490","RF3E000749","RF3E000697","RF3E000724","RF3E000740","RF3E000532"];
         hub_id = [];
     end
-    ue_ids= ["RF3E000392", "RF3E000027"];
+    ue_ids= ["RF3E000392", "RF3D000016"];
 
     N_BS_NODE               = length(bs_ids);           % Number of nodes/antennas at the BS
     N_UE                    = length(ue_ids);           % Number of UE nodes
@@ -215,17 +215,18 @@ else
         'rxgain', RX_GN, ...
         'sample_rate', SMPL_RT);
 
-    try
+    %try
         mimo_handle = mimo_driver(sdr_params);
         [rx_vec_iris, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
         mimo_handle.mimo_close();
         if isempty(rx_vec_iris)
             error("Driver returned empty array. No good data received by base station");
         end
-    catch
-        mimo_handle.mimo_close();
-        exit(0);
-    end
+    %catch
+    %    disp("Error, exit now!");
+    %    mimo_handle.mimo_close();
+    %    exit(0);
+    %end
     rx_vec_iris = permute(rx_vec_iris, [1,2,4,3]);
     
 end

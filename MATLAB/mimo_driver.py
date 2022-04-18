@@ -158,7 +158,10 @@ class MIMODriver:
 
             print("frame = {}, tries = {}, all_triggred = {}, good_signal = {}, amp = {}".format(frame, i + 1, all_triggered, good_signal, amp))
             if all_triggered and good_signal:
-                rx_data[good_frame_id, :, :, :] = np.reshape(np.array(rx_data_frame[0]), (self.n_bs_antenna, numRxSyms, n_samps))
+                if n_users == 1:
+                    rx_data[good_frame_id, :, :, :] = np.reshape(np.array(rx_data_frame[0]), (self.n_bs_antenna, numRxSyms, n_samps))
+                else:
+                    rx_data[good_frame_id, :, :, :] = np.reshape(np.array(rx_data_frame), (self.n_bs_antenna, numRxSyms, n_samps))
                 good_frame_id = good_frame_id + 1
                 #tmptmp = np.array(rx_data_frame[0])
                 #plt.plot(np.abs(tmptmp))
