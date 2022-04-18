@@ -69,29 +69,34 @@ classdef mimo_driver < handle
             data_py = result_cell{1,1};
             if result_cell{1, 2} == 0
                 data = [];
+                data2 = [];
                 disp('*** Unsucessful uplink receive. Try different gain settings! *** ');
             
             else
                 % Data shape: (# good frames, # BS antenna, # numRxSyms, # number samps)
-                ngoodframes = double(py.numpy.int_(data_py.data.shape(1)));
-                nbsantennas = double(py.numpy.int_(data_py.data.shape(2)));
-                nrecvframes = double(py.numpy.int_(data_py.data.shape(3)));
-                nsamples = double(py.numpy.int_(data_py.data.shape(4)));
-                data = zeros(ngoodframes, nbsantennas, nrecvframes, nsamples);
+                %ngoodframes = double(py.numpy.int_(data_py.data.shape(1)))
+                numGoodFrames = double(py.numpy.int_(results(2)));
+                nbsantennas = double(py.numpy.int_(data_py.data.shape(2)))
+                nrecvSyms = double(py.numpy.int_(data_py.data.shape(3)))
+                nsamples = double(py.numpy.int_(data_py.data.shape(4)))
+                data = zeros(numGoodFrames, nbsantennas, nrecvSyms, nsamples);
                 
                 P1 = cellfun(@cell, cell(data_py.tolist), 'Uniform',false);
                 %P1 = vertcat(P1{:});
-                for igf = 1:ngoodframes
+                for igf = 1:numGoodFrames
                     for ibs = 1:nbsantennas
-                        for ifr = 1:nrecvframes
+                        for ifr = 1:nrecvSyms
                             data(igf, ibs, ifr, :) = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(P1{igf}{ibs}{ifr}) ) ) ) + ...
-                                1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(P1{igf}{ibs}{ifr}) ) ) );
+                                                  1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(P1{igf}{ibs}{ifr}) ) ) );
+                            %figure(100); plot(abs(squeeze(data(igf, ibs, ifr, :)))); hold on;
                         end
                     end
                 end
+
             end
             numRxSyms = double(py.numpy.int_(results(3)));
-            numGoodFrames = double(py.numpy.int_(results(2)));
+            %numGoodFrames = double(py.numpy.int_(results(2)));
+
         end
 
         function data = mimo_txrx_downlink(obj, tx_data_mat, n_frames, n_samps_pad)

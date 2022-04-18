@@ -27,7 +27,7 @@
 % RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
 % ---------------------------------------------------------------------
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-clear;
+clear all;
 close all;
 
 [version, executable, isloaded] = pyversion;
@@ -49,11 +49,11 @@ N_BS_NODE               = 1;
 N_UE                    = 1;
 TX_FRQ                  = 3.6e9;
 RX_FRQ                  = TX_FRQ;
-TX_GN                   = 81;
+TX_GN                   = 80;
 RX_GN                   = 60;
 SMPL_RT                 = 5e6;
 TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
-N_FRM                   = 1;
+N_FRM                   = 3;
           
 bs_ids = string.empty();
 bs_sched = string.empty();
@@ -150,14 +150,14 @@ if SIM_MODE
     rx_vec_iris_tmp = H_ul.*tx_vec_iris.' + W_ul;
     rx_vec_iris_tmp = rx_vec_iris_tmp.';
 
-    N_FRM = 1;  % Don't care about number of frames in SIM MODE
+    numGoodFrames = 1;  % Don't care about number of frames in SIM MODE
 else
     % Set up the Iris experiment
     disp("Running: HARDWARE MODE");
 
     % Create two Iris node objects:
     bs_ids = ["RF3E000146"];
-    ue_ids = ["RF3E000392"];
+    ue_ids = ["RF3D000016"];
 
     % Iris nodes' parameters
     sdr_params = struct(...
@@ -168,6 +168,7 @@ else
         'txgain', TX_GN, ...
         'rxgain', RX_GN, ...
         'sample_rate', SMPL_RT);
+
 
     mimo_handle = mimo_driver(sdr_params);
 
@@ -182,29 +183,27 @@ else
         mimo_handle.mimo_update_sdr_param('rxgain', rxg_opt);
     end
 
-    [rx_vec_iris_tmp, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
-    rx_vec_iris_tmp = squeeze(rx_vec_iris_tmp);
+    [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
     mimo_handle.mimo_close();
+
 end
 
 if (isempty(rx_vec_iris_tmp))
     return;
 end
 
-figure; plot(abs(rx_vec_iris_tmp(1,:)),'-r'); hold on; plot(abs(rx_vec_iris_tmp(2,:)),'--b'); % FIXMEEEEEEEEEEEEEEEE - delayed copy of itself??????
 % Process data
 for frm_idx = 1:numGoodFrames
     fprintf(' =============================== \n');
     fprintf('Frame #%d Out of %d Triggered Frames \n', frm_idx, numGoodFrames);
 
     if numGoodFrames == 1
-        rx_vec_iris = rx_vec_iris_tmp;
+        rx_vec_iris = squeeze(rx_vec_iris_tmp);
     else
-        rx_vec_iris = rx_vec_iris_tmp(frm_idx, :);
+        rx_vec_iris = squeeze(rx_vec_iris_tmp(frm_idx, 1, 1, :));
     end
 
-    %figure; plot(abs(rx_vec_iris));
-
+    %figure; plot(abs(rx_vec_iris))
     %% Correlate for LTS
     % Complex cross correlation of Rx waveform with time-domain LTS
     a = 1;
@@ -246,7 +245,6 @@ for frm_idx = 1:numGoodFrames
     missed_samps = (N_SC+CP_LEN) * N_OFDM_SYM - length(payload_vec); %sometimes it's below 0.
 
     if (missed_samps > 0)
-        disp("MEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEGD");
         payload_vec = [payload_vec zeros(1, missed_samps)];
     elseif (missed_samps < 0)
         payload_vec = payload_vec(1:end+missed_samps);
