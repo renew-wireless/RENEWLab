@@ -3,6 +3,25 @@ cmake_minimum_required(VERSION 3.10)
 cmake_policy(SET CMP0048 NEW)
 project(Sounder VERSION 1.1.0)
 
+set(BOOST_REQUIRED_COMPONENTS
+    program_options
+    system
+    thread
+)
+
+if(MSVC)
+    set(BOOST_ALL_DYN_LINK "${BOOST_ALL_DYN_LINK}" CACHE BOOL "boost enable dynamic linking")
+    if(BOOST_ALL_DYN_LINK)
+        add_definitions(-DBOOST_ALL_DYN_LINK) #setup boost auto-linking in msvc
+    else(BOOST_ALL_DYN_LINK)
+        set(BOOST_REQUIRED_COMPONENTS) #empty components list for static link
+    endif(BOOST_ALL_DYN_LINK)
+endif(MSVC)
+find_package(Boost "1.46" REQUIRED ${BOOST_REQUIRED_COMPONENTS})
+
+# To add UHD as a dependency to this project, add a line such as this:
+find_package(UHD "3.8.0" REQUIRED)
+
 if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 7.0)
   set(GCC_COVERAGE_COMPILE_FLAGS "-faligned-new")
 endif()
@@ -95,6 +114,14 @@ if(${USE_UHD})
   add_definitions(-DUSE_UHD)
 endif()
 
+set(PURE_UHD False CACHE STRING "PURE_UHD defaulting to 'False'")
+message(STATUS "PURE_UHD: ${PURE_UHD}")
+
+if(${PURE_UHD})
+  message(STATUS "Enabled PURE_UHD: ${PURE_UHD} ")
+  add_definitions(-DPURE_UHD)
+endif()
+
 ########################################################################
 # SoapySDR dependency
 ########################################################################
@@ -123,9 +150,11 @@ include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS} third_party/ t
 
 set(SOUNDER_SOURCES 
     ClientRadioSet.cc
+    ClientRadioSetUHD.cc
     config.cc
     data_generator.cc
     Radio.cc
+    RadioUHD.cc
     receiver.cc
     scheduler.cc
     recorder_worker.cc
@@ -133,6 +162,7 @@ set(SOUNDER_SOURCES
     hdf5_reader.cc
     recorder_thread.cc
     BaseRadioSet.cc
+    BaseRadioSetUHD.cc
     BaseRadioSet-calibrate.cc
     comms-lib.cc
     comms-lib-avx.cc
@@ -142,6 +172,8 @@ set(SOUNDER_SOURCES
 add_executable(sounder 
     main.cc
     ${SOUNDER_SOURCES})
+
+target_link_libraries(sounder  ${UHD_LIBRARIES})
 
 if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") 
     set(MUFFT_LIBRARIES
