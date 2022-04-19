@@ -27,6 +27,8 @@
 
 #include "BaseRadioSet.h"
 #include "ClientRadioSet.h"
+#include "BaseRadioSetUHD.h"
+#include "ClientRadioSetUHD.h"
 #include "concurrentqueue.h"
 #include "macros.h"
 
@@ -84,6 +86,9 @@ class Receiver {
   Config* config_;
   ClientRadioSet* clientRadioSet_;
   BaseRadioSet* base_radio_set_;
+
+  ClientRadioSetUHD* clientRadioSetUHD_;
+  BaseRadioSetUHD* base_radio_setUHD_;
 
   size_t thread_num_;
   // pointer of message_queue_
