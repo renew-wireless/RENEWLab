@@ -1,33 +1,31 @@
 {
-  "serial_file" : "files/special_conf/userp_topology.json",
+  "serial_file" : "files/special_conf/usrp_topology.json",
   "frequency" : 2.5e9,
-  "channel" : "A",
-  "rx_gain_a" : 10,
-  "tx_gain_a" : 10,
-  "rx_gain_b" : 10,
-  "tx_gain_b" : 10,
-  "sample_rate" : 20e6,
+  "channel" : "AB",
+  "rx_gain_a" : 20,
+  "tx_gain_a" : 20,
+  "rx_gain_b" : 20,
+  "tx_gain_b" : 20,
+  "sample_rate" : 5e6,
   "frame_schedule" : [
-      "BGPGUGGGGGGGGGGGGGGG"
+      "BGGPPGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
   ],
-  "max_frame" : 0,
+  "max_frame" : 4000,
   "ofdm_symbol_per_slot" : 10,
   "fft_size" : 64,
   "cp_size" : 16,
   "ofdm_tx_zero_prefix" : 160,
   "ofdm_tx_zero_postfix" : 160,
   "beamsweep" : true,
-  "channel" : "A",
-  "ue_rx_gain_a" : [10],
-  "ue_tx_gain_a" : [10],
-  "ue_rx_gain_b" : [10],
-  "ue_tx_gain_b" : [10],
+  "ue_channel" : "AB",
+  "ue_rx_gain_a" : [20],
+  "ue_tx_gain_a" : [20],
+  "ue_rx_gain_b" : [20],
+  "ue_tx_gain_b" : [20],
   "ue_frame_schedule" : [
-      "BGPGUGGGGGGGGGGGGGGG"
+      "BGGPPGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
   ],
   "tx_advance" : [100],
-  "ue_modulation" : "16QAM",
-  "sdr_id" : [
-      "10.117.2.2"
-  ]
+  "hw_framer" : false,
+  "frame_mode" : "free_running"
 }
