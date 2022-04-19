@@ -10,6 +10,12 @@ static constexpr bool kUseUHD = true;
 static constexpr bool kUseUHD = false;
 #endif
 
+#ifdef PURE_UHD
+static constexpr bool pUseUHD = true;
+#else
+static constexpr bool pUseUHD = false;
+#endif
+
 static constexpr size_t kStreamContinuous = 1;
 static constexpr size_t kStreamEndBurst = 2;
 static constexpr size_t kDsDimsNum = 5;
