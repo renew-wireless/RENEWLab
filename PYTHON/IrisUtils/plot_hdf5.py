@@ -159,8 +159,6 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 snr, seq_found = hdf5_lib.measure_snr(pilot_samples, noise_samples, peak_map, pilot_type, ofdm_pilot, ofdm_len, z_padding)
                 snr_end = time.time()
                 print(">>>> compute_snr time: %f \n" % (snr_end - snr_start))
-            else:
-                 seq_found = hdf5_lib.pilot_map_prep(pilot_samples, peak_map, ofdm_len, z_padding)
 
             # Plots:
             print("Plotting the results:\n")
@@ -316,6 +314,122 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             tx_data = hdf5_lib.load_tx_data(metadata, hdf5.dirpath)
             equalized_symbols, tx_symbols, slot_evm, slot_evm_snr = hdf5_lib.demodulate(ul_samps[:, ul_slot_i, :, :], userCSI, tx_data, metadata, offset, ul_slot_i)
             plot_constellation_stats(slot_evm, slot_evm_snr, equalized_symbols, tx_symbols, ref_frame, ul_slot_i)
+
+        # if demodulate:
+        #     print('trying evm')
+        #     cl_ch_num = int(metadata['CL_CH_PER_RADIO'])
+        #     data_sc_ind = np.array(metadata['OFDM_DATA_SC'])
+        #     pilot_sc_ind = np.array(metadata['OFDM_PILOT_SC'])
+        #     pilot_sc_val = np.array(metadata['OFDM_PILOT_SC_VALS'])
+        #     zero_sc_ind = np.setdiff1d(range(fft_size), data_sc_ind)
+        #     zero_sc_ind = np.setdiff1d(zero_sc_ind, pilot_sc_ind)
+        #     nonzero_sc_ind = np.setdiff1d(range(fft_size), zero_sc_ind)
+        #
+        #     # UL Samps: #Frames, #Uplink SF, #Antennas, #Samples
+        #     ul_samps = ul_samps[:, :, :, :]
+        #
+        #     n_frames = ul_samps.shape[0]
+        #     ul_syms = np.empty((ul_samps.shape[0], ul_samps.shape[1],
+        #                         ul_samps.shape[2], num_pilots_per_sym, fft_size), dtype='complex64')
+        #     # UL Syms: #Frames, #Uplink SF, #Antennas, #OFDM Symbols, #Samples
+        #     for i in range(num_pilots_per_sym):
+        #         ul_syms[:, :, :, i, :] = ul_samps[:, :, :, offset + cp + i * fft_size:offset + cp + (i + 1) * fft_size]
+        #     # UL Syms: #Frames, #OFDM Symbols, #Uplink SF, #Antennas, #Samples
+        #     ul_syms = np.transpose(ul_syms, (0, 3, 1, 2, 4))
+        #     # UL Syms: #Frames, # Frame All OFDM Symbols, #Antennas, #Samples
+        #     num_ul_sym = ul_syms.shape[1] * ul_syms.shape[2]
+        #     ul_syms = np.reshape(ul_syms, (ul_syms.shape[0], num_ul_sym, ul_syms.shape[3], ul_syms.shape[4]))
+        #     ul_syms_f = np.fft.fft(ul_syms, fft_size, 3)
+        #     ul_syms_f = np.delete(ul_syms_f, zero_sc_ind, 3)
+        #     # UL DEMULT: #Frames, # Frame OFDM Symbols, #User, #Sample (DATA + PILOT SCs)
+        #     ul_demult = demult(userCSI, ul_syms_f)
+        #     dims = ul_demult.shape
+        #     ul_demult_exp = np.empty((dims[0], dims[1], dims[2], fft_size), dtype='complex64')
+        #     ul_demult_exp[:, :, :, nonzero_sc_ind] = ul_demult
+        #     # Phase offset tracking and correction
+        #     phase_corr = ul_demult_exp[:, :, :, pilot_sc_ind] * np.conj(pilot_sc_val)
+        #     phase_err = np.angle(np.mean(phase_corr, 3))
+        #     phase_comp = np.exp(-1j * phase_err)
+        #     ul_data = ul_demult_exp[:, :, :, data_sc_ind]
+        #     phase_comp_exp = np.empty(ul_data.shape, dtype='complex64')
+        #     for i in range(len(data_sc_ind)):
+        #         phase_comp_exp[:, :, :, i] = phase_comp
+        #     ul_data = np.multiply(ul_data, phase_comp_exp)
+        #     # UL DATA: #Frames, #User, # Frame OFDM Symbols, #DATA SCs
+        #     ul_data = np.transpose(ul_data, (0, 2, 1, 3))
+        #     # UL DATA: #Frames, #User, # Frame DATA SCs
+        #     # ul_data = np.reshape(ul_data, (ul_data.shape[0], ul_data.shape[1], ul_data.shape[2] * ul_data.shape[3]))
+        #     evm = np.empty((ul_data.shape[0], ul_data.shape[1]), dtype='complex64')
+        #
+        #     ul_data_frame_num = int(metadata['UL_DATA_FRAME_NUM'])
+        #     txdata = np.empty((ul_data_frame_num, num_cl_tmp, ul_sf_num,
+        #                        num_pilots_per_sym, fft_size), dtype='complex64')
+        #     print("ul data", ul_data_frame_num)
+        #     if ul_data_frame_num > 1:
+        #         tx_file_names = metadata['TX_FD_DATA_FILENAMES'].astype(str)
+        #         read_size = 2 * ul_data_frame_num * ul_sf_num * cl_ch_num * num_pilots_per_sym * fft_size
+        #         cl = 0
+        #         for fn in tx_file_names:
+        #             tx_file_path = hdf5.dirpath + '/' + fn
+        #             print('Opening source TX data file %s' % tx_file_path)
+        #             with open(tx_file_path, mode='rb') as f:
+        #                 txdata0 = list(struct.unpack('f' * read_size, f.read(4 * read_size)))
+        #                 I = np.array(txdata0[0::2])
+        #                 Q = np.array(txdata0[1::2])
+        #                 IQ = I + Q * 1j
+        #                 txdata[:, cl:cl + cl_ch_num, :, :, :] = np.transpose(
+        #                     np.reshape(IQ, (ul_data_frame_num, ul_sf_num,
+        #                                     cl_ch_num, num_pilots_per_sym, fft_size)), (0, 2, 1, 3, 4))
+        #             cl = cl + cl_ch_num
+        #         rep = n_frames // ul_data_frame_num
+        #         txdata_ext = np.tile(txdata, (rep, 1, 1, 1, 1))
+        #         frac_fr = n_frames % ul_data_frame_num
+        #         if frac_fr > 0:
+        #             frac = txdata[frac_fr:, :, :, :, :]
+        #             txdata_ext = np.concatenate((txdata_ext, frac), axis=0)
+        #     else:
+        #         for f in range(ul_data_frame_num):
+        #             for i in range(num_cl_tmp):
+        #                 # for i in range(0):
+        #                 #     tx_data0 = metadata['OFDM_DATA_CL'+str(i)]
+        #                 tx_data0 = metadata['OFDM_DATA_CL' + str(0)]
+        #                 tx_data_mat = np.reshape(tx_data0, (ul_sf_num, num_pilots_per_sym, fft_size))
+        #                 txdata[f, i, :, :, :] = tx_data_mat
+        #         txdata_ext = np.tile(txdata, (n_frames, 1, 1, 1, 1))
+        #     txdata_ext = txdata_ext[:, :, :, :, data_sc_ind]
+        #
+        #     ul_sym_i = ul_sf_i * num_pilots_per_sym + ofdm_sym_i
+        #     fig5, axes5 = plt.subplots(nrows=num_cl_tmp // 2, ncols=2, squeeze=False, figsize=(10, 8))
+        #     fig5.suptitle(
+        #         'Uplink User Constellations (ZF) - Frame %d - Cell %d - UL SF %d' % (ref_frame, cell_i, ul_sym_i))
+        #     fig6, axes6 = plt.subplots(nrows=1, ncols=1, squeeze=False, figsize=(10, 8))
+        #     fig6.suptitle('Uplink EVM - Cell %d - UL SF %d' % (cell_i, ul_sym_i))
+        #     axes6[0, 0].set_ylabel('EVM (%)')
+        #     axes6[0, 0].set_xlabel('Frame Number')
+        #     for i in range(num_cl_tmp // 2):
+        #         # for i in range(0):
+        #         axes5[i, 0].set_title('User %d' % (2 * i))
+        #         axes5[i, 0].scatter(np.real(ul_data[ref_frame, i * 2, ul_sym_i, :]),
+        #                             np.imag(ul_data[ref_frame, i * 2, ul_sym_i, :]))
+        #         axes5[i, 0].scatter(np.real(txdata_ext[ref_frame, i * 2, ul_sf_i, ofdm_sym_i, :]),
+        #                             np.imag(txdata_ext[ref_frame, i * 2, ul_sf_i, ofdm_sym_i, :]))
+        #
+        #         axes5[i, 1].set_title('User %d' % (2 * i + 1))
+        #         axes5[i, 1].scatter(np.real(ul_data[ref_frame, i * 2 + 1, ul_sym_i, :]),
+        #                             np.imag(ul_data[ref_frame, i * 2 + 1, ul_sym_i, :]))
+        #         axes5[i, 1].scatter(np.real(txdata_ext[ref_frame, i * 2 + 1, ul_sf_i, ofdm_sym_i, :]),
+        #                             np.imag(txdata_ext[ref_frame, i * 2 + 1, ul_sf_i, ofdm_sym_i, :]))
+        #
+        #         for f in range(ul_data.shape[0]):
+        #             evm[f, 2 * i] = 100 * np.linalg.norm(
+        #                 ul_data[f, 2 * i, ul_sym_i, :] - txdata_ext[f, 2 * i, ul_sf_i, ofdm_sym_i, :], 2) / \
+        #                             ul_data.shape[3]
+        #             evm[f, 2 * i + 1] = 100 * np.linalg.norm(
+        #                 ul_data[f, 2 * i + 1, ul_sym_i, :] - txdata_ext[f, 2 * i + 1, ul_sf_i, ofdm_sym_i, :], 2) / \
+        #                                 ul_data.shape[3]
+        #         axes6[0, 0].plot(range(ul_data.shape[0]), evm[:, 2 * i], label='User %d' % (2 * i))
+        #         axes6[0, 0].plot(range(ul_data.shape[0]), evm[:, 2 * i + 1], label='User %d' % (2 * i + 1))
+        #     axes6[0, 0].legend(loc='upper right', frameon=False)
 
     # Plot DL data symbols
     if dl_data_avail > 0:
