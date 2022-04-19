@@ -114,8 +114,8 @@ class MIMODriver:
         [ue.config_sdr_tdd(is_bs=False, tdd_sched=str(ue_sched[i]), nsamps=n_samps) for i, ue in enumerate(self.ue_obj)]
 
         for i, ue in enumerate(self.ue_obj):
-            ue.burn_data_complex(tx_data_mat[:, i] if self.n_users > 1 else tx_data_mat)
-            #ue.burn_data_complex(tx_data_mat[:, i])
+            ue.burn_data_complex(tx_data_mat[:, i] if self.n_users > 1 else tx_data_mat)    # for matlab
+            #ue.burn_data_complex(tx_data_mat[:, i])   # for python
 
         [bs.activate_stream_rx() for bs in self.bs_obj]
         [ue.set_corr() for ue in self.ue_obj]
@@ -171,21 +171,52 @@ class MIMODriver:
         self.reset_frame()
         return rx_data, good_frame_id, numRxSyms
 
+
     def txrx_downlink(self, tx_data_mat_re, tx_data_mat_im, num_frames, nsamps_pad=160, max_try=10):
         tx_data_mat = tx_data_mat_re + 1j * tx_data_mat_im
         n_samps = tx_data_mat.shape[0]
+
         if len(tx_data_mat.shape) > 1:
-            n_bs_ant = tx_data_mat.shape[1]
+            n_users = tx_data_mat.shape[1]
         else:
-            n_bs_ant = 1
-        if n_bs_ant != self.n_bs_antenna:
-            print("Input data size (dim 2) does not match number of BS antennas!")
+            n_users = 1
+        if n_users != self.n_users:
+            print("Input data size (dim 2) does not match number of UEs!")
             return
         if n_samps > 4096:
             print("Input data size (dim 1) exceeds pilot buffer size!")
             return
-        [bs.config_sdr_tdd(tdd_sched="BGPG" if i == 0 else "GGPG", nsamps=n_samps, prefix_len=nsamps_pad) for i, bs in enumerate(self.bs_obj)] 
-        [ue.config_sdr_tdd(is_bs=False, tdd_sched="GGRG", nsamps=n_samps) for ue in self.ue_obj]
+
+        ### Build TDD Schedule ###
+        bs_sched_b = 'BG'   # Beacon node
+        bs_sched   = 'GG'
+        ue_sched_tmp = list(''.join([char*2*n_users for char in 'G']))
+        ue_sched = []
+        for ue_idx in range(n_users):
+            # Individual Pilots (downlink)
+            curr_str_bs = 'PG'
+            bs_sched_b = bs_sched_b + curr_str_bs
+            bs_sched = bs_sched + curr_str_bs
+            tmp = copy.copy(ue_sched_tmp)
+            tmp[2*ue_idx:2*ue_idx+2] = 'RG'
+            tmpstr = 'GG' + ''.join([char for char in tmp])
+            if n_users > 1:
+                # Multi-user TX (downlink)
+                tmpstr = tmpstr + 'RG'
+
+            ue_sched.append(tmpstr)
+
+        # Multi-user RX (downlink)
+        if n_users > 1:
+            bs_sched_b = bs_sched_b + 'PG'
+            bs_sched = bs_sched + 'PG'
+
+        numRxSyms = bs_sched.count('P')
+        print("NumRxSyms: {}, n_samps: {}, n_users: {}, bs_sched_b: {}, bs_sched: {}, ue_sched: {}".format(numRxSyms,n_samps,n_users,bs_sched_b,bs_sched,ue_sched))
+
+        ### Write TDD Schedule ###
+        [bs.config_sdr_tdd(tdd_sched=str(bs_sched_b) if i == 0 else str(bs_sched), nsamps=n_samps, prefix_len=nsamps_pad) for i, bs in enumerate(self.bs_obj)]
+        [ue.config_sdr_tdd(is_bs=False, tdd_sched=str(ue_sched[i]), nsamps=n_samps, prefix_len=nsamps_pad) for i, ue in enumerate(self.ue_obj)]
 
         for i, bs in enumerate(self.bs_obj):
             bs.burn_data_complex(tx_data_mat[:, i] if self.n_bs_antenna > 1 else tx_data_mat)
@@ -193,20 +224,18 @@ class MIMODriver:
         [ue.activate_stream_rx() for ue in self.ue_obj]
         [ue.set_corr() for ue in self.ue_obj]
 
-        rx_data = np.empty((num_frames, self.n_users, n_samps), dtype=np.complex64)
-        rx_data_frame = np.empty((self.n_users, n_samps), dtype=np.complex64)
+        rx_data = np.empty((num_frames, self.n_users, numRxSyms, n_samps), dtype=np.complex64)
         good_frame_id = 0
-        old_triggers = []
-        triggers = []
-        for u in range(self.n_users):
-            old_triggers.append(0)
 
         for frame in range(num_frames):
-            all_triggered = True
-            good_signal = True
+            all_triggered = False
+            good_signal = False
             amp = 0
-            if frame > 0:
-                old_triggers = triggers
+            #if frame > 0:
+            old_triggers = []
+            triggers = []
+            for u in range(self.n_users):
+                old_triggers.append(0)
             for i in range(max_try):
                 self.bs_trigger()
                 # Receive Data
@@ -220,7 +249,7 @@ class MIMODriver:
                     new_triggers.append(triggers_i - old_triggers_i)
                 print("triggers = {}, Amplitude = {}".format(new_triggers, amp))
                 all_triggered = True
-                for u in range(self.n_users):
+                for u in range(n_users):
                     if (new_triggers[u] == 0):
                         all_triggered = False
                 if all_triggered and good_signal:
@@ -228,11 +257,20 @@ class MIMODriver:
 
             print("frame = {}, tries = {}, all_triggred = {}, good_signal = {}, amp = {}".format(frame, i + 1, all_triggered, good_signal, amp))
             if all_triggered and good_signal:
-                rx_data[good_frame_id] = rx_data_frame
+                if n_users == 1 and self.n_bs_antenna == 1:
+                    rx_data[good_frame_id, :, :, :] = np.reshape(np.array(rx_data_frame[0]), (self.n_bs_antenna, numRxSyms, n_samps))
+                else:
+                    rx_data[good_frame_id, :, :, :] = np.reshape(np.array(rx_data_frame), (self.n_bs_antenna, numRxSyms, n_samps))
                 good_frame_id = good_frame_id + 1
+                #tmptmp = np.array(rx_data_frame[0])
+                #plt.plot(np.abs(tmptmp))
+
+        #plt.show()
         [ue.unset_corr() for ue in self.ue_obj]
         self.reset_frame()
-        return rx_data, good_frame_id
+
+        return rx_data, good_frame_id, numRxSyms
+
 
     def set_opt_gains(self, num_frames):
         print("Testing gain combinations to find best settings...")
@@ -336,10 +374,12 @@ def main():
     wb_pilot1 = np.concatenate([pad1, wb_pilot, pad2])
     wb_pilot1 = np.transpose(np.matlib.repmat(wb_pilot1, len(options.ue_serials.split(',')), 1))
     wb_pilot2 = wbz  # wb_pilot1 if both_channels else wbz
-    ul_rx_data, n_ul_good, numRxSyms = mimo.txrx_uplink(np.real(wb_pilot1), np.imag(wb_pilot1), 5, len(pad2))
-    print("Uplink Rx Num {}, ShapeRxData: {}, NumRsyms: {}".format(n_ul_good, ul_rx_data.shape, numRxSyms))
-    #dl_rx_data, n_dl_good = mimo.txrx_downlink(np.real(wb_pilot1), np.imag(wb_pilot1), 1)
-    #print("Downlink Rx Num %d"%n_dl_good)
+
+    #ul_rx_data, n_ul_good, numRxSyms = mimo.txrx_uplink(np.real(wb_pilot1), np.imag(wb_pilot1), 5, len(pad2))
+    #print("Uplink Rx Num {}, ShapeRxData: {}, NumRsyms: {}".format(n_ul_good, ul_rx_data.shape, numRxSyms))
+
+    dl_rx_data, n_dl_good, numRxSyms = mimo.txrx_downlink(np.real(wb_pilot1), np.imag(wb_pilot1), 1, len(pad2))
+    print("Downlink Rx Num {}".format(n_dl_good))
 
     # 10 frames
     #[txg, rxg, max_val, is_valid] = mimo.set_opt_gains(10)

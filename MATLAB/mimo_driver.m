@@ -76,9 +76,9 @@ classdef mimo_driver < handle
                 % Data shape: (# good frames, # BS antenna, # numRxSyms, # number samps)
                 %ngoodframes = double(py.numpy.int_(data_py.data.shape(1)))
                 numGoodFrames = double(py.numpy.int_(results(2)));
-                nbsantennas = double(py.numpy.int_(data_py.data.shape(2)))
-                nrecvSyms = double(py.numpy.int_(data_py.data.shape(3)))
-                nsamples = double(py.numpy.int_(data_py.data.shape(4)))
+                nbsantennas = double(py.numpy.int_(data_py.data.shape(2)));
+                nrecvSyms = double(py.numpy.int_(data_py.data.shape(3)));
+                nsamples = double(py.numpy.int_(data_py.data.shape(4)));
                 data = zeros(numGoodFrames, nbsantennas, nrecvSyms, nsamples);
                 
                 P1 = cellfun(@cell, cell(data_py.tolist), 'Uniform',false);
@@ -96,24 +96,63 @@ classdef mimo_driver < handle
             end
             numRxSyms = double(py.numpy.int_(results(3)));
             %numGoodFrames = double(py.numpy.int_(results(2)));
-
         end
 
-        function data = mimo_txrx_downlink(obj, tx_data_mat, n_frames, n_samps_pad)
+
+        function [data, numGoodFrames, numRxSyms] = mimo_txrx_downlink(obj, tx_data_mat, n_frames, n_samps_pad)
             results = obj.mimo_obj.txrx_downlink(py.numpy.array(real(tx_data_mat)), py.numpy.array(imag(tx_data_mat)), py.int(n_frames), py.int(n_samps_pad));
-            data = [];
-            if results == py.NoneType
-                disp('*** Unsucessful downlink receive. Try different gain settings! ***');
+
+            result_cell = cell(results);
+            data_py = result_cell{1,1};
+
+            if result_cell{1, 2} == 0
+                data = [];
+                numGoodFrames = 0;
+                numRxSyms = 0;
+                disp('*** Unsucessful downlink receive. Try different gain settings! *** ');
+
             else
-                result_cell = cell(results);
-                if result_cell{1, 2} == 0
-                    disp('*** Unsucessful downlink receive. Try different gain settings! ***');
-                else
-                    data = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(results(1)) ) ) ) + ...
-                        1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(results(1)) ) ) );
+                % Data shape: (# good frames, # BS antenna, # numRxSyms, # number samps)
+                %ngoodframes = double(py.numpy.int_(data_py.data.shape(1)))
+                numGoodFrames = double(py.numpy.int_(results(2)));
+                nue = double(py.numpy.int_(data_py.data.shape(2)));
+                nrecvSyms = double(py.numpy.int_(data_py.data.shape(3)));
+                nsamples = double(py.numpy.int_(data_py.data.shape(4)));
+                data = zeros(numGoodFrames, nue, nrecvSyms, nsamples);
+
+                P1 = cellfun(@cell, cell(data_py.tolist), 'Uniform',false);
+                %P1 = vertcat(P1{:});
+                for igf = 1:numGoodFrames
+                    for iue = 1:nue
+                        for ifr = 1:nrecvSyms
+                            data(igf, iue, ifr, :) = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(P1{igf}{iue}{ifr}) ) ) ) + ...
+                                                  1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(P1{igf}{iue}{ifr}) ) ) );
+                            %figure(100); plot(abs(squeeze(data(igf, iue, ifr, :)))); hold on;
+                        end
+                    end
                 end
+
             end
+            numRxSyms = double(py.numpy.int_(results(3)));
+
         end
+
+
+        %function data = mimo_txrx_downlink(obj, tx_data_mat, n_frames, n_samps_pad)
+        %    results = obj.mimo_obj.txrx_downlink(py.numpy.array(real(tx_data_mat)), py.numpy.array(imag(tx_data_mat)), py.int(n_frames), py.int(n_samps_pad));
+        %    data = [];
+        %    if results == py.NoneType
+        %        disp('*** Unsucessful downlink receive. Try different gain settings! ***');
+        %    else
+        %        result_cell = cell(results);
+        %        if result_cell{1, 2} == 0
+        %            disp('*** Unsucessful downlink receive. Try different gain settings! ***');
+        %        else
+        %            data = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(results(1)) ) ) ) + ...
+        %                1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(results(1)) ) ) );
+        %        end
+        %    end
+        %end
 
         function [txg, rxg, max_num_beac, valid] = mimo_set_opt_gains(obj, n_frames)
             results = obj.mimo_obj.set_opt_gains(py.int(n_frames));

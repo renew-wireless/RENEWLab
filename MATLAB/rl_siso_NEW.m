@@ -53,7 +53,7 @@ TX_GN                   = 80;
 RX_GN                   = 60;
 SMPL_RT                 = 5e6;
 TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
-N_FRM                   = 3;
+N_FRM                   = 1;
           
 bs_ids = string.empty();
 bs_sched = string.empty();
@@ -156,6 +156,7 @@ else
     disp("Running: HARDWARE MODE");
 
     % Create two Iris node objects:
+    tx_direction = 'uplink';    % Options: {'uplink', 'downlink'}
     bs_ids = ["RF3E000356"];
     ue_ids = ["RF3D000016"];
 
@@ -183,7 +184,12 @@ else
         mimo_handle.mimo_update_sdr_param('rxgain', rxg_opt);
     end
 
-    [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
+    if strcmp(tx_direction, 'uplink')
+        [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
+    else
+        [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_downlink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
+    end
+
     mimo_handle.mimo_close();
 
 end
@@ -203,7 +209,7 @@ for frm_idx = 1:numGoodFrames
         rx_vec_iris = squeeze(rx_vec_iris_tmp(frm_idx, 1, 1, :));
     end
 
-    %figure; plot(abs(rx_vec_iris))
+    figure; plot(abs(rx_vec_iris))
     %% Correlate for LTS
     % Complex cross correlation of Rx waveform with time-domain LTS
     a = 1;
@@ -215,7 +221,9 @@ for frm_idx = 1:numGoodFrames
     [rho_max, ipos] = max(lts_corr);
 
     payload_ind = ipos + 1;
-    lts_ind = payload_ind - N_LTS_SYM*(N_SC + CP_LEN);
+    lts_ind = payload_ind - N_LTS_SYM*(N_SC + CP_LEN)
+
+    figure; plot(lts_corr);
 
     if lts_ind < 1
         lts_ind = 1;
