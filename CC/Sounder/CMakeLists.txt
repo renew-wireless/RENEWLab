@@ -3,25 +3,6 @@ cmake_minimum_required(VERSION 3.10)
 cmake_policy(SET CMP0048 NEW)
 project(Sounder VERSION 1.1.0)
 
-set(BOOST_REQUIRED_COMPONENTS
-    program_options
-    system
-    thread
-)
-
-if(MSVC)
-    set(BOOST_ALL_DYN_LINK "${BOOST_ALL_DYN_LINK}" CACHE BOOL "boost enable dynamic linking")
-    if(BOOST_ALL_DYN_LINK)
-        add_definitions(-DBOOST_ALL_DYN_LINK) #setup boost auto-linking in msvc
-    else(BOOST_ALL_DYN_LINK)
-        set(BOOST_REQUIRED_COMPONENTS) #empty components list for static link
-    endif(BOOST_ALL_DYN_LINK)
-endif(MSVC)
-find_package(Boost "1.46" REQUIRED ${BOOST_REQUIRED_COMPONENTS})
-
-# To add UHD as a dependency to this project, add a line such as this:
-find_package(UHD "3.8.0" REQUIRED)
-
 if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 7.0)
   set(GCC_COVERAGE_COMPILE_FLAGS "-faligned-new")
 endif()
@@ -122,6 +103,38 @@ if(${PURE_UHD})
   add_definitions(-DPURE_UHD)
 endif()
 
+
+if(${PURE_UHD})
+# Adding dependency of UHD to souder
+    find_package(UHD "3.15.0" REQUIRED)
+    message(STATUS "Using UHD Version: ${UHD_VERSION}")
+
+    ########################################################################
+    # PURE UHD dependencies
+    ########################################################################
+    # Adding dependency of Boost to souder
+    set(BOOST_REQUIRED_COMPONENTS
+        program_options
+        system
+        thread
+    )
+    if(MSVC)
+        set(BOOST_ALL_DYN_LINK "${BOOST_ALL_DYN_LINK}" CACHE BOOL "boost enable dynamic linking")
+        if(BOOST_ALL_DYN_LINK)
+            add_definitions(-DBOOST_ALL_DYN_LINK) #setup boost auto-linking in msvc
+        else(BOOST_ALL_DYN_LINK)
+            set(BOOST_REQUIRED_COMPONENTS) #empty components list for static link
+        endif(BOOST_ALL_DYN_LINK)
+    endif(MSVC)
+    find_package(Boost "1.65" REQUIRED ${BOOST_REQUIRED_COMPONENTS})
+    message(STATUS "Using Boost Version: ${Boost_VERSION}")
+
+    set(PURE_UHD_SOURCES 
+        BaseRadioSetUHD.cc
+        ClientRadioSetUHD.cc
+        RadioUHD.cc)
+endif()
+
 ########################################################################
 # SoapySDR dependency
 ########################################################################
@@ -148,13 +161,11 @@ message(STATUS "HDF5_INCLUDE_DIRS: ${HDF5_INCLUDE_DIRS}")
 message(STATUS "HDF5_LIBRARIES: ${HDF5_LIBRARIES}")
 include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS} third_party/ third_party/nlohmann/single_include )
 
-set(SOUNDER_SOURCES 
+set(SOUNDER_SOURCES ${PURE_UHD_SOURCES}
     ClientRadioSet.cc
-    ClientRadioSetUHD.cc
     config.cc
     data_generator.cc
     Radio.cc
-    RadioUHD.cc
     receiver.cc
     scheduler.cc
     recorder_worker.cc
@@ -162,7 +173,6 @@ set(SOUNDER_SOURCES
     hdf5_reader.cc
     recorder_thread.cc
     BaseRadioSet.cc
-    BaseRadioSetUHD.cc
     BaseRadioSet-calibrate.cc
     comms-lib.cc
     comms-lib-avx.cc
@@ -172,8 +182,6 @@ set(SOUNDER_SOURCES
 add_executable(sounder 
     main.cc
     ${SOUNDER_SOURCES})
-
-target_link_libraries(sounder  ${UHD_LIBRARIES})
 
 if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") 
     set(MUFFT_LIBRARIES
@@ -186,7 +194,7 @@ else()
         ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-avx.a)
 endif()
 
-target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe gflags
+target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe gflags ${UHD_LIBRARIES}
     ${SoapySDR_LIBRARIES}
     ${HDF5_LIBRARIES}
     ${MUFFT_LIBRARIES})
@@ -194,7 +202,7 @@ target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe gflags
 add_library(sounder_module MODULE 
     ${SOUNDER_SOURCES})
 
-target_link_libraries(sounder_module -lpthread -lhdf5_cpp --enable-threadsafe gflags
+target_link_libraries(sounder_module -lpthread -lhdf5_cpp --enable-threadsafe gflags ${UHD_LIBRARIES}
     -Wl,--whole-archive
     ${MUFFT_LIBRARIES}
     -Wl,--no-whole-archive
