@@ -4,7 +4,7 @@
 #include <SoapySDR/Errors.hpp>
 #include <iostream>
 
-#include <uhd/utils/thread_priority.hpp>
+#include <uhd/utils/thread.hpp>
 #include <uhd/utils/safe_main.hpp>
 #include <uhd/usrp/multi_usrp.hpp>
 #include <boost/program_options.hpp>
