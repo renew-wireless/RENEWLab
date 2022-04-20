@@ -234,7 +234,7 @@ class Iris_py:
                                 print("No coe was passed into config_sdr_tdd() \n")
 
                         # DEV: ueTrigTime = 153 (prefix_length=0), CBRS: ueTrigTime = 235 (prefix_length=82), tx_advance=prefix_length, corr delay is 17 cycles
-                        ueTrigTime = len(beacon) + 200
+                        ueTrigTime = len(beacon) + 235
                         sf_start = int(ueTrigTime//(self.n_samp))
                         sp_start = int(ueTrigTime % (self.n_samp))
                         print("config_sdr_tdd: UE starting symbol and sample count (%d, %d)" %

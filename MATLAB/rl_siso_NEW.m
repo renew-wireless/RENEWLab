@@ -39,6 +39,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Parameters
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+DEBUG                   = 0;
 WRITE_PNG_FILES         = 0;            % Enable writing plots to PNG
 PLOT                    = 0;
 FIND_OPTIMAL_GAINS      = 0;            % Evaluates different TX/RX gain combinations and returns the combination that yields the largest number of detected beacons
@@ -62,7 +63,7 @@ ue_sched = string.empty();
 
 
 % Waveform params
-N_OFDM_SYM              = 46;         % Number of OFDM symbols for burst, it needs to be less than 47
+N_OFDM_SYM              = 20;         % Number of OFDM symbols for burst, it needs to be less than 47
 MOD_ORDER               = 16;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
 
 % OFDM params
@@ -74,7 +75,7 @@ N_DATA_SYMS             = N_OFDM_SYM * length(SC_IND_DATA);       % Number of da
 N_LTS_SYM               = 2;                                      % Number of 
 N_SYM_SAMP              = N_SC + CP_LEN;                          % Number of samples that will go over the air
 N_ZPAD_PRE              = 90;                                     % Zero-padding prefix for Iris
-N_ZPAD_POST             = N_ZPAD_PRE - 14;                         % Zero-padding postfix for Iris
+N_ZPAD_POST             = nan;                                    % (defined below) Zero-padding postfix for Iris
 
 % Rx processing params
 FFT_OFFSET                    = 0;          % Number of CP samples to use in FFT (on average)
@@ -127,6 +128,8 @@ tx_payload_vec = reshape(tdd_tx_payload_mat, 1, numel(tdd_tx_payload_mat));
 
 
 % Construct the full time-domain OFDM waveform
+MAX_N_SAMPS = 4096;    % Maximum number of samples we can write to the FPGA buffer for TX
+N_ZPAD_POST = MAX_N_SAMPS - N_ZPAD_PRE - length(preamble) - length(tx_payload_vec);
 tx_vec = [zeros(1,N_ZPAD_PRE) preamble tx_payload_vec zeros(1,N_ZPAD_POST)];
 
 % Leftover from zero padding:
@@ -209,7 +212,9 @@ for frm_idx = 1:numGoodFrames
         rx_vec_iris = squeeze(rx_vec_iris_tmp(frm_idx, 1, 1, :));
     end
 
-    figure; plot(abs(rx_vec_iris))
+    if DEBUG
+        figure; plot(abs(rx_vec_iris));
+    end
     %% Correlate for LTS
     % Complex cross correlation of Rx waveform with time-domain LTS
     a = 1;
@@ -221,9 +226,11 @@ for frm_idx = 1:numGoodFrames
     [rho_max, ipos] = max(lts_corr);
 
     payload_ind = ipos + 1;
-    lts_ind = payload_ind - N_LTS_SYM*(N_SC + CP_LEN)
+    lts_ind = payload_ind - N_LTS_SYM*(N_SC + CP_LEN);
 
-    figure; plot(lts_corr);
+    if DEBUG
+        figure; plot(lts_corr);
+    end
 
     if lts_ind < 1
         lts_ind = 1;
@@ -252,7 +259,9 @@ for frm_idx = 1:numGoodFrames
 
     missed_samps = (N_SC+CP_LEN) * N_OFDM_SYM - length(payload_vec); %sometimes it's below 0.
 
-    fprintf("MISSED SAMPLES: %d", missed_samps);
+    if DEBUG
+        fprintf("MISSED SAMPLES: %d", missed_samps);
+    end
     if (missed_samps > 0)
         payload_vec = [payload_vec.' zeros(1, missed_samps)];
     elseif (missed_samps <= 0)
@@ -457,6 +466,7 @@ for frm_idx = 1:numGoodFrames
     rx_evm   = sqrt(sum((real(rx_syms) - real(tx_syms)).^2 + (imag(rx_syms) - imag(tx_syms)).^2)/(length(SC_IND_DATA) * N_OFDM_SYM));
 
     fprintf('\n Frame %d Results:\n', frm_idx);
+    fprintf('Mode: %s \n', tx_direction);
     fprintf('Num Bytes:   %d\n', N_DATA_SYMS * log2(MOD_ORDER) / 8);
     fprintf('Sym Errors:  %d (of %d total symbols)\n', sym_errs, N_DATA_SYMS);
     fprintf('Bit Errors:  %d (of %d total bits)\n', bit_errs, N_DATA_SYMS * log2(MOD_ORDER));
