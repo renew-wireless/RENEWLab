@@ -107,8 +107,6 @@ ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
   std::cout << "ClientRadioSetUHD Init Check" << std::endl;
   std::cout << std::endl;
 
-  //    }
-
   // Update for UHD multi USRP
   if (radioNotFound == true) {
     std::cout << "some client serials were not "
@@ -150,7 +148,6 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
 
   // update for UHD multi USRP
   std::map<std::string, std::string> args;
-  //    SoapySDR::Kwargs args;
   args["timeout"] = "1000000";
   args["driver"] = "uhd";
   args["addr"] = _cfg->cl_sdr_ids().at(i);
