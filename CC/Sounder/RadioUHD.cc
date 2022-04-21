@@ -1,49 +1,13 @@
 #include "include/RadioUHD.h"
 #include "include/logger.h"
 #include "include/macros.h"
-#include <SoapySDR/Errors.hpp>
-#include <iostream>
-
-#include <uhd/utils/thread.hpp>
-#include <uhd/utils/safe_main.hpp>
-#include <uhd/usrp/multi_usrp.hpp>
-#include <boost/program_options.hpp>
-#include <boost/format.hpp>
-#include <boost/thread.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/algorithm/string.hpp>
-#include <iostream>
-#include <complex>
-
-#include <uhd/transport/udp_simple.hpp>
-#include <fstream>
-#include <sstream>
-#include <string.h>
-
 #include "include/comms-lib.h"
-#include "include/logger.h"
-#include "include/macros.h"
-#include "include/utils.h"
-#include "nlohmann/json.hpp"
-#include <SoapySDR/Errors.hpp>
-#include <SoapySDR/Formats.hpp>
-#include <SoapySDR/Time.hpp>
 
-#include <SoapySDR/Device.hpp>
-#include <SoapySDR/Registry.hpp>
-#include <SoapySDR/Logger.hpp>
-#include <uhd/version.hpp>
-#include <uhd/device.hpp>
 #ifdef UHD_HAS_MSG_HPP
 #include <uhd/utils/msg.hpp>
 #else
 #include <uhd/utils/log_add.hpp>
 #endif
-#include <uhd/usrp/multi_usrp.hpp>
-#include <uhd/property_tree.hpp>
-#include <uhd/version.hpp>
-#include <cctype>
-#include <iostream>
 
 
 
@@ -70,7 +34,7 @@ void RadioUHD::dev_init(Config* _cfg, int ch, double rxgain, double txgain)
 
     // update for UHD multi USRP
     dev->set_rx_gain(std::min(31.5, rxgain), "PGA0", ch);
-    dev->set_tx_gain(std::min(31.5, rxgain), "PGA0", ch);
+    dev->set_tx_gain(std::min(31.5, txgain), "PGA0", ch);
 }
 
 void RadioUHD::drain_buffers(std::vector<void*> buffs, int symSamp)
@@ -85,7 +49,7 @@ void RadioUHD::drain_buffers(std::vector<void*> buffs, int symSamp)
      *      None
      */
 
-    long long frameTime = 0;
+//    long long frameTime = 0;
     int flags = 0, r = 0, i = 0;
 //    while (r != -1) {
 //        r = dev->readStream(rxs, buffs.data(), symSamp, flags, frameTime, 0);
@@ -154,26 +118,26 @@ int RadioUHD::activateRecv(
         const long long rxTime, const size_t numSamps, int flags)
 {
     std::cout << "activate recv" << std::endl;
-//    std::cout<<"flags are: " << flags<<std::endl;
-    int soapyFlags[]
-            = { 0, SOAPY_SDR_HAS_TIME, SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST,
-                SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST };
-    int flag_args = soapyFlags[flags];
+    std::cout << "rxTIme is " << rxTime << std::endl;
+    std::cout << "number of samples are " << numSamps << std::endl;
+//    rxTime = UHD_INIT_TIME_SEC * 1e9;
+//    numSamps = 0;
+    flags = SOAPY_SDR_HAS_TIME;
     // for USRP device start rx stream UHD_INIT_TIME_SEC sec in the future
     uhd::stream_cmd_t::stream_mode_t mode;
     const size_t numElems = 0 ;
     if (numElems == 0){
         mode = uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS;
     }
-    else if ((SOAPY_SDR_HAS_TIME & SOAPY_SDR_END_BURST) != 0) {
+    else if ((flags & SOAPY_SDR_END_BURST) != 0) {
         mode = uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_DONE;
     }
     else {mode = uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_MORE;}
 
     uhd::stream_cmd_t cmd(mode);
-    cmd.stream_now = (SOAPY_SDR_HAS_TIME & SOAPY_SDR_HAS_TIME) == 0;
+    cmd.stream_now = (flags & SOAPY_SDR_HAS_TIME) == 0;
     cmd.time_spec = uhd::time_spec_t::from_ticks(UHD_INIT_TIME_SEC * 1e9, 1e9);
-    cmd.num_samps = 0;
+    cmd.num_samps = numElems;
 
     rxs->issue_stream_cmd(cmd);
     return 0;
@@ -239,6 +203,7 @@ int RadioUHD::recv(void* const* buffs, int samples, long long& frameTime)
         case uhd::rx_metadata_t::ERROR_CODE_LATE_COMMAND: return SOAPY_SDR_STREAM_ERROR;
         case uhd::rx_metadata_t::ERROR_CODE_BROKEN_CHAIN: return SOAPY_SDR_STREAM_ERROR;
     }
+    return r;
 }
 
 int RadioUHD::xmit(
