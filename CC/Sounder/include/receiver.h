@@ -26,8 +26,8 @@
 #include <numeric>
 
 #include "BaseRadioSet.h"
-#include "ClientRadioSet.h"
 #include "BaseRadioSetUHD.h"
+#include "ClientRadioSet.h"
 #include "ClientRadioSetUHD.h"
 #include "concurrentqueue.h"
 #include "macros.h"
