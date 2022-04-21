@@ -254,8 +254,3 @@ int ClientRadioSetUHD::radioTx(size_t radio_id, const void* const* buffs,
   long long frameTimeNs = SoapySDR::ticksToTimeNs(frameTime, _cfg->rate());
   return radios->xmit(buffs, numSamps, flags, frameTimeNs);
 }
-
-// Update for UHD multi USRP
-// not used as if kuseUHD == true, going to set this function to do nothing
-// will modify if errors comes up when debugging
-//static void initAGC(uhd::usrp::multi_usrp::sptr* dev, Config* cfg){}
