@@ -5,20 +5,14 @@
 */
 
 #include "config.h"
+#include <uhd/usrp/multi_usrp.hpp>
 #include <SoapySDR/Device.hpp>
-#include <SoapySDR/Time.hpp>
-#include <uhd/usrp/multi_usrp.hpp>
-#include <uhd/stream.hpp>
-#include <uhd/utils/thread.hpp>
-#include <uhd/utils/safe_main.hpp>
-#include <uhd/usrp/multi_usrp.hpp>
-#include <boost/program_options.hpp>
-#include <boost/format.hpp>
-#include <boost/thread.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/algorithm/string.hpp>
-#include <iostream>
-#include <complex>
+#include <SoapySDR/Errors.hpp>
+
+
+#ifndef RADIO_UHD_H
+#define RADIO_UHD_H
+
 
 class RadioUHD {
 private:
@@ -50,3 +44,6 @@ public:
     void deactivateXmit(void);
     int getTriggers(void) const;
 };
+
+#endif /* RADIO_UHD_H */
+
