@@ -14,10 +14,6 @@
 #include "include/macros.h"
 #include "include/utils.h"
 
-using json = nlohmann::json;
-
-//static void initAGC(uhd::usrp::multi_usrp::sptr* dev, Config* cfg);
-
 static void freeRadios(RadioUHD*& radios) { delete radios; }
 
 ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
