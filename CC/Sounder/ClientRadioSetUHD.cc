@@ -176,8 +176,6 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
     throw;
   }
   if (has_runtime_error == false) {
-    //        auto dev = radios.at(i)->dev;
-    //        SoapySDR::Kwargs info = dev->getHardwareInfo();
     for (auto ch : channels) {
       std::cout << "check ch: " << ch << std::endl;
       auto new_ch = _cfg->cl_channel();
@@ -187,11 +185,6 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
           i);  // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
       radios->dev_init(_cfg, ch, rxgain, txgain);
     }
-
-    // Init AGC only for Iris device
-    //        if (kUseUHD == false) {
-    //            initAGC(dev, _cfg);
-    //        }
   }
   MLPD_TRACE("ClientRadioSet: Init complete\n");
   assert(thread_count->load() != 0);
@@ -229,16 +222,6 @@ int ClientRadioSetUHD::radioRx(size_t radio_id, void* const* buffs,
       std::cout << "client " << radio_id << " received " << ret << " at "
                 << frameTimeNs << std::endl;
 #endif
-    //        double a = radios->dev->get_time_now().get_real_secs();
-    //        std::cout << "time: " << a <<std::endl;
-    //        std::cout << "full seconds: " << radios->dev->get_time_now().get_full_secs() << std::endl;
-    //        std::cout << "frac seconds: " << radios->dev->get_time_now().get_frac_secs() << std::endl;
-
-    //        long long b = check_dev->getHardwareTime();
-    //        double utime = b / 1e9;
-    //        std::cout << "sopay way time in ns: " << b << std::endl;
-    //        std::cout << "soapy way time: " << utime <<std::endl;
-    //        }
     return ret;
   }
   std::cout << "invalid radio id " << radio_id << std::endl;
