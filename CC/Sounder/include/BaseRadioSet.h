@@ -1,17 +1,17 @@
-#include <SoapySDR/Device.hpp>
-#include <chrono>
-#include <complex>
-#include <csignal>
+/**
+ * @file BaseRadioSet.h
+ * @brief Declaration file for the BaseRadioSet class.
+ */
+#ifndef BASE_RADIO_SET_H_
+#define BASE_RADIO_SET_H_
+
+#include <atomic>
 #include <cstddef>
-#include <cstdint>
-#include <cstdlib>
-#include <fstream>
-#include <iostream>
-#include <string>
+#include <vector>
 
+#include "Radio.h"
+#include "SoapySDR/Device.hpp"
 #include "config.h"
-
-class Radio;
 
 class BaseRadioSet {
  public:
@@ -55,3 +55,5 @@ class BaseRadioSet {
   std::vector<std::vector<Radio*>> bsRadios;  // [cell, iris]
   bool radioNotFound;
 };
+
+#endif  // BASE_RADIO_SET_H_

@@ -353,7 +353,7 @@ void BaseRadioSet::dciqCalibrationProc(size_t channel) {
 
   size_t referenceRadio = _cfg->cal_ref_sdr_id();  //radioSize / 2;
   Radio* refRadio = bsRadios[0][referenceRadio];
-  SoapySDR::Device* refDev = refRadio->dev;
+  auto* refDev = refRadio->RawDev();
 
   /* 
      * Start with calibrating the rx paths on all radios using the reference radio
@@ -366,7 +366,7 @@ void BaseRadioSet::dciqCalibrationProc(size_t channel) {
   for (size_t r = 0; r < radioSize; r++) {
     if (r == referenceRadio) continue;
     Radio* bsRadio = bsRadios[0][r];
-    SoapySDR::Device* dev = bsRadio->dev;
+    auto* dev = bsRadio->RawDev();
     // must set TX "RF" Freq to make sure, we continue using the same LO for rx cal
     dev->setFrequency(SOAPY_SDR_TX, channel, "RF", centerRfFreq);
     dev->setFrequency(SOAPY_SDR_RX, channel, "RF", centerRfFreq);
@@ -527,7 +527,7 @@ int BaseRadioSet::syncTimeOffset(bool measure_ref_radio, bool adjust_trigger) {
   long long rxTime(0);
 
   Radio* ref_radio = bsRadios.at(0).back();
-  SoapySDR::Device* ref_dev = ref_radio->dev;
+  auto* ref_dev = ref_radio->RawDev();
 
   int offset_diff = num_samps;
   if (measure_ref_radio == true) {
@@ -536,7 +536,7 @@ int BaseRadioSet::syncTimeOffset(bool measure_ref_radio, bool adjust_trigger) {
 
     ref_radio->drain_buffers(dummybuffs, num_samps);
     Radio* front_radio = bsRadios.at(0).front();
-    SoapySDR::Device* front_dev = front_radio->dev;
+    auto* front_dev = front_radio->RawDev();
     front_dev->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->cal_tx_gain().at(0));
     front_radio->activateXmit();
     int ret = front_radio->xmit(txbuff.data(), num_samps, 3, txTime);
@@ -643,7 +643,7 @@ int BaseRadioSet::syncTimeOffset(bool measure_ref_radio, bool adjust_trigger) {
       int median_offset = offset_sorted.at(num_radios / 2);
       for (int i = 0; i < num_radios; i++) {
         Radio* bsRadio = bsRadios.at(0).at(i);
-        SoapySDR::Device* dev = bsRadio->dev;
+        auto* dev = bsRadio->RawDev();
         //int delta = median_offset - offset[i];
         int delta = median_offset - offset[i];
         /*std::cout << "adjusting delay of node " << i << " by " << delta

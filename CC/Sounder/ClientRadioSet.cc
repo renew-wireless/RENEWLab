@@ -9,10 +9,9 @@
 
 #include "include/ClientRadioSet.h"
 
-#include <SoapySDR/Errors.hpp>
-#include <SoapySDR/Formats.hpp>
-#include <SoapySDR/Time.hpp>
-
+#include "SoapySDR/Errors.hpp"
+#include "SoapySDR/Formats.hpp"
+#include "SoapySDR/Time.hpp"
 #include "include/Radio.h"
 #include "include/comms-lib.h"
 #include "include/logger.h"
@@ -25,7 +24,12 @@ using json = nlohmann::json;
 static void initAGC(SoapySDR::Device* dev, Config* cfg);
 
 static void freeRadios(std::vector<Radio*>& radios) {
-  for (size_t i = 0; i < radios.size(); i++) delete radios.at(i);
+  for (size_t i = 0; i < radios.size(); i++) {
+    if (radios.at(i) != nullptr) {
+      delete radios.at(i);
+      radios.at(i) = nullptr;
+    }
+  }
 }
 
 ClientRadioSet::ClientRadioSet(Config* cfg) : _cfg(cfg) {
@@ -76,7 +80,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg) : _cfg(cfg) {
   radios.shrink_to_fit();
 
   for (size_t i = 0; i < radios.size(); i++) {
-    auto dev = radios.at(i)->dev;
+    auto* dev = radios.at(i)->RawDev();
     std::cout << _cfg->cl_sdr_ids().at(i) << ": Front end "
               << dev->getHardwareInfo()["frontend"] << std::endl;
     for (auto ch : channels) {
@@ -150,11 +154,11 @@ ClientRadioSet::ClientRadioSet(Config* cfg) : _cfg(cfg) {
   } else {
     //beaconSize + 82 (BS FE delay) + 68 (path delay) + 17 (correlator delay) + 82 (Client FE Delay)
     for (size_t i = 0; i < radios.size(); i++) {
-      int clTrigOffset = _cfg->beacon_size() + _cfg->tx_advance(i);
-      int sf_start = clTrigOffset / _cfg->samps_per_slot();
-      int sp_start = clTrigOffset % _cfg->samps_per_slot();
+      const int clTrigOffset = _cfg->beacon_size() + _cfg->tx_advance(i);
+      const int sf_start = clTrigOffset / _cfg->samps_per_slot();
+      const int sp_start = clTrigOffset % _cfg->samps_per_slot();
 
-      auto dev = radios.at(i)->dev;
+      auto* dev = radios.at(i)->RawDev();
 
       // hw_frame is only for Iris
       if (_cfg->hw_framer() == true) {
@@ -277,7 +281,7 @@ void ClientRadioSet::init(ClientRadioContext* context) {
     throw;
   }
   if (has_runtime_error == false) {
-    auto dev = radios.at(i)->dev;
+    auto* dev = radios.at(i)->RawDev();
     SoapySDR::Kwargs info = dev->getHardwareInfo();
 
     for (auto ch : channels) {
@@ -305,7 +309,7 @@ void ClientRadioSet::radioStop(void) {
     std::string corrConfStr = "{\"corr_enabled\":false}";
     std::string tddConfStr = "{\"tdd_enabled\":false}";
     for (Radio* stop_radio : radios) {
-      auto dev = stop_radio->dev;
+      auto* dev = stop_radio->RawDev();
       dev->writeSetting("CORR_CONFIG", corrConfStr);
       const auto timeStamp =
           SoapySDR::timeNsToTicks(dev->getHardwareTime(""), _cfg->rate());

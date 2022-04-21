@@ -11,10 +11,10 @@
 
 #include <unistd.h>
 
-#include <SoapySDR/Time.hpp>
 #include <atomic>
 #include <random>
 
+#include "SoapySDR/Time.hpp"
 #include "include/ClientRadioSet.h"
 #include "include/ClientRadioSetUHD.h"
 #include "include/comms-lib.h"
@@ -45,19 +45,19 @@ Receiver::Receiver(
 
   try {
     if (!pUseUHD) {
-      this->clientRadioSet_ =
+      this->client_radio_set_ =
           config_->client_present() ? new ClientRadioSet(config_) : nullptr;
       this->base_radio_set_ =
           config_->bs_present() ? new BaseRadioSet(config_) : nullptr;
-      this->clientRadioSetUHD_ = nullptr;
-      this->base_radio_setUHD_ = nullptr;
+      this->client_radio_set_UHD_ = nullptr;
+      this->base_radio_set_UHD_ = nullptr;
     } else {
       std::cout << "using pure uhd setting" << std::endl;
-      this->clientRadioSet_ = nullptr;
+      this->client_radio_set_ = nullptr;
       this->base_radio_set_ = nullptr;
-      this->clientRadioSetUHD_ =
+      this->client_radio_set_UHD_ =
           config_->client_present() ? new ClientRadioSetUHD(config_) : nullptr;
-      this->base_radio_setUHD_ =
+      this->base_radio_set_UHD_ =
           config_->bs_present() ? new BaseRadioSetUHD(config_) : nullptr;
     }
   } catch (std::exception& e) {
@@ -70,38 +70,38 @@ Receiver::Receiver(
   if (!pUseUHD) {
     if (((this->base_radio_set_ != nullptr) &&
          (this->base_radio_set_->getRadioNotFound())) ||
-        ((this->clientRadioSet_ != nullptr) &&
-         (this->clientRadioSet_->getRadioNotFound()))) {
+        ((this->client_radio_set_ != nullptr) &&
+         (this->client_radio_set_->getRadioNotFound()))) {
       if (this->base_radio_set_ != nullptr) {
         MLPD_WARN("Invalid Base Radio Setup: %d\n",
                   this->base_radio_set_ == nullptr);
         this->base_radio_set_->radioStop();
         delete this->base_radio_set_;
       }
-      if (this->clientRadioSet_ != nullptr) {
+      if (this->client_radio_set_ != nullptr) {
         MLPD_WARN("Invalid Client Radio Setup: %d\n",
-                  this->clientRadioSet_ == nullptr);
-        this->clientRadioSet_->radioStop();
-        delete this->clientRadioSet_;
+                  this->client_radio_set_ == nullptr);
+        this->client_radio_set_->radioStop();
+        delete this->client_radio_set_;
       }
       throw ReceiverException("Invalid Radio Setup");
     }
   } else {
-    if (((this->base_radio_setUHD_ != nullptr) &&
-         (this->base_radio_setUHD_->getRadioNotFound())) ||
-        ((this->clientRadioSetUHD_ != nullptr) &&
-         (this->clientRadioSetUHD_->getRadioNotFound()))) {
-      if (this->base_radio_setUHD_ != nullptr) {
+    if (((this->base_radio_set_UHD_ != nullptr) &&
+         (this->base_radio_set_UHD_->getRadioNotFound())) ||
+        ((this->client_radio_set_UHD_ != nullptr) &&
+         (this->client_radio_set_UHD_->getRadioNotFound()))) {
+      if (this->base_radio_set_UHD_ != nullptr) {
         MLPD_WARN("Invalid Base Radio Setup: %d\n",
-                  this->base_radio_setUHD_ == nullptr);
-        this->base_radio_setUHD_->radioStop();
-        delete this->base_radio_setUHD_;
+                  this->base_radio_set_UHD_ == nullptr);
+        this->base_radio_set_UHD_->radioStop();
+        delete this->base_radio_set_UHD_;
       }
-      if (this->clientRadioSetUHD_ != nullptr) {
+      if (this->client_radio_set_UHD_ != nullptr) {
         MLPD_WARN("Invalid Client Radio Setup: %d\n",
-                  this->clientRadioSetUHD_ == nullptr);
-        this->clientRadioSetUHD_->radioStop();
-        delete this->clientRadioSetUHD_;
+                  this->client_radio_set_UHD_ == nullptr);
+        this->client_radio_set_UHD_->radioStop();
+        delete this->client_radio_set_UHD_;
       }
       throw ReceiverException("Invalid Radio Setup");
     }
@@ -113,54 +113,55 @@ Receiver::Receiver(
 
 Receiver::~Receiver() {
   MLPD_TRACE("Radio Set cleanup, Base: %d, Client: %d\n",
-             this->base_radio_set_ == nullptr, this->clientRadioSet_ == nullptr,
-             this->base_radio_setUHD_ == nullptr,
-             this->clientRadioSetUHD_ == nullptr);
+             this->base_radio_set_ == nullptr,
+             this->client_radio_set_ == nullptr,
+             this->base_radio_set_UHD_ == nullptr,
+             this->client_radio_set_UHD_ == nullptr);
   if (!pUseUHD) {
     if (this->base_radio_set_ != nullptr) {
       this->base_radio_set_->radioStop();
       delete this->base_radio_set_;
     }
-    if (this->clientRadioSet_ != nullptr) {
-      this->clientRadioSet_->radioStop();
-      delete this->clientRadioSet_;
+    if (this->client_radio_set_ != nullptr) {
+      this->client_radio_set_->radioStop();
+      delete this->client_radio_set_;
     }
   } else {
-    if (this->base_radio_setUHD_ != nullptr) {
-      this->base_radio_setUHD_->radioStop();
-      delete this->base_radio_setUHD_;
+    if (this->base_radio_set_UHD_ != nullptr) {
+      this->base_radio_set_UHD_->radioStop();
+      delete this->base_radio_set_UHD_;
     }
-    if (this->clientRadioSetUHD_ != nullptr) {
-      this->clientRadioSetUHD_->radioStop();
-      delete this->clientRadioSetUHD_;
+    if (this->client_radio_set_UHD_ != nullptr) {
+      this->client_radio_set_UHD_->radioStop();
+      delete this->client_radio_set_UHD_;
     }
   }
 
-  for (auto memory : zeros) {
+  for (auto memory : zeros_) {
     free(memory);
   }
-  zeros.clear();
+  zeros_.clear();
 }
 
 void Receiver::initBuffers() {
   size_t frameTimeLen = config_->samps_per_frame();
-  txFrameDelta = int(TIME_DELTA / (1e3 * config_->getFrameDurationSec()));
-  txTimeDelta = txFrameDelta * frameTimeLen;
+  txFrameDelta_ = int(TIME_DELTA / (1e3 * config_->getFrameDurationSec()));
+  txTimeDelta_ = txFrameDelta_ * frameTimeLen;
 
-  zeros.resize(2);
-  pilotbuffA.resize(2);
-  pilotbuffB.resize(2);
-  for (auto& memory : zeros) {
+  zeros_.resize(2);
+  pilotbuffA_.resize(2);
+  pilotbuffB_.resize(2);
+  for (auto& memory : zeros_) {
     memory = calloc(config_->samps_per_slot(), sizeof(int16_t) * 2);
     if (memory == NULL) {
       throw std::runtime_error("Error allocating memory");
     }
   }
-  pilotbuffA.at(0) = config_->pilot_ci16().data();
+  pilotbuffA_.at(0) = config_->pilot_ci16().data();
   if (config_->cl_sdr_ch() == 2) {
-    pilotbuffA.at(1) = zeros.at(0);
-    pilotbuffB.at(1) = config_->pilot_ci16().data();
-    pilotbuffB.at(0) = zeros.at(1);
+    pilotbuffA_.at(1) = zeros_.at(0);
+    pilotbuffB_.at(1) = config_->pilot_ci16().data();
+    pilotbuffB_.at(0) = zeros_.at(1);
   }
 }
 
@@ -237,8 +238,8 @@ void Receiver::go() {
       this->base_radio_set_->radioStart();  // hardware trigger
     }
   } else {
-    if (this->base_radio_setUHD_ != NULL) {
-      this->base_radio_setUHD_->radioStart();  // hardware trigger
+    if (this->base_radio_set_UHD_ != NULL) {
+      this->base_radio_set_UHD_->radioStart();  // hardware trigger
     }
   }
 }
@@ -260,10 +261,10 @@ void Receiver::baseTxBeacon(int radio_id, int cell, int frame_id,
     if (config_->beacon_radio() == (size_t)radio_id) {
       size_t bcn_ch = config_->beacon_channel();
       beaconbuff.at(bcn_ch) = config_->beacon_ci16().data();
-      if (config_->bs_sdr_ch() > 1) beaconbuff.at(1 - bcn_ch) = zeros.at(0);
+      if (config_->bs_sdr_ch() > 1) beaconbuff.at(1 - bcn_ch) = zeros_.at(0);
     } else {  // set both channels to zeros
       for (size_t ch = 0; ch < config_->bs_sdr_ch(); ++ch)
-        beaconbuff.at(ch) = zeros.at(ch);
+        beaconbuff.at(ch) = zeros_.at(ch);
     }
   }
   int r_tx;
@@ -272,7 +273,7 @@ void Receiver::baseTxBeacon(int radio_id, int cell, int frame_id,
         radio_id, cell, beaconbuff.data(), kStreamEndBurst,
         base_time);  // assume beacon is first slot
   } else {
-    r_tx = this->base_radio_setUHD_->radioTx(
+    r_tx = this->base_radio_set_UHD_->radioTx(
         radio_id, cell, beaconbuff.data(), kStreamEndBurst,
         base_time);  // assume beacon is first slot
   }
@@ -330,8 +331,8 @@ int Receiver::baseTxData(int radio_id, int cell, int frame_id,
         r = this->base_radio_set_->radioTx(radio_id, cell, dl_txbuff.data(),
                                            flagsTxData, txTime);
       } else {
-        r = this->base_radio_setUHD_->radioTx(radio_id, cell, dl_txbuff.data(),
-                                              flagsTxData, txTime);
+        r = this->base_radio_set_UHD_->radioTx(radio_id, cell, dl_txbuff.data(),
+                                               flagsTxData, txTime);
       }
       if (r < num_samps) {
         MLPD_WARN("BAD Write: %d/%d\n", r, num_samps);
@@ -475,7 +476,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
               radio_id, cell, samp_buffer.data(), config_->samps_per_slot(),
               rxTimeBs);
         } else {
-          bs_sync_ret = this->base_radio_setUHD_->radioRx(
+          bs_sync_ret = this->base_radio_set_UHD_->radioRx(
               radio_id, cell, samp_buffer.data(), config_->samps_per_slot(),
               rxTimeBs);
         }
@@ -547,7 +548,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
       if (!pUseUHD) {
         assert(this->base_radio_set_ != NULL);
       } else {
-        assert(this->base_radio_setUHD_ != NULL);
+        assert(this->base_radio_set_UHD_ != NULL);
       }
       ant_id = radio_id * num_channels;
 
@@ -568,11 +569,11 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
         } else {
           if (config_->isPilot(frame_id, slot_id) ||
               config_->isUlData(frame_id, slot_id))
-            r = this->base_radio_setUHD_->radioRx(radio_id, cell, samp,
-                                                  rxTimeBs);
+            r = this->base_radio_set_UHD_->radioRx(radio_id, cell, samp,
+                                                   rxTimeBs);
           else
-            r = this->base_radio_setUHD_->radioRx(radio_id, cell,
-                                                  samp_buffer.data(), rxTimeBs);
+            r = this->base_radio_set_UHD_->radioRx(
+                radio_id, cell, samp_buffer.data(), rxTimeBs);
         }
 
         if (r < 0) {
@@ -590,11 +591,11 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
           if (config_->dl_data_slot_present() == true) {
             while (-1 != baseTxData(radio_id, cell, frame_id, rxTimeBs))
               ;
-            this->notifyPacket(kBS, frame_id + this->txFrameDelta, 0, radio_id,
+            this->notifyPacket(kBS, frame_id + this->txFrameDelta_, 0, radio_id,
                                bs_tx_buff_size);  // Notify new frame
           } else {
             this->baseTxBeacon(radio_id, cell, frame_id,
-                               rxTimeBs + txTimeDelta);
+                               rxTimeBs + txTimeDelta_);
           }  // end if config_->dul_data_slot_present()
         }
         if (!config_->isPilot(frame_id, slot_id) &&
@@ -625,8 +626,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
             break;
           }
         } else {
-          if (this->base_radio_setUHD_->radioRx(radio_id, cell, samp,
-                                                frameTime) < 0) {
+          if (this->base_radio_set_UHD_->radioRx(radio_id, cell, samp,
+                                                 frameTime) < 0) {
             config_->running(false);
             break;
           }
@@ -653,7 +654,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
           if (config_->dl_data_slot_present() == true) {
             while (-1 != baseTxData(radio_id, cell, frame_id, frameTime))
               ;
-            this->notifyPacket(kBS, frame_id + this->txFrameDelta, 0, radio_id,
+            this->notifyPacket(kBS, frame_id + this->txFrameDelta_, 0, radio_id,
                                bs_tx_buff_size);  // Notify new frame
           }
         }
@@ -753,9 +754,9 @@ void Receiver::clientTxRx(int tid) {
   clock_gettime(CLOCK_MONOTONIC, &tv);
 
   if (!pUseUHD) {
-    assert(clientRadioSet_ != NULL);
+    assert(client_radio_set_ != NULL);
   } else {
-    assert(clientRadioSetUHD_ != NULL);
+    assert(client_radio_set_UHD_ != NULL);
   }
   while (config_->running() == true) {
     clock_gettime(CLOCK_MONOTONIC, &tv2);
@@ -765,9 +766,9 @@ void Receiver::clientTxRx(int tid) {
       int total_trigs;
 
       if (!pUseUHD) {
-        total_trigs = clientRadioSet_->triggers(tid);
+        total_trigs = client_radio_set_->triggers(tid);
       } else {
-        total_trigs = clientRadioSetUHD_->triggers(tid);
+        total_trigs = client_radio_set_UHD_->triggers(tid);
       }
       std::cout << "new triggers: " << total_trigs - all_trigs
                 << ", total: " << total_trigs << std::endl;
@@ -782,9 +783,10 @@ void Receiver::clientTxRx(int tid) {
     for (size_t i = 0; i < rxSyms; i++) {
       int r;
       if (!pUseUHD) {
-        r = clientRadioSet_->radioRx(tid, rxbuff.data(), NUM_SAMPS, rxTime);
+        r = client_radio_set_->radioRx(tid, rxbuff.data(), NUM_SAMPS, rxTime);
       } else {
-        r = clientRadioSetUHD_->radioRx(tid, rxbuff.data(), NUM_SAMPS, rxTime);
+        r = client_radio_set_UHD_->radioRx(tid, rxbuff.data(), NUM_SAMPS,
+                                           rxTime);
       }
       if (r == NUM_SAMPS) {
         if (i == 0) firstRxTime = rxTime;
@@ -797,17 +799,17 @@ void Receiver::clientTxRx(int tid) {
     if (receiveErrors == false) {
       // transmit loop
       txTime = firstRxTime & 0xFFFFFFFF00000000;
-      txTime += ((long long)this->txFrameDelta << 32);
+      txTime += ((long long)this->txFrameDelta_ << 32);
       txTime += ((long long)txStartSym << 16);
       //printf("rxTime %llx, txTime %llx \n", firstRxTime, txTime);
       for (size_t i = 0; i < tx_slots; i++) {
         int r;
         if (!pUseUHD) {
-          r = clientRadioSet_->radioTx(tid, ul_txbuff.data(), NUM_SAMPS, 1,
-                                       txTime);
+          r = client_radio_set_->radioTx(tid, ul_txbuff.data(), NUM_SAMPS, 1,
+                                         txTime);
         } else {
-          r = clientRadioSetUHD_->radioTx(tid, ul_txbuff.data(), NUM_SAMPS, 1,
-                                          txTime);
+          r = client_radio_set_UHD_->radioTx(tid, ul_txbuff.data(), NUM_SAMPS,
+                                             1, txTime);
         }
         if (r == NUM_SAMPS) {
           txTime += 0x10000;
@@ -832,11 +834,11 @@ void Receiver::clientTxPilots(size_t user_id, long long base_time) {
                      config_->tx_advance(user_id);
   int r;
   if (!pUseUHD) {
-    r = clientRadioSet_->radioTx(user_id, pilotbuffA.data(), num_samps, flags,
-                                 txTime);
+    r = client_radio_set_->radioTx(user_id, pilotbuffA_.data(), num_samps,
+                                   flags, txTime);
   } else {
-    r = clientRadioSetUHD_->radioTx(user_id, pilotbuffA.data(), num_samps,
-                                    flags, txTime);
+    r = client_radio_set_UHD_->radioTx(user_id, pilotbuffA_.data(), num_samps,
+                                       flags, txTime);
   }
 
   if (r < num_samps) {
@@ -847,11 +849,11 @@ void Receiver::clientTxPilots(size_t user_id, long long base_time) {
              config_->cl_pilot_slots().at(user_id).at(1) * num_samps -
              config_->tx_advance(user_id);
     if (!pUseUHD) {
-      r = clientRadioSet_->radioTx(user_id, pilotbuffB.data(), num_samps,
-                                   kStreamEndBurst, txTime);
+      r = client_radio_set_->radioTx(user_id, pilotbuffB_.data(), num_samps,
+                                     kStreamEndBurst, txTime);
     } else {
-      r = clientRadioSetUHD_->radioTx(user_id, pilotbuffB.data(), num_samps,
-                                      kStreamEndBurst, txTime);
+      r = client_radio_set_UHD_->radioTx(user_id, pilotbuffB_.data(), num_samps,
+                                         kStreamEndBurst, txTime);
     }
     if (r < num_samps) {
       MLPD_WARN("BAD Write: %d/%d\n", r, num_samps);
@@ -896,11 +898,11 @@ int Receiver::clientTxData(int tid, int frame_id, long long base_time) {
         flagsTxUlData = kStreamEndBurst;  // HAS_TIME & END_BURST, fixme
       int r;
       if (!pUseUHD) {
-        r = clientRadioSet_->radioTx(tid, ul_txbuff.data(), num_samps,
-                                     flagsTxUlData, txTime);
+        r = client_radio_set_->radioTx(tid, ul_txbuff.data(), num_samps,
+                                       flagsTxUlData, txTime);
       } else {
-        r = clientRadioSetUHD_->radioTx(tid, ul_txbuff.data(), num_samps,
-                                        flagsTxUlData, txTime);
+        r = client_radio_set_UHD_->radioTx(tid, ul_txbuff.data(), num_samps,
+                                           flagsTxUlData, txTime);
       }
       if (r < num_samps) {
         MLPD_WARN("BAD Write: %d/%d\n", r, num_samps);
@@ -944,8 +946,8 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   }
 
   MLPD_INFO("Scheduling TX: %zu Frames (%lf ms) in the future!\n",
-            this->txFrameDelta,
-            this->txFrameDelta * (1e3 * config_->getFrameDurationSec()));
+            this->txFrameDelta_,
+            this->txFrameDelta_ * (1e3 * config_->getFrameDurationSec()));
 
   int SYNC_NUM_SAMPS = config_->samps_per_frame();
   std::vector<std::complex<int16_t>> syncbuff0(SYNC_NUM_SAMPS, 0);
@@ -999,11 +1001,11 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
     sleep(UHD_INIT_TIME_SEC);
     while (cl_sync_ret < 0) {
       if (!pUseUHD) {
-        cl_sync_ret = clientRadioSet_->radioRx(tid, syncrxbuff.data(),
-                                               SYNC_NUM_SAMPS, rxTime);
+        cl_sync_ret = client_radio_set_->radioRx(tid, syncrxbuff.data(),
+                                                 SYNC_NUM_SAMPS, rxTime);
       } else {
-        cl_sync_ret = clientRadioSetUHD_->radioRx(tid, syncrxbuff.data(),
-                                                  SYNC_NUM_SAMPS, rxTime);
+        cl_sync_ret = client_radio_set_UHD_->radioRx(tid, syncrxbuff.data(),
+                                                     SYNC_NUM_SAMPS, rxTime);
       }
     }
   }
@@ -1015,11 +1017,11 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
          find_beacon_retry++) {
       int r;
       if (!pUseUHD) {
-        r = clientRadioSet_->radioRx(tid, syncrxbuff.data(), SYNC_NUM_SAMPS,
-                                     rxTime);
+        r = client_radio_set_->radioRx(tid, syncrxbuff.data(), SYNC_NUM_SAMPS,
+                                       rxTime);
       } else {
-        r = clientRadioSetUHD_->radioRx(tid, syncrxbuff.data(), SYNC_NUM_SAMPS,
-                                        rxTime);
+        r = client_radio_set_UHD_->radioRx(tid, syncrxbuff.data(),
+                                           SYNC_NUM_SAMPS, rxTime);
       }
       if (r != SYNC_NUM_SAMPS) {
         MLPD_WARN("BAD SYNC Receive( %d / %d ) at Time %lld\n", r,
@@ -1041,11 +1043,11 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
     if (rx_offset > 0) {
       int rx_data;
       if (!pUseUHD) {
-        rx_data =
-            clientRadioSet_->radioRx(tid, syncrxbuff.data(), rx_offset, rxTime);
+        rx_data = client_radio_set_->radioRx(tid, syncrxbuff.data(), rx_offset,
+                                             rxTime);
       } else {
-        rx_data = clientRadioSetUHD_->radioRx(tid, syncrxbuff.data(), rx_offset,
-                                              rxTime);
+        rx_data = client_radio_set_UHD_->radioRx(tid, syncrxbuff.data(),
+                                                 rx_offset, rxTime);
       }
       if (rx_data != rx_offset) {
         MLPD_WARN("Rx data: %d : %d failed to align sync read\n", rx_data,
@@ -1078,18 +1080,18 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
       break;
     }
     if (!pUseUHD) {
-      r = clientRadioSet_->radioRx(tid, syncrxbuff.data(),
-                                   NUM_SAMPS + rx_offset, rxTime);
+      r = client_radio_set_->radioRx(tid, syncrxbuff.data(),
+                                     NUM_SAMPS + rx_offset, rxTime);
     } else {
-      r = clientRadioSetUHD_->radioRx(tid, syncrxbuff.data(),
-                                      NUM_SAMPS + rx_offset, rxTime);
+      r = client_radio_set_UHD_->radioRx(tid, syncrxbuff.data(),
+                                         NUM_SAMPS + rx_offset, rxTime);
     }
     if (r < 0) {
       config_->running(false);
       break;
     }
     if (config_->ul_data_slot_present() == true) {
-      this->notifyPacket(kClient, frame_id + this->txFrameDelta, 0, tid,
+      this->notifyPacket(kClient, frame_id + this->txFrameDelta_, 0, tid,
                          tx_buffer_size);  // Notify new frame
     }
 
@@ -1136,7 +1138,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
       while (-1 != this->clientTxData(tid, frame_id, rxTime))
         ;
     } else {
-      this->clientTxPilots(tid, rxTime + txTimeDelta);
+      this->clientTxPilots(tid, rxTime + txTimeDelta_);
     }  // end if config_->ul_data_slot_present()
 
     slot_id++;
@@ -1167,14 +1169,14 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
         }
 
         if (!pUseUHD) {
-          if ((r = this->clientRadioSet_->radioRx(tid, samp, NUM_SAMPS,
-                                                  rxTime)) < 0) {
+          if ((r = this->client_radio_set_->radioRx(tid, samp, NUM_SAMPS,
+                                                    rxTime)) < 0) {
             config_->running(false);
             break;
           }
         } else {
-          if ((r = this->clientRadioSetUHD_->radioRx(tid, samp, NUM_SAMPS,
-                                                     rxTime)) < 0) {
+          if ((r = this->client_radio_set_UHD_->radioRx(tid, samp, NUM_SAMPS,
+                                                        rxTime)) < 0) {
             config_->running(false);
             break;
           }
@@ -1191,11 +1193,11 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
         }
       } else {
         if (!pUseUHD) {
-          r = this->clientRadioSet_->radioRx(tid, rxbuff.data(), NUM_SAMPS,
-                                             rxTime);
+          r = this->client_radio_set_->radioRx(tid, rxbuff.data(), NUM_SAMPS,
+                                               rxTime);
         } else {
-          r = this->clientRadioSetUHD_->radioRx(tid, rxbuff.data(), NUM_SAMPS,
-                                                rxTime);
+          r = this->client_radio_set_UHD_->radioRx(tid, rxbuff.data(),
+                                                   NUM_SAMPS, rxTime);
         }
         if (r < 0) {
           config_->running(false);
