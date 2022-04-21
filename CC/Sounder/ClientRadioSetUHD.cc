@@ -6,44 +6,20 @@
  Initializes and Configures Client Radios
 ----------------------------------------------------------
 */
-
 #include "include/ClientRadioSetUHD.h"
 #include "include/RadioUHD.h"
 #include "include/comms-lib.h"
 #include "include/logger.h"
 #include "include/macros.h"
 #include "include/utils.h"
-#include "nlohmann/json.hpp"
-#include <SoapySDR/Errors.hpp>
-#include <SoapySDR/Formats.hpp>
-#include <SoapySDR/Time.hpp>
-
-#include <uhd/utils/thread.hpp>
-#include <uhd/utils/safe_main.hpp>
-#include <uhd/usrp/multi_usrp.hpp>
-#include <boost/program_options.hpp>
-#include <boost/format.hpp>
-#include <boost/thread.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/algorithm/string.hpp>
-#include <iostream>
-#include <complex>
-
-#include <SoapySDR/Time.hpp>
-#include <atomic>
-#include <random>
-#include <unistd.h>
 
 using json = nlohmann::json;
 
-
-static void initAGC(uhd::usrp::multi_usrp::sptr* dev, Config* cfg);
-
+//static void initAGC(uhd::usrp::multi_usrp::sptr* dev, Config* cfg);
 
 static void freeRadios(RadioUHD*& radios)
 {
-//    for (size_t i = 0; i < radios.size(); i++)
-//        delete radios.at(i);
+    delete radios;
 }
 
 ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg)
@@ -153,10 +129,6 @@ ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg)
     else {
         //beaconSize + 82 (BS FE delay) + 68 (path delay) + 17 (correlator delay) + 82 (Client FE Delay)
         std::cout<<"checking tx advance "<<_cfg->tx_advance(0)<<std::endl;
-        int clTrigOffset = _cfg->beacon_size() + _cfg->tx_advance(0);
-        int sf_start = clTrigOffset / _cfg->samps_per_slot();
-        int sp_start = clTrigOffset % _cfg->samps_per_slot();
-
         radios->dev->set_time_source("internal");
         radios->dev->set_clock_source("internal");
         radios->dev->set_time_unknown_pps(uhd::time_spec_t(0.0));
@@ -250,7 +222,13 @@ void ClientRadioSetUHD::radioStop(void)
     MLPD_TRACE("Stopping radio...\n");
 }
 
-int ClientRadioSetUHD::triggers(int i) { return (radios->getTriggers()); }
+int ClientRadioSetUHD::triggers(int i) {
+    if (i > (int)radios->dev->get_num_mboards()) {
+        std::cout << "invalid radio id " << i << std::endl;
+        return 0;
+    }
+    return (radios->getTriggers());
+}
 
 int ClientRadioSetUHD::radioRx(size_t radio_id, void* const* buffs, int numSamps, long long& frameTime){
     if (radio_id < radios->dev->get_num_mboards()) {
@@ -285,6 +263,10 @@ int ClientRadioSetUHD::radioRx(size_t radio_id, void* const* buffs, int numSamps
 int ClientRadioSetUHD::radioTx(size_t radio_id, const void* const* buffs,
 int numSamps, int flags, long long& frameTime)
 {
+    if (radio_id > radios->dev->get_num_mboards()) {
+        std::cout << "invalid radio id " << radio_id << std::endl;
+        return 0;
+    }
     long long frameTimeNs = SoapySDR::ticksToTimeNs(frameTime, _cfg->rate());
     return radios->xmit(buffs, numSamps, flags, frameTimeNs);
 }
@@ -292,4 +274,4 @@ int numSamps, int flags, long long& frameTime)
 // Update for UHD multi USRP
 // not used as if kuseUHD == true, going to set this function to do nothing
 // will modify if errors comes up when debugging
-static void initAGC(uhd::usrp::multi_usrp::sptr* dev, Config* cfg){}
+//static void initAGC(uhd::usrp::multi_usrp::sptr* dev, Config* cfg){}
