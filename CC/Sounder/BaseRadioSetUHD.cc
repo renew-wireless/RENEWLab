@@ -9,29 +9,12 @@
  Initializes and Configures Radios in the massive-MIMO base station 
 ---------------------------------------------------------------------
 */
-
 #include "include/BaseRadioSetUHD.h"
 #include "include/RadioUHD.h"
 #include "include/comms-lib.h"
 #include "include/logger.h"
 #include "include/macros.h"
 #include "include/utils.h"
-
-#include "nlohmann/json.hpp"
-#include <SoapySDR/Errors.hpp>
-#include <SoapySDR/Formats.hpp>
-#include <SoapySDR/Time.hpp>
-
-#include <uhd/utils/thread.hpp>
-#include <uhd/utils/safe_main.hpp>
-#include <uhd/usrp/multi_usrp.hpp>
-#include <boost/program_options.hpp>
-#include <boost/format.hpp>
-#include <boost/thread.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/algorithm/string.hpp>
-#include <iostream>
-#include <complex>
 
 using json = nlohmann::json;
 static constexpr int kMaxOffsetDiff = 6;
@@ -285,8 +268,8 @@ void* BaseRadioSetUHD::configure_launch(void* in_context)
 
 void BaseRadioSetUHD::configure(BaseRadioContext* context)
 {
-    int i = context->tid;
-    int c = context->cell;
+//    int i = context->tid;
+//    int c = context->cell;
     std::atomic_ulong* thread_count = context->thread_count;
     delete context;
 
@@ -305,15 +288,9 @@ void BaseRadioSetUHD::configure(BaseRadioContext* context)
 
 uhd::usrp::multi_usrp::sptr BaseRadioSetUHD::baseRadio(size_t cellId)
 {
-//    if (cellId < hubs.size())
-//        return (hubs.at(cellId));
-//    if (cellId < bsRadios.size() && bsRadios.at(cellId).size() > 0)
-//        return bsRadios.at(cellId).at(0)->dev;
-//    return NULL;
-
-    // update for UHD multi USRP
+    // future edit when doing multi USRP
+    std::cout << "cell ID is " << cellId << std::endl;
     return NULL;
-//    return bsRadios->dev;
 }
 
 void BaseRadioSetUHD::sync_delays(size_t cellIdx){
@@ -375,12 +352,17 @@ void BaseRadioSetUHD::radioTx(const void* const* buffs)
 int BaseRadioSetUHD::radioTx(size_t radio_id, size_t cell_id,
     const void* const* buffs, int flags, long long& frameTime)
 {
+    (void) radio_id;
+    (void ) cell_id;
     int w;
     // for UHD device xmit from host using frameTimeNs
 //    if (!kUseUHD) {
 //        w = bsRadios.at(cell_id).at(radio_id)->xmit(
 //            buffs, _cfg->samps_per_symbol(), flags, frameTime);
 //    } else {
+// future edit on multi usrp:
+//    std::cout << "radio id is " << radio_id << std::endl;
+//    std::cout << "cell id is " << cell_id << std::endl;
     long long frameTimeNs = SoapySDR::ticksToTimeNs(frameTime, _cfg->rate());
     w = bsRadios->xmit(buffs, _cfg->samps_per_slot(), flags, frameTimeNs);
 //    }
@@ -394,7 +376,6 @@ int BaseRadioSetUHD::radioTx(size_t radio_id, size_t cell_id,
 //              << w << " and status " << s << std::endl;
 #endif
 //    std::cout<<"running tx 2" << std::endl;
-
     return w;
 }
 
@@ -406,8 +387,8 @@ void BaseRadioSetUHD::radioRx(void* const* buffs)
 //    for (size_t c = 0; c < _cfg->num_cells(); c++) {
     for (size_t i = 0; i < bsRadios->dev->get_num_mboards(); i++) {
         buff = buffs + (i * 2);
+        bsRadios->recv(buff, _cfg->samps_per_slot(), frameTime);
     }
-    bsRadios->recv(buff, _cfg->samps_per_slot(), frameTime);
 //        }
 //    }
 }
