@@ -1,28 +1,12 @@
 #include "config.h"
-#include <SoapySDR/Device.hpp>
-#include <chrono>
-#include <complex>
-#include <csignal>
-#include <cstddef>
-#include <cstdint>
-#include <cstdlib>
-#include <fstream>
-#include <iostream>
-#include <string>
 
+#include <uhd/usrp/multi_usrp.hpp>
+#include "nlohmann/json.hpp"
+#include <SoapySDR/Formats.hpp>
 #include <SoapySDR/Time.hpp>
-#include <uhd/usrp/multi_usrp.hpp>
-#include <uhd/stream.hpp>
-#include <uhd/utils/thread.hpp>
-#include <uhd/utils/safe_main.hpp>
-#include <uhd/usrp/multi_usrp.hpp>
-#include <boost/program_options.hpp>
-#include <boost/format.hpp>
-#include <boost/thread.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/algorithm/string.hpp>
-#include <iostream>
-#include <complex>
+
+#ifndef BASE_RADIO_SET_UHD_H
+#define BASE_RADIO_SET_UHD_H
 
 class RadioUHD;
 
@@ -71,3 +55,6 @@ private:
     RadioUHD* bsRadios;
     bool radioNotFound;
 };
+
+#endif /* BASE_RADIO_SET_UHD_H */
+
