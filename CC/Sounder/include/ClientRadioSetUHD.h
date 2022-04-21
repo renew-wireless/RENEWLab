@@ -1,5 +1,8 @@
 #include "config.h"
-#include <SoapySDR/Device.hpp>
+#include "nlohmann/json.hpp"
+#include <SoapySDR/Errors.hpp>
+#include <SoapySDR/Formats.hpp>
+#include <SoapySDR/Time.hpp>
 
 #ifndef CLIENT_RADIO_SET_UHD_H
 #define CLIENT_RADIO_SET_UHD_H
