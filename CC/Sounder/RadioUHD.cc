@@ -5,9 +5,9 @@
 #include "include/macros.h"
 
 #ifdef UHD_HAS_MSG_HPP
-#include <uhd/utils/msg.hpp>
+#include "uhd/utils/msg.hpp"
 #else
-#include <uhd/utils/log_add.hpp>
+#include "uhd/utils/log_add.hpp"
 #endif
 
 void RadioUHD::dev_init(Config* _cfg, int ch, double rxgain, double txgain) {
@@ -75,15 +75,8 @@ void RadioUHD::drain_buffers(std::vector<void*> buffs, int symSamp) {
 
 RadioUHD::RadioUHD(const std::map<std::string, std::string>& args,
                    const char uhdFmt[], const std::vector<size_t>& channels) {
-  //    dev = SoapySDR::Device::make(args);
   dev = uhd::usrp::multi_usrp::make(args);
-  //    uhd::stream_args_t stream_args("fc32");
   if (dev == NULL) throw std::invalid_argument("error making UHD:Device\n");
-  //    for (auto ch : channels) {
-  //        // update for UHD multi USRP
-  //        dev->set_rx_rate(rate, ch);
-  //        dev->set_tx_rate(rate, ch);
-  //    }
   const std::string& format = uhdFmt;
   std::string hostFormat;
   for (const char ch : format) {

@@ -14,10 +14,6 @@
 #include "include/macros.h"
 #include "include/utils.h"
 
-using json = nlohmann::json;
-
-//static void initAGC(uhd::usrp::multi_usrp::sptr* dev, Config* cfg);
-
 static void freeRadios(RadioUHD*& radios) { delete radios; }
 
 ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
@@ -111,8 +107,6 @@ ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
   std::cout << "ClientRadioSetUHD Init Check" << std::endl;
   std::cout << std::endl;
 
-  //    }
-
   // Update for UHD multi USRP
   if (radioNotFound == true) {
     std::cout << "some client serials were not "
@@ -154,7 +148,6 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
 
   // update for UHD multi USRP
   std::map<std::string, std::string> args;
-  //    SoapySDR::Kwargs args;
   args["timeout"] = "1000000";
   args["driver"] = "uhd";
   args["addr"] = _cfg->cl_sdr_ids().at(i);
@@ -180,8 +173,6 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
     throw;
   }
   if (has_runtime_error == false) {
-    //        auto dev = radios.at(i)->dev;
-    //        SoapySDR::Kwargs info = dev->getHardwareInfo();
     for (auto ch : channels) {
       std::cout << "check ch: " << ch << std::endl;
       auto new_ch = _cfg->cl_channel();
@@ -191,11 +182,6 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
           i);  // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
       radios->dev_init(_cfg, ch, rxgain, txgain);
     }
-
-    // Init AGC only for Iris device
-    //        if (kUseUHD == false) {
-    //            initAGC(dev, _cfg);
-    //        }
   }
   MLPD_TRACE("ClientRadioSet: Init complete\n");
   assert(thread_count->load() != 0);
@@ -233,16 +219,6 @@ int ClientRadioSetUHD::radioRx(size_t radio_id, void* const* buffs,
       std::cout << "client " << radio_id << " received " << ret << " at "
                 << frameTimeNs << std::endl;
 #endif
-    //        double a = radios->dev->get_time_now().get_real_secs();
-    //        std::cout << "time: " << a <<std::endl;
-    //        std::cout << "full seconds: " << radios->dev->get_time_now().get_full_secs() << std::endl;
-    //        std::cout << "frac seconds: " << radios->dev->get_time_now().get_frac_secs() << std::endl;
-
-    //        long long b = check_dev->getHardwareTime();
-    //        double utime = b / 1e9;
-    //        std::cout << "sopay way time in ns: " << b << std::endl;
-    //        std::cout << "soapy way time: " << utime <<std::endl;
-    //        }
     return ret;
   }
   std::cout << "invalid radio id " << radio_id << std::endl;
@@ -258,8 +234,3 @@ int ClientRadioSetUHD::radioTx(size_t radio_id, const void* const* buffs,
   long long frameTimeNs = SoapySDR::ticksToTimeNs(frameTime, _cfg->rate());
   return radios->xmit(buffs, numSamps, flags, frameTimeNs);
 }
-
-// Update for UHD multi USRP
-// not used as if kuseUHD == true, going to set this function to do nothing
-// will modify if errors comes up when debugging
-//static void initAGC(uhd::usrp::multi_usrp::sptr* dev, Config* cfg){}
