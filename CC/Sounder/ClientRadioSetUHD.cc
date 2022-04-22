@@ -63,45 +63,45 @@ ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
   //    }
   //    radios.shrink_to_fit();
 
-  if (num_radios != radios->dev->get_num_mboards()) {
+  if (num_radios != radios->RawDev()->get_num_mboards()) {
     radioNotFound = true;
   }
 
   // update for UHD multi USRP
-  for (size_t i = 0; i < radios->dev->get_num_mboards(); i++) {
-    auto dev = radios->dev;
+  for (size_t i = 0; i < radios->RawDev()->get_num_mboards(); i++) {
+    auto dev = radios->RawDev();
     std::cout << _cfg->cl_sdr_ids().at(i) << ": Front end "
               << dev->get_usrp_rx_info()["frontend"] << std::endl;
   }
 
   for (auto ch : channels) {
-    if (ch < radios->dev->get_rx_num_channels()) {
+    if (ch < radios->RawDev()->get_rx_num_channels()) {
       printf("RX Channel %zu\n", ch);
       printf("Actual RX sample rate: %fMSps...\n",
-             (radios->dev->get_rx_rate(ch) / 1e6));
+             (radios->RawDev()->get_rx_rate(ch) / 1e6));
       printf("Actual RX frequency: %fGHz...\n",
-             (radios->dev->get_rx_freq(ch) / 1e9));
-      printf("Actual RX gain: %f...\n", (radios->dev->get_rx_gain(ch)));
+             (radios->RawDev()->get_rx_freq(ch) / 1e9));
+      printf("Actual RX gain: %f...\n", (radios->RawDev()->get_rx_gain(ch)));
 
       printf("Actual RX bandwidth: %fM...\n",
-             (radios->dev->get_rx_bandwidth(ch) / 1e6));
+             (radios->RawDev()->get_rx_bandwidth(ch) / 1e6));
       printf("Actual RX antenna: %s...\n",
-             (radios->dev->get_rx_antenna(ch).c_str()));
+             (radios->RawDev()->get_rx_antenna(ch).c_str()));
     }
   }
 
   for (auto ch : channels) {
-    if (ch < radios->dev->get_tx_num_channels()) {
+    if (ch < radios->RawDev()->get_tx_num_channels()) {
       printf("TX Channel %zu\n", ch);
       printf("Actual TX sample rate: %fMSps...\n",
-             (radios->dev->get_tx_rate(ch) / 1e6));
+             (radios->RawDev()->get_tx_rate(ch) / 1e6));
       printf("Actual TX frequency: %fGHz...\n",
-             (radios->dev->get_tx_freq(ch) / 1e9));
-      printf("Actual TX gain: %f...\n", (radios->dev->get_tx_gain(ch)));
+             (radios->RawDev()->get_tx_freq(ch) / 1e9));
+      printf("Actual TX gain: %f...\n", (radios->RawDev()->get_tx_gain(ch)));
       printf("Actual TX bandwidth: %fM...\n",
-             (radios->dev->get_tx_bandwidth(ch) / 1e6));
+             (radios->RawDev()->get_tx_bandwidth(ch) / 1e6));
       printf("Actual TX antenna: %s...\n",
-             (radios->dev->get_tx_antenna(ch).c_str()));
+             (radios->RawDev()->get_tx_antenna(ch).c_str()));
     }
   }
   std::cout << "ClientRadioSetUHD Init Check" << std::endl;
@@ -115,9 +115,9 @@ ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
   } else {
     //beaconSize + 82 (BS FE delay) + 68 (path delay) + 17 (correlator delay) + 82 (Client FE Delay)
     std::cout << "checking tx advance " << _cfg->tx_advance(0) << std::endl;
-    radios->dev->set_time_source("internal");
-    radios->dev->set_clock_source("internal");
-    radios->dev->set_time_unknown_pps(uhd::time_spec_t(0.0));
+    radios->RawDev()->set_time_source("internal");
+    radios->RawDev()->set_clock_source("internal");
+    radios->RawDev()->set_time_unknown_pps(uhd::time_spec_t(0.0));
     radios->activateRecv();
     radios->activateXmit();
 
@@ -197,7 +197,7 @@ void ClientRadioSetUHD::radioStop(void) {
 }
 
 int ClientRadioSetUHD::triggers(int i) {
-  if (i > (int)radios->dev->get_num_mboards()) {
+  if (i > (int)radios->RawDev()->get_num_mboards()) {
     std::cout << "invalid radio id " << i << std::endl;
     return 0;
   }
@@ -206,7 +206,7 @@ int ClientRadioSetUHD::triggers(int i) {
 
 int ClientRadioSetUHD::radioRx(size_t radio_id, void* const* buffs,
                                int numSamps, long long& frameTime) {
-  if (radio_id < radios->dev->get_num_mboards()) {
+  if (radio_id < radios->RawDev()->get_num_mboards()) {
     int ret(0);
     // update for UHD multi USRP
     long long frameTimeNs(0);
@@ -227,7 +227,7 @@ int ClientRadioSetUHD::radioRx(size_t radio_id, void* const* buffs,
 
 int ClientRadioSetUHD::radioTx(size_t radio_id, const void* const* buffs,
                                int numSamps, int flags, long long& frameTime) {
-  if (radio_id > radios->dev->get_num_mboards()) {
+  if (radio_id > radios->RawDev()->get_num_mboards()) {
     std::cout << "invalid radio id " << radio_id << std::endl;
     return 0;
   }
