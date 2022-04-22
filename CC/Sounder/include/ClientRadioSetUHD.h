@@ -1,16 +1,21 @@
-#include <SoapySDR/Errors.hpp>
-#include <SoapySDR/Formats.hpp>
-#include <SoapySDR/Time.hpp>
+/**
+ * @file ClientRadioSetUHD.h
+ * @brief Declaration file for the ClientRadioSetUHD class.
+ */
+#ifndef CLIENT_RADIO_SET_UHD_H_
+#define CLIENT_RADIO_SET_UHD_H_
 
+#include <atomic>
+#include <cstddef>
+
+#include "RadioUHD.h"
 #include "config.h"
+
+#include "SoapySDR/Errors.hpp"
+#include "SoapySDR/Formats.hpp"
+#include "SoapySDR/Time.hpp"
+
 #include "nlohmann/json.hpp"
-
-#ifndef CLIENT_RADIO_SET_UHD_H
-#define CLIENT_RADIO_SET_UHD_H
-
-#pragma once
-
-class RadioUHD;
 
 class ClientRadioSetUHD {
  public:
@@ -38,4 +43,4 @@ class ClientRadioSetUHD {
   bool radioNotFound;
 };
 
-#endif /* CLIENT_RADIO_SET_UHD_H */
+#endif /* CLIENT_RADIO_SET_UHD_H_ */
