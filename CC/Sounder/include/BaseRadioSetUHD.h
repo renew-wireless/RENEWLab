@@ -1,14 +1,18 @@
-#include <SoapySDR/Formats.hpp>
-#include <SoapySDR/Time.hpp>
-#include <uhd/usrp/multi_usrp.hpp>
+/**
+ * @file BaseRadioSetUHD.h
+ * @brief Declaration file for the BaseRadioSetUHD class.
+ */
+
+#ifndef BASE_RADIO_SET_UHD_H_
+#define BASE_RADIO_SET_UHD_H_
+
+#include "SoapySDR/Formats.hpp"
+#include "SoapySDR/Time.hpp"
+#include "uhd/usrp/multi_usrp.hpp"
+#include "RadioUHD.h"
 
 #include "config.h"
 #include "nlohmann/json.hpp"
-
-#ifndef BASE_RADIO_SET_UHD_H
-#define BASE_RADIO_SET_UHD_H
-
-class RadioUHD;
 
 class BaseRadioSetUHD {
  public:
@@ -56,4 +60,4 @@ class BaseRadioSetUHD {
   bool radioNotFound;
 };
 
-#endif /* BASE_RADIO_SET_UHD_H */
+#endif /* BASE_RADIO_SET_UHD_H_ */
