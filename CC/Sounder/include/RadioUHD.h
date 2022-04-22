@@ -1,36 +1,34 @@
-/*
- Copyright (c) 2018-2019, Rice University
- RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
-
+/** @file RadioUHD.h
+  * @brief Declaration file for the RadioUHD class.
+  *
+  * Copyright (c) 2018-2022, Rice University
+  * RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
 */
+#ifndef RADIOUHD_H_
+#define RADIOUHD_H_
 
-#include <SoapySDR/Device.hpp>
-#include <SoapySDR/Errors.hpp>
-#include <uhd/usrp/multi_usrp.hpp>
+#include <cstdlib>
+#include <vector>
 
+#include "SoapySDR/Device.hpp"
+#include "SoapySDR/Types.hpp"
+#include "SoapySDR/Errors.hpp"
+#include "uhd/usrp/multi_usrp.hpp"
 #include "config.h"
-
-#ifndef RADIO_UHD_H
-#define RADIO_UHD_H
 
 class RadioUHD {
  private:
-  uhd::usrp::multi_usrp::sptr dev;
-  uhd::rx_streamer::sptr rxs;
-  uhd::tx_streamer::sptr txs;
-
-  void reset_DATA_clk_domain(void);
-  void dev_init(Config* _cfg, int ch, double rxgain, double txgain);
-  friend class ClientRadioSetUHD;
-  friend class BaseRadioSetUHD;
+  uhd::usrp::multi_usrp::sptr dev_;
+  uhd::rx_streamer::sptr rxs_;
+  uhd::tx_streamer::sptr txs_;
 
  public:
+  inline uhd::usrp::multi_usrp::sptr RawDev() const { return dev_; };
+
   void drain_buffers(std::vector<void*> buffs, int symSamp);
   RadioUHD(const std::map<std::string, std::string>& args, const char uhdFmt[],
            const std::vector<size_t>& channels);
-
   void activateXmit(void);
-
   ~RadioUHD(void);
   int recv(void* const* buffs, int samples, long long& frameTime);
   int activateRecv(const long long rxTime = 0, const size_t numSamps = 0,
@@ -41,6 +39,9 @@ class RadioUHD {
 
   void deactivateXmit(void);
   int getTriggers(void) const;
+
+  void dev_init(Config* _cfg, int ch, double rxgain, double txgain);
+  void reset_DATA_clk_domain(void);
 };
 
-#endif /* RADIO_UHD_H */
+#endif /* RADIOUHD_H_ */
