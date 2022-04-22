@@ -1,13 +1,15 @@
-#include <SoapySDR/Device.hpp>
+/**
+ * @file ClientRadioSet.h
+ * @brief Declaration file for the ClientRadioSet class.
+ */
+#ifndef CLIENT_RADIO_SET_H_
+#define CLIENT_RADIO_SET_H_
 
+#include <atomic>
+#include <cstddef>
+
+#include "Radio.h"
 #include "config.h"
-
-#ifndef CLIENT_RADIO_SET_H
-#define CLIENT_RADIO_SET_H
-
-#pragma once
-
-class Radio;
 
 class ClientRadioSet {
  public:
@@ -35,4 +37,4 @@ class ClientRadioSet {
   bool radioNotFound;
 };
 
-#endif /* CLIENT_RADIO_SET_H */
+#endif /* CLIENT_RADIO_SET_H_ */
