@@ -16,9 +16,11 @@
 #include <vector>
 
 #include "BaseRadioSet.h"
-#include "BaseRadioSetUHD.h"
 #include "ClientRadioSet.h"
-#include "ClientRadioSetUHD.h"
+#if defined(PURE_UHD)
+    #include "BaseRadioSetUHD.h"
+    #include "ClientRadioSetUHD.h"
+#endif
 #include "concurrentqueue.h"
 #include "config.h"
 #include "macros.h"
@@ -75,11 +77,14 @@ class Receiver {
 
  private:
   Config* config_;
+
+#if defined (PURE_UHD)
+  ClientRadioSetUHD* client_radio_set_;
+  BaseRadioSetUHD* base_radio_set_;
+#else
   ClientRadioSet* client_radio_set_;
   BaseRadioSet* base_radio_set_;
-
-  ClientRadioSetUHD* client_radio_set_UHD_;
-  BaseRadioSetUHD* base_radio_set_UHD_;
+#endif
 
   size_t thread_num_;
   // pointer of message_queue_
