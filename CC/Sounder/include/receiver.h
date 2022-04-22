@@ -18,8 +18,8 @@
 #include "BaseRadioSet.h"
 #include "ClientRadioSet.h"
 #if defined(PURE_UHD)
-    #include "BaseRadioSetUHD.h"
-    #include "ClientRadioSetUHD.h"
+#include "BaseRadioSetUHD.h"
+#include "ClientRadioSetUHD.h"
 #endif
 #include "concurrentqueue.h"
 #include "config.h"
@@ -78,7 +78,7 @@ class Receiver {
  private:
   Config* config_;
 
-#if defined (PURE_UHD)
+#if defined(PURE_UHD)
   ClientRadioSetUHD* client_radio_set_;
   BaseRadioSetUHD* base_radio_set_;
 #else

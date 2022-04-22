@@ -54,7 +54,7 @@ void RadioUHD::drain_buffers(std::vector<void*> buffs, int symSamp) {
                                               rxs_->get_num_channels());
     uhd::rx_metadata_t md;
     r = rxs_->recv(stream_buffs, symSamp, md, 0,
-                  (flags & SOAPY_SDR_ONE_PACKET) != 0);
+                   (flags & SOAPY_SDR_ONE_PACKET) != 0);
     if (md.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE) {
       std::cout << "in drain_buffer" << std::endl;
       throw std::runtime_error(

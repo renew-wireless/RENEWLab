@@ -15,8 +15,8 @@
 #include <random>
 
 #include "SoapySDR/Time.hpp"
-#if defined (PURE_UHD)
-    #include "include/ClientRadioSetUHD.h"
+#if defined(PURE_UHD)
+#include "include/ClientRadioSetUHD.h"
 #endif
 
 #include "include/ClientRadioSet.h"
@@ -46,42 +46,42 @@ Receiver::Receiver(
   MLPD_TRACE("Receiver Construction - CL present: %d, BS Present: %d\n",
              config_->client_present(), config_->bs_present());
   try {
-    #if defined(PURE_UHD)
-          this->client_radio_set_ =
-                  config_->client_present() ? new ClientRadioSetUHD(config_) : nullptr;
-          this->base_radio_set_ =
-                  config_->bs_present() ? new BaseRadioSetUHD(config_) : nullptr;
-    #else
-          this->client_radio_set_ =
-                  config_->client_present() ? new ClientRadioSet(config_) : nullptr;
-          this->base_radio_set_ =
-                  config_->bs_present() ? new BaseRadioSet(config_) : nullptr;
-    #endif
-  } catch (std::exception& e){
-      throw ReceiverException(e.what());
+#if defined(PURE_UHD)
+    this->client_radio_set_ =
+        config_->client_present() ? new ClientRadioSetUHD(config_) : nullptr;
+    this->base_radio_set_ =
+        config_->bs_present() ? new BaseRadioSetUHD(config_) : nullptr;
+#else
+    this->client_radio_set_ =
+        config_->client_present() ? new ClientRadioSet(config_) : nullptr;
+    this->base_radio_set_ =
+        config_->bs_present() ? new BaseRadioSet(config_) : nullptr;
+#endif
+  } catch (std::exception& e) {
+    throw ReceiverException(e.what());
   }
 
   MLPD_TRACE("Receiver Construction -- number radios %zu\n",
              config_->num_bs_sdrs_all());
 
-    if (((this->base_radio_set_ != nullptr) &&
-         (this->base_radio_set_->getRadioNotFound())) ||
-        ((this->client_radio_set_ != nullptr) &&
-         (this->client_radio_set_->getRadioNotFound()))) {
-      if (this->base_radio_set_ != nullptr) {
-        MLPD_WARN("Invalid Base Radio Setup: %d\n",
-                  this->base_radio_set_ == nullptr);
-        this->base_radio_set_->radioStop();
-        delete this->base_radio_set_;
-      }
-      if (this->client_radio_set_ != nullptr) {
-        MLPD_WARN("Invalid Client Radio Setup: %d\n",
-                  this->client_radio_set_ == nullptr);
-        this->client_radio_set_->radioStop();
-        delete this->client_radio_set_;
-      }
-      throw ReceiverException("Invalid Radio Setup");
+  if (((this->base_radio_set_ != nullptr) &&
+       (this->base_radio_set_->getRadioNotFound())) ||
+      ((this->client_radio_set_ != nullptr) &&
+       (this->client_radio_set_->getRadioNotFound()))) {
+    if (this->base_radio_set_ != nullptr) {
+      MLPD_WARN("Invalid Base Radio Setup: %d\n",
+                this->base_radio_set_ == nullptr);
+      this->base_radio_set_->radioStop();
+      delete this->base_radio_set_;
     }
+    if (this->client_radio_set_ != nullptr) {
+      MLPD_WARN("Invalid Client Radio Setup: %d\n",
+                this->client_radio_set_ == nullptr);
+      this->client_radio_set_->radioStop();
+      delete this->client_radio_set_;
+    }
+    throw ReceiverException("Invalid Radio Setup");
+  }
 
   this->initBuffers();
   MLPD_TRACE("Construction complete\n");
@@ -226,8 +226,8 @@ void Receiver::baseTxBeacon(int radio_id, int cell, int frame_id,
   }
   int r_tx;
   r_tx = this->base_radio_set_->radioTx(
-    radio_id, cell, beaconbuff.data(), kStreamEndBurst,
-    base_time);  // assume beacon is first slot
+      radio_id, cell, beaconbuff.data(), kStreamEndBurst,
+      base_time);  // assume beacon is first slot
 
   if (r_tx != (int)config_->samps_per_slot())
     std::cerr << "BAD Transmit(" << r_tx << "/" << config_->samps_per_slot()
@@ -419,9 +419,9 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
       bs_sync_ret = -1;
       while (bs_sync_ret < 0) {
         std::cout << "bs_sync_ret is being executed" << std::endl;
-        bs_sync_ret = this->base_radio_set_->radioRx(
-                radio_id, cell, samp_buffer.data(), config_->samps_per_slot(),
-                rxTimeBs);
+        bs_sync_ret =
+            this->base_radio_set_->radioRx(radio_id, cell, samp_buffer.data(),
+                                           config_->samps_per_slot(), rxTimeBs);
       }
     }
   }
@@ -499,12 +499,11 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
         // only write received pilot or data into samp
         // otherwise use samp_buffer as a dummy buffer
         if (config_->isPilot(frame_id, slot_id) ||
-              config_->isUlData(frame_id, slot_id))
+            config_->isUlData(frame_id, slot_id))
           r = this->base_radio_set_->radioRx(radio_id, cell, samp, rxTimeBs);
         else
-          r = this->base_radio_set_->radioRx(radio_id, cell,
-                                             samp_buffer.data(), rxTimeBs);
-
+          r = this->base_radio_set_->radioRx(radio_id, cell, samp_buffer.data(),
+                                             rxTimeBs);
 
         if (r < 0) {
           config_->running(false);
@@ -550,7 +549,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
       } else {
         long long frameTime;
         if (this->base_radio_set_->radioRx(radio_id, cell, samp, frameTime) <
-              0) {
+            0) {
           config_->running(false);
           break;
         }
@@ -715,7 +714,7 @@ void Receiver::clientTxRx(int tid) {
       for (size_t i = 0; i < tx_slots; i++) {
         int r;
         r = client_radio_set_->radioTx(tid, ul_txbuff.data(), NUM_SAMPS, 1,
-                                         txTime);
+                                       txTime);
         if (r == NUM_SAMPS) {
           txTime += 0x10000;
         }
@@ -738,8 +737,8 @@ void Receiver::clientTxPilots(size_t user_id, long long base_time) {
                      config_->cl_pilot_slots().at(user_id).at(0) * num_samps -
                      config_->tx_advance(user_id);
   int r;
-  r = client_radio_set_->radioTx(user_id, pilotbuffA_.data(), num_samps,
-                                 flags, txTime);
+  r = client_radio_set_->radioTx(user_id, pilotbuffA_.data(), num_samps, flags,
+                                 txTime);
 
   if (r < num_samps) {
     MLPD_WARN("BAD Write: %d/%d\n", r, num_samps);
@@ -923,8 +922,8 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
     MLPD_INFO("Start main client txrx loop... tid=%d\n", tid);
     if (rx_offset > 0) {
       int rx_data;
-      rx_data = client_radio_set_->radioRx(tid, syncrxbuff.data(), rx_offset,
-                                           rxTime);
+      rx_data =
+          client_radio_set_->radioRx(tid, syncrxbuff.data(), rx_offset, rxTime);
       if (rx_data != rx_offset) {
         MLPD_WARN("Rx data: %d : %d failed to align sync read\n", rx_data,
                   rx_offset);
@@ -1045,7 +1044,6 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
           config_->running(false);
           break;
         }
-
 
         for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
           new (pkt[ch]) Packet(frame_id, slot_id, 0, ant_id + ch);

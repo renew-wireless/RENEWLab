@@ -11,10 +11,10 @@
 #include <vector>
 
 #include "SoapySDR/Device.hpp"
-#include "SoapySDR/Types.hpp"
 #include "SoapySDR/Errors.hpp"
-#include "uhd/usrp/multi_usrp.hpp"
+#include "SoapySDR/Types.hpp"
 #include "config.h"
+#include "uhd/usrp/multi_usrp.hpp"
 
 class RadioUHD {
  private:

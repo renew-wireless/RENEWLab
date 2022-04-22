@@ -9,12 +9,10 @@
 #include <cstddef>
 
 #include "RadioUHD.h"
-#include "config.h"
-
 #include "SoapySDR/Errors.hpp"
 #include "SoapySDR/Formats.hpp"
 #include "SoapySDR/Time.hpp"
-
+#include "config.h"
 #include "nlohmann/json.hpp"
 
 class ClientRadioSetUHD {
