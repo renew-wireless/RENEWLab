@@ -115,8 +115,8 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
 
     auto channels = Utils::strToChannels(_cfg->bs_channel());
 
-    for (size_t i = 0; i < bsRadios->dev->get_num_mboards(); i++) {
-      auto dev = bsRadios->dev;
+    for (size_t i = 0; i < bsRadios->RawDev()->get_num_mboards(); i++) {
+      auto dev = bsRadios->RawDev();
       std::cout << _cfg->bs_sdr_ids().at(c).at(i) << ": Front end "
                 << dev->get_usrp_rx_info()["frontend"] << std::endl;
       for (auto ch : channels) {
@@ -192,10 +192,10 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
 
     // write TDD schedule and beacons to FPFA buffers only for Iris
     for (size_t c = 0; c < _cfg->num_cells(); c++) {
-      bsRadios->dev->set_time_source("external", 0);
-      bsRadios->dev->set_clock_source("external", 0);
+      bsRadios->RawDev()->set_time_source("external", 0);
+      bsRadios->RawDev()->set_clock_source("external", 0);
       uhd::time_spec_t time = uhd::time_spec_t::from_ticks(0, 1e9);
-      bsRadios->dev->set_time_next_pps(time);
+      bsRadios->RawDev()->set_time_next_pps(time);
 
       // Wait for pps sync pulse
       std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -264,7 +264,7 @@ void BaseRadioSetUHD::configure(BaseRadioContext* context) {
   //load channels
   auto channels = Utils::strToChannels(_cfg->bs_channel());
   RadioUHD* bsRadio = bsRadios;
-  uhd::usrp::multi_usrp::sptr dev = bsRadio->dev;
+  uhd::usrp::multi_usrp::sptr dev = bsRadio->RawDev();
   for (auto ch : channels) {
     double rxgain = _cfg->rx_gain().at(ch);
     double txgain = _cfg->tx_gain().at(ch);
@@ -301,7 +301,7 @@ void BaseRadioSetUHD::radioStart() {
 }
 
 void BaseRadioSetUHD::readSensors() {
-  uhd::usrp::multi_usrp::sptr dev = bsRadios->dev;
+  uhd::usrp::multi_usrp::sptr dev = bsRadios->RawDev();
   for (size_t i = 0; i < dev->get_num_mboards(); i++) {
     std::cout << dev->get_mboard_sensor_names(i).at(0) << std::endl;
   }
@@ -366,7 +366,7 @@ void BaseRadioSetUHD::radioRx(void* const* buffs) {
   void* const* buff;
 
   //    for (size_t c = 0; c < _cfg->num_cells(); c++) {
-  for (size_t i = 0; i < bsRadios->dev->get_num_mboards(); i++) {
+  for (size_t i = 0; i < bsRadios->RawDev()->get_num_mboards(); i++) {
     buff = buffs + (i * 2);
     bsRadios->recv(buff, _cfg->samps_per_slot(), frameTime);
   }
@@ -386,7 +386,7 @@ int BaseRadioSetUHD::radioRx(size_t radio_id, size_t cell_id,
   int ret = 0;
 
   //    std::cout<< "radio id is "<<radio_id<<std::endl;
-  if (radio_id < bsRadios->dev->get_num_mboards()) {
+  if (radio_id < bsRadios->RawDev()->get_num_mboards()) {
     long long frameTimeNs = 0;
     ret = bsRadios->recv(buffs, numSamps, frameTimeNs);
     //        std::cout<<"bsRadios->dev->get_num_mboards() " << bsRadios->dev->get_num_mboards() << std::endl;
@@ -449,7 +449,7 @@ int BaseRadioSetUHD::syncTimeOffsetUHD(bool measure_ref_radio,
   long long rxTime(0);
 
   RadioUHD* ref_radio = bsRadios;
-  uhd::usrp::multi_usrp::sptr ref_dev = ref_radio->dev;
+  uhd::usrp::multi_usrp::sptr ref_dev = ref_radio->RawDev();
 
   int offset_diff = num_samps;
   if (measure_ref_radio == true) {
@@ -458,7 +458,7 @@ int BaseRadioSetUHD::syncTimeOffsetUHD(bool measure_ref_radio,
 
     ref_radio->drain_buffers(dummybuffs, num_samps);
     RadioUHD* front_radio = bsRadios;
-    uhd::usrp::multi_usrp::sptr front_dev = front_radio->dev;
+    uhd::usrp::multi_usrp::sptr front_dev = front_radio->RawDev();
     //        front_dev->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->cal_tx_gain().at(0));
     front_dev->set_tx_gain(0, "PAD", _cfg->cal_tx_gain().at(0));
     front_radio->activateXmit();
@@ -568,7 +568,7 @@ int BaseRadioSetUHD::syncTimeOffsetUHD(bool measure_ref_radio,
       int median_offset = offset_sorted.at(num_radios / 2);
       for (int i = 0; i < num_radios; i++) {
         RadioUHD* bsRadio = bsRadios;
-        uhd::usrp::multi_usrp::sptr dev = bsRadio->dev;
+        uhd::usrp::multi_usrp::sptr dev = bsRadio->RawDev();
         //int delta = median_offset - offset[i];
         int delta = median_offset - offset[i];
         /*std::cout << "adjusting delay of node " << i << " by " << delta
