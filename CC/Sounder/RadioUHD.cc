@@ -14,25 +14,25 @@ void RadioUHD::dev_init(Config* _cfg, int ch, double rxgain, double txgain) {
   // these params are sufficient to set before DC offset and IQ imbalance calibration
   std::cout << "radioUHD.cc being called" << std::endl;
 
-  dev->set_rx_rate(_cfg->rate(), ch);
-  dev->set_tx_rate(_cfg->rate(), ch);
+  dev_->set_rx_rate(_cfg->rate(), ch);
+  dev_->set_tx_rate(_cfg->rate(), ch);
 
   MLPD_INFO("Init USRP channel: %d\n", ch);
   // update for UHD multi USRP
-  dev->set_tx_antenna("TX/RX", ch);
-  dev->set_rx_antenna("TX/RX", ch);
+  dev_->set_tx_antenna("TX/RX", ch);
+  dev_->set_rx_antenna("TX/RX", ch);
   uhd::tune_request_t tune_request(0);
-  dev->set_rx_freq(tune_request, ch);
-  dev->set_tx_freq(tune_request, ch);
+  dev_->set_rx_freq(tune_request, ch);
+  dev_->set_tx_freq(tune_request, ch);
 
   // update for UHD multi USRP
   tune_request = _cfg->radio_rf_freq();
-  dev->set_rx_freq(tune_request, ch);
-  dev->set_tx_freq(tune_request, ch);
+  dev_->set_rx_freq(tune_request, ch);
+  dev_->set_tx_freq(tune_request, ch);
 
   // update for UHD multi USRP
-  dev->set_rx_gain(std::min(31.5, rxgain), "PGA0", ch);
-  dev->set_tx_gain(std::min(31.5, txgain), "PGA0", ch);
+  dev_->set_rx_gain(std::min(31.5, rxgain), "PGA0", ch);
+  dev_->set_tx_gain(std::min(31.5, txgain), "PGA0", ch);
 }
 
 void RadioUHD::drain_buffers(std::vector<void*> buffs, int symSamp) {
@@ -48,19 +48,12 @@ void RadioUHD::drain_buffers(std::vector<void*> buffs, int symSamp) {
 
   //    long long frameTime = 0;
   int flags = 0, r = 0, i = 0;
-  //    while (r != -1) {
-  //        r = dev->readStream(rxs, buffs.data(), symSamp, flags, frameTime, 0);
-  //        i++;
-  //    }
-  //    MLPD_TRACE("Number of reads needed to drain: %d\n", i);
-
   // update for UHD multi USRP
-  //    const size_t samps_per_buff = rxs->get_max_num_samps();
   while (r != -1) {
     uhd::rx_streamer::buffs_type stream_buffs(buffs.data(),
-                                              rxs->get_num_channels());
+                                              rxs_->get_num_channels());
     uhd::rx_metadata_t md;
-    r = rxs->recv(stream_buffs, symSamp, md, 0,
+    r = rxs_->recv(stream_buffs, symSamp, md, 0,
                   (flags & SOAPY_SDR_ONE_PACKET) != 0);
     if (md.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE) {
       std::cout << "in drain_buffer" << std::endl;
@@ -75,8 +68,8 @@ void RadioUHD::drain_buffers(std::vector<void*> buffs, int symSamp) {
 
 RadioUHD::RadioUHD(const std::map<std::string, std::string>& args,
                    const char uhdFmt[], const std::vector<size_t>& channels) {
-  dev = uhd::usrp::multi_usrp::make(args);
-  if (dev == NULL) throw std::invalid_argument("error making UHD:Device\n");
+  dev_ = uhd::usrp::multi_usrp::make(args);
+  if (dev_ == NULL) throw std::invalid_argument("error making UHD:Device\n");
   const std::string& format = uhdFmt;
   std::string hostFormat;
   for (const char ch : format) {
@@ -104,8 +97,8 @@ RadioUHD::RadioUHD(const std::map<std::string, std::string>& args,
 
   std::cout << "format is " << hostFormat << std::endl;
 
-  rxs = dev->get_rx_stream(stream_args);
-  txs = dev->get_tx_stream(stream_args1);
+  rxs_ = dev_->get_rx_stream(stream_args);
+  txs_ = dev_->get_tx_stream(stream_args1);
 }
 
 int RadioUHD::activateRecv(const long long rxTime, const size_t numSamps,
@@ -132,7 +125,7 @@ int RadioUHD::activateRecv(const long long rxTime, const size_t numSamps,
   cmd.time_spec = uhd::time_spec_t::from_ticks(UHD_INIT_TIME_SEC * 1e9, 1e9);
   cmd.num_samps = numElems;
 
-  rxs->issue_stream_cmd(cmd);
+  rxs_->issue_stream_cmd(cmd);
   return 0;
 }
 
@@ -150,7 +143,7 @@ void RadioUHD::deactivateRecv(void) {
 
   stream_cmd_1.stream_now = (flags & SOAPY_SDR_HAS_TIME) == 0;
   stream_cmd_1.time_spec = uhd::time_spec_t::from_ticks(0, 1e9);
-  rxs->issue_stream_cmd(stream_cmd_1);
+  rxs_->issue_stream_cmd(stream_cmd_1);
 }
 
 void RadioUHD::deactivateXmit(void) {
@@ -164,7 +157,7 @@ RadioUHD::~RadioUHD(void) {
 }
 
 int RadioUHD::recv(void* const* buffs, int samples, long long& frameTime) {
-  uhd::rx_streamer::sptr& stream = rxs;
+  uhd::rx_streamer::sptr& stream = rxs_;
   int flags(0);
   uhd::rx_streamer::buffs_type stream_buffs(buffs, stream->get_num_channels());
   uhd::rx_metadata_t md;
@@ -210,7 +203,7 @@ int RadioUHD::recv(void* const* buffs, int samples, long long& frameTime) {
 
 int RadioUHD::xmit(const void* const* buffs, int samples, int flags,
                    long long& frameTime) {
-  uhd::tx_streamer::sptr& stream = txs;
+  uhd::tx_streamer::sptr& stream = txs_;
   int soapyFlags[] = {0, SOAPY_SDR_HAS_TIME,
                       SOAPY_SDR_HAS_TIME | SOAPY_SDR_END_BURST,
                       SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST};
