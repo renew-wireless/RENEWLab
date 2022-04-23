@@ -9,10 +9,12 @@
 #include <cstddef>
 
 #include "RadioUHD.h"
+#include "config.h"
+
 #include "SoapySDR/Errors.hpp"
 #include "SoapySDR/Formats.hpp"
 #include "SoapySDR/Time.hpp"
-#include "config.h"
+
 #include "nlohmann/json.hpp"
 
 class ClientRadioSetUHD {
@@ -37,7 +39,7 @@ class ClientRadioSetUHD {
   static void* init_launch(void* in_context);
 
   Config* _cfg;
-  RadioUHD* radios;
+  RadioUHD* radio_;
   bool radioNotFound;
 };
 
