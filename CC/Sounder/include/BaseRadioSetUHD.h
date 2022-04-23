@@ -6,12 +6,17 @@
 #ifndef BASE_RADIO_SET_UHD_H_
 #define BASE_RADIO_SET_UHD_H_
 
-#include "RadioUHD.h"
+#include <atomic>
+#include <cstddef>
+#include <vector>
+
 #include "SoapySDR/Formats.hpp"
 #include "SoapySDR/Time.hpp"
+#include "uhd/usrp/multi_usrp.hpp"
+#include "RadioUHD.h"
+
 #include "config.h"
 #include "nlohmann/json.hpp"
-#include "uhd/usrp/multi_usrp.hpp"
 
 class BaseRadioSetUHD {
  public:
@@ -45,16 +50,13 @@ class BaseRadioSetUHD {
 
   void radioTriggerUHD(void);
   void sync_delays(size_t cellIdx);
-  //    SoapySDR::Device* baseRadio(size_t cellId);
   uhd::usrp::multi_usrp::sptr baseRadio(size_t cellId);
   int syncTimeOffsetUHD(bool, bool);
   void dciqCalibrationProcUHD(size_t){};
   void readSensors(void);
 
   Config* _cfg;
-  //    std::vector<SoapySDR::Device*> hubs;
   uhd::usrp::multi_usrp::sptr hubs;
-  //    std::vector<std::vector<Radio*>> bsRadios; // [cell, iris]
   RadioUHD* bsRadios;
   bool radioNotFound;
 };
