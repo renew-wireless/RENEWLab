@@ -87,26 +87,26 @@ set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 #find_package(Threads REQUIRED)
 message(STATUS "Using Pthread Library: ${CMAKE_THREAD_LIBS_INIT}: ${CMAKE_USE_PTHREADS_INIT}")
 
+set(USE_SOAPYUHD False CACHE STRING "USE_UHD defaulting to 'False'")
+message(STATUS "USE_SOAPYUHD: ${USE_SOAPYUHD}")
+
+if(${USE_SOAPYUHD})
+  message(STATUS "Enabled USE_SOAPYUHD: ${USE_SOAPYUHD}")
+  add_definitions(-DUSE_SOAPYUHD)
+endif()
+
 set(USE_UHD False CACHE STRING "USE_UHD defaulting to 'False'")
 message(STATUS "USE_UHD: ${USE_UHD}")
 
 if(${USE_UHD})
-  message(STATUS "Enabled USE_UHD: ${USE_UHD}")
+  message(STATUS "Enabled USE_UHD: ${USE_UHD} ")
   add_definitions(-DUSE_UHD)
 endif()
 
-set(PURE_UHD False CACHE STRING "PURE_UHD defaulting to 'False'")
-message(STATUS "PURE_UHD: ${PURE_UHD}")
 
-if(${PURE_UHD})
-  message(STATUS "Enabled PURE_UHD: ${PURE_UHD} ")
-  add_definitions(-DPURE_UHD)
-endif()
-
-
-if(${PURE_UHD})
+if(${USE_UHD})
 # Adding dependency of UHD to souder
-    find_package(UHD "3.15.0" REQUIRED)
+    find_package(UHD "3.14.0" REQUIRED)
     message(STATUS "Using UHD Version: ${UHD_VERSION}")
 
     ########################################################################
