@@ -21,7 +21,7 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain) {
   dev_->setSampleRate(SOAPY_SDR_TX, ch, _cfg->rate());
 
   // these params are sufficient to set before DC offset and IQ imbalance calibration
-  if (!kUseUHD) {
+  if (!kUseSoapyUHD) {
     dev_->setAntenna(SOAPY_SDR_RX, ch, "TRX");
     dev_->setBandwidth(SOAPY_SDR_RX, ch, _cfg->bw_filter());
     dev_->setBandwidth(SOAPY_SDR_TX, ch, _cfg->bw_filter());
@@ -38,7 +38,7 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain) {
   dev_->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->radio_rf_freq());
   dev_->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->radio_rf_freq());
 
-  if (kUseUHD == false) {
+  if (kUseSoapyUHD== false) {
     // Unified gains for both lime and frontend
     if (_cfg->single_gain()) {
       dev_->setGain(SOAPY_SDR_RX, ch,
@@ -70,7 +70,7 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain) {
   }
 
   // DC Offset for Iris
-  if (!kUseUHD) dev_->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
+  if (!kUseSoapyUHD) dev_->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
 }
 
 void Radio::drain_buffers(std::vector<void*> buffs, int symSamp) {
@@ -107,7 +107,7 @@ Radio::Radio(const SoapySDR::Kwargs& args, const char soapyFmt[],
   rxs_ = dev_->setupStream(SOAPY_SDR_RX, soapyFmt, channels);
   txs_ = dev_->setupStream(SOAPY_SDR_TX, soapyFmt, channels);
 
-  if (!kUseUHD) {
+  if (!kUseSoapyUHD) {
     reset_DATA_clk_domain();
   }
 }
@@ -147,7 +147,7 @@ int Radio::activateRecv(const long long rxTime, const size_t numSamps,
                       SOAPY_SDR_WAIT_TRIGGER | SOAPY_SDR_END_BURST};
   int flag_args = soapyFlags[flags];
   // for USRP device start rx stream UHD_INIT_TIME_SEC sec in the future
-  if (!kUseUHD) {
+  if (!kUseSoapyUHD) {
     return dev_->activateStream(rxs_, flag_args, rxTime, numSamps);
   } else {
     return dev_->activateStream(rxs_, SOAPY_SDR_HAS_TIME,
@@ -174,7 +174,7 @@ int Radio::xmit(const void* const* buffs, int samples, int flags,
 
 void Radio::activateXmit(void) {
   // for USRP device start tx stream UHD_INIT_TIME_SEC sec in the future
-  if (!kUseUHD) {
+  if (!kUseSoapyUHD) {
     dev_->activateStream(txs_);
   } else {
     dev_->activateStream(txs_, SOAPY_SDR_HAS_TIME, UHD_INIT_TIME_SEC * 1e9, 0);
