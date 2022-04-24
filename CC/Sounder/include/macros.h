@@ -4,16 +4,16 @@
 #include <atomic>
 #include <vector>
 
+#ifdef USE_SOAPYUHD
+static constexpr bool kUseSoapyUHD = true;
+#else
+static constexpr bool kUseSoapyUHD = false;
+#endif
+
 #ifdef USE_UHD
 static constexpr bool kUseUHD = true;
 #else
 static constexpr bool kUseUHD = false;
-#endif
-
-#ifdef PURE_UHD
-static constexpr bool pUseUHD = true;
-#else
-static constexpr bool pUseUHD = false;
 #endif
 
 static constexpr size_t kStreamContinuous = 1;
