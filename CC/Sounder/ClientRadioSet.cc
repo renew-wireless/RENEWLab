@@ -91,7 +91,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg) : _cfg(cfg) {
         printf("Actual RX frequency: %fGHz...\n",
                (dev->getFrequency(SOAPY_SDR_RX, ch) / 1e9));
         printf("Actual RX gain: %f...\n", (dev->getGain(SOAPY_SDR_RX, ch)));
-        if (!kUseUHD) {
+        if (!kUseSoapyUHD) {
           printf("Actual RX LNA gain: %f...\n",
                  (dev->getGain(SOAPY_SDR_RX, ch, "LNA")));
           printf("Actual RX PGA gain: %f...\n",
@@ -121,7 +121,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg) : _cfg(cfg) {
         printf("Actual TX frequency: %fGHz...\n",
                (dev->getFrequency(SOAPY_SDR_TX, ch) / 1e9));
         printf("Actual TX gain: %f...\n", (dev->getGain(SOAPY_SDR_TX, ch)));
-        if (!kUseUHD) {
+        if (!kUseSoapyUHD) {
           printf("Actual TX PAD gain: %f...\n",
                  (dev->getGain(SOAPY_SDR_TX, ch, "PAD")));
           printf("Actual TX IAMP gain: %f...\n",
@@ -215,7 +215,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg) : _cfg(cfg) {
           dev->writeSetting("CORR_START",
                             (_cfg->cl_channel() == "B") ? "B" : "A");
       } else {
-        if (!kUseUHD) {
+        if (!kUseSoapyUHD) {
           dev->setHardwareTime(0, "TRIGGER");
           radios.at(i)->activateRecv();
           radios.at(i)->activateXmit();
@@ -254,7 +254,7 @@ void ClientRadioSet::init(ClientRadioContext* context) {
              _cfg->num_cl_sdrs());
   SoapySDR::Kwargs args;
   args["timeout"] = "1000000";
-  if (kUseUHD == false) {
+  if (kUseSoapyUHD == false) {
     args["driver"] = "iris";
     args["serial"] = _cfg->cl_sdr_ids().at(i);
   } else {
@@ -293,7 +293,7 @@ void ClientRadioSet::init(ClientRadioContext* context) {
     }
 
     // Init AGC only for Iris device
-    if (kUseUHD == false) {
+    if (kUseSoapyUHD == false) {
       initAGC(dev, _cfg);
     }
   }
