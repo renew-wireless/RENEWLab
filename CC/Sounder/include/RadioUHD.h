@@ -25,7 +25,7 @@ class RadioUHD {
 
   void drain_buffers(std::vector<void*> buffs, int symSamp);
   RadioUHD(const std::map<std::string, std::string>& args, const char uhdFmt[],
-           const std::vector<size_t>& channels);
+           const std::vector<size_t>& channels, Config* _cfg);
   void activateXmit(void);
   ~RadioUHD(void);
   int recv(void* const* buffs, int samples, long long& frameTime);
