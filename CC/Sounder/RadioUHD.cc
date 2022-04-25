@@ -24,10 +24,6 @@
 void RadioUHD::dev_init(Config* _cfg, int ch, double rxgain, double txgain) {
   // these params are sufficient to set before DC offset and IQ imbalance calibration
   std::cout << "radioUHD.cc being called" << std::endl;
-
-  dev_->set_rx_rate(_cfg->rate(), ch);
-  dev_->set_tx_rate(_cfg->rate(), ch);
-
   MLPD_INFO("Init USRP channel: %d\n", ch);
   // update for UHD multi USRP
   dev_->set_tx_antenna("TX/RX", ch);
@@ -57,7 +53,6 @@ void RadioUHD::drain_buffers(std::vector<void*> buffs, int symSamp) {
      *      None
      */
 
-  //    long long frameTime = 0;
   int flags = 0, r = 0, i = 0;
   // update for UHD multi USRP
   while (r != -1) {
@@ -78,9 +73,14 @@ void RadioUHD::drain_buffers(std::vector<void*> buffs, int symSamp) {
 }
 
 RadioUHD::RadioUHD(const std::map<std::string, std::string>& args,
-                   const char uhdFmt[], const std::vector<size_t>& channels) {
+                   const char uhdFmt[], const std::vector<size_t>& channels,
+                   Config* _cfg) {
   dev_ = uhd::usrp::multi_usrp::make(args);
   if (dev_ == NULL) throw std::invalid_argument("error making UHD:Device\n");
+  for (auto ch : channels) {
+    dev_->set_rx_rate(_cfg->rate(), ch);
+    dev_->set_tx_rate(_cfg->rate(), ch);
+  }
   const std::string& format = uhdFmt;
   std::string hostFormat;
   for (const char ch : format) {
@@ -117,8 +117,6 @@ int RadioUHD::activateRecv(const long long rxTime, const size_t numSamps,
   std::cout << "activate recv" << std::endl;
   std::cout << "rxTIme is " << rxTime << std::endl;
   std::cout << "number of samples are " << numSamps << std::endl;
-  //    rxTime = UHD_INIT_TIME_SEC * 1e9;
-  //    numSamps = 0;
   flags = SOAPY_SDR_HAS_TIME;
   // for USRP device start rx stream UHD_INIT_TIME_SEC sec in the future
   uhd::stream_cmd_t::stream_mode_t mode;
