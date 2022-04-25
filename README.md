@@ -78,8 +78,6 @@ $ cd ../
 If you wish to switch to use the UHD impelentation (install necessary UHD packages [here](https://kb.ettus.com/Building_and_Installing_the_USRP_Open-Source_Toolchain_(UHD_and_GNU_Radio)_on_Linux)):
 ```sh
 $ cd build
-$ cmake .. -DCMAKE_BUILD_TYPE=Release -DLOG_LEVEL=info && make -j
-$ cd ../
 $ cmake .. -DRADIO_TYPE=PURE_UHD
 $ make
 $ cd ../
