@@ -1,12 +1,12 @@
-/*
- Copyright (c) 2018-2021, Rice University
- RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
- 
-----------------------------------------------------------
- Initializes and Configures Client Radios 
-----------------------------------------------------------
-*/
-
+/** @file ClientRadioSet.cc
+  * @brief Defination file for the ClientRadioSet class.
+  *
+  * Copyright (c) 2018-2022, Rice University
+  * RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+  * ----------------------------------------------------------
+  * Initializes and Configures Client Radios 
+  * ----------------------------------------------------------
+  */
 #include "include/ClientRadioSet.h"
 
 #include "SoapySDR/Errors.hpp"

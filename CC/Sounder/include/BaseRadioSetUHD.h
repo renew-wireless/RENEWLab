@@ -10,13 +10,9 @@
 #include <cstddef>
 #include <vector>
 
-#include "SoapySDR/Formats.hpp"
-#include "SoapySDR/Time.hpp"
-#include "uhd/usrp/multi_usrp.hpp"
 #include "RadioUHD.h"
-
 #include "config.h"
-#include "nlohmann/json.hpp"
+#include "uhd/usrp/multi_usrp.hpp"
 
 class BaseRadioSetUHD {
  public:

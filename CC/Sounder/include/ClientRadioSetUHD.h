@@ -11,12 +11,6 @@
 #include "RadioUHD.h"
 #include "config.h"
 
-#include "SoapySDR/Errors.hpp"
-#include "SoapySDR/Formats.hpp"
-#include "SoapySDR/Time.hpp"
-
-#include "nlohmann/json.hpp"
-
 class ClientRadioSetUHD {
  public:
   ClientRadioSetUHD(Config* cfg);

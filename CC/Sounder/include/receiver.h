@@ -1,9 +1,10 @@
-/*
- Copyright (c) 2018-2022, Rice University
- RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
-----------------------------------------------------------
- Handles received samples from massive-mimo base station 
-----------------------------------------------------------
+/** @file receiver.h
+  * @brief Declaration file for the Receiver class.
+  * Copyright (c) 2018-2022, Rice University
+  * RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+  * ----------------------------------------------------------
+  * Handles received samples from massive-mimo base station 
+  *----------------------------------------------------------
 */
 #ifndef DATARECEIVER_H_
 #define DATARECEIVER_H_
@@ -15,11 +16,12 @@
 #include <string>
 #include <vector>
 
+#if defined(USE_UHD)
+#include "BaseRadioSetUHD.h"
+#include "ClientRadioSetUHD.h"
+#else
 #include "BaseRadioSet.h"
 #include "ClientRadioSet.h"
-#if defined(USE_UHD)
-    #include "BaseRadioSetUHD.h"
-    #include "ClientRadioSetUHD.h"
 #endif
 #include "concurrentqueue.h"
 #include "config.h"
@@ -78,7 +80,7 @@ class Receiver {
  private:
   Config* config_;
 
-#if defined (USE_UHD)
+#if defined(USE_UHD)
   ClientRadioSetUHD* client_radio_set_;
   BaseRadioSetUHD* base_radio_set_;
 #else
@@ -104,4 +106,4 @@ class Receiver {
   size_t txFrameDelta_;
 };
 
-#endif  // sDATARECEIVER_H_
+#endif  // DATARECEIVER_H_

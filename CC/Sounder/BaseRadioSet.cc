@@ -1,12 +1,12 @@
-/*
- Copyright (c) 2018-2022, Rice University 
- RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
- 
----------------------------------------------------------------------
- Initializes and Configures Radios in the massive-MIMO base station 
----------------------------------------------------------------------
-*/
-
+/** @file BaseRadioSet.cc
+  * @brief Defination file for the BaseRadioSet class.
+  *
+  * Copyright (c) 2018-2022, Rice University
+  * RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+  * ----------------------------------------------------------
+  *  Initializes and Configures Radios in the massive-MIMO base station 
+  * ----------------------------------------------------------
+  */
 #include "include/BaseRadioSet.h"
 
 #include "SoapySDR/Errors.hpp"

@@ -1,12 +1,12 @@
-/*
- Copyright (c) 2018-2021, Rice University
- RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
- 
-----------------------------------------------------------
- Initialize and Configure an SDR
-----------------------------------------------------------
+/** @file Radio.cc
+  * @brief Defination file for the Radio class.
+  *
+  * Copyright (c) 2018-2022, Rice University
+  * RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+  * ----------------------------------------------------------
+  * Initialize and Configure an SDR
+  * ----------------------------------------------------------
 */
-
 #include "include/Radio.h"
 
 #include <iostream>
@@ -38,7 +38,7 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain) {
   dev_->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->radio_rf_freq());
   dev_->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->radio_rf_freq());
 
-  if (kUseSoapyUHD== false) {
+  if (kUseSoapyUHD == false) {
     // Unified gains for both lime and frontend
     if (_cfg->single_gain()) {
       dev_->setGain(SOAPY_SDR_RX, ch,

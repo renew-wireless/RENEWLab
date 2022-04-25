@@ -1,13 +1,16 @@
-/*
- Copyright (c) 2018-2019, Rice University
- RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
-
-----------------------------------------------------------
- Initializes and Configures Client Radios
-----------------------------------------------------------
-*/
+/** @file ClientRadioSetUHD.cc
+  * @brief Defination file for the ClientRadioSetUHD class.
+  *
+  * Copyright (c) 2018-2022, Rice University
+  * RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+  * ----------------------------------------------------------
+  *  Initializes and Configures Client Radios
+  * ----------------------------------------------------------
+  */
 #include "include/ClientRadioSetUHD.h"
 
+#include "SoapySDR/Formats.h"
+#include "SoapySDR/Time.hpp"
 #include "include/RadioUHD.h"
 #include "include/comms-lib.h"
 #include "include/logger.h"

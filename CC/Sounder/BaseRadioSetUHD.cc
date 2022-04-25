@@ -1,21 +1,22 @@
-/*
- Copyright (c) 2018-2019, Rice University 
- RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
- Author(s): Rahman Doost-Mohamamdy: doost@rice.edu
-            Doug Moore: dougm@rice.edu
-	    Oscar Bejarano: ob4@rice.edu
- 
----------------------------------------------------------------------
- Initializes and Configures Radios in the massive-MIMO base station 
----------------------------------------------------------------------
-*/
+/** @file BaseRadioSetUHD.cc
+  * @brief Defination file for the BaseRadioSetUHD class.
+  *
+  * Copyright (c) 2018-2022, Rice University
+  * RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+  * ----------------------------------------------------------
+  *  Initializes and Configures Radios in the massive-MIMO base station for UHD radios
+  * ----------------------------------------------------------
+  */
 #include "include/BaseRadioSetUHD.h"
 
+#include "SoapySDR/Formats.h"
+#include "SoapySDR/Time.hpp"
 #include "include/RadioUHD.h"
 #include "include/comms-lib.h"
 #include "include/logger.h"
 #include "include/macros.h"
 #include "include/utils.h"
+#include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
 static constexpr int kMaxOffsetDiff = 6;
