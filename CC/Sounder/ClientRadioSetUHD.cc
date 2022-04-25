@@ -47,24 +47,6 @@ ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
   // Wait for init
   while (thread_count.load() > 0) {
   }
-  // commented out for now, will add this when future doing Multi USRP
-  // Strip out broken radios.
-  // Update for UHD multi USRP
-  //    for (size_t i = 0; i < num_radios; i++) {
-  //        if (radios.at(i) == nullptr) {
-  //            radioNotFound = true;
-  //            radioSerialNotFound.push_back(_cfg->cl_sdr_ids().at(i));
-  //            while (num_radios != 0 && radios.at(num_radios - 1) == NULL) {
-  //                --num_radios;
-  //                radios.pop_back();
-  //            }
-  //            if (i < num_radios) {
-  //                radios.at(i) = radios.at(--num_radios);
-  //                radios.pop_back();
-  //            }
-  //        }
-  //    }
-  //    radios.shrink_to_fit();
 
   if (num_radios != radio_->RawDev()->get_num_mboards()) {
     radioNotFound = true;
@@ -116,7 +98,6 @@ ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
                  "discovered in the network!"
               << std::endl;
   } else {
-    //beaconSize + 82 (BS FE delay) + 68 (path delay) + 17 (correlator delay) + 82 (Client FE Delay)
     std::cout << "checking tx advance " << _cfg->tx_advance(0) << std::endl;
     radio_->RawDev()->set_time_source("internal");
     radio_->RawDev()->set_clock_source("internal");
@@ -158,7 +139,7 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
 
   try {
     radio_ = nullptr;
-    radio_ = new RadioUHD(args, SOAPY_SDR_CS16, channels);
+    radio_ = new RadioUHD(args, SOAPY_SDR_CS16, channels, _cfg);
   } catch (std::runtime_error& err) {
     has_runtime_error = true;
 
