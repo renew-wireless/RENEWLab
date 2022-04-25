@@ -58,26 +58,6 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
     // Wait for init
     while (thread_count.load() > 0) {
     }
-    // commented out for now, will add this when future doing Multi USRP
-    // Strip out broken radios.
-    // elimated this part
-    //        for (size_t i = 0; i < num_radios; i++) {
-    //            if (bsRadios == NULL) {
-    //                radioNotFound = true;
-    //                radio_serial_not_found.push_back(
-    //                    _cfg->bs_sdr_ids().at(c).at(i));
-    //                while (num_radios != 0
-    //                    && bsRadios.at(c).at(num_radios - 1) == NULL) {
-    //                    --num_radios;
-    //                    bsRadios.at(c).pop_back();
-    //                }
-    //                if (i < num_radios) {
-    //                    bsRadios.at(c).at(i) = bsRadios.at(c).at(--num_radios);
-    //                    bsRadios.at(c).pop_back();
-    //                }
-    //            }
-    //        }
-    //        bsRadios.at(c).shrink_to_fit();
     _cfg->n_bs_sdrs().at(c) = num_radios;
     if (radioNotFound == true) {
       break;
@@ -162,7 +142,6 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
               << std::endl;
   } else {
     if (_cfg->sample_cal_en() == true) {
-      //            bool adjust = false;
       int cal_cnt = 0;
       int offset_diff = 1;
 
@@ -234,7 +213,7 @@ void BaseRadioSetUHD::init(BaseRadioContext* context) {
   args["timeout"] = "1000000";
   try {
     bsRadios = nullptr;
-    bsRadios = new RadioUHD(args, SOAPY_SDR_CS16, channels);
+    bsRadios = new RadioUHD(args, SOAPY_SDR_CS16, channels, _cfg);
   } catch (std::runtime_error& err) {
     std::cerr << "Ignoring uhd device " << _cfg->bs_sdr_ids().at(c).at(i)
               << std::endl;
@@ -257,8 +236,6 @@ void* BaseRadioSetUHD::configure_launch(void* in_context) {
 }
 
 void BaseRadioSetUHD::configure(BaseRadioContext* context) {
-  //    int i = context->tid;
-  //    int c = context->cell;
   std::atomic_ulong* thread_count = context->thread_count;
   delete context;
 
@@ -288,18 +265,9 @@ void BaseRadioSetUHD::sync_delays(size_t cellIdx) {
   uhd::usrp::multi_usrp::sptr base = baseRadio(cellIdx);
 }
 
-void BaseRadioSetUHD::radioTriggerUHD(void) {
-  //    for (size_t c = 0; c < _cfg->num_cells(); c++) {
-  //        SoapySDR::Device* base = baseRadio(c);
-  //        if (base != NULL)
-  //            base->writeSetting("TRIGGER_GEN", "");
-  //    }
-}
+void BaseRadioSetUHD::radioTriggerUHD(void) {}
 
-void BaseRadioSetUHD::radioStart() {
-  //    if (!kUseUHD)
-  //        radioTrigger();
-}
+void BaseRadioSetUHD::radioStart() {}
 
 void BaseRadioSetUHD::readSensors() {
   uhd::usrp::multi_usrp::sptr dev = bsRadios->RawDev();
@@ -310,26 +278,13 @@ void BaseRadioSetUHD::readSensors() {
 
 void BaseRadioSetUHD::radioStop(void) {
   std::string tddConfStr = "{\"tdd_enabled\":false}";
-  //    for (size_t c = 0; c < _cfg->num_cells(); c++) {
-  //        for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
-  //            if (!kUseUHD) {
-  //                SoapySDR::Device* dev = bsRadios.at(c).at(i)->dev;
-  //                dev->writeSetting("TDD_CONFIG", tddConfStr);
-  //                dev->writeSetting("TDD_MODE", "false");
-  //            }
   bsRadios->reset_DATA_clk_domain();
-  //        }
-  //    }
 }
 
 void BaseRadioSetUHD::radioTx(const void* const* buffs) {
   long long frameTime(0);
-  //    for (size_t c = 0; c < _cfg->num_cells(); c++) {
-  //        for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
   std::cout << "running tx 1" << std::endl;
   bsRadios->xmit(buffs, _cfg->samps_per_slot(), 0, frameTime);
-  //        }
-  //    }
 }
 
 int BaseRadioSetUHD::radioTx(size_t radio_id, size_t cell_id,
@@ -338,14 +293,6 @@ int BaseRadioSetUHD::radioTx(size_t radio_id, size_t cell_id,
   (void)radio_id;
   (void)cell_id;
   int w;
-  // for UHD device xmit from host using frameTimeNs
-  //    if (!kUseUHD) {
-  //        w = bsRadios.at(cell_id).at(radio_id)->xmit(
-  //            buffs, _cfg->samps_per_symbol(), flags, frameTime);
-  //    } else {
-  // future edit on multi usrp:
-  //    std::cout << "radio id is " << radio_id << std::endl;
-  //    std::cout << "cell id is " << cell_id << std::endl;
   long long frameTimeNs = SoapySDR::ticksToTimeNs(frameTime, _cfg->rate());
   w = bsRadios->xmit(buffs, _cfg->samps_per_slot(), flags, frameTimeNs);
 //    }
@@ -358,7 +305,6 @@ int BaseRadioSetUHD::radioTx(size_t radio_id, size_t cell_id,
 //    std::cout << "cell " << cell_id << " radio " << radio_id << " tx returned "
 //              << w << " and status " << s << std::endl;
 #endif
-  //    std::cout<<"running tx 2" << std::endl;
   return w;
 }
 
@@ -366,13 +312,10 @@ void BaseRadioSetUHD::radioRx(void* const* buffs) {
   long long frameTime(0);
   void* const* buff;
 
-  //    for (size_t c = 0; c < _cfg->num_cells(); c++) {
   for (size_t i = 0; i < bsRadios->RawDev()->get_num_mboards(); i++) {
     buff = buffs + (i * 2);
     bsRadios->recv(buff, _cfg->samps_per_slot(), frameTime);
   }
-  //        }
-  //    }
 }
 
 int BaseRadioSetUHD::radioRx(size_t radio_id, size_t cell_id,
@@ -386,11 +329,9 @@ int BaseRadioSetUHD::radioRx(size_t radio_id, size_t cell_id,
                              long long& frameTime) {
   int ret = 0;
 
-  //    std::cout<< "radio id is "<<radio_id<<std::endl;
   if (radio_id < bsRadios->RawDev()->get_num_mboards()) {
     long long frameTimeNs = 0;
     ret = bsRadios->recv(buffs, numSamps, frameTimeNs);
-    //        std::cout<<"bsRadios->dev->get_num_mboards() " << bsRadios->dev->get_num_mboards() << std::endl;
 
     // for UHD device recv using ticks
     frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate());
@@ -460,7 +401,6 @@ int BaseRadioSetUHD::syncTimeOffsetUHD(bool measure_ref_radio,
     ref_radio->drain_buffers(dummybuffs, num_samps);
     RadioUHD* front_radio = bsRadios;
     uhd::usrp::multi_usrp::sptr front_dev = front_radio->RawDev();
-    //        front_dev->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->cal_tx_gain().at(0));
     front_dev->set_tx_gain(0, "PAD", _cfg->cal_tx_gain().at(0));
     front_radio->activateXmit();
     int ret = front_radio->xmit(txbuff.data(), num_samps, 3, txTime);
@@ -473,11 +413,6 @@ int BaseRadioSetUHD::syncTimeOffsetUHD(bool measure_ref_radio,
     if (_cfg->bs_sdr_ch() == 2) rxbuffref[1] = dummyBuff0.data();
     ret = ref_radio->recv(rxbuffref.data(), num_samps, rxTime);
     auto rx = Utils::cint16_to_cfloat(rx_buff_ref);
-    //std::cout << "ref=[";
-    //for (size_t s = 0; s < num_samps; s++)
-    //  std::cout << rx_buff_ref.at(s).real() << "+1j*"
-    //            << rx_buff_ref.at(s).imag() << " ";
-    //std::cout << "];" << std::endl;
     int peak = CommsLib::findLTS(rx, seqLen);
     int offset = peak < seqLen ? 0 : peak - seqLen;
     if (offset > 0) {
@@ -492,15 +427,12 @@ int BaseRadioSetUHD::syncTimeOffsetUHD(bool measure_ref_radio,
           std::cout << "Likely bad receive!" << std::endl;
         else {
           while (abs_delta > 0) {
-            //                        ref_dev->writeSetting("ADJUST_DELAYS",
-            //                                              offset_diff > 0 ? "1" : "-1");
             --abs_delta;
           }
         }
       }
     }
     front_radio->deactivateXmit();
-    //        front_dev->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->tx_gain().at(0));
     front_dev->set_tx_gain(0, "PAD", _cfg->cal_tx_gain().at(0));
     ref_radio->deactivateRecv();
     ref_radio->drain_buffers(dummybuffs, num_samps);
@@ -511,7 +443,6 @@ int BaseRadioSetUHD::syncTimeOffsetUHD(bool measure_ref_radio,
       buff[i].resize(num_samps);
     }
 
-    //        ref_dev->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->cal_tx_gain().at(0));
     ref_dev->set_tx_gain(0, "PAD", _cfg->cal_tx_gain().at(0));
     for (int i = 0; i < num_radios; i++)
       bsRadios->drain_buffers(dummybuffs, num_samps);
@@ -531,7 +462,6 @@ int BaseRadioSetUHD::syncTimeOffsetUHD(bool measure_ref_radio,
     for (int i = 0; i < num_radios; i++) {
       std::vector<void*> rxbuff(2);
       rxbuff[0] = buff[i].data();
-      //rxbuff[1] = ant == 2 ? buff[(i*M+j)*ant+1].data() : dummyBuff.data();
       if (_cfg->bs_sdr_ch() == 2) rxbuff[1] = dummyBuff0.data();
       int ret = bsRadios->recv(rxbuff.data(), num_samps, rxTime);
       if (ret < 0) std::cout << "bad read at node " << i << std::endl;
@@ -542,15 +472,9 @@ int BaseRadioSetUHD::syncTimeOffsetUHD(bool measure_ref_radio,
     std::vector<int> offset(num_radios, 0);
 
     for (int i = 0; i < num_radios; i++) {
-      // std::cout << "s" << i << "=[";
-      // for (size_t s = 0; s < num_samps; s++)
-      //     std::cout << buff[i].at(s).real() << "+1j*" << buff[i].at(s).imag()
-      //               << " ";
-      // std::cout << "];" << std::endl;
       auto rx = Utils::cint16_to_cfloat(buff[i]);
       int peak = CommsLib::findLTS(rx, seqLen);
       offset[i] = peak < seqLen ? 0 : peak - seqLen;
-      //std::cout << i << " " << offset[i] << std::endl;
       if (offset[i] != 0) {
         min_offset = std::min(offset[i], min_offset);
         max_offset = std::max(offset[i], max_offset);
@@ -570,20 +494,15 @@ int BaseRadioSetUHD::syncTimeOffsetUHD(bool measure_ref_radio,
       for (int i = 0; i < num_radios; i++) {
         RadioUHD* bsRadio = bsRadios;
         uhd::usrp::multi_usrp::sptr dev = bsRadio->RawDev();
-        //int delta = median_offset - offset[i];
         int delta = median_offset - offset[i];
-        /*std::cout << "adjusting delay of node " << i << " by " << delta
-                          << std::endl;*/
         int abs_delta = std::abs(delta);
         while (abs_delta > 0) {
-          //                    dev->writeSetting("ADJUST_DELAYS", delta > 0 ? "1" : "-1");
           --abs_delta;
         }
       }
     }
 
     ref_radio->deactivateXmit();
-    //        ref_dev->setGain(SOAPY_SDR_TX, 0, "PAD", _cfg->tx_gain().at(0));
     ref_dev->set_tx_gain(0, "PAD", _cfg->cal_tx_gain().at(0));
     for (int i = 0; i < num_radios; i++) {
       RadioUHD* bsRadio = bsRadios;
