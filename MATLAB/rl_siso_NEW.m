@@ -54,7 +54,7 @@ TX_GN                   = 80;
 RX_GN                   = 60;
 SMPL_RT                 = 5e6;
 TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
-N_FRM                   = 1;
+N_FRM                   = 3;
           
 bs_ids = string.empty();
 bs_sched = string.empty();
