@@ -11,9 +11,9 @@ static constexpr bool kUseSoapyUHD = false;
 #endif
 
 #ifdef USE_UHD
-static constexpr bool kUseUHD = true;
+static constexpr bool kUsePureUHD = true;
 #else
-static constexpr bool kUseUHD = false;
+static constexpr bool kUsePureUHD = false;
 #endif
 
 static constexpr size_t kStreamContinuous = 1;
