@@ -263,7 +263,7 @@ int Receiver::baseTxData(int radio_id, int cell, int frame_id,
         cur_offset = (cur_offset + 1) % tx_buffer_size;
       }
       long long txTime = 0;
-      if (kUseSoapyUHD == true || kUseUHD == true ||
+      if (kUseSoapyUHD == true || kUsePureUHD == true ||
           config_->bs_hw_framer() == false) {
         txTime = txFrameTime +
                  config_->dl_slots().at(radio_id).at(s) * num_samps -
@@ -273,7 +273,7 @@ int Receiver::baseTxData(int radio_id, int cell, int frame_id,
         txTime = ((size_t)event.frame_id << 32) |
                  (config_->dl_slots().at(cell).at(s) << 16);
       }
-      if ((kUseUHD == true || kUseSoapyUHD == true) &&
+      if ((kUsePureUHD == true || kUseSoapyUHD == true) &&
           s < (config_->dl_slot_per_frame() - 1))
         flagsTxData = kStreamContinuous;  // HAS_TIME
       else
@@ -402,7 +402,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
 
   int cell = 0;
   // for UHD device, the first pilot should not have an END_BURST flag
-  if (kUseSoapyUHD == true || kUseUHD == true ||
+  if (kUseSoapyUHD == true || kUsePureUHD == true ||
       config_->bs_hw_framer() == false) {
     // For multi-USRP BS perform dummy radioRx to avoid initial late packets
     int bs_sync_ret = -1;
@@ -433,7 +433,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
   MLPD_INFO("Start BS main recv loop in thread %d\n", tid);
   while (config_->running() == true) {
     // Global updates of frame and slot IDs for USRPs
-    if (kUseSoapyUHD == true || kUseUHD == true ||
+    if (kUseSoapyUHD == true || kUsePureUHD == true ||
         config_->bs_hw_framer() == false) {
       if (slot_id == config_->slot_per_frame()) {
         slot_id = 0;
@@ -488,7 +488,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
 
       ant_id = radio_id * num_channels;
 
-      if (kUseSoapyUHD == true || kUseUHD == true ||
+      if (kUseSoapyUHD == true || kUsePureUHD == true ||
           config_->bs_hw_framer() == false) {
         int rx_len = config_->samps_per_slot();
         int r;
@@ -600,7 +600,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
     }
 
     // for UHD device update slot_id on host
-    if (kUseSoapyUHD == true || kUseUHD == true ||
+    if (kUseSoapyUHD == true || kUsePureUHD == true ||
         config_->bs_hw_framer() == false) {
       slot_id++;
     }
@@ -723,7 +723,7 @@ void Receiver::clientTxRx(int tid) {
 
 void Receiver::clientTxPilots(size_t user_id, long long base_time) {
   // for UHD device, the first pilot should not have an END_BURST flag
-  int flags = (((kUseUHD == true || kUseSoapyUHD == true) &&
+  int flags = (((kUsePureUHD == true || kUseSoapyUHD == true) &&
                 (config_->cl_sdr_ch() == 2)))
                   ? kStreamContinuous
                   : kStreamEndBurst;
@@ -782,7 +782,7 @@ int Receiver::clientTxData(int tid, int frame_id, long long base_time) {
       long long txTime = txFrameTime +
                          config_->cl_ul_slots().at(tid).at(s) * num_samps -
                          config_->tx_advance(tid);
-      if ((kUseUHD || kUseSoapyUHD) && s < (tx_slots - 1)) {
+      if ((kUsePureUHD || kUseSoapyUHD) && s < (tx_slots - 1)) {
         flagsTxUlData = kStreamContinuous;  // HAS_TIME
       } else {
         flagsTxUlData = kStreamEndBurst;  // HAS_TIME & END_BURST, fixme
@@ -882,7 +882,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   int rx_offset = 0;
 
   // For USRP clients skip UHD_INIT_TIME_SEC to avoid late packets
-  if (kUseUHD == true || kUseSoapyUHD == true) {
+  if (kUsePureUHD == true || kUseSoapyUHD == true) {
     int cl_sync_ret = -1;
     sleep(UHD_INIT_TIME_SEC);
     while (cl_sync_ret < 0) {
