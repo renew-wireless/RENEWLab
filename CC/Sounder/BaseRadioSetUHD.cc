@@ -164,11 +164,11 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
       std::cout << "sample offset calibration!" << std::endl;
     }
 
-    nlohmann::json tddConf;
-    tddConf["tdd_enabled"] = true;
-    tddConf["frame_mode"] = "free_running";
-    tddConf["max_frame"] = _cfg->max_frame();
-    tddConf["symbol_size"] = _cfg->samps_per_slot();
+    //    nlohmann::json tddConf;
+    //    tddConf["tdd_enabled"] = true;
+    //    tddConf["frame_mode"] = "free_running";
+    //    tddConf["max_frame"] = _cfg->max_frame();
+    //    tddConf["symbol_size"] = _cfg->samps_per_slot();
 
     // write TDD schedule and beacons to FPFA buffers only for Iris
     for (size_t c = 0; c < _cfg->num_cells(); c++) {
