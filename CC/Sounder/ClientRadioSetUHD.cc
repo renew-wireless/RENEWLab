@@ -17,8 +17,6 @@
 #include "include/macros.h"
 #include "include/utils.h"
 
-static void freeRadios(RadioUHD*& radios) { delete radios; }
-
 ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
   size_t num_radios = _cfg->num_cl_sdrs();
   //load channels
@@ -172,7 +170,12 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
   std::cout << "Client Init success" << std::endl;
 }
 
-ClientRadioSetUHD::~ClientRadioSetUHD(void) { freeRadios(radio_); }
+ClientRadioSetUHD::~ClientRadioSetUHD(void) {
+  if (radio_ != nullptr) {
+    delete radio_;
+    radio_ = nullptr;
+  }
+}
 
 void ClientRadioSetUHD::radioStop(void) {
   radio_->deactivateRecv();
