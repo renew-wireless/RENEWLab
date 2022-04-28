@@ -9,7 +9,7 @@
 
 #include "include/hdf5_lib.h"
 
-#include <assert.h>
+#include <cassert>
 
 #include "include/logger.h"
 #include "include/utils.h"

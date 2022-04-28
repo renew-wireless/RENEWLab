@@ -11,6 +11,8 @@
 
 #include <gflags/gflags.h>
 
+#include <iostream>
+
 #include "include/data_generator.h"
 #include "include/scheduler.h"
 #include "include/signalHandler.hpp"

@@ -1,14 +1,15 @@
 {
-  "serial_file" : "files/special_conf/usrp_topology.json",
+  "serial_file" : "files/special_conf/usrp_16qam.json",
   "frequency" : 2.5e9,
   "channel" : "AB",
-  "rx_gain_a" : 20,
-  "tx_gain_a" : 20,
-  "rx_gain_b" : 20,
-  "tx_gain_b" : 20,
+  "rx_gain_a" : 15,
+  "tx_gain_a" : 15,
+  "rx_gain_b" : 15,
+  "tx_gain_b" : 15,
   "sample_rate" : 5e6,
+  "modulation" : "64QAM",
   "frame_schedule" : [
-      "BGGPPGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
+      "BGGPPGGGGUGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
   ],
   "max_frame" : 4000,
   "ofdm_symbol_per_slot" : 10,
@@ -18,14 +19,15 @@
   "ofdm_tx_zero_postfix" : 160,
   "beamsweep" : true,
   "ue_channel" : "AB",
-  "ue_rx_gain_a" : [20],
-  "ue_tx_gain_a" : [20],
-  "ue_rx_gain_b" : [20],
-  "ue_tx_gain_b" : [20],
+  "ue_rx_gain_a" : [15],
+  "ue_tx_gain_a" : [15],
+  "ue_rx_gain_b" : [15],
+  "ue_tx_gain_b" : [15],
   "ue_frame_schedule" : [
-      "BGGPPGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
+      "BGGPPGGGGUGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
   ],
   "tx_advance" : [100],
   "hw_framer" : false,
+  "ue_modulation" : "64QAM",
   "frame_mode" : "free_running"
 }

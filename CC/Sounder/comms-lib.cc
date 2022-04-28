@@ -23,7 +23,6 @@
 
 #include "include/constants.h"
 #include "include/utils.h"
-//#include <itpp/itbase.h>
 
 int CommsLib::findLTS(const std::vector<std::complex<float>>& iq, int seqLen) {
   /*
