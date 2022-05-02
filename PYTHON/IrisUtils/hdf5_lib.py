@@ -911,11 +911,11 @@ class hdf5_lib:
         zero_sc_ind = np.setdiff1d(range(fft_size), data_sc_ind)
         zero_sc_ind = np.setdiff1d(zero_sc_ind, pilot_sc_ind)
         nonzero_sc_ind = np.setdiff1d(range(fft_size), zero_sc_ind)
-        ul_equal_syms_frame_num = int(metadata['UL_DATA_FRAME_NUM'])
+        ul_data_frame_num = int(metadata['UL_DATA_FRAME_NUM'])
         tx_file_names = metadata['TX_FD_DATA_FILENAMES'].astype(str)
-        txdata = np.empty((ul_equal_syms_frame_num, num_cl, ul_slot_num,
+        txdata = np.empty((ul_data_frame_num, num_cl, ul_slot_num,
                      symbol_per_slot,  fft_size), dtype='complex64')
-        read_size = 2 * ul_equal_syms_frame_num * ul_slot_num * cl_ch_num * symbol_per_slot * fft_size
+        read_size = 2 * ul_data_frame_num * ul_slot_num * cl_ch_num * symbol_per_slot * fft_size
         cl = 0
         for fn in tx_file_names:
             if dirpath == "":
@@ -928,13 +928,13 @@ class hdf5_lib:
                 I = np.array(txdata0[0::2])
                 Q = np.array(txdata0[1::2])
                 IQ = I + Q * 1j
-                txdata[:, cl:cl+cl_ch_num, :, :, :] = np.transpose(np.reshape(IQ, (ul_equal_syms_frame_num, ul_slot_num,
+                txdata[:, cl:cl+cl_ch_num, :, :, :] = np.transpose(np.reshape(IQ, (ul_data_frame_num, ul_slot_num,
                     cl_ch_num, symbol_per_slot, fft_size)), (0, 2, 1, 3, 4))
             cl = cl + cl_ch_num
         return txdata
 
     @staticmethod
-    def demodulate(ul_samps_f, csi, txdata, metadata, offset, ul_slot_i, noise_samps_f=None, method='zf'):
+    def demodulate(ul_samps_f, csi, txdata, metadata, ue_frame_offset, offset, ul_slot_i, noise_samps_f=None, method='zf'):
         if method.lower() == 'mmse' and noise_samps_f is None:
             print("%s requires noise samples"%(method))
             return None
@@ -961,8 +961,6 @@ class hdf5_lib:
         zero_sc_ind = np.setdiff1d(range(fft_size), data_sc_ind)
         zero_sc_ind = np.setdiff1d(zero_sc_ind, pilot_sc_ind)
         nonzero_sc_ind = np.setdiff1d(range(fft_size), zero_sc_ind)
-        ul_equal_syms_frame_num = int(metadata['UL_DATA_FRAME_NUM'])
-        tx_file_names = metadata['TX_FD_DATA_FILENAMES'].astype(str)
 
 
         # UL Samps: #Frames, #Uplink SLOTS, #Antennas, #Samples
@@ -993,17 +991,20 @@ class hdf5_lib:
         ul_equal_syms = np.transpose(ul_equal_syms, (0, 2, 1, 3))
         # UL DATA: #Frames, #User, SLOT DATA SCs
         ul_equal_syms = np.reshape(ul_equal_syms, (ul_equal_syms.shape[0], ul_equal_syms.shape[1], symbol_per_slot * len(data_sc_ind)))
-        evm = np.empty((ul_equal_syms.shape[0], ul_equal_syms.shape[1]), dtype='complex64')
-        evm_snr = np.empty((ul_equal_syms.shape[0], ul_equal_syms.shape[1]), dtype='complex64')
 
         rep = n_frames // txdata.shape[0]
         tx_symbols = np.tile(txdata, (rep, 1, 1, 1, 1))
         frac_fr = n_frames % txdata.shape[0]
         if frac_fr > 0:
-            frac = txdata[frac_fr:, :, :, :, :]
-            tx_symbols = np.concatenate((tx_symbols, frac), axis=0)
+            frac = txdata[:frac_fr, :, :, :, :]
+            tx_symbols = frac if rep == 0 else np.concatenate((tx_symbols, frac), axis=0)
         tx_symbols = np.reshape(tx_symbols[:, :, :, :, data_sc_ind], (tx_symbols.shape[0], tx_symbols.shape[1], ul_slot_num, symbol_per_slot * len(data_sc_ind)))
-        slot_evm = np.linalg.norm(ul_equal_syms - tx_symbols[:, :, ul_slot_i, :], 2, axis=2) / ul_equal_syms.shape[2]
+        useful_frame_num = ul_equal_syms.shape[0] - max(ue_frame_offset)
+        slot_evm = np.zeros((useful_frame_num, ul_equal_syms.shape[1]))
+        for i in range(ul_equal_syms.shape[1]):
+            frame_start = ue_frame_offset[i]
+            frame_end = ue_frame_offset[i] + useful_frame_num
+            slot_evm[:, i] = np.linalg.norm(ul_equal_syms[frame_start:frame_end, i, :] - tx_symbols[:useful_frame_num, i, ul_slot_i, :], 2, axis=1) / ul_equal_syms.shape[2]
         slot_evm_snr = 10 * np.log10(1 / slot_evm)
 
         return ul_equal_syms, tx_symbols, slot_evm, slot_evm_snr

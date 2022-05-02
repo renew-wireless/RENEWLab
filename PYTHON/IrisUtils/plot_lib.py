@@ -131,8 +131,8 @@ def plot_constellation_stats(evm, evm_snr, ul_data, txdata, frame_i, ul_slot_i, 
         axes5[y_i, x_i].scatter(np.real(ul_data[frame_i, i, :]), np.imag(ul_data[frame_i, i, :]))
         axes5[y_i, x_i].scatter(np.real(txdata[frame_i, i, ul_slot_i, :]), np.imag(txdata[frame_i, i, ul_slot_i, :]))
 
-        axes6[0, 0].plot(range(ul_data.shape[0]), 100 * evm[:, i], label='User %d'%(i))
-        axes6[1, 0].plot(range(ul_data.shape[0]), evm_snr[:, i], label='User %d'%(i))
+        axes6[0, 0].plot(range(evm.shape[0]), 100 * evm[:, i], label='User %d'%(i))
+        axes6[1, 0].plot(range(evm.shape[0]), evm_snr[:, i], label='User %d'%(i))
     axes6[0, 0].legend(loc='upper right', frameon=False)
 
 def show_plot(cmpx_pilots, lts_seq_orig, match_filt, ref_user, ref_ant, ref_frame, frm_st_idx):

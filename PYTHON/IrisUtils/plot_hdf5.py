@@ -97,6 +97,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     dl_data_avail = len(hdf5.downlink_samples) > 0
 
     chunk_size = 10000
+    ue_frame_offset = [0]*num_cl
 
     if pilot_data_avail:
         pilot_samples = hdf5.pilot_samples[:, cell_i, :, :, :]
@@ -140,6 +141,17 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         if len(good_ants) == 0:
             print("no valid frames found in data belonging to user %d. Exitting ..." % user_i)
             return
+
+        # Find the frame number at which each UE starts sending pilots+data
+        for u in range(num_ues):
+            amps = np.mean(np.abs(samps[:, u, ant_i, :]), axis=1)
+            for i in range(1, len(amps)):
+                if amps[i] > thresh and amps[i-1] < thresh:
+                    ue_frame_offset[u] = i
+                    break
+            #pilot_frames[u] = [i for i in range(1, len(amps)) if amps[i] > thresh and amps[i-1] < thresh]
+        print("Starting frame offset for each UE:")
+        print(ue_frame_offset)
 
         if deep_inspect:
             filter_pilots_start = time.time()
@@ -321,7 +333,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             else:
                 noise_f = None
             tx_data = hdf5_lib.load_tx_data(metadata, hdf5.dirpath)
-            equalized_symbols, tx_symbols, slot_evm, slot_evm_snr = hdf5_lib.demodulate(ul_samps[:, ul_slot_i, :, :], userCSI, tx_data, metadata, offset, ul_slot_i, noise_f, demod)
+            equalized_symbols, tx_symbols, slot_evm, slot_evm_snr = hdf5_lib.demodulate(ul_samps[:, ul_slot_i, :, :], userCSI, tx_data, metadata, ue_frame_offset, offset, ul_slot_i, noise_f, demod)
             plot_constellation_stats(slot_evm, slot_evm_snr, equalized_symbols, tx_symbols, ref_frame, ul_slot_i)
 
     # Plot DL data symbols
