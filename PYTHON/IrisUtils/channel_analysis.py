@@ -404,8 +404,9 @@ def calcBW(csi, noise=None, method='zf'):
         elif method == 'mmse' and noise is not None:
             sigma = np.mean(np.mean(np.power(np.abs(noise[:, :, sc]), 2), axis=0))
             H = csi[:, :, sc]
-            w_mmse = np.matmul(np.linalg.inv(np.matmul(H, np.transpose(np.conj(H))) + sigma*np.eye(H.shape[0])), H)
-            bmf_w[sc, :, :] = np.transpose(np.conj(w_mmse))
+            #w_mmse = np.matmul(np.linalg.inv(np.matmul(H, np.transpose(np.conj(H))) + sigma*np.eye(H.shape[0])), H)
+            w_mmse = np.matmul(H, np.linalg.inv(np.matmul(np.transpose(np.conj(H)), H) + sigma*np.eye(H.shape[1])))
+            bmf_w[sc, :, :] = np.conj(w_mmse)
         else:
             csi_conj = np.conj(csi[:, :, sc])
             w_scale = np.sum(np.multiply(csi_conj, csi[:, :, sc]), 1);
