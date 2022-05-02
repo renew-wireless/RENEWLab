@@ -11,11 +11,15 @@
 
 #include <unistd.h>
 
-#include <SoapySDR/Time.hpp>
 #include <atomic>
 #include <random>
 
+#include "SoapySDR/Time.hpp"
+#if defined(USE_UHD)
+#include "include/ClientRadioSetUHD.h"
+#else
 #include "include/ClientRadioSet.h"
+#endif
 #include "include/comms-lib.h"
 #include "include/logger.h"
 #include "include/macros.h"
@@ -41,12 +45,18 @@ Receiver::Receiver(
 
   MLPD_TRACE("Receiver Construction - CL present: %d, BS Present: %d\n",
              config_->client_present(), config_->bs_present());
-
   try {
-    this->clientRadioSet_ =
+#if defined(USE_UHD)
+    this->client_radio_set_ =
+        config_->client_present() ? new ClientRadioSetUHD(config_) : nullptr;
+    this->base_radio_set_ =
+        config_->bs_present() ? new BaseRadioSetUHD(config_) : nullptr;
+#else
+    this->client_radio_set_ =
         config_->client_present() ? new ClientRadioSet(config_) : nullptr;
     this->base_radio_set_ =
         config_->bs_present() ? new BaseRadioSet(config_) : nullptr;
+#endif
   } catch (std::exception& e) {
     throw ReceiverException(e.what());
   }
@@ -56,22 +66,23 @@ Receiver::Receiver(
 
   if (((this->base_radio_set_ != nullptr) &&
        (this->base_radio_set_->getRadioNotFound())) ||
-      ((this->clientRadioSet_ != nullptr) &&
-       (this->clientRadioSet_->getRadioNotFound()))) {
+      ((this->client_radio_set_ != nullptr) &&
+       (this->client_radio_set_->getRadioNotFound()))) {
     if (this->base_radio_set_ != nullptr) {
       MLPD_WARN("Invalid Base Radio Setup: %d\n",
                 this->base_radio_set_ == nullptr);
       this->base_radio_set_->radioStop();
       delete this->base_radio_set_;
     }
-    if (this->clientRadioSet_ != nullptr) {
+    if (this->client_radio_set_ != nullptr) {
       MLPD_WARN("Invalid Client Radio Setup: %d\n",
-                this->clientRadioSet_ == nullptr);
-      this->clientRadioSet_->radioStop();
-      delete this->clientRadioSet_;
+                this->client_radio_set_ == nullptr);
+      this->client_radio_set_->radioStop();
+      delete this->client_radio_set_;
     }
     throw ReceiverException("Invalid Radio Setup");
   }
+
   this->initBuffers();
   MLPD_TRACE("Construction complete\n");
 }
@@ -79,41 +90,41 @@ Receiver::Receiver(
 Receiver::~Receiver() {
   MLPD_TRACE("Radio Set cleanup, Base: %d, Client: %d\n",
              this->base_radio_set_ == nullptr,
-             this->clientRadioSet_ == nullptr);
+             this->client_radio_set_ == nullptr);
   if (this->base_radio_set_ != nullptr) {
     this->base_radio_set_->radioStop();
     delete this->base_radio_set_;
   }
-  if (this->clientRadioSet_ != nullptr) {
-    this->clientRadioSet_->radioStop();
-    delete this->clientRadioSet_;
+  if (this->client_radio_set_ != nullptr) {
+    this->client_radio_set_->radioStop();
+    delete this->client_radio_set_;
   }
 
-  for (auto memory : zeros) {
+  for (auto memory : zeros_) {
     free(memory);
   }
-  zeros.clear();
+  zeros_.clear();
 }
 
 void Receiver::initBuffers() {
   size_t frameTimeLen = config_->samps_per_frame();
-  txFrameDelta = int(TIME_DELTA / (1e3 * config_->getFrameDurationSec()));
-  txTimeDelta = txFrameDelta * frameTimeLen;
+  txFrameDelta_ = int(TIME_DELTA / (1e3 * config_->getFrameDurationSec()));
+  txTimeDelta_ = txFrameDelta_ * frameTimeLen;
 
-  zeros.resize(2);
-  pilotbuffA.resize(2);
-  pilotbuffB.resize(2);
-  for (auto& memory : zeros) {
+  zeros_.resize(2);
+  pilotbuffA_.resize(2);
+  pilotbuffB_.resize(2);
+  for (auto& memory : zeros_) {
     memory = calloc(config_->samps_per_slot(), sizeof(int16_t) * 2);
     if (memory == NULL) {
       throw std::runtime_error("Error allocating memory");
     }
   }
-  pilotbuffA.at(0) = config_->pilot_ci16().data();
+  pilotbuffA_.at(0) = config_->pilot_ci16().data();
   if (config_->cl_sdr_ch() == 2) {
-    pilotbuffA.at(1) = zeros.at(0);
-    pilotbuffB.at(1) = config_->pilot_ci16().data();
-    pilotbuffB.at(0) = zeros.at(1);
+    pilotbuffA_.at(1) = zeros_.at(0);
+    pilotbuffB_.at(1) = config_->pilot_ci16().data();
+    pilotbuffB_.at(0) = zeros_.at(1);
   }
 }
 
@@ -207,15 +218,17 @@ void Receiver::baseTxBeacon(int radio_id, int cell, int frame_id,
     if (config_->beacon_radio() == (size_t)radio_id) {
       size_t bcn_ch = config_->beacon_channel();
       beaconbuff.at(bcn_ch) = config_->beacon_ci16().data();
-      if (config_->bs_sdr_ch() > 1) beaconbuff.at(1 - bcn_ch) = zeros.at(0);
+      if (config_->bs_sdr_ch() > 1) beaconbuff.at(1 - bcn_ch) = zeros_.at(0);
     } else {  // set both channels to zeros
       for (size_t ch = 0; ch < config_->bs_sdr_ch(); ++ch)
-        beaconbuff.at(ch) = zeros.at(ch);
+        beaconbuff.at(ch) = zeros_.at(ch);
     }
   }
-  int r_tx = this->base_radio_set_->radioTx(
+  int r_tx;
+  r_tx = this->base_radio_set_->radioTx(
       radio_id, cell, beaconbuff.data(), kStreamEndBurst,
       base_time);  // assume beacon is first slot
+
   if (r_tx != (int)config_->samps_per_slot())
     std::cerr << "BAD Transmit(" << r_tx << "/" << config_->samps_per_slot()
               << ") at Time " << base_time << ", frame count " << frame_id
@@ -250,7 +263,8 @@ int Receiver::baseTxData(int radio_id, int cell, int frame_id,
         cur_offset = (cur_offset + 1) % tx_buffer_size;
       }
       long long txTime = 0;
-      if (kUseUHD == true || config_->bs_hw_framer() == false) {
+      if (kUseSoapyUHD == true || kUsePureUHD == true ||
+          config_->bs_hw_framer() == false) {
         txTime = txFrameTime +
                  config_->dl_slots().at(radio_id).at(s) * num_samps -
                  config_->tx_advance(radio_id);
@@ -259,12 +273,15 @@ int Receiver::baseTxData(int radio_id, int cell, int frame_id,
         txTime = ((size_t)event.frame_id << 32) |
                  (config_->dl_slots().at(cell).at(s) << 16);
       }
-      if (kUseUHD == true && s < (config_->dl_slot_per_frame() - 1))
+      if ((kUsePureUHD == true || kUseSoapyUHD == true) &&
+          s < (config_->dl_slot_per_frame() - 1))
         flagsTxData = kStreamContinuous;  // HAS_TIME
       else
         flagsTxData = kStreamEndBurst;  // HAS_TIME & END_BURST, fixme
-      int r = this->base_radio_set_->radioTx(radio_id, cell, dl_txbuff.data(),
-                                             flagsTxData, txTime);
+      int r;
+      r = this->base_radio_set_->radioTx(radio_id, cell, dl_txbuff.data(),
+                                         flagsTxData, txTime);
+
       if (r < num_samps) {
         MLPD_WARN("BAD Write: %d/%d\n", r, num_samps);
       }
@@ -385,8 +402,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
 
   int cell = 0;
   // for UHD device, the first pilot should not have an END_BURST flag
-  //if (kUseUHD == true) {
-  if (kUseUHD == true || config_->bs_hw_framer() == false) {
+  if (kUseSoapyUHD == true || kUsePureUHD == true ||
+      config_->bs_hw_framer() == false) {
     // For multi-USRP BS perform dummy radioRx to avoid initial late packets
     int bs_sync_ret = -1;
     MLPD_INFO("Sync BS host and FPGA timestamp for thread %d\n", tid);
@@ -416,7 +433,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
   MLPD_INFO("Start BS main recv loop in thread %d\n", tid);
   while (config_->running() == true) {
     // Global updates of frame and slot IDs for USRPs
-    if (kUseUHD == true || config_->bs_hw_framer() == false) {
+    if (kUseSoapyUHD == true || kUsePureUHD == true ||
+        config_->bs_hw_framer() == false) {
       if (slot_id == config_->slot_per_frame()) {
         slot_id = 0;
         frame_id++;
@@ -467,9 +485,11 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
         samp[num_channels - 1] = std::vector<char>(packetLength).data();
 
       assert(this->base_radio_set_ != NULL);
+
       ant_id = radio_id * num_channels;
 
-      if (kUseUHD == true || config_->bs_hw_framer() == false) {
+      if (kUseSoapyUHD == true || kUsePureUHD == true ||
+          config_->bs_hw_framer() == false) {
         int rx_len = config_->samps_per_slot();
         int r;
 
@@ -497,16 +517,30 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
           if (config_->dl_data_slot_present() == true) {
             while (-1 != baseTxData(radio_id, cell, frame_id, rxTimeBs))
               ;
-            this->notifyPacket(kBS, frame_id + this->txFrameDelta, 0, radio_id,
+            this->notifyPacket(kBS, frame_id + this->txFrameDelta_, 0, radio_id,
                                bs_tx_buff_size);  // Notify new frame
           } else {
             this->baseTxBeacon(radio_id, cell, frame_id,
-                               rxTimeBs + txTimeDelta);
+                               rxTimeBs + txTimeDelta_);
           }  // end if config_->dul_data_slot_present()
         }
         if (!config_->isPilot(frame_id, slot_id) &&
-            !config_->isUlData(frame_id, slot_id))
+            !config_->isUlData(frame_id, slot_id)) {
+          for (size_t ch = 0; ch < num_packets; ++ch) {
+            const int bit = 1 << (cursor + ch) % sizeof(std::atomic_int);
+            const int offs = (cursor + ch) / sizeof(std::atomic_int);
+            const int old =
+                std::atomic_fetch_and(&pkt_buf_inuse[offs], ~bit);  // now empty
+            // if buffer was empty, exit
+            if ((old & bit) != bit) {
+              MLPD_ERROR("thread %d freed buffer when already free\n", tid);
+              throw std::runtime_error("buffer empty during free\n");
+            }
+            // Reserved until marked empty by consumer
+          }
           continue;
+        }
+
       } else {
         long long frameTime;
         if (this->base_radio_set_->radioRx(radio_id, cell, samp, frameTime) <
@@ -536,7 +570,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
           if (config_->dl_data_slot_present() == true) {
             while (-1 != baseTxData(radio_id, cell, frame_id, frameTime))
               ;
-            this->notifyPacket(kBS, frame_id + this->txFrameDelta, 0, radio_id,
+            this->notifyPacket(kBS, frame_id + this->txFrameDelta_, 0, radio_id,
                                bs_tx_buff_size);  // Notify new frame
           }
         }
@@ -566,7 +600,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
     }
 
     // for UHD device update slot_id on host
-    if (kUseUHD == true || config_->bs_hw_framer() == false) {
+    if (kUseSoapyUHD == true || kUsePureUHD == true ||
+        config_->bs_hw_framer() == false) {
       slot_id++;
     }
   }
@@ -634,13 +669,16 @@ void Receiver::clientTxRx(int tid) {
   struct timespec tv, tv2;
   clock_gettime(CLOCK_MONOTONIC, &tv);
 
-  assert(clientRadioSet_ != NULL);
+  assert(client_radio_set_ != NULL);
+
   while (config_->running() == true) {
     clock_gettime(CLOCK_MONOTONIC, &tv2);
     double diff =
         ((tv2.tv_sec - tv.tv_sec) * 1e9 + (tv2.tv_nsec - tv.tv_nsec)) / 1e9;
     if ((config_->frame_mode() != "free_running") && (diff > 2)) {
-      int total_trigs = clientRadioSet_->triggers(tid);
+      int total_trigs;
+      total_trigs = client_radio_set_->triggers(tid);
+
       std::cout << "new triggers: " << total_trigs - all_trigs
                 << ", total: " << total_trigs << std::endl;
       all_trigs = total_trigs;
@@ -652,7 +690,8 @@ void Receiver::clientTxRx(int tid) {
     long long firstRxTime(0);
     bool receiveErrors = false;
     for (size_t i = 0; i < rxSyms; i++) {
-      int r = clientRadioSet_->radioRx(tid, rxbuff.data(), NUM_SAMPS, rxTime);
+      int r;
+      r = client_radio_set_->radioRx(tid, rxbuff.data(), NUM_SAMPS, rxTime);
       if (r == NUM_SAMPS) {
         if (i == 0) firstRxTime = rxTime;
       } else {
@@ -664,12 +703,13 @@ void Receiver::clientTxRx(int tid) {
     if (receiveErrors == false) {
       // transmit loop
       txTime = firstRxTime & 0xFFFFFFFF00000000;
-      txTime += ((long long)this->txFrameDelta << 32);
+      txTime += ((long long)this->txFrameDelta_ << 32);
       txTime += ((long long)txStartSym << 16);
       //printf("rxTime %llx, txTime %llx \n", firstRxTime, txTime);
       for (size_t i = 0; i < tx_slots; i++) {
-        int r = clientRadioSet_->radioTx(tid, ul_txbuff.data(), NUM_SAMPS, 1,
-                                         txTime);
+        int r;
+        r = client_radio_set_->radioTx(tid, ul_txbuff.data(), NUM_SAMPS, 1,
+                                       txTime);
         if (r == NUM_SAMPS) {
           txTime += 0x10000;
         }
@@ -683,16 +723,18 @@ void Receiver::clientTxRx(int tid) {
 
 void Receiver::clientTxPilots(size_t user_id, long long base_time) {
   // for UHD device, the first pilot should not have an END_BURST flag
-  int flags = (((kUseUHD == true) && (config_->cl_sdr_ch() == 2)))
+  int flags = (((kUsePureUHD == true || kUseSoapyUHD == true) &&
+                (config_->cl_sdr_ch() == 2)))
                   ? kStreamContinuous
                   : kStreamEndBurst;
   int num_samps = config_->samps_per_slot();
   long long txTime = base_time +
                      config_->cl_pilot_slots().at(user_id).at(0) * num_samps -
                      config_->tx_advance(user_id);
+  int r;
+  r = client_radio_set_->radioTx(user_id, pilotbuffA_.data(), num_samps, flags,
+                                 txTime);
 
-  int r = clientRadioSet_->radioTx(user_id, pilotbuffA.data(), num_samps, flags,
-                                   txTime);
   if (r < num_samps) {
     MLPD_WARN("BAD Write: %d/%d\n", r, num_samps);
   }
@@ -700,9 +742,9 @@ void Receiver::clientTxPilots(size_t user_id, long long base_time) {
     txTime = base_time +
              config_->cl_pilot_slots().at(user_id).at(1) * num_samps -
              config_->tx_advance(user_id);
+    r = client_radio_set_->radioTx(user_id, pilotbuffB_.data(), num_samps,
+                                   kStreamEndBurst, txTime);
 
-    r = clientRadioSet_->radioTx(user_id, pilotbuffB.data(), num_samps,
-                                 kStreamEndBurst, txTime);
     if (r < num_samps) {
       MLPD_WARN("BAD Write: %d/%d\n", r, num_samps);
     }
@@ -740,12 +782,14 @@ int Receiver::clientTxData(int tid, int frame_id, long long base_time) {
       long long txTime = txFrameTime +
                          config_->cl_ul_slots().at(tid).at(s) * num_samps -
                          config_->tx_advance(tid);
-      if (kUseUHD && s < (tx_slots - 1))
+      if ((kUsePureUHD || kUseSoapyUHD) && s < (tx_slots - 1)) {
         flagsTxUlData = kStreamContinuous;  // HAS_TIME
-      else
+      } else {
         flagsTxUlData = kStreamEndBurst;  // HAS_TIME & END_BURST, fixme
-      int r = clientRadioSet_->radioTx(tid, ul_txbuff.data(), num_samps,
-                                       flagsTxUlData, txTime);
+      }
+      int r;
+      r = client_radio_set_->radioTx(tid, ul_txbuff.data(), num_samps,
+                                     flagsTxUlData, txTime);
       if (r < num_samps) {
         MLPD_WARN("BAD Write: %d/%d\n", r, num_samps);
       }
@@ -825,8 +869,8 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   }
 
   MLPD_INFO("Scheduling TX: %zu Frames (%lf ms) in the future!\n",
-            this->txFrameDelta,
-            this->txFrameDelta * (1e3 * config_->getFrameDurationSec()));
+            this->txFrameDelta_,
+            this->txFrameDelta_ * (1e3 * config_->getFrameDurationSec()));
 
   int SYNC_NUM_SAMPS = config_->samps_per_frame();
   std::vector<std::complex<int16_t>> syncbuff0(SYNC_NUM_SAMPS, 0);
@@ -876,12 +920,12 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   float cfo_phase_est = 0;
 
   // For USRP clients skip UHD_INIT_TIME_SEC to avoid late packets
-  if (kUseUHD == true) {
+  if (kUsePureUHD == true || kUseSoapyUHD == true) {
     int cl_sync_ret = -1;
     sleep(UHD_INIT_TIME_SEC);
     while (cl_sync_ret < 0) {
-      cl_sync_ret = clientRadioSet_->radioRx(tid, syncrxbuff.data(),
-                                             SYNC_NUM_SAMPS, rxTime);
+      cl_sync_ret = client_radio_set_->radioRx(tid, syncrxbuff.data(),
+                                               SYNC_NUM_SAMPS, rxTime);
     }
   }
 
@@ -890,8 +934,9 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   while ((config_->running() == true) && (sync_index < 0)) {
     for (int find_beacon_retry = 0; find_beacon_retry < BEACON_INTERVAL;
          find_beacon_retry++) {
-      int r = clientRadioSet_->radioRx(tid, syncrxbuff.data(), SYNC_NUM_SAMPS,
-                                       rxTime);
+      int r;
+      r = client_radio_set_->radioRx(tid, syncrxbuff.data(), SYNC_NUM_SAMPS,
+                                     rxTime);
       if (r != SYNC_NUM_SAMPS) {
         MLPD_WARN("BAD SYNC Receive( %d / %d ) at Time %lld\n", r,
                   SYNC_NUM_SAMPS, rxTime);
@@ -916,7 +961,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
     if (rx_offset > 0) {
       int rx_data;
       rx_data =
-          clientRadioSet_->radioRx(tid, syncrxbuff.data(), rx_offset, rxTime);
+          client_radio_set_->radioRx(tid, syncrxbuff.data(), rx_offset, rxTime);
       if (rx_data != rx_offset) {
         MLPD_WARN("Rx data: %d : %d failed to align sync read\n", rx_data,
                   rx_offset);
@@ -947,15 +992,15 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
       config_->running(false);
       break;
     }
+    r = client_radio_set_->radioRx(tid, syncrxbuff.data(),
+                                   NUM_SAMPS + rx_offset, rxTime);
 
-    r = clientRadioSet_->radioRx(tid, syncrxbuff.data(), NUM_SAMPS + rx_offset,
-                                 rxTime);
     if (r < 0) {
       config_->running(false);
       break;
     }
     if (config_->ul_data_slot_present() == true) {
-      this->notifyPacket(kClient, frame_id + this->txFrameDelta, 0, tid,
+      this->notifyPacket(kClient, frame_id + this->txFrameDelta_, 0, tid,
                          tx_buffer_size);  // Notify new frame
     }
 
@@ -990,6 +1035,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
         resync_retry_cnt++;
       }
     }
+    //    std::cout<<"here"<<std::endl;
     if ((resync == true) && (resync_retry_cnt > resync_retry_max)) {
       MLPD_WARN(
           "Exceeded resync retry limit (%zu) for client "
@@ -1007,7 +1053,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
       while (-1 != this->clientTxData(tid, frame_id, rxTime))
         ;
     } else {
-      this->clientTxPilots(tid, rxTime + txTimeDelta);
+      this->clientTxPilots(tid, rxTime + txTimeDelta_);
     }  // end if config_->ul_data_slot_present()
 
     slot_id++;
@@ -1036,11 +1082,12 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
           samp[ch] = pkt[ch]->data;
         }
 
-        if ((r = this->clientRadioSet_->radioRx(tid, samp, NUM_SAMPS, rxTime)) <
-            0) {
+        if ((r = this->client_radio_set_->radioRx(tid, samp, NUM_SAMPS,
+                                                  rxTime)) < 0) {
           config_->running(false);
           break;
         }
+
         for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
           new (pkt[ch]) Packet(frame_id, slot_id, 0, ant_id + ch);
           // push kEventRxSymbol event into the queue
@@ -1051,8 +1098,8 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
           buffer_offset %= buffer_chunk_size;
         }
       } else {
-        r = this->clientRadioSet_->radioRx(tid, rxbuff.data(), NUM_SAMPS,
-                                           rxTime);
+        r = this->client_radio_set_->radioRx(tid, rxbuff.data(), NUM_SAMPS,
+                                             rxTime);
         if (r < 0) {
           config_->running(false);
           break;

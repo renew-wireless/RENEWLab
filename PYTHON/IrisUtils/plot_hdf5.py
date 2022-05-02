@@ -159,6 +159,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 snr, seq_found = hdf5_lib.measure_snr(pilot_samples, noise_samples, peak_map, pilot_type, ofdm_pilot, ofdm_len, z_padding)
                 snr_end = time.time()
                 print(">>>> compute_snr time: %f \n" % (snr_end - snr_start))
+            else:
+                 seq_found = hdf5_lib.pilot_map_prep(pilot_samples, peak_map, ofdm_len, z_padding)
 
             # Plots:
             print("Plotting the results:\n")

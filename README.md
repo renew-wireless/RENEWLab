@@ -1,6 +1,6 @@
 # RENEWLab
 
-[![Build Status](https://falcon.ecg.rice.edu:443/buildStatus/icon?job=github_public_renewlab%2Fdevelop)](https://falcon.ecg.rice.edu:443/job/github_public_renewlab/job/develop/)
+[![Build Status](https://falcon.ecg.rice.edu:443/buildStatus/icon?job=github_public_renewlab%2Fmaster)](https://falcon.ecg.rice.edu:443/job/github_public_renewlab/job/master/)
 
 # Contents
  * [Description](#description)
@@ -75,6 +75,13 @@ $ cd build
 $ cmake .. -DCMAKE_BUILD_TYPE=Release -DLOG_LEVEL=info && make -j
 $ cd ../
 ```
+If you wish to switch to use the UHD impelentation (install necessary UHD packages [here](https://kb.ettus.com/Building_and_Installing_the_USRP_Open-Source_Toolchain_(UHD_and_GNU_Radio)_on_Linux)):
+```sh
+$ cd build
+$ cmake .. -DRADIO_TYPE=PURE_UHD
+$ make
+$ cd ../
+```
 Once compiled successfully, the code can be run as the following.
 
  1. If your JSON file includes uplink/downlink data transmission, first generate the files, including a random bits source file, as below:
@@ -97,7 +104,7 @@ Once compiled successfully, the code can be run as the following.
      ```sh
      $ ../../PYTHON/IrisUtils/plot_hdf5.py PATH_TO_DATASET_FILE # add command line options
      ```   
- 5. Checkout the [RENEW Wireless Wiki](https://wiki.renew-wireless.org/) for more details.
+ 5. For more info on how to use these tools including all the options available for dataset processing as well as other tools available in the RENEWLab codebase, visit the [RENEW Documentation](https://docs.renew-wireless.org) website.
 
 # Contributing and Support
 
