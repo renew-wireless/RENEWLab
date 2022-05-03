@@ -659,6 +659,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
       MLPD_INFO("Allocating %zu cores to client threads ... \n", num_cl_sdrs_);
     }
   }
+
+  tx_frame_delta_ = std::ceil(TIME_DELTA / (1e3 * this->getFrameDurationSec()));
   std::printf(
       "Config: %zu BS, %zu BS radios (total), %zu UE antennas, %zu pilot "
       "symbols per "

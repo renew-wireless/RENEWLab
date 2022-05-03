@@ -108,7 +108,7 @@ Receiver::~Receiver() {
 
 void Receiver::initBuffers() {
   size_t frameTimeLen = config_->samps_per_frame();
-  txFrameDelta_ = int(TIME_DELTA / (1e3 * config_->getFrameDurationSec()));
+  txFrameDelta_ = config_->getTxFrameDelta();
   txTimeDelta_ = txFrameDelta_ * frameTimeLen;
 
   zeros_.resize(2);

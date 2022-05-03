@@ -86,8 +86,8 @@ bool Hdf5Reader::DispatchWork(Event_data event) {
 }
 
 Event_data Hdf5Reader::ReadFrame(Event_data event, int* offset) {
-  size_t data_frame_num = event.node_type == kBS ? config_->ul_data_frame_num()
-                                                 : config_->dl_data_frame_num();
+  size_t data_frame_num = event.node_type == kBS ? config_->dl_data_frame_num()
+                                                 : config_->ul_data_frame_num();
   size_t frame_offset = event.frame_id % data_frame_num;
   size_t num_tx_slots = event.node_type == kBS ? config_->dl_slot_per_frame()
                                                : config_->ul_slot_per_frame();
@@ -169,8 +169,7 @@ void Hdf5Reader::DoReading(void) {
   int* offset = new int[radio_num];
   for (size_t i = 0; i < radio_num; i++) offset[i] = 0;
   size_t packet_length = sizeof(Packet) + this->packet_data_length_;
-  size_t txFrameDelta =
-      std::ceil(TIME_DELTA / (1e3 * config_->getFrameDurationSec()));
+  size_t txFrameDelta = config_->getTxFrameDelta();
   // Initially read a few frames and push to tx buffers
   for (size_t i = 0; i < txFrameDelta; i++) {
     for (size_t u = 0; u < radio_num; u++) {
