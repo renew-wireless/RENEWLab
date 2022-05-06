@@ -113,26 +113,28 @@ def plot_calib(calib_mat, bs_nodes, frame_i, ant_i, subcarrier_i, unwrap=True):
         axes[3, 0].set_ylim(-np.pi, np.pi)
     axes[3, 0].legend(loc='lower right', frameon=False)
 
-def plot_constellation_stats(evm, evm_snr, ul_data, txdata, frame_i, ul_slot_i, data_str = "Uplink"):
+def plot_constellation_stats(evm, evm_snr, ser, ul_data, txdata, frame_i, ul_slot_i, data_str = "Uplink"):
     n_users = ul_data.shape[1]
     plt_x_len = int(np.ceil(np.sqrt(n_users)))
     plt_y_len = int(np.ceil(n_users / plt_x_len))
     fig5, axes5 = plt.subplots(nrows=plt_y_len, ncols=plt_x_len, squeeze=False, figsize=(10, 8))
     fig5.suptitle(data_str+" User Constellations (ZF) - Frame %d - UL SF %d" % (frame_i, ul_slot_i))
-    fig6, axes6 = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
-    fig6.suptitle('Uplink EVM/SNR - UL SF %d' % (ul_slot_i))
+    fig6, axes6 = plt.subplots(nrows=3, ncols=1, squeeze=False, figsize=(10, 8))
+    fig6.suptitle('Uplink EVM/SNR/SER - UL SF %d' % (ul_slot_i))
     axes6[0, 0].set_ylabel('EVM (%)')
     axes6[1, 0].set_ylabel('EVM-SNR (dB)')
-    axes6[0, 0].set_xlabel('Frame Number')
+    axes6[2, 0].set_ylabel('Symbol Error Rate')
+    axes6[2, 0].set_xlabel('Frame Number')
     for i in range(n_users):
         y_i = int(i // plt_x_len)
         x_i = i % plt_x_len
         axes5[y_i, x_i].set_title('User %d'%(i))
         axes5[y_i, x_i].scatter(np.real(ul_data[frame_i, i, :]), np.imag(ul_data[frame_i, i, :]))
-        axes5[y_i, x_i].scatter(np.real(txdata[frame_i, i, ul_slot_i, :]), np.imag(txdata[frame_i, i, ul_slot_i, :]))
+        axes5[y_i, x_i].scatter(np.real(txdata[frame_i, i, :]), np.imag(txdata[frame_i, i, :]))
 
         axes6[0, 0].plot(range(evm.shape[0]), 100 * evm[:, i], label='User %d'%(i))
         axes6[1, 0].plot(range(evm.shape[0]), evm_snr[:, i], label='User %d'%(i))
+        axes6[2, 0].plot(range(ser.shape[0]), ser[:, i], label='User %d'%(i))
     axes6[0, 0].legend(loc='upper right', frameon=False)
 
 def show_plot(cmpx_pilots, lts_seq_orig, match_filt, ref_user, ref_ant, ref_frame, frm_st_idx):

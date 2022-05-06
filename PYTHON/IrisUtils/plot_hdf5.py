@@ -310,12 +310,12 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
     # Plot UL data symbols
     if ul_data_avail > 0:
-        # UL Samps: #Frames, #Cell, #Uplink Symbol, #Antennas, #Samples
+        # UL Samps: #Frames, #Uplink Symbol, #Antennas, #Samples
         uplink_samples = hdf5.uplink_samples[:, cell_i, :, :, :]
         all_bs_nodes = set(range(hdf5.uplink_samples.shape[3]))
         plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
         uplink_samples = uplink_samples[:, :, plot_bs_nodes, :]
-        ref_frame = min(frame_i - n_frm_st, uplink_samples.shape[0])
+        ref_frame = frame_i #min(frame_i - n_frm_st, uplink_samples.shape[0])
         samps_mat = np.reshape(
                 uplink_samples, (uplink_samples.shape[0], uplink_samples.shape[1], uplink_samples.shape[2], samps_per_slot, 2))
         ul_samps = (samps_mat[:, :, :, :, 0] +
@@ -324,7 +324,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         user_amps = np.mean(np.abs(ul_samps[:, :, ant_i, :]), axis=2)
         plot_iq_samps(ul_samps, user_amps, n_frm_st, ref_frame, [ul_slot_i], [ant_i], data_str="Uplink Data")
 
-        if demod=='zf' or demod=='conj' or demod=='mmse':
+        if demod=='zf' or demod=='conj' or demod=='mmse' or demod=='ml':
             if noise_avail:
                 noise_samples = hdf5.noise_samples[:, cell_i, :, :, :]
                 noise, _ = hdf5_lib.samps2csi_large(noise_samples, noise_samples.shape[1], chunk_size, samps_per_slot, fft_size=fft_size,
@@ -333,8 +333,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             else:
                 noise_f = None
             tx_data = hdf5_lib.load_tx_data(metadata, hdf5.dirpath)
-            equalized_symbols, tx_symbols, slot_evm, slot_evm_snr = hdf5_lib.demodulate(ul_samps[:, ul_slot_i, :, :], userCSI, tx_data, metadata, ue_frame_offset, offset, ul_slot_i, noise_f, demod)
-            plot_constellation_stats(slot_evm, slot_evm_snr, equalized_symbols, tx_symbols, ref_frame, ul_slot_i)
+            equalized_symbols, demod_symbols, tx_symbols, slot_evm, slot_evm_snr, slot_ser = hdf5_lib.demodulate(ul_samps[:, ul_slot_i, :, :], userCSI, tx_data, metadata, ue_frame_offset, offset, ul_slot_i, noise_f, demod)
+            plot_constellation_stats(slot_evm, slot_evm_snr, slot_ser, equalized_symbols, tx_symbols, ref_frame, ul_slot_i)
 
     # Plot DL data symbols
     if dl_data_avail > 0:
