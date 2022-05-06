@@ -982,9 +982,10 @@ class hdf5_lib:
 
         # process tx data
         rep = n_frames // txdata.shape[0]
-        #tx_symbols = np.tile(txdata, (rep, 1, 1, 1, 1))
-        tx_symbols = np.tile(txdata[:1], (n_frames, 1, 1, 1, 1))
-        frac_fr = 0 #n_frames % txdata.shape[0]
+        tx_symbols = np.tile(txdata, (rep, 1, 1, 1, 1))
+        frac_fr = n_frames % txdata.shape[0]
+        #tx_symbols = np.tile(txdata[:1], (n_frames, 1, 1, 1, 1))
+        #frac_fr = 0
         if frac_fr > 0:
             frac = txdata[:frac_fr, :, :, :, :]
             tx_symbols = frac if rep == 0 else np.concatenate((tx_symbols, frac), axis=0)
