@@ -577,7 +577,7 @@ class hdf5_lib:
             csi = np.empty(iq.shape, dtype='complex64')
             # pre_csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 4),4)
 
-            iq_fft = np.fft.fftshift(np.fft.fft(iq, fft_size, 4), 4) 
+            iq_fft = np.fft.fftshift(np.fft.fft(iq, fft_size, 4), 4)
             csi = iq_fft * lts.lts_freq
 
             zero_sc = [0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63]
@@ -935,7 +935,7 @@ class hdf5_lib:
         return txdata
 
     @staticmethod
-    def demodulate(ul_samps_f, csi, txdata, metadata, ue_frame_offset, offset, ul_slot_i, noise_samps_f=None, method='zf'):
+    def demodulate(ul_samps, csi, txdata, metadata, ue_frame_offset, offset, ul_slot_i, noise_samps_f=None, method='zf'):
         if method.lower() == 'mmse' and noise_samps_f is None:
             print("%s requires noise samples"%(method))
             return None
@@ -965,15 +965,15 @@ class hdf5_lib:
 
 
         # UL Samps: #Frames, #Uplink SLOTS, #Antennas, #Samples
-        n_frames = ul_samps_f.shape[0]
-        n_ants = ul_samps_f.shape[1]
+        n_frames = ul_samps.shape[0]
+        n_ants = ul_samps.shape[1]
         n_users = csi.shape[1]
         ul_syms = np.empty((n_frames, n_ants,
                        symbol_per_slot, fft_size), dtype='complex64')
 
         # UL Syms: #Frames, #Antennas, #OFDM Symbols, #Samples
         for i in range(symbol_per_slot):
-            ul_syms[:, :, i, :] = ul_samps_f[:, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len]
+            ul_syms[:, :, i, :] = ul_samps[:, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len]
         # UL Syms: #Frames, #OFDM Symbols, #Antennas, #Samples
         ul_syms = np.transpose(ul_syms, (0, 2, 1, 3))
         ul_syms_f = np.fft.fft(ul_syms, fft_size, 3)
@@ -982,15 +982,17 @@ class hdf5_lib:
 
         # process tx data
         rep = n_frames // txdata.shape[0]
-        tx_symbols = np.tile(txdata, (rep, 1, 1, 1, 1))
+        tx_symbols = np.tile(txdata, (rep, 1, 1, 1))
         frac_fr = n_frames % txdata.shape[0]
-        #tx_symbols = np.tile(txdata[:1], (n_frames, 1, 1, 1, 1))
+        #tx_symbols = np.tile(txdata[:1], (n_frames, 1, 1, 1))
         #frac_fr = 0
         if frac_fr > 0:
-            frac = txdata[:frac_fr, :, :, :, :]
+            frac = txdata[:frac_fr, :, :, :]
             tx_symbols = frac if rep == 0 else np.concatenate((tx_symbols, frac), axis=0)
-        tx_symbols = np.reshape(tx_symbols[:, :, ul_slot_i, :, data_sc_ind], (tx_symbols.shape[0], tx_symbols.shape[1], symbol_per_slot * len(data_sc_ind)))
-        useful_frame_num = tx_symbols.shape[0] - max(ue_frame_offset)
+        tx_data_syms = np.reshape(tx_symbols[:, :, :, data_sc_ind], (tx_symbols.shape[0], n_users, symbol_per_slot * len(data_sc_ind)))
+        useful_frame_num = tx_data_syms.shape[0]
+        if txdata.shape[0] == 1:
+            useful_frame_num = useful_frame_num - max(ue_frame_offset)
         slot_evm = np.zeros((useful_frame_num, n_users))
         slot_evm_snr = np.zeros((useful_frame_num, n_users))
         slot_ser = np.zeros((useful_frame_num, n_users))
@@ -1029,7 +1031,7 @@ class hdf5_lib:
                 for i in range(n_frames):
                     if i >= ue_frame_offset[j] and i < ue_frame_offset[j] + useful_frame_num:
                         new_i = i - ue_frame_offset[j]
-                        res = [k for k, l in zip(list(ul_demod_syms[i, j, :]), list(tx_symbols[new_i, j, :])) if k == l]
+                        res = [k for k, l in zip(list(ul_demod_syms[i, j, :]), list(tx_data_syms[new_i, j, :])) if k == l]
                         slot_ser[new_i, j] = (ul_demod_syms.shape[2] - len(list(res))) / ul_demod_syms.shape[2]
         else:
             ul_syms_f = np.delete(ul_syms_f, zero_sc_ind, 3)
@@ -1051,10 +1053,10 @@ class hdf5_lib:
             ul_equal_syms = np.reshape(ul_equal_syms, (ul_equal_syms.shape[0], ul_equal_syms.shape[1], symbol_per_slot * len(data_sc_ind)))
             ul_demod_syms = np.empty(ul_equal_syms.shape, dtype="complex64")
 
-            for i in range(ul_equal_syms.shape[1]):
-                frame_start = ue_frame_offset[i]
+            for i in range(n_users):
+                frame_start = 0 if txdata.shape[0] == 1 else ue_frame_offset[i]
                 frame_end = frame_start + useful_frame_num
-                slot_evm[:, i] = np.linalg.norm(ul_equal_syms[frame_start:frame_end, i, :] - tx_symbols[:useful_frame_num, i, :], 2, axis=1) / ul_equal_syms.shape[2]
+                slot_evm[:, i] = np.linalg.norm(ul_equal_syms[frame_start:frame_end, i, :] - tx_data_syms[:useful_frame_num, i, :], 2, axis=1) / ul_equal_syms.shape[2]
             slot_evm_snr = 10 * np.log10(1 / slot_evm)
 
             for j in range(n_users):
@@ -1067,9 +1069,9 @@ class hdf5_lib:
                         ul_demod_syms[i, j, :] = ofdm_obj.qam64_dem(ul_equal_syms[i, j, :])
                     if i >= ue_frame_offset[j] and i < ue_frame_offset[j] + useful_frame_num:
                         new_i = i - ue_frame_offset[j]
-                        res = [k for k, l in zip(list(ul_demod_syms[i, j, :]), list(tx_symbols[new_i, j, :])) if k == l]
+                        res = [k for k, l in zip(list(ul_demod_syms[i, j, :]), list(tx_data_syms[new_i, j, :])) if k == l]
                         slot_ser[new_i, j] = (ul_demod_syms.shape[2] - len(list(res))) / ul_demod_syms.shape[2]
 
 
-        return ul_equal_syms, ul_demod_syms, tx_symbols, slot_evm, slot_evm_snr, slot_ser
+        return ul_equal_syms, ul_demod_syms, tx_data_syms, slot_evm, slot_evm_snr, slot_ser
 
