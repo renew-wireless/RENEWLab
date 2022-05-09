@@ -1066,3 +1066,4 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
     slot_id = 0;
   }  // end while
 }
+
