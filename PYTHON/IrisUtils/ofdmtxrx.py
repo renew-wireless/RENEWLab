@@ -239,6 +239,26 @@ class ofdmTxRx:
 
         return signal, data_matrix, data_i, sc_idx_all, pilots_matrix
 
+    def modulation(self, in_data, mod_order):
+        """
+        Demodulate data stream of n_ofdm_syms number of symbols, according to mod_order.
+        """
+        data_i = [int(a) for a in in_data]
+        data = np.zeros(len(data_i), dtype='complex64')
+        for x in range(len(data_i)):
+            if mod_order == 2:
+                data[x] = self.bpsk_mod(data_i[x])
+            elif mod_order == 4:
+                data[x] = self.qpsk_mod(data_i[x])
+            elif mod_order == 16:
+                data[x] = self.qam16_mod(data_i[x])
+            elif mod_order == 64:
+                data[x] = self.qam64_mod(data_i[x])
+            else:
+                raise Exception("Modulation Order Not Supported. Valid orders: 2/4/16/64 for BPSK, QPSK, 16QAM, 64QAM")
+
+        return data
+
     def demodulation(self, in_data, mod_order):
         """
         Demodulate data stream of n_ofdm_syms number of symbols, according to mod_order.

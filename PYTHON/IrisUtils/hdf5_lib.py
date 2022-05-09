@@ -991,22 +991,28 @@ class hdf5_lib:
             tx_symbols = frac if rep == 0 else np.concatenate((tx_symbols, frac), axis=0)
         tx_data_syms = np.reshape(tx_symbols[:, :, :, data_sc_ind], (tx_symbols.shape[0], n_users, symbol_per_slot * len(data_sc_ind)))
         useful_frame_num = tx_data_syms.shape[0]
-        if txdata.shape[0] == 1:
+        if txdata.shape[0] > 1:
             useful_frame_num = useful_frame_num - max(ue_frame_offset)
         slot_evm = np.zeros((useful_frame_num, n_users))
         slot_evm_snr = np.zeros((useful_frame_num, n_users))
         slot_ser = np.zeros((useful_frame_num, n_users))
 
+        M = 4
+        if modulation == '16QAM':
+            M = 16
+        elif modulation == '64QAM':
+            M = 64
+
         if method == 'ml':
             mod_syms = []
             if modulation == 'QPSK':
-                for i in range(4):
+                for i in range(M):
                     mod_syms.append(ofdm_obj.qpsk_mod(i))
             elif modulation == '16QAM':
-                for i in range(16):
+                for i in range(M):
                     mod_syms.append(ofdm_obj.qam16_mod(i))
             elif modulation == '64QAM':
-                for i in range(64):
+                for i in range(M):
                     mod_syms.append(ofdm_obj.qam64_mod(i))
 
             csi_f = np.zeros((n_frames, n_users, n_ants, fft_size), dtype='complex64')
@@ -1028,11 +1034,12 @@ class hdf5_lib:
             ul_demod_syms = mlDetector(csi_f_pc, ul_syms_f, data_sc_ind, mod_syms)
 
             for j in range(n_users):
-                for i in range(n_frames):
-                    if i >= ue_frame_offset[j] and i < ue_frame_offset[j] + useful_frame_num:
-                        new_i = i - ue_frame_offset[j]
-                        res = [k for k, l in zip(list(ul_demod_syms[i, j, :]), list(tx_data_syms[new_i, j, :])) if k == l]
-                        slot_ser[new_i, j] = (ul_demod_syms.shape[2] - len(list(res))) / ul_demod_syms.shape[2]
+                frame_start = 0 if txdata.shape[0] == 1 else min(ue_frame_offset)
+                frame_end = frame_start + useful_frame_num
+                for i in range(frame_start, frame_end):
+                    new_i = i - frame_start
+                    res = [k for k, l in zip(list(ul_demod_syms[i, j, :]), list(tx_data_syms[new_i, j, :])) if k == l]
+                    slot_ser[new_i, j] = (ul_demod_syms.shape[2] - len(list(res))) / ul_demod_syms.shape[2]
         else:
             ul_syms_f = np.delete(ul_syms_f, zero_sc_ind, 3)
             # UL DEMULT: #Frames, #OFDM Symbols, #User, #Sample (DATA + PILOT SCs)
@@ -1053,24 +1060,18 @@ class hdf5_lib:
             ul_equal_syms = np.reshape(ul_equal_syms, (ul_equal_syms.shape[0], ul_equal_syms.shape[1], symbol_per_slot * len(data_sc_ind)))
             ul_demod_syms = np.empty(ul_equal_syms.shape, dtype="complex64")
 
-            for i in range(n_users):
-                frame_start = 0 if txdata.shape[0] == 1 else ue_frame_offset[i]
+            for j in range(n_users):
+                frame_start = 0 if txdata.shape[0] == 1 else min(ue_frame_offset)
                 frame_end = frame_start + useful_frame_num
-                slot_evm[:, i] = np.linalg.norm(ul_equal_syms[frame_start:frame_end, i, :] - tx_data_syms[:useful_frame_num, i, :], 2, axis=1) / ul_equal_syms.shape[2]
+                slot_evm[:, j] = np.linalg.norm(ul_equal_syms[frame_start:frame_end, j, :] - tx_data_syms[:useful_frame_num, j, :], 2, axis=1) / ul_equal_syms.shape[2]
+                for i in range(n_frames):
+                    ul_demod_syms[i, j, :] = ofdm_obj.modulation(ofdm_obj.demodulation(ul_equal_syms[i, j, :], M), M)
+                for i in range(frame_start, frame_end):
+                    new_i = i - frame_start
+                    res = [k for k, l in zip(list(ul_demod_syms[i, j, :]), list(tx_data_syms[new_i, j, :])) if k == l]
+                    slot_ser[new_i, j] = (ul_demod_syms.shape[2] - len(list(res))) / ul_demod_syms.shape[2]
             slot_evm_snr = 10 * np.log10(1 / slot_evm)
 
-            for j in range(n_users):
-                for i in range(n_frames):
-                    if modulation == 'QPSK':
-                         ul_demod_syms[i, j, :] = ofdm_obj.qpsk_dem(ul_equal_syms[i, j, :])
-                    elif modulation == '16QAM':
-                        ul_demod_syms[i, j, :] = ofdm_obj.qam16_dem(ul_equal_syms[i, j, :])
-                    elif modulation == '64QAM':
-                        ul_demod_syms[i, j, :] = ofdm_obj.qam64_dem(ul_equal_syms[i, j, :])
-                    if i >= ue_frame_offset[j] and i < ue_frame_offset[j] + useful_frame_num:
-                        new_i = i - ue_frame_offset[j]
-                        res = [k for k, l in zip(list(ul_demod_syms[i, j, :]), list(tx_data_syms[new_i, j, :])) if k == l]
-                        slot_ser[new_i, j] = (ul_demod_syms.shape[2] - len(list(res))) / ul_demod_syms.shape[2]
 
 
         return ul_equal_syms, ul_demod_syms, tx_data_syms, slot_evm, slot_evm_snr, slot_ser
