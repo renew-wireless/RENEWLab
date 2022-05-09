@@ -8,6 +8,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <sstream>
 #include <vector>
 
 #include "RadioUHD.h"
