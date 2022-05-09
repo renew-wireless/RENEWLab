@@ -626,10 +626,14 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   unsigned num_cores = this->getCoreCount();
   MLPD_INFO("Cores found %u ... \n", num_cores);
   if (bs_present_ == true && pilot_slot_per_frame_ + ul_slot_per_frame_ > 0) {
+#if defined(USE_UHD)
+    bs_rx_thread_num_ = 1;
+#else
     bs_rx_thread_num_ =
         (num_cores >= (2 * RX_THREAD_NUM))
             ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_sdrs_all_))
             : 1;
+#endif
     if (internal_measurement_ == true && ref_node_enable_ == true) {
       bs_rx_thread_num_ = 2;
     }
