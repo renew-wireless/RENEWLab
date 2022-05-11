@@ -82,10 +82,10 @@ noisPwrBuffer = collections.deque(maxlen=numBufferSamps)
 ########################################
 #               LOGGER                 #
 ########################################
-logging.basicConfig(filename='./data_out/debug_AGC_NON-REAL-TIME_DEMO.log',
-                    level=logging.DEBUG,
-                    format='[%(levelname)s] (%(threadName)-10s) %(asctime)s %(message)s',
-                    )
+#logging.basicConfig(filename='./data_out/debug_AGC_NON-REAL-TIME_DEMO.log',
+#                    level=logging.DEBUG,
+#                    format='[%(levelname)s] (%(threadName)-10s) %(asctime)s %(message)s',
+#                    )
 
 
 #########################################
