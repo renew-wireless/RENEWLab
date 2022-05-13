@@ -414,50 +414,46 @@ def calcBW(csi, noise=None, method='zf'):
             bmf_w[sc, :, :] = np.transpose(np.diag(w_scale) * csi_conj, (1, 0))
     return bmf_w
 
-def mlDetector(csi_f, ul_syms_f, data_sc_ind, mod_syms):
+### This function requires Gurobi Optimization package installed (requires a license)
+def mlDetector(csi_f, ul_syms_f, mod_syms):
     from ml_solver import mlSolver
     mod_syms_lin = list(set(np.real(mod_syms)))
     n_frames = csi_f.shape[0]
-    symbol_per_slot = csi_f.shape[1]
-    n_ants = csi_f.shape[2]
-    n_users = csi_f.shape[3]
-    fft_size = csi_f.shape[4]
+    n_ants = csi_f.shape[1]
+    n_users = csi_f.shape[2]
+    sc_per_slot = csi_f.shape[3]
 
     # convert complex csi to real
-    csi_f_exp = np.reshape(csi_f, (n_frames * symbol_per_slot, n_ants, n_users, fft_size))
-    csi_f_real = np.zeros((csi_f_exp.shape[0], 2 * csi_f_exp.shape[1], 2 * csi_f_exp.shape[2], csi_f_exp.shape[3]))
-    csi_f_real[:, :n_ants, :n_users, :] = np.real(csi_f_exp)
-    csi_f_real[:, n_ants:, :n_users, :] = np.imag(csi_f_exp)
-    csi_f_real[:, :n_ants, n_users:, :] = -np.imag(csi_f_exp)
-    csi_f_real[:, n_ants:, n_users:, :] = np.real(csi_f_exp)
+    #csi_f_exp = np.reshape(csi_f, (n_frames * symbol_per_slot, n_ants, n_users, fft_size))
+    csi_f_real = np.zeros((csi_f.shape[0], 2 * csi_f.shape[1], 2 * csi_f.shape[2], csi_f.shape[3]))
+    csi_f_real[:, :n_ants, :n_users, :] = np.real(csi_f)
+    csi_f_real[:, n_ants:, :n_users, :] = np.imag(csi_f)
+    csi_f_real[:, :n_ants, n_users:, :] = -np.imag(csi_f)
+    csi_f_real[:, n_ants:, n_users:, :] = np.real(csi_f)
 
     # convert complex receive signal to real
-    ul_syms_f_data = np.reshape(ul_syms_f, (n_frames * symbol_per_slot, n_ants, fft_size))
-    ul_syms_f_real = np.zeros((n_frames * symbol_per_slot, 2 * n_ants, fft_size))
-    ul_syms_f_real[:, :n_ants, :] = np.real(ul_syms_f_data)
-    ul_syms_f_real[:, n_ants:, :] = np.imag(ul_syms_f_data)
-    #ul_syms_f_real = np.concatenate((np.real(ul_syms_f_data), np.imag(ul_syms_f_data)), axis=1)
+    #ul_syms_f_data = np.reshape(ul_syms_f, (n_frames * symbol_per_slot, n_ants, fft_size))
+    ul_syms_f_real = np.zeros((n_frames, 2 * n_ants, sc_per_slot))
+    #ul_syms_f_real[:, :n_ants, :] = np.real(ul_syms_f)
+    #ul_syms_f_real[:, n_ants:, :] = np.imag(ul_syms_f)
+    ul_syms_f_real = np.concatenate((np.real(ul_syms_f), np.imag(ul_syms_f)), axis=1)
 
-    demod_sc_real = np.zeros((n_frames * symbol_per_slot, 2 * n_users, len(data_sc_ind)), dtype='complex64')
-    #for i, sc in enumerate(data_sc_ind):
-    #    demod_sc_real[:, :, i] = mlSolver(csi_f_real[:, :, :, sc], ul_syms_f_real[:, :, sc], mod_syms_lin)
-    # use multi processing to solve Maximum Likelihood detector
-    pool = mp.Pool(mp.cpu_count())
     indexing_start = time.time()
-    result_objects = [pool.apply_async(mlSolver,
-                                args=(csi_f_real[:, :, :, sc], ul_syms_f_real[:, :, sc], mod_syms_lin)) for sc in data_sc_ind]
-    for i in range(len(data_sc_ind)):
-        demod_sc_real[:, :, i] = result_objects[i].get()[0]
-    pool.close()
+    demod_sc_real = np.zeros((n_frames, 2 * n_users, sc_per_slot), dtype='complex64')
+    for sc in range(sc_per_slot):
+        demod_sc_real[:, :, sc] = mlSolver(csi_f_real[:, :, :, sc], ul_syms_f_real[:, :, sc], mod_syms_lin)
+    ## use multi processing to solve Maximum Likelihood detector
+    #pool = mp.Pool(mp.cpu_count())
+    #result_objects = [pool.apply_async(mlSolver,
+    #    args=(csi_f_real[:, :, :, sc], ul_syms_f_real[:, :, sc], mod_syms_lin)) for sc in range(sc_per_slot)]
+    #for i in range(sc_per_slot):
+    #    demod_sc_real[:, :, i] = result_objects[i].get()[0]
+    #pool.close()
     indexing_end = time.time()
     print("ML Solver time: %f \n" % (indexing_end - indexing_start))
     #sc = data_sc_ind[0]
     #demod_sc_real[:symbol_per_slot, :, 0] = mlSolver(csi_f_real[:symbol_per_slot, :, :, sc], ul_syms_f_real[:symbol_per_slot, :, sc], mod_syms_lin)
 
-    demod_sc_complex = demod_sc_real[:, :n_users, :] + 1j*demod_sc_real[:, n_users:, :]
-    #print(demod_sc_complex[:symbol_per_slot, :, 0])
-    #print(np.transpose(tx_symbols[0, :, ::len(data_sc_ind)], (1, 0)))
-    demod_syms = np.transpose((np.reshape(demod_sc_complex, (n_frames, symbol_per_slot, n_users, len(data_sc_ind)))), (0, 2, 1, 3))
-    ul_demod_syms = np.reshape(demod_syms, (n_frames, n_users, symbol_per_slot * len(data_sc_ind)))
+    ul_demod_syms = demod_sc_real[:, :n_users, :] + 1j*demod_sc_real[:, n_users:, :]
     return ul_demod_syms
 

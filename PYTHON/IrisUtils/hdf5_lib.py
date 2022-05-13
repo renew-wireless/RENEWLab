@@ -962,6 +962,7 @@ class hdf5_lib:
         nonzero_sc_ind = np.setdiff1d(range(fft_size), zero_sc_ind)
         modulation = metadata['CL_MODULATION'].astype(str)
         ofdm_obj = ofdmTxRx()
+        data_sc_len = len(data_sc_ind)
 
 
         # UL Samps: #Frames, #Uplink SLOTS, #Antennas, #Samples
@@ -974,11 +975,9 @@ class hdf5_lib:
         # UL Syms: #Frames, #Antennas, #OFDM Symbols, #Samples
         for i in range(symbol_per_slot):
             ul_syms[:, :, i, :] = ul_samps[:, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len]
-        # UL Syms: #Frames, #OFDM Symbols, #Antennas, #Samples
-        ul_syms = np.transpose(ul_syms, (0, 2, 1, 3))
         ul_syms_f = np.fft.fft(ul_syms, fft_size, 3)
 
-        ul_equal_syms = np.zeros((n_frames, n_users, symbol_per_slot * len(data_sc_ind)), dtype='complex64')
+        ul_equal_syms = np.zeros((n_frames, n_users, symbol_per_slot * data_sc_len), dtype='complex64')
 
         # process tx data
         rep = n_frames // txdata.shape[0]
@@ -989,16 +988,19 @@ class hdf5_lib:
         if frac_fr > 0:
             frac = txdata[:frac_fr, :, :, :]
             tx_symbols = frac if rep == 0 else np.concatenate((tx_symbols, frac), axis=0)
-        tx_data_syms = np.reshape(tx_symbols[:, :, :, data_sc_ind], (tx_symbols.shape[0], n_users, symbol_per_slot * len(data_sc_ind)))
+        tx_data_syms = np.reshape(tx_symbols[:, :, :, data_sc_ind], (tx_symbols.shape[0], n_users, symbol_per_slot * data_sc_len))
         useful_frame_num = tx_data_syms.shape[0]
         if txdata.shape[0] > 1:
             useful_frame_num = useful_frame_num - max(ue_frame_offset)
+        min_ue_offset = min(ue_frame_offset)
         slot_evm = np.zeros((useful_frame_num, n_users))
         slot_evm_snr = np.zeros((useful_frame_num, n_users))
         slot_ser = np.zeros((useful_frame_num, n_users))
 
-        M = 4
-        if modulation == '16QAM':
+        M = 2
+        if modulation == 'QPSK':
+            M = 4
+        elif modulation == '16QAM':
             M = 16
         elif modulation == '64QAM':
             M = 64
@@ -1019,28 +1021,34 @@ class hdf5_lib:
             csi_f[:, :, :, nonzero_sc_ind] = csi
 
             # Calc. phase rotation with ZF
-            pilot_sc_demult = demult(csi_f[:, :, :, pilot_sc_ind], ul_syms_f[:, :, :, pilot_sc_ind], None, 'zf')
+            pilot_sc_demult = demult(csi_f[:, :, :, pilot_sc_ind], np.transpose(ul_syms_f[:, :, :, pilot_sc_ind], (0, 2, 1, 3)), None, 'zf')
             phase_corr = pilot_sc_demult * np.conj(pilot_sc_val)
-            phase_err = np.angle(np.mean(phase_corr, 3))
             # Frame, Symbol, User
-            phase_comp = np.exp(-1j*phase_err)
-            phase_comp_exp = np.tile(np.expand_dims(phase_comp, axis= 3), (1, 1, 1, n_ants))
-            phase_comp_exp2 = np.tile(np.expand_dims(phase_comp_exp, axis=4), (1, 1, 1, 1, fft_size))
+            phase_err = np.angle(np.mean(phase_corr, 3))
+            # Frame, User, Symbol
+            phase_comp = np.transpose(np.exp(-1j*phase_err), (0, 2, 1))
 
             # Apply phase correction to CSI
-            csi_f = np.transpose((np.tile(np.expand_dims(csi_f, axis=4), (1, 1, 1, 1, symbol_per_slot))), (0, 4, 1, 2, 3))
-            csi_f_pc = np.transpose((np.multiply(csi_f, phase_comp_exp2)), (0, 1, 3, 2, 4))
+            csi_f_pc = np.zeros((n_frames, n_ants, n_users, symbol_per_slot * data_sc_len), dtype='complex64')
+            for i in range(symbol_per_slot):
+                csi_f_flat = np.reshape(csi_f[:, :, :, data_sc_ind], (n_frames, n_users, n_ants * data_sc_len))
+                csi_f_flat_pc = csi_f_flat# * phase_comp[:, :, i:i+1]
+                csi_f_pc[:, :, :, i*data_sc_len:(i+1)*data_sc_len] = np.transpose(np.reshape(csi_f_flat_pc, (n_frames, n_users, n_ants, data_sc_len)), (0, 2, 1, 3))
 
-            ul_demod_syms = mlDetector(csi_f_pc, ul_syms_f, data_sc_ind, mod_syms)
+            ul_demod_syms = np.empty(ul_equal_syms.shape, dtype="complex64")
+            ul_syms_f_flat = np.reshape(ul_syms_f[:, :, :, data_sc_ind], (n_frames, n_ants, symbol_per_slot * data_sc_len))
+            ul_demod_syms = mlDetector(csi_f_pc, ul_syms_f_flat, mod_syms)
 
             for j in range(n_users):
-                frame_start = 0 if txdata.shape[0] == 1 else min(ue_frame_offset)
+                frame_start = 0 if txdata.shape[0] == 1 else min_ue_offset
                 frame_end = frame_start + useful_frame_num
                 for i in range(frame_start, frame_end):
                     new_i = i - frame_start
                     res = [k for k, l in zip(list(ul_demod_syms[i, j, :]), list(tx_data_syms[new_i, j, :])) if k == l]
                     slot_ser[new_i, j] = (ul_demod_syms.shape[2] - len(list(res))) / ul_demod_syms.shape[2]
         else:
+            # UL Syms: #Frames, #OFDM Symbols, #Antennas, #Samples
+            ul_syms_f = np.transpose(ul_syms_f, (0, 2, 1, 3))
             ul_syms_f = np.delete(ul_syms_f, zero_sc_ind, 3)
             # UL DEMULT: #Frames, #OFDM Symbols, #User, #Sample (DATA + PILOT SCs)
             ul_demult = demult(csi, ul_syms_f, noise_samps_f, method=method)
@@ -1061,7 +1069,7 @@ class hdf5_lib:
             ul_demod_syms = np.empty(ul_equal_syms.shape, dtype="complex64")
 
             for j in range(n_users):
-                frame_start = 0 if txdata.shape[0] == 1 else min(ue_frame_offset)
+                frame_start = 0 if txdata.shape[0] == 1 else min_ue_offset
                 frame_end = frame_start + useful_frame_num
                 slot_evm[:, j] = np.linalg.norm(ul_equal_syms[frame_start:frame_end, j, :] - tx_data_syms[:useful_frame_num, j, :], 2, axis=1) / ul_equal_syms.shape[2]
                 for i in range(n_frames):
