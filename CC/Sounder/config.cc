@@ -336,8 +336,9 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     dl_slot_per_frame_ = dl_slots_.at(0).size();
     // read commons from client json config
     if (client_serial_present == false) {
-      num_cl_sdrs_ = num_cl_antennas_ =
+      num_cl_antennas_ =
           std::count(frames_.at(0).begin(), frames_.at(0).end(), 'P');
+      num_cl_sdrs_ = num_cl_antennas_ / cl_sdr_ch_;
     }
     if (tddConf.find("ue_frame_schedule") == tddConf.end()) {
       cl_frames_.resize(num_cl_sdrs_);
