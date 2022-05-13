@@ -50,6 +50,8 @@ N_BS_NODE               = 1;
 N_UE                    = 1;
 TX_FRQ                  = 3.6e9;
 RX_FRQ                  = TX_FRQ;
+ANT_BS                  = 'A';          % SISO: only one antenna supported
+ANT_UE                  = 'A';          % SISO: only one antenna supported
 TX_GN                   = 80;
 RX_GN                   = 60;
 SMPL_RT                 = 5e6;
@@ -159,7 +161,7 @@ else
     disp("Running: HARDWARE MODE");
 
     % Create two Iris node objects:
-    tx_direction = 'uplink';    % Options: {'uplink', 'downlink'}
+    tx_direction = 'downlink';    % Options: {'uplink', 'downlink'}
     bs_ids = ["RF3E000356"];
     ue_ids = ["RF3D000016"];
 
@@ -167,12 +169,13 @@ else
     sdr_params = struct(...
         'bs_id', bs_ids, ...
         'ue_id', ue_ids,...
+        'bs_ant', ANT_BS, ...
+        'ue_ant', ANT_UE, ...
         'txfreq', TX_FRQ, ...
         'rxfreq', RX_FRQ, ...
         'txgain', TX_GN, ...
         'rxgain', RX_GN, ...
         'sample_rate', SMPL_RT);
-
 
     mimo_handle = mimo_driver(sdr_params);
 

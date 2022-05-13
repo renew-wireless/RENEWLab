@@ -11,6 +11,10 @@ classdef mimo_driver < handle
 
         bs_serial_ids;
         ue_serial_ids;
+        n_bs_ant = 0;
+        n_ue_ant = 0;
+        bs_channels = 'A';
+        ue_channels = 'A';
         hub_serial='';
         sample_rate = 0;
         tx_freq = 0;
@@ -38,6 +42,11 @@ classdef mimo_driver < handle
                 n_bs_sdrs = length(obj.bs_serial_ids);
                 n_ue_sdrs = length(obj.ue_serial_ids);
 
+                obj.n_bs_ant = n_bs_sdrs * length(sdr_params.bs_ant);
+                obj.n_ue_ant = n_ue_sdrs * length(sdr_params.ue_ant);
+                obj.bs_channels = sdr_params.bs_ant;
+                obj.ue_channels = sdr_params.ue_ant;
+
                 bs_id_str = cell(1, n_bs_sdrs);
                 for i = 1:n_bs_sdrs
                     bs_id_str(1, i) = {convertStringsToChars(obj.bs_serial_ids(i))};
@@ -52,12 +61,13 @@ classdef mimo_driver < handle
 
                 hub_id_str = convertStringsToChars(obj.hub_serial);
                 obj.mimo_obj = py.mimo_driver.MIMODriver( pyargs( ...
-                    'hub_serial', hub_id_str,...
+                    'hub_serial', hub_id_str, ...
                         'bs_serials', bs_id_list, ...
                         'ue_serials', ue_id_list, ...
-                        'rate', obj.sample_rate,...
-                        'tx_freq', obj.tx_freq, 'rx_freq', obj.rx_freq,...
-                        'tx_gain', obj.tx_gain, 'rx_gain', obj.rx_gain) );
+                        'rate', obj.sample_rate, ...
+                        'tx_freq', obj.tx_freq, 'rx_freq', obj.rx_freq, ...
+                        'tx_gain', obj.tx_gain, 'rx_gain', obj.rx_gain, ...
+                        'bs_channels', obj.bs_channels , 'ue_channels', obj.ue_channels ) );
                 
             end
         end

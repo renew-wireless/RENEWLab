@@ -51,6 +51,7 @@ class MIMODriver:
 
         self.n_bs_chan = len(bs_channels)
         self.n_ue_chan = len(ue_channels)
+
         self.n_users = len(ue_serials) * self.n_ue_chan
         self.n_bs_antenna = len(bs_serials) * self.n_bs_chan
         self.n_bs_sdrs = len(bs_serials)
@@ -174,18 +175,25 @@ class MIMODriver:
 
 
     def txrx_downlink(self, tx_data_mat_re, tx_data_mat_im, num_frames, nsamps_pad=160, max_try=10):
-        tx_data_mat = tx_data_mat_re + 1j * tx_data_mat_im
-        n_samps = tx_data_mat.shape[0]
 
-        if len(tx_data_mat.shape) > 1:
-            n_users = tx_data_mat.shape[1]
+        tx_data_mat = tx_data_mat_re + 1j * tx_data_mat_im
+
+        ################################
+        print(tx_data_mat.shape)
+        print(len(tx_data_mat.shape))
+        print(tx_data_mat.shape[0])
+        ################################
+
+        n_users = self.n_users
+        n_bs_antenna = self.n_bs_antenna
+
+        if len(tx_data_mat.shape) == 1:
+            n_samps = tx_data_mat.shape[0]
         else:
-            n_users = 1
-        if n_users != self.n_users:
-            print("Input data size (dim 2) does not match number of UEs!")
-            return
+            n_samps = tx_data_mat.shape[1]
+
         if n_samps > 4096:
-            print("Input data size (dim 1) exceeds pilot buffer size!")
+            print("Input data size exceeds pilot buffer size!")
             return
 
         ### Build TDD Schedule ###
@@ -194,25 +202,26 @@ class MIMODriver:
         ue_sched_tmp = list(''.join([char*2*n_users for char in 'G']))
         ue_sched = []
         for ue_idx in range(n_users):
-            # Individual Pilots (downlink)
-            curr_str_bs = 'PG'
+
+            # UE
+            tmp = copy.copy(ue_sched_tmp)
+
+            if self.n_bs_chan > 1:
+                curr_str_bs = 'PP'
+                tmp[2*ue_idx:2*ue_idx+2] = 'RR'
+            else:
+                curr_str_bs = 'PG'
+                tmp[2*ue_idx:2*ue_idx+2] = 'RG'
+
+            # BS
             bs_sched_b = bs_sched_b + curr_str_bs
             bs_sched = bs_sched + curr_str_bs
-            tmp = copy.copy(ue_sched_tmp)
-            tmp[2*ue_idx:2*ue_idx+2] = 'RG'
+            # UE
             tmpstr = 'GG' + ''.join([char for char in tmp])
-            if n_users > 1:
-                # Multi-user TX (downlink)
-                tmpstr = tmpstr + 'RG'
-
             ue_sched.append(tmpstr)
 
-        # Multi-user RX (downlink)
-        if n_users > 1:
-            bs_sched_b = bs_sched_b + 'PG'
-            bs_sched = bs_sched + 'PG'
 
-        numRxSyms = bs_sched.count('P')
+        numRxSyms = bs_sched.count('P')    ## FIXME - CHECK THIS
         print("NumRxSyms: {}, n_samps: {}, n_users: {}, bs_sched_b: {}, bs_sched: {}, ue_sched: {}".format(numRxSyms,n_samps,n_users,bs_sched_b,bs_sched,ue_sched))
 
         ### Write TDD Schedule ###
@@ -220,12 +229,12 @@ class MIMODriver:
         [ue.config_sdr_tdd(is_bs=False, tdd_sched=str(ue_sched[i]), nsamps=n_samps, prefix_len=nsamps_pad) for i, ue in enumerate(self.ue_obj)]
 
         for i, bs in enumerate(self.bs_obj):
-            bs.burn_data_complex(tx_data_mat[:, i] if self.n_bs_antenna > 1 else tx_data_mat)
+            bs.burn_data_complex(tx_data_mat[i, :] if n_bs_antenna > 1 else tx_data_mat)
 
         [ue.activate_stream_rx() for ue in self.ue_obj]
         [ue.set_corr() for ue in self.ue_obj]
 
-        rx_data = np.empty((num_frames, self.n_users, numRxSyms, n_samps), dtype=np.complex64)
+        rx_data = np.empty((num_frames, n_users, numRxSyms, n_samps), dtype=np.complex64)
         good_frame_id = 0
 
         for frame in range(num_frames):
@@ -258,10 +267,10 @@ class MIMODriver:
 
             print("frame = {}, tries = {}, all_triggred = {}, good_signal = {}, amp = {}".format(frame, i + 1, all_triggered, good_signal, amp))
             if all_triggered and good_signal:
-                if n_users == 1 and self.n_bs_antenna == 1:
-                    rx_data[good_frame_id, :, :, :] = np.reshape(np.array(rx_data_frame[0]), (self.n_bs_antenna, numRxSyms, n_samps))
+                if n_users == 1 and n_bs_antenna == 1:
+                    rx_data[good_frame_id, :, :, :] = np.reshape(np.array(rx_data_frame[0]), (n_bs_antenna, numRxSyms, n_samps))
                 else:
-                    rx_data[good_frame_id, :, :, :] = np.reshape(np.array(rx_data_frame), (self.n_bs_antenna, numRxSyms, n_samps))
+                    rx_data[good_frame_id, :, :, :] = np.reshape(np.array(rx_data_frame), (n_users, numRxSyms, n_samps))
                 good_frame_id = good_frame_id + 1
                 #tmptmp = np.array(rx_data_frame[0])
                 #plt.plot(np.abs(tmptmp))
@@ -295,11 +304,19 @@ class MIMODriver:
 
         bs_sched = []
         ue_sched = []
-        for bs_idx in range(self.n_bs_sdrs):
-            # Individual Pilots (downlink)
+
+        if self.n_bs_chan == 1:
             curr_str_bs = 'PG'
             curr_str_ue = 'RG'
+        elif self.n_bs_chan == 2:
+            curr_str_bs = 'PP'
+            curr_str_ue = 'RR'
+        else:
+            print("Invalid number of RF channels (must be 1 or 2)!")
+            return
 
+        for bs_idx in range(self.n_bs_sdrs):
+            # Individual Pilots (downlink)
             tmp_bs = copy.copy(bs_sched_tmp)
             tmp_bs[2*bs_idx:2*bs_idx+2] = curr_str_bs
             tmp_ue[2*bs_idx:2*bs_idx+2] = curr_str_ue
@@ -321,7 +338,8 @@ class MIMODriver:
         [ue.config_sdr_tdd(is_bs=False, tdd_sched=str(ue_sched[i]), nsamps=n_samps, prefix_len=nsamps_pad) for i, ue in enumerate(self.ue_obj)]
 
         for i, bs in enumerate(self.bs_obj):
-            bs.burn_data_complex(tx_data_mat)
+            bs.burn_data_complex(tx_data_mat)      # for matlab
+            #bs.burn_data_complex(tx_data_mat[0])  # For python
 
         [ue.activate_stream_rx() for ue in self.ue_obj]
         [ue.set_corr() for ue in self.ue_obj]

@@ -2,7 +2,8 @@
 %
 %	Author(s): C. Nicolas Barati nicobarati@rice.edu 
 %		Rahman Doost-Mohamamdy: doost@rice.edu
-%
+%   
+%    TODO OBCH: Extend to dual antenna mode in the BS
 %
 % Single-shot transmission from N_UE clients to N_BS_NODE base station
 % radios (UE stands for User Equipment). We define two modes:
@@ -58,6 +59,8 @@ else
     USE_HUB                 = 1;
     TX_FRQ                  = 3.58e9;
     RX_FRQ                  = TX_FRQ;
+    ANT_BS                  = 'A';         % Currently, only support single antenna. TODO: Options: {A, AB}
+    ANT_UE                  = 'A';          % Currently, only support single antenna
     TX_GN                   = 80;
     RX_GN                   = 70;
     SMPL_RT                 = 5e6;
@@ -79,7 +82,10 @@ else
     ue_ids= ["RF3E000392", "RF3D000016"];
 
     N_BS_NODE               = length(bs_ids);           % Number of nodes/antennas at the BS
-    N_UE                    = length(ue_ids);           % Number of UE nodes
+    N_BS_ANT                = length(bs_ids) * length(ANT_BS);  % Number of antennas at the BS
+    N_UE                    = length(ue_ids);           % Number of UE nodes (single antenna UE)
+    N_UE_ANT                = length(ue_ids) * length(ANT_UE);
+
 end
 
 % MIMO params
@@ -209,24 +215,21 @@ else
     sdr_params = struct(...
         'bs_id', bs_ids, ...
         'ue_id', ue_ids,...
+        'bs_ant', ANT_BS, ...
+        'ue_ant', ANT_UE, ...
         'txfreq', TX_FRQ, ...
         'rxfreq', RX_FRQ, ...
         'txgain', TX_GN, ...
         'rxgain', RX_GN, ...
         'sample_rate', SMPL_RT);
 
-    %try
-        mimo_handle = mimo_driver(sdr_params);
-        [rx_vec_iris, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
-        mimo_handle.mimo_close();
-        if isempty(rx_vec_iris)
-            error("Driver returned empty array. No good data received by base station");
-        end
-    %catch
-    %    disp("Error, exit now!");
-    %    mimo_handle.mimo_close();
-    %    exit(0);
-    %end
+    mimo_handle = mimo_driver(sdr_params);
+    [rx_vec_iris, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
+    mimo_handle.mimo_close();
+    if isempty(rx_vec_iris)
+        error("Driver returned empty array. No good data received by base station");
+    end
+
     rx_vec_iris = permute(rx_vec_iris, [1,2,4,3]);
     
 end
