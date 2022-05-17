@@ -167,8 +167,6 @@ std::vector<pthread_t> Receiver::startRecvThreads(SampleBuffer* rx_buffer,
                                                   unsigned in_core_id) {
   assert(rx_buffer[0].buffer.size() != 0);
   thread_num_ = n_rx_threads;
-  // added
-  //  thread_num_ = 1;
   std::cout << "rx thread num are: " << thread_num_ << std::endl;
   bs_tx_buffer_ = tx_buffer;
   std::vector<pthread_t> created_threads;
@@ -257,7 +255,6 @@ int Receiver::baseTxData(int radio_id, int cell, int frame_id,
 #if defined(USE_UHD)
   int cha = config_->bs_channel() == "AB" ? 2 : 1;
   size_t num_channels = config_->num_bs_sdrs_all() * cha;
-  //  size_t num_channels = 2;
   std::vector<void*> dl_txbuff(num_channels);
 #else
   size_t num_channels = config_->bs_sdr_ch();
@@ -276,7 +273,6 @@ int Receiver::baseTxData(int radio_id, int cell, int frame_id,
     if (config_->bs_hw_framer() == false)
       this->baseTxBeacon(radio_id, cell, event.frame_id, txFrameTime);
     for (size_t s = 0; s < config_->dl_slot_per_frame(); s++) {
-      //      for (size_t ch = 0; ch < config_->bs_sdr_ch(); ++ch) {
       for (size_t ch = 0; ch < num_channels; ++ch) {
         char* cur_ptr_buffer =
             bs_tx_buffer_[radio_id].buffer.data() + (cur_offset * packetLength);
@@ -370,7 +366,6 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
   int cha = config_->bs_channel() == "AB" ? 2 : 1;
   std::cout << "cha is" << cha << std::endl;
   const size_t num_channels = config_->num_bs_sdrs_all() * cha;
-//  const size_t num_channels = 2;
 #else
   const size_t num_channels = config_->bs_channel().length();
 #endif
@@ -493,7 +488,6 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
     }
 
     // Receive data
-    //    num_channels = 4;
     for (auto& it : radio_ids_in_thread) {
       Packet* pkt[num_channels];
       void* samp[num_channels];
