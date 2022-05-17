@@ -77,18 +77,10 @@ RadioUHD::RadioUHD(const std::map<std::string, std::string>& args,
                    Config* _cfg) {
   dev_ = uhd::usrp::multi_usrp::make(args);
   if (dev_ == NULL) throw std::invalid_argument("error making UHD:Device\n");
-  //  for (auto ch : channels){
-  //      std::cout << "channesl are: " << ch << std::endl;
-  //  }
-  //  std::string subdev = "A:0";
-  //  dev_->set_rx_subdev_spec(subdev);
-  //  dev_->set_tx_subdev_spec(subdev);
+
   dev_->set_rx_rate(_cfg->rate());
   dev_->set_tx_rate(_cfg->rate());
-  //  for (auto ch : channels) {
-  //    dev_->set_rx_rate(_cfg->rate(), ch);
-  //    dev_->set_tx_rate(_cfg->rate(), ch);
-  //  }
+
   const std::string& format = uhdFmt;
   std::string hostFormat;
   for (const char ch : format) {
@@ -107,15 +99,11 @@ RadioUHD::RadioUHD(const std::map<std::string, std::string>& args,
   uhd::stream_args_t stream_args(hostFormat);
   std::cout << "channel size is: " << channels.size() << std::endl;
   stream_args.channels = channels;
-  //  std::vector<size_t> channel_nums = {0,2,4};
-  //  stream_args.channels = channel_nums;
   stream_args.args = args;
   if (args.count("WIRE") != 0) stream_args.otw_format = args.at("WIRE");
 
   uhd::stream_args_t stream_args1(hostFormat);
   stream_args1.channels = channels;
-  //  std::vector<size_t> channel_nums1 = {1,3,5};
-  //  stream_args1.channels = channel_nums1;
   stream_args1.args = args;
   if (args.count("WIRE") != 0) stream_args1.otw_format = args.at("WIRE");
 
