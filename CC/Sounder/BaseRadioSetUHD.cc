@@ -191,7 +191,6 @@ void* BaseRadioSetUHD::init_launch(void* in_context) {
 }
 
 void BaseRadioSetUHD::init(BaseRadioContext* context) {
-  //  int i = context->tid;
   int c = context->cell;
   std::atomic_ulong* thread_count = context->thread_count;
   delete context;
