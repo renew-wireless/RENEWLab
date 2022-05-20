@@ -41,9 +41,12 @@ end
 WRITE_PNG_FILES         = 0;                % Enable writing plots to PNG
 SIM_MODE                = 0;
 DEBUG                   = 0;
+
+PILOT_PLOT              = 1;
 CONST_PLOT              = 1;
 CHANNEL_PLOT            = 1;
-DOWNLINK_PLOT           = 0;
+DOWNLINK_PLOT           = 1;
+EVM_SNR_PLOT            = 1;
 
 if SIM_MODE
     TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
@@ -57,12 +60,12 @@ if SIM_MODE
 else 
     %Iris params:
     TX_SCALE                = 0.8;          % Scale for Tx waveform ([0:1])
-    ANT_BS                  = 'A';         % Options: {A, B, AB}
+    ANT_BS                  = 'AB';         % Options: {A, B, AB}
     ANT_UE                  = 'A';          % Currently, only support single antenna, i.e., A
     USE_HUB                 = 1;
     TX_FRQ                  = 3.58e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = 80;
+    TX_GN                   = 81;
     RX_GN                   = 70;
     SMPL_RT                 = 5e6;
     N_FRM                   = 1;
@@ -74,13 +77,13 @@ else
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
-        bs_ids = ["RF3E000356"];%,"RF3E000620"];%,"RF3E000609","RF3E000604","RF3E000612","RF3E000640","RF3E000551"];
+        bs_ids = ["RF3E000356","RF3E000620","RF3E000609","RF3E000604","RF3E000612","RF3E000640"];%,"RF3E000551"];
         hub_id = ["FH4B000019"];
     else
         bs_ids = ["RF3E000246","RF3E000490","RF3E000749","RF3E000697","RF3E000724","RF3E000740","RF3E000532"];
         hub_id = [];
     end
-    ue_ids= ["RF3E000392"];%, "RF3D000016"];
+    ue_ids= ["RF3E000392"];%, "RF3D000016"]; % Only MISO supported at the moment
 
     N_BS_NODE               = length(bs_ids);                   % Number of nodes at the BS
     N_BS_ANT                = length(bs_ids) * length(ANT_BS);  % Number of antennas at the BS
@@ -210,11 +213,11 @@ else
         'sample_rate', SMPL_RT);
 
     mimo_handle = mimo_driver(sdr_params);
-    [rx_vec_iris, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx_dl_sound(tx_vec_train, N_FRM, N_ZPAD_PRE);
-    if isempty(rx_vec_iris)
+    [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx_dl_sound(tx_vec_train, N_FRM, N_ZPAD_PRE);
+    if isempty(rx_vec_iris_sound)
         error("Driver returned empty array. No good data received by base station");
     end
-    assert(size(rx_vec_iris,3) == N_BS_ANT) 
+    assert(size(rx_vec_iris_sound,3) == N_BS_ANT) 
 end
 
 fprintf('=============================== \n');
@@ -226,7 +229,7 @@ for iue = 1:N_UE
     for ibs = 1:N_BS_ANT
 
         % Data shape: (# good frames, # UEs, # numRxSyms, # number samps)
-        curr_vec = squeeze(rx_vec_iris(1, iue, ibs, :));
+        curr_vec = squeeze(rx_vec_iris_sound(1, iue, ibs, :));
         lts_corr = abs(conv(conj(fliplr(lts_t.')), sign(curr_vec.')));
 
         if DEBUG
@@ -349,7 +352,7 @@ else
     [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_downlink(tx_payload, N_FRM, N_ZPAD_PRE);
     mimo_handle.mimo_close();
 
-    if isempty(rx_vec_iris)
+    if isempty(rx_vec_iris_tmp)
         error("Driver returned empty array. No good data received by UE");
         exit(0);
     end
@@ -479,113 +482,119 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                               PLOTTER
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-cf = 0;
-fst_clr = [0, 0.4470, 0.7410];
-sec_clr = [0.8500, 0.3250, 0.0980];
-
-
-if CHANNEL_PLOT
-    cf = cf + 1;
-    figure(cf); clf;
-    x = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1));
-
-    subplot(1,2,1);
-    rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
-    rx_H_est_plot(SC_IND_DATA) = rx_H_est_sound(SC_IND_DATA);
-    rx_H_est_plot(SC_IND_PILOTS) = rx_H_est_sound(SC_IND_PILOTS);
-    bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
-    axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
-    grid on;
-    title('Channel Estimates (Magnitude)')
-    xlabel('Baseband Frequency (MHz)')
-
-    subplot(1,2,2);
-    rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
-    rx_H_est_plot(SC_IND_DATA) = rx_H_est(SC_IND_DATA);
-    rx_H_est_plot(SC_IND_PILOTS) = rx_H_est(SC_IND_PILOTS);
-    bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
-    axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
-    grid on;
-    title('Channel Estimates (Magnitude)')
-    xlabel('Baseband Frequency (MHz)')
-end
-
-if CONST_PLOT
-    cf = cf + 1;
-    figure(cf); clf;
-
-    plot(payload_dl_syms_mat(:),'o','MarkerSize',2, 'color', sec_clr);
-    axis square; axis(1.5*[-1 1 -1 1]);
-    xlabel('Inphase')
-    ylabel('Quadrature')
-    grid on;
-    hold on;
-
-    plot(squeeze(tx_syms_mat(1,:,:)),'*', 'MarkerSize',16, 'LineWidth',2, 'color', fst_clr);
-    title('Tx and Rx Constellations')
-    legend('Rx','Tx','Location','EastOutside');
-end
-
-% Downlink Rx Vector and Constellation Plots
-if DOWNLINK_PLOT
-    % NOT TESTED
+for iue = 1:N_UE
+    cf = 0 + 10^iue;
     fst_clr = [0, 0.4470, 0.7410];
     sec_clr = [0.8500, 0.3250, 0.0980];
-    cf = cf + 1;
-    figure(cf);clf;
 
-    plot(real(rx_vec_downlink));
-    xline(dl_data_start,'--r')
-    axis([0 N_SAMP -1 1])
-    grid on;
-    title('Received Data (Real)');
-    % DL
-    cf = cf + 1;
-    figure(cf); clf;
-    
-    plot(payload_dl_syms_mat(:),'ro','MarkerSize',1);
-    axis square; axis(1.5*[-1 1 -1 1]);
-    grid on;
-    hold on;
-
-    plot(tx_syms(:),'bo');
-    title('Downlink Tx and Rx Constellations')
-    legend('Rx','Tx');
+    if PILOT_PLOT
+        cf = cf + 1;
+        figure(cf); clf;
+        numRows = 5;
+        numCols = 5;
+        for ibs = 1:N_BS_ANT
+            subplot(numRows,numCols,ibs);
+            plot(abs(squeeze(rx_vec_iris_sound(1, iue, ibs, :))));
+        end
+    end
 
 
-    % EVM & SNR
-    cf = cf + 1;
-    figure(cf); clf;
-    subplot(2,1,1)
-    plot(100*evm_mat(:),'o','MarkerSize',1)
-    axis tight
-    hold on
-    plot([1 length(evm_mat(:))], 100*[aevms, aevms],'color', sec_clr,'LineWidth',4)
-    myAxis = axis;
-    h = text(round(.05*length(evm_mat(:))), 100*aevms+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', snr));
-    set(h,'Color',[1 0 0])
-    set(h,'FontWeight','bold')
-    set(h,'FontSize',10)
-    set(h,'EdgeColor',[1 0 0])
-    set(h,'BackgroundColor',[1 1 1])
-    hold off
-    xlabel('Data Symbol Index')
-    ylabel('EVM (%)');
-    legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
-    title('EVM vs. Data Symbol Index')
-    grid on
+    if CHANNEL_PLOT
+        cf = cf + 1;
+        figure(cf); clf;
+        x = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1));
 
-    subplot(2,1,2)
-    imagesc(1:N_DATA_SYMS, (SC_IND_DATA - N_SC/2), 100*fftshift(evm_mat,1))
+        subplot(1,2,1);
+        rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
+        rx_H_est_plot(SC_IND_DATA) = rx_H_est_sound(SC_IND_DATA);
+        rx_H_est_plot(SC_IND_PILOTS) = rx_H_est_sound(SC_IND_PILOTS);
+        bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
+        axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
+        grid on;
+        title('Channel Estimates (Magnitude)')
+        xlabel('Baseband Frequency (MHz)')
 
-    grid on
-    xlabel('OFDM Symbol Index')
-    ylabel('Subcarrier Index')
-    title('EVM vs. (Subcarrier & OFDM Symbol)')
-    h = colorbar;
-    set(get(h,'title'),'string','EVM (%)');
-    myAxis = caxis();
-    if (myAxis(2)-myAxis(1)) < 5
-        caxis([myAxis(1), myAxis(1)+5])
+        subplot(1,2,2);
+        rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
+        rx_H_est_plot(SC_IND_DATA) = rx_H_est(SC_IND_DATA);
+        rx_H_est_plot(SC_IND_PILOTS) = rx_H_est(SC_IND_PILOTS);
+        bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
+        axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
+        grid on;
+        title('Channel Estimates (Magnitude)')
+        xlabel('Baseband Frequency (MHz)')
+    end
+
+    if CONST_PLOT
+        cf = cf + 1;
+        figure(cf); clf;
+
+        plot(payload_dl_syms_mat(:),'o','MarkerSize',2, 'color', sec_clr);
+        axis square; axis(1.5*[-1 1 -1 1]);
+        xlabel('Inphase')
+        ylabel('Quadrature')
+        grid on;
+        hold on;
+
+        plot(squeeze(tx_syms_mat(1,:,:)),'*', 'MarkerSize',16, 'LineWidth',2, 'color', fst_clr);
+        title('Tx and Rx Constellations')
+        legend('Rx','Tx','Location','EastOutside');
+    end
+
+    % Downlink Rx Vector and Constellation Plots
+    if DOWNLINK_PLOT
+        cf = cf + 1;
+        figure(cf);clf;
+
+        subplot(2,1,1);
+        plot(real(squeeze(rx_vec_iris_tmp(1,iue,1,:))));
+        xline(dl_data_start,'--r')
+        axis([0 N_SAMPS -1 1])
+        grid on;
+        title('Downlink Data - Received Data (Real)');
+
+        subplot(2,1,2);
+        plot(lts_corr);
+        axis([0 N_SAMPS -1 6])
+        grid on;
+        title('Downlink Data - LTS Correlation');
+    end
+
+    if EVM_SNR_PLOT
+        % EVM & SNR
+        cf = cf + 1;
+        figure(cf); clf;
+        subplot(2,1,1)
+        plot(100*evm_mat(:),'o','MarkerSize',1)
+        axis tight
+        hold on
+        plot([1 length(evm_mat(:))], 100*[aevms, aevms],'color', sec_clr,'LineWidth',4)
+        myAxis = axis;
+        h = text(round(.05*length(evm_mat(:))), 100*aevms+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', snr));
+        set(h,'Color',[1 0 0])
+        set(h,'FontWeight','bold')
+        set(h,'FontSize',10)
+        set(h,'EdgeColor',[1 0 0])
+        set(h,'BackgroundColor',[1 1 1])
+        hold off
+        xlabel('Data Symbol Index')
+        ylabel('EVM (%)');
+        legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
+        title('EVM vs. Data Symbol Index')
+        grid on
+
+        subplot(2,1,2)
+        imagesc(1:N_DATA_SYM, (SC_IND_DATA - N_SC/2), 100*fftshift(evm_mat,1))
+
+        grid on
+        xlabel('OFDM Symbol Index')
+        ylabel('Subcarrier Index')
+        title('EVM vs. (Subcarrier & OFDM Symbol)')
+        h = colorbar;
+        set(get(h,'title'),'string','EVM (%)');
+        myAxis = caxis();
+        if (myAxis(2)-myAxis(1)) < 5
+            caxis([myAxis(1), myAxis(1)+5])
+        end
     end
 end

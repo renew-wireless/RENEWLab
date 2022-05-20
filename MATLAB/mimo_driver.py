@@ -186,6 +186,7 @@ class MIMODriver:
 
         n_users = self.n_users
         n_bs_antenna = self.n_bs_antenna
+        n_bs_nodes = self.n_bs_sdrs
 
         if len(tx_data_mat.shape) == 1:
             n_samps = tx_data_mat.shape[0]
@@ -197,29 +198,35 @@ class MIMODriver:
             return
 
         ### Build TDD Schedule ###
-        bs_sched_b = 'BG'   # Beacon node
-        bs_sched   = 'GG'
-        ue_sched_tmp = list(''.join([char*2*n_users for char in 'G']))
+        # Each channel has its own separate ram. So you can write different data into them. 
+        # When dual pilot is enabled, what happens is that we write 0 to the second half of RAM_A and to the first half of RAM_B. 
+        # And that's how we get orthogonal pilots.
+        # To send from both antennas, simply use 'PG', write data to both, and enable both channels.
+        bs_sched_b = 'BGPG'   # Beacon node
+        bs_sched   = 'GGPG'
+        ue_sched_tmp = 'GGRG' #list(''.join([char*2*n_users for char in 'G']))
         ue_sched = []
+
         for ue_idx in range(n_users):
+            ue_sched.append(ue_sched_tmp)
 
-            # UE
-            tmp = copy.copy(ue_sched_tmp)
+        # UE
+        #tmp = copy.copy(ue_sched_tmp)
+        #curr_str_bs = 'PG'
+        #tmp[2*ue_idx:2*ue_idx+2] = 'RG'
+        # BS
+        #bs_sched_b = bs_sched_b + curr_str_bs
+        #bs_sched = bs_sched + curr_str_bs
+        # UE
+        #tmpstr = 'GG' + ''.join([char for char in tmp])
+        #ue_sched.append(tmpstr)
 
-            # Each channel has its own separate ram. So you can write different data into them. 
-            # When dual pilot is enabled, what happens is that we write 0 to the second half of RAM_A and to the first half of RAM_B. 
-            # And that's how we get orthogonal pilots.
-            # To send from both antennas, simply use 'PG', write data to both, and enable both channels.
-            curr_str_bs = 'PG'
-            tmp[2*ue_idx:2*ue_idx+2] = 'RG'
-
-            # BS
-            bs_sched_b = bs_sched_b + curr_str_bs
-            bs_sched = bs_sched + curr_str_bs
-            # UE
-            tmpstr = 'GG' + ''.join([char for char in tmp])
-            ue_sched.append(tmpstr)
-
+        print("Base Station Schedule (B)")
+        print(bs_sched_b)
+        print("Base Station Schedule")
+        print(bs_sched)
+        print("UE Schedule")
+        print(ue_sched)
 
         numRxSyms = bs_sched.count('P')
         print("NumRxSyms: {}, n_samps: {}, n_users: {}, bs_sched_b: {}, bs_sched: {}, ue_sched: {}".format(numRxSyms,n_samps,n_users,bs_sched_b,bs_sched,ue_sched))
@@ -320,6 +327,7 @@ class MIMODriver:
             print("Invalid number of RF channels (must be 1 or 2)!")
             return
 
+        print("Base Station Schedule")
         for bs_idx in range(self.n_bs_sdrs):
             # Individual Pilots (downlink)
             tmp_bs = copy.copy(bs_sched_tmp)
@@ -331,9 +339,12 @@ class MIMODriver:
             else:
                 tmp_bs = 'GG' + ''.join([char for char in tmp_bs])
 
+            print(tmp_bs)
             bs_sched.append(tmp_bs)
 
         tmp_ue = 'GG' + ''.join([char for char in tmp_ue])
+        print("UE Schedule")
+        print(tmp_ue)
         ue_sched.append(tmp_ue)
         numRxSyms = ue_sched[0].count('R')
         print("NumRxSyms: {}, n_samps: {}, n_users: {}, bs_sched: {}, ue_sched: {}".format(numRxSyms,n_samps,n_users,bs_sched,ue_sched))
