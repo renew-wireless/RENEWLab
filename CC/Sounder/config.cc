@@ -52,8 +52,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   ref_node_enable_ = tddConf.value("reference_node_enable", true);
   guard_mult_ = tddConf.value("meas_guard_interval_mult", 1);
 
-  sample_cal_en_ = tddConf.value("sample_calibrate", false);
-  imbalance_cal_en_ = tddConf.value("imbalance_calibrate", false);
+  sample_cal_en_ = tddConf.value("calibrate_digital", false);
+  imbalance_cal_en_ = tddConf.value("calibrate_analog", false);
 
   num_bs_sdrs_all_ = 0;
   num_bs_antennas_all_ = 0;
@@ -336,8 +336,9 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     dl_slot_per_frame_ = dl_slots_.at(0).size();
     // read commons from client json config
     if (client_serial_present == false) {
-      num_cl_sdrs_ = num_cl_antennas_ =
+      num_cl_antennas_ =
           std::count(frames_.at(0).begin(), frames_.at(0).end(), 'P');
+      num_cl_sdrs_ = num_cl_antennas_ / cl_sdr_ch_;
     }
     if (tddConf.find("ue_frame_schedule") == tddConf.end()) {
       cl_frames_.resize(num_cl_sdrs_);
@@ -539,7 +540,9 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     if (this_amp > max_amp) max_amp = this_amp;
   }
   std::printf("Max pilot amplitude = %.2f\n", max_amp);
-  tx_scale_ = tddConf.value("tx_scale", 1 / (2 * max_amp));
+  // 6dB Power backoff value to avoid clipping in the data due to high PAPR
+  static constexpr float ofdm_pwr_scale_lin = 4;
+  tx_scale_ = tddConf.value("tx_scale", 1 / (ofdm_pwr_scale_lin * max_amp));
   for (size_t i = 0; i < iq_cf.size(); i++) {
     iq_cf.at(i) *= tx_scale_;
   }
@@ -659,6 +662,9 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
       MLPD_INFO("Allocating %zu cores to client threads ... \n", num_cl_sdrs_);
     }
   }
+
+  tx_frame_delta_ =
+      std::ceil(TIME_DELTA_MS / (1e3 * this->getFrameDurationSec()));
   std::printf(
       "Config: %zu BS, %zu BS radios (total), %zu UE antennas, %zu pilot "
       "symbols per "

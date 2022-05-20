@@ -258,6 +258,7 @@ class Config {
   inline double getFrameDurationSec() const {
     return ((this->samps_per_frame()) / this->rate_);
   }
+  inline size_t getTxFrameDelta() const { return tx_frame_delta_; }
 
   size_t getNumAntennas();
   size_t getMaxNumAntennas();
@@ -361,6 +362,7 @@ class Config {
   bool internal_measurement_;
   bool ref_node_enable_;
   size_t cal_ref_sdr_id_;
+  size_t tx_frame_delta_;
 
   // Clients features
   std::vector<std::string> cl_sdr_ids_;
