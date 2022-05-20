@@ -34,12 +34,10 @@ static constexpr size_t kQueueSize = 36;
 #define RX_THREAD_NUM (4)
 
 #define MAX_FRAME_INC (2000)
-#define TIME_DELTA (40)  //ms
+#define TIME_DELTA_MS (40)  //ms
 #define SETTLE_TIME_MS (1)
 #define UHD_INIT_TIME_SEC (3)  // radio init time for UHD devices
 #define BEACON_INTERVAL (20)   // frames
-
-#define PI_CONST 3.14159265358979323846
 
 enum SchedulerEventType {
   kEventRxSymbol = 0,

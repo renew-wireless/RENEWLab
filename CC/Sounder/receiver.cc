@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <climits>
 #include <random>
 
 #include "SoapySDR/Time.hpp"
@@ -27,6 +28,7 @@
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+static constexpr float SHRT_MAX_FLOAT = SHRT_MAX;
 
 Receiver::Receiver(
     Config* config, moodycamel::ConcurrentQueue<Event_data>* in_queue,
@@ -801,14 +803,15 @@ int Receiver::clientTxData(int tid, int frame_id, long long base_time) {
   return -1;
 }
 
-int Receiver::syncSearch(std::vector<std::complex<int16_t>> sync_buff,
+int Receiver::syncSearch(const std::vector<std::complex<int16_t>>& sync_buff,
                          size_t sync_num_samps) {
   int sync_index(-1);
   // convert data to complex float for sync detection
   std::vector<std::complex<float>> sync_buff_float(sync_num_samps, 0);
   for (size_t i = 0; i < sync_num_samps; i++) {
-    sync_buff_float[i] = (std::complex<float>(sync_buff[i].real() / 32768.0,
-                                              sync_buff[i].imag() / 32768.0));
+    sync_buff_float[i] =
+        (std::complex<float>(sync_buff[i].real() / SHRT_MAX_FLOAT,
+                             sync_buff[i].imag() / SHRT_MAX_FLOAT));
   }
   //TODO syncbuff0 is sloppy here since we recevied into syncrxbuff.data(), r bytes.
 #if defined(__x86_64__)
@@ -819,7 +822,7 @@ int Receiver::syncSearch(std::vector<std::complex<int16_t>> sync_buff,
   return sync_index;
 }
 
-float Receiver::estimateCFO(std::vector<std::complex<int16_t>> sync_buff,
+float Receiver::estimateCFO(const std::vector<std::complex<int16_t>>& sync_buff,
                             int sync_index) {
   float cfo_phase_est = 0;
   int beacon_start = sync_index - config_->beacon_size();
@@ -829,10 +832,12 @@ float Receiver::estimateCFO(std::vector<std::complex<int16_t>> sync_buff,
   for (int i = 0; i < beacon_half_size; i++) {
     size_t beacon0_id = i + beacon_start;
     size_t beacon1_id = i + beacon_start + beacon_half_size;
-    beacon0[i] = std::complex<float>(sync_buff[beacon0_id].real() / 32768.0,
-                                     sync_buff[beacon0_id].imag() / 32768.0);
-    beacon1[i] = std::complex<float>(sync_buff[beacon1_id].real() / 32768.0,
-                                     sync_buff[beacon1_id].imag() / 32768.0);
+    beacon0[i] =
+        std::complex<float>(sync_buff[beacon0_id].real() / SHRT_MAX_FLOAT,
+                            sync_buff[beacon0_id].imag() / SHRT_MAX_FLOAT);
+    beacon1[i] =
+        std::complex<float>(sync_buff[beacon1_id].real() / SHRT_MAX_FLOAT,
+                            sync_buff[beacon1_id].imag() / SHRT_MAX_FLOAT);
   }
   auto cfo_mult = CommsLib::complex_mult_avx(beacon1, beacon0, true);
   float phase = 0, prev_phase = 0;
@@ -843,16 +848,16 @@ float Receiver::estimateCFO(std::vector<std::complex<int16_t>> sync_buff,
       unwrapped_phase = phase;
     } else {
       float diff = phase - prev_phase;
-      if (diff > PI_CONST)
-        diff = diff - 2 * PI_CONST;
-      else if (diff < -PI_CONST)
-        diff = diff + 2 * PI_CONST;
+      if (diff > M_PI)
+        diff = diff - 2 * M_PI;
+      else if (diff < -M_PI)
+        diff = diff + 2 * M_PI;
       unwrapped_phase = prev_phase + diff;
     }
     prev_phase = phase;
     cfo_phase_est += unwrapped_phase;
   }
-  cfo_phase_est /= (PI_CONST * cfo_mult.size() * config_->beacon_size());
+  cfo_phase_est /= (M_PI * cfo_mult.size() * config_->beacon_size());
   return cfo_phase_est;
 }
 
@@ -1025,12 +1030,6 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
             "Re-syncing with offset: %d, after %zu "
             "tries, index: %d, tid %d\n",
             rx_offset, resync_retry_cnt + 1, sync_index, tid);
-        //float cfo_phase_est_inst = estimateCFO(syncbuff0, sync_index);
-        //cfo_phase_est = cfo_phase_est_inst * 0.2 + cfo_phase_est * 0.8;
-        //std::cout << "Client " << tid << " Estimated CFO (Hz): "
-        //          << cfo_phase_est_inst * config_->rate()
-        //          << ", Estimated Mean CFO (Hz): "
-        //          << cfo_phase_est * config_->rate() << std::endl;
       } else {
         resync_retry_cnt++;
       }

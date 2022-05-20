@@ -540,7 +540,9 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     if (this_amp > max_amp) max_amp = this_amp;
   }
   std::printf("Max pilot amplitude = %.2f\n", max_amp);
-  tx_scale_ = tddConf.value("tx_scale", 1 / (4 * max_amp));
+  // 6dB Power backoff value to avoid clipping in the data due to high PAPR
+  static constexpr float ofdm_pwr_scale_lin = 4;
+  tx_scale_ = tddConf.value("tx_scale", 1 / (ofdm_pwr_scale_lin * max_amp));
   for (size_t i = 0; i < iq_cf.size(); i++) {
     iq_cf.at(i) *= tx_scale_;
   }
@@ -661,7 +663,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     }
   }
 
-  tx_frame_delta_ = std::ceil(TIME_DELTA / (1e3 * this->getFrameDurationSec()));
+  tx_frame_delta_ =
+      std::ceil(TIME_DELTA_MS / (1e3 * this->getFrameDurationSec()));
   std::printf(
       "Config: %zu BS, %zu BS radios (total), %zu UE antennas, %zu pilot "
       "symbols per "
