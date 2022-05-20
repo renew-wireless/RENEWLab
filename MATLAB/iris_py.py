@@ -197,7 +197,7 @@ class Iris_py:
                 for chan in [0, 1]:
                     self.sdr.setGain(SOAPY_SDR_RX, chan, rx_gain)
 
-        def config_sdr_tdd(self, is_bs=True, tdd_sched="G", nsamps=4096, prefix_len=0, max_frames=1):
+        def config_sdr_tdd(self, is_bs=True, tdd_sched="G", nsamps=4096, prefix_len=0, max_frames=1, dualpilot=False):
                 '''Configure the TDD schedule and functionality when unchained. Set up the correlator.'''
                 self.n_samp = nsamps
                 global corr_threshold, beacon
@@ -210,6 +210,7 @@ class Iris_py:
                             "frame_mode": "free_running",
                             "symbol_size": self.n_samp,
                             "max_frame": max_frames,
+                            "dual_pilot": dualpilot,
                             "beacon_start": prefix_len,
                             "beacon_stop": prefix_len + len(beacon),
                             "frames": [self.tdd_sched]}

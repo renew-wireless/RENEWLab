@@ -41,7 +41,9 @@ end
 WRITE_PNG_FILES         = 0;                % Enable writing plots to PNG
 SIM_MODE                = 0;
 DEBUG                   = 0;
-PLOT                    = 0;
+CONST_PLOT              = 1;
+CHANNEL_PLOT            = 1;
+DOWNLINK_PLOT           = 0;
 
 if SIM_MODE
     TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
@@ -55,8 +57,8 @@ if SIM_MODE
 else 
     %Iris params:
     TX_SCALE                = 0.8;          % Scale for Tx waveform ([0:1])
-    ANT_BS                  = 'AB';         % Options: {A, B, AB}
-    ANT_UE                  = 'A';          % Currently, only support single antenna
+    ANT_BS                  = 'A';         % Options: {A, B, AB}
+    ANT_UE                  = 'A';          % Currently, only support single antenna, i.e., A
     USE_HUB                 = 1;
     TX_FRQ                  = 3.58e9;
     RX_FRQ                  = TX_FRQ;
@@ -72,7 +74,7 @@ else
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
-        bs_ids = ["RF3E000356","RF3E000620"];%,"RF3E000609","RF3E000604","RF3E000612","RF3E000640","RF3E000551"];
+        bs_ids = ["RF3E000356"];%,"RF3E000620"];%,"RF3E000609","RF3E000604","RF3E000612","RF3E000640","RF3E000551"];
         hub_id = ["FH4B000019"];
     else
         bs_ids = ["RF3E000246","RF3E000490","RF3E000749","RF3E000697","RF3E000724","RF3E000740","RF3E000532"];
@@ -228,7 +230,7 @@ for iue = 1:N_UE
         lts_corr = abs(conv(conj(fliplr(lts_t.')), sign(curr_vec.')));
 
         if DEBUG
-            figure; subplot(2,1,1); plot(abs(curr_vec)); subplot(2,1,2); plot(lts_corr);
+            figure; subplot(2,1,1); plot(abs(curr_vec)); subplot(2,1,2); plot(lts_corr); title(sprintf('SOUNDING UE %d, BS %d',iue,ibs));
         end
 
         lts_peaks = find(lts_corr > 0.8*max(lts_corr));
@@ -265,7 +267,9 @@ for iue = 1:N_UE
             rx_lts2_f = fft(rx_lts2);
 
             % Calculate channel estimate from average of 2 training symbols: 
-            rx_H_est = mean([rx_lts1_f./lts_f   rx_lts2_f./ lts_f], 2);
+            %rx_H_est = mean([rx_lts1_f./lts_f   rx_lts2_f./ lts_f], 2);
+            rx_H_est = lts_f .* (rx_lts1_f + rx_lts2_f) / 2;
+            rx_H_est_sound = rx_H_est;
             H(iue, ibs, :) = rx_H_est;
         end
     end
@@ -304,14 +308,18 @@ else
     ifft_in_mat = zeros(N_BS_ANT, N_SC, N_OFDM_SYM);
     for isc = 1:N_SC
         for isym = 1:N_OFDM_SYM
-            ifft_in_mat(:, isc, isym) = W(:, :, isc) * precoding_in_mat(:, isc, isym);
+            if N_UE > 1
+                ifft_in_mat(:, isc, isym) = W(:, :, isc) * precoding_in_mat(:, isc, isym);
+            else
+                ifft_in_mat(:, isc, isym) = precoding_in_mat(:, isc, isym);
+            end
         end
     end
 
     % IFFT
     tx_payload_mat = zeros(N_BS_ANT, N_SYM_SAMP, N_DATA_SYM);
     tx_pilot_mat = zeros(N_BS_ANT, length(lts_t)*2.5);
-
+    
     for ibs = 1:N_BS_ANT
         pilot1 = squeeze(ifft(ifft_in_mat(ibs, :, 1)));
         pilot2 = squeeze(ifft(ifft_in_mat(ibs, :, 2)));
@@ -323,16 +331,22 @@ else
         end
     end
 
-    % Reshape to a vector
+    % Reshape to a vector and append zeros to fill out remaining of buffer (not necessary)
+    % Total frame length 4096 = N_SAMPS
     tx_payload_vec = reshape(tx_payload_mat, N_BS_ANT, numel(tx_payload_mat(1, :, :)));
-    tx_payload_vec = [tx_pilot_mat tx_payload_vec];
+    frame_length = length(tx_payload_mat(1,:)) + length(tx_pilot_mat(1,:));
+    N_ZPAD_POST = MAX_NUM_SAMPS - frame_length - N_ZPAD_PRE;
+    tx_payload = [zeros(N_BS_ANT, N_ZPAD_PRE) tx_pilot_mat tx_payload_vec zeros(N_BS_ANT, N_ZPAD_POST)];
 
     % NOTE: Add preamble to one antenna for sync (workaround to offset from beamformed preamble)
-    %syncSeq = zeros(size(tx_payload_vec,1), length(lts_lcp));
+    %syncSeq = zeros(size(tx_payload,1), length(lts_lcp));
     %syncSeq(1, :) = lts_lcp;
-    %tx_payload_vec = [syncSeq tx_payload_vec];
+    %tx_payload = [syncSeq tx_payload];
+    N_DATA_SAMP = N_SYM_SAMP * N_DATA_SYM;
+    N_SAMPS = N_ZPAD_PRE + length(tx_pilot_mat(1,:)) + (N_SYM_SAMP * N_DATA_SYM) + N_ZPAD_POST;
+    assert(N_SAMPS == MAX_NUM_SAMPS);
 
-    [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_downlink(tx_payload_vec, N_FRM, N_ZPAD_PRE);
+    [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_downlink(tx_payload, N_FRM, N_ZPAD_PRE);
     mimo_handle.mimo_close();
 
     if isempty(rx_vec_iris)
@@ -346,38 +360,37 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                        PROCESS DOWNLINK DATA
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-return;
-
 igf = numGoodFrames;
 preamble_pk = zeros(1, N_UE);
 for iue = 1:N_UE
 
     %%%%% Find Preamble
     curr_vec = squeeze(rx_vec_iris_tmp(igf, iue, 1, :)); % Dimensions: (nGoodFrames,nUE,numRxSyms,numSamps)
-    lts_corr = abs(conv(conj(fliplr(lts_t)), sign(curr_vec)));
+    lts_corr = abs(conv(conj(fliplr(lts_t.')), sign(curr_vec)));
     lts_peaks = find(lts_corr > 0.8*max(lts_corr));
     [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
     [lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
 
     if DEBUG
-        figure; subplot(2,1,1); plot(abs(curr_vec)); subplot(2,1,2); plot(lts_corr);
+        figure; subplot(2,1,1); plot(abs(curr_vec)); subplot(2,1,2); plot(lts_corr); title(sprintf('DL DATA: UE %d,',iue));
     end
 
     % Stop if no valid correlation peak was found
-    if(isempty(lts_second_peak_index2))
+    if(isempty(lts_second_peak_index))
         fprintf('SOUNDING: NO correlation peak at UE %d. Exit now! \n', iue);
         return;
     end
 
-    if length(lts_second_peak_index2) > 1
-        preamble_pk(iue) = lts_peaks(lts_second_peak_index2(2));
+    if length(lts_second_peak_index) > 1
+        preamble_pk(iue) = lts_peaks(lts_second_peak_index(2));
     else
-        preamble_pk(iue) = lts_peaks(lts_second_peak_index2(1));
+        preamble_pk(iue) = lts_peaks(lts_second_peak_index(1));
     end
 
     % Check if valid...
     pk_tmp = preamble_pk(iue); 
-    lts_ind = pk_tmp - length(preamble_common);
+    lts_ind = pk_tmp - length(preamble_common) + 1;
+    dl_data_start = pk_tmp + 1;
 
     if lts_ind <= 0
         fprintf('INVALID correlation peak at UE %d. Exit now! \n', iue);
@@ -394,18 +407,17 @@ for iue = 1:N_UE
     rx_lts2_f = fft(rx_lts2);
 
     % Calculate channel estimate from average of 2 training symbols: 
-    rx_H_est = mean([rx_lts1_f./lts_f   rx_lts2_f./ lts_f], 2);
-    H(iue, ibs, :) = rx_H_est;
-
-
-
+    %rx_H_est = mean([rx_lts1_f./lts_f   rx_lts2_f./ lts_f], 2);
+    %rx_H_est = (lts_f.') .* (rx_lts1_f + rx_lts2_f) / 2;
+    rx_H_est = lts_f .* (rx_lts1_f + rx_lts2_f) / 2;
 
     %%%%% Retrieve data and apply corrections
-    N_RX_DATA_SYMS = min(N_DATA_SYMS, floor((N_SAMP - dl_data_start)/N_SYM_SAMP));
-    rx_dl_data_vec = zeros(N_RX_DATA_SYMS * N_SYM_SAMP);
-    end_idx = min(4096, dl_data_start + N_RX_DATA_SYMS * N_SYM_SAMP - 1);
-    rx_dl_data_vec = rx_vec_downlink(1, dl_data_start: end_idx);
-    rx_dl_data_mat = reshape(rx_dl_data_vec, N_SYM_SAMP, N_RX_DATA_SYMS );
+    %data_samples = dl_data_start + N_DATA_SAMP;
+    rx_vec_downlink = curr_vec;
+    N_RX_DATA_SYMS = min(N_DATA_SYM, floor((length(curr_vec) - dl_data_start) / N_SYM_SAMP));
+    end_idx = min(N_SAMPS, dl_data_start + N_RX_DATA_SYMS * N_SYM_SAMP - 1);
+    rx_dl_data_vec = rx_vec_downlink(dl_data_start: end_idx);
+    rx_dl_data_mat = reshape(rx_dl_data_vec, N_SYM_SAMP, N_RX_DATA_SYMS);
 
     if(CP_LEN > 0)
         rx_dl_data_mat = rx_dl_data_mat(CP_LEN+1-FFT_OFFSET:end-FFT_OFFSET, :);
@@ -415,7 +427,7 @@ for iue = 1:N_UE
 
     dl_syms_eq_mat = zeros(N_SC, N_RX_DATA_OFDM_SYMS);
     for i=1:N_RX_DATA_OFDM_SYMS
-        dl_syms_eq_mat(:,i) = squeeze(rx_dl_f_mat(:,i).')./rx_H_est;
+        dl_syms_eq_mat(:,i) = squeeze(rx_dl_f_mat(:,i))./rx_H_est;
     end
 
     pilots_eq_mat = dl_syms_eq_mat(SC_IND_PILOTS,:);
@@ -446,13 +458,13 @@ for iue = 1:N_UE
     
     %%%%% Calculate EVM & SNR
     % Do yourselves. Calculate EVM and effective SNR:
-    evm_mat = abs(payload_dl_syms_mat - tx_syms_mat).^2;
+    evm_mat = abs(payload_dl_syms_mat - squeeze(tx_syms_mat(iue, :, :))).^2;
     aevms = mean(evm_mat(:)); % needs to be a scalar
     snr = 10*log10(1./aevms); % calculate in dB scale.
 
     sym_errs = sum(tx_data ~= rx_data);
     bit_errs = length(find(dec2bin(bitxor(tx_data, rx_data),8) == '1'));
-    rx_evm   = sqrt(sum((real(rx_syms) - real(tx_syms)).^2 + (imag(rx_syms) - imag(tx_syms)).^2)/(length(SC_IND_DATA) * N_DATA_SYMS));
+    rx_evm   = sqrt(sum((real(rx_syms) - real(tx_syms)).^2 + (imag(rx_syms) - imag(tx_syms)).^2)/(length(SC_IND_DATA) * N_DATA_SYM));
 
     fprintf('\nResults:\n');
     fprintf('Num Bytes:  \t  %d\n', N_DATA_SC * log2(MOD_ORDER) / 8);
@@ -463,46 +475,60 @@ for iue = 1:N_UE
 end
 
 
-%% Step 6: Plotting
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                               PLOTTER
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 cf = 0;
-% Reciprocal Calibration Vectors Plots
-if RECIP_PLOT
+fst_clr = [0, 0.4470, 0.7410];
+sec_clr = [0.8500, 0.3250, 0.0980];
+
+
+if CHANNEL_PLOT
     cf = cf + 1;
-    figure(cf);clf;
+    figure(cf); clf;
+    x = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1));
 
-    for i = 1:N_BS_NODE
-        subplot(N_BS_NODE, 1, i);
-        plot(-32:1:31, abs(cal_mat(i, :)));
-        axis([-40 40 0 5])
-        grid on;
-        title('Calibration MAGNITUDE');
-    end
+    subplot(1,2,1);
+    rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
+    rx_H_est_plot(SC_IND_DATA) = rx_H_est_sound(SC_IND_DATA);
+    rx_H_est_plot(SC_IND_PILOTS) = rx_H_est_sound(SC_IND_PILOTS);
+    bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
+    axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
+    grid on;
+    title('Channel Estimates (Magnitude)')
+    xlabel('Baseband Frequency (MHz)')
 
-    cf = cf + 1;
-    figure(cf);clf;
-
-    for i = 1:N_BS_NODE
-        subplot(N_BS_NODE, 1, i);
-        plot(-32:1:31, angle(cal_mat(i, :)));
-        axis([-40 40 -pi pi])
-        grid on;
-        title('Calibration ANGLE');
-    end
+    subplot(1,2,2);
+    rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
+    rx_H_est_plot(SC_IND_DATA) = rx_H_est(SC_IND_DATA);
+    rx_H_est_plot(SC_IND_PILOTS) = rx_H_est(SC_IND_PILOTS);
+    bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
+    axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
+    grid on;
+    title('Channel Estimates (Magnitude)')
+    xlabel('Baseband Frequency (MHz)')
 end
 
-% Uplink Pilot Rx Vectors Plots
-if PILOT_PLOT
+if CONST_PLOT
     cf = cf + 1;
-    figure(cf);clf;
+    figure(cf); clf;
 
-    plot(real(rx_vec_pilot.'));
-    %axis([0 N_SAMP -1 1])
+    plot(payload_dl_syms_mat(:),'o','MarkerSize',2, 'color', sec_clr);
+    axis square; axis(1.5*[-1 1 -1 1]);
+    xlabel('Inphase')
+    ylabel('Quadrature')
     grid on;
-    title('Received Pilots (Real)');
+    hold on;
+
+    plot(squeeze(tx_syms_mat(1,:,:)),'*', 'MarkerSize',16, 'LineWidth',2, 'color', fst_clr);
+    title('Tx and Rx Constellations')
+    legend('Rx','Tx','Location','EastOutside');
 end
 
 % Downlink Rx Vector and Constellation Plots
 if DOWNLINK_PLOT
+    % NOT TESTED
     fst_clr = [0, 0.4470, 0.7410];
     sec_clr = [0.8500, 0.3250, 0.0980];
     cf = cf + 1;
