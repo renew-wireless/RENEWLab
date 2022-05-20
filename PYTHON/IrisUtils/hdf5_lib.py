@@ -1044,7 +1044,9 @@ class hdf5_lib:
                 frame_end = frame_start + useful_frame_num
                 for i in range(frame_start, frame_end):
                     new_i = i - frame_start
-                    res = [k for k, l in zip(list(ul_demod_syms[i, j, :]), list(tx_data_syms[new_i, j, :])) if k == l]
+                    ul_demod_int = ofdm_obj.demodulation(ul_demod_syms[i, j, :], M)
+                    ul_tx_syms = ofdm_obj.demodulation(tx_data_syms[new_i, j, :], M)
+                    res = [k for k, l in zip(list(ul_demod_int), list(ul_tx_syms)) if k == l]
                     slot_ser[new_i, j] = (ul_demod_syms.shape[2] - len(list(res))) / ul_demod_syms.shape[2]
         else:
             # UL Syms: #Frames, #OFDM Symbols, #Antennas, #Samples
@@ -1066,17 +1068,18 @@ class hdf5_lib:
             ul_equal_syms = np.transpose(ul_equal_syms, (0, 2, 1, 3))
             # UL DATA: #Frames, #User, SLOT DATA SCs
             ul_equal_syms = np.reshape(ul_equal_syms, (ul_equal_syms.shape[0], ul_equal_syms.shape[1], symbol_per_slot * len(data_sc_ind)))
-            ul_demod_syms = np.empty(ul_equal_syms.shape, dtype="complex64")
+            ul_demod_syms = np.empty(ul_equal_syms.shape, dtype="int")
 
             for j in range(n_users):
                 frame_start = 0 if txdata.shape[0] == 1 else min_ue_offset
                 frame_end = frame_start + useful_frame_num
                 slot_evm[:, j] = np.linalg.norm(ul_equal_syms[frame_start:frame_end, j, :] - tx_data_syms[:useful_frame_num, j, :], 2, axis=1) / ul_equal_syms.shape[2]
                 for i in range(n_frames):
-                    ul_demod_syms[i, j, :] = ofdm_obj.modulation(ofdm_obj.demodulation(ul_equal_syms[i, j, :], M), M)
+                    ul_demod_syms[i, j, :] = ofdm_obj.demodulation(ul_equal_syms[i, j, :], M)
                 for i in range(frame_start, frame_end):
                     new_i = i - frame_start
-                    res = [k for k, l in zip(list(ul_demod_syms[i, j, :]), list(tx_data_syms[new_i, j, :])) if k == l]
+                    ul_tx_syms = ofdm_obj.demodulation(tx_data_syms[new_i, j, :], M)
+                    res = [k for k, l in zip(list(ul_demod_syms[i, j, :]), list(ul_tx_syms)) if k == l]
                     slot_ser[new_i, j] = (ul_demod_syms.shape[2] - len(list(res))) / ul_demod_syms.shape[2]
             slot_evm_snr = 10 * np.log10(1 / slot_evm)
 

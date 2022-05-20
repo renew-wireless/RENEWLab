@@ -134,11 +134,11 @@ class ofdmTxRx:
         RETURNS:
             - val: Integer value (data symbol) between 0 and 15 (i.e., 0:1:15)
         """
-
+        thresh = 2 / np.sqrt(10)
         val = (8 * (np.real(iq) > 0)) + \
-              (4 * (abs(np.real(iq)) < 0.6325)) + \
+              (4 * (abs(np.real(iq)) < thresh)) + \
               (2 * (np.imag(iq) > 0)) + \
-              (1 * (abs(np.imag(iq)) < 0.6325))
+              (1 * (abs(np.imag(iq)) < thresh))
         return val
 
     def qam64_dem(self, iq):
@@ -151,12 +151,15 @@ class ofdmTxRx:
         RETURNS:
             - val: Integer value (data symbol) between 0 and 63 (i.e., 0:1:63)
         """
+        thresh1 = 2 / np.sqrt(43)
+        thresh2 = 4 / np.sqrt(43)
+        thresh3 = 6 / np.sqrt(43)
         val = (32 * (np.real(iq) > 0)) + \
-              (16 * (abs(np.real(iq)) < 0.6172)) + \
-              (8 * ((abs(np.real(iq)) < 0.9258) and (abs(np.real(iq)) > 0.3086))) + \
+              (16 * (abs(np.real(iq)) < thresh2)) + \
+              (8 * ((abs(np.real(iq)) < thresh3) and (abs(np.real(iq)) > thresh1))) + \
               (4 * (np.imag(iq) > 0)) + \
-              (2 * (abs(np.imag(iq)) < 0.6172)) + \
-              (1 * ((abs(np.imag(iq)) < 0.9258) and (abs(np.imag(iq)) > 0.3086)))
+              (2 * (abs(np.imag(iq)) < thresh2)) + \
+              (1 * ((abs(np.imag(iq)) < thresh3) and (abs(np.imag(iq)) > thresh1)))
         return val
 
     def generate_data(self, n_ofdm_syms=100, mod_order=4, cp_length=16, datastream=[]):
