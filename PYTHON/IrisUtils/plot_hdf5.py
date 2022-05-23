@@ -36,7 +36,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 user_i=0, ul_slot_i=0, dl_slot_i=0, subcarrier_i=10, offset=-1,
                 dn_calib_offset=0, up_calib_offset=0, thresh=0.001,
                 deep_inspect=False, corr_thresh=0.00, exclude_bs_nodes=[],
-                demodulate=False, analyze=False):
+                demod="", analyze=False):
     """Plot data in the hdf5 file to verify contents.
 
     Args:
@@ -97,6 +97,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     dl_data_avail = len(hdf5.downlink_samples) > 0
 
     chunk_size = 10000
+    ue_frame_offset = [0]*num_cl
 
     if pilot_data_avail:
         pilot_samples = hdf5.pilot_samples[:, cell_i, :, :, :]
@@ -140,6 +141,17 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         if len(good_ants) == 0:
             print("no valid frames found in data belonging to user %d. Exitting ..." % user_i)
             return
+
+        # Find the frame number at which each UE starts sending pilots+data
+        for u in range(num_ues):
+            amps = np.mean(np.abs(samps[:, u, ant_i, :]), axis=1)
+            for i in range(1, len(amps)):
+                if amps[i] > thresh and amps[i-1] < thresh:
+                    ue_frame_offset[u] = i
+                    break
+            #pilot_frames[u] = [i for i in range(1, len(amps)) if amps[i] > thresh and amps[i-1] < thresh]
+        print("Starting frame offset for each UE:")
+        print(ue_frame_offset)
 
         if deep_inspect:
             filter_pilots_start = time.time()
@@ -188,7 +200,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             # CSI:   #Frames, #Users, #Pilot Rep, #Antennas, #Subcarrier
             # For correlation use a fft size of 64
             print("*verify_hdf5(): Calling samps2csi with fft_size = {}, offset = {}, bound = {}, cp = {} *".format(fft_size, offset, z_padding, cp))
-            csi = hdf5_lib.samps2csi_large(pilot_samples, num_pilots, chunk_size, samps_per_slot, fft_size=fft_size,
+            csi,_ = hdf5_lib.samps2csi_large(pilot_samples, num_pilots, chunk_size, samps_per_slot, fft_size=fft_size,
                                             offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
 
             if corr_thresh > 0.0:
@@ -213,7 +225,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             if analyze:
                 if noise_avail:
                     noise_samples = hdf5.noise_samples[:, cell_i, :, :, :]
-                    noise = hdf5_lib.samps2csi_large(noise_samples, noise_samples.shape[1], chunk_size, samps_per_slot, fft_size=fft_size,
+                    noise,_ = hdf5_lib.samps2csi_large(noise_samples, noise_samples.shape[1], chunk_size, samps_per_slot, fft_size=fft_size,
                                                 offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
                     analyze_hdf5(csi, noise, metadata, ref_frame, subcarrier_i, offset)
                 else:
@@ -248,16 +260,16 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 c_stop = min([(i+1)*chunk_size, calib_mat.shape[0]])
                 print("frames [%d, %d] "%(c_start, c_stop))
                 cal_samps = calib_pilot_samps[c_start:c_stop] 
-                csi_u = hdf5_lib.samps2csi_large(cal_samps[:, 1:2, :, :], 1, chunk_size, samps_per_slot, fft_size=fft_size,
+                csi_u, _ = hdf5_lib.samps2csi_large(cal_samps[:, 1:2, :, :], 1, chunk_size, samps_per_slot, fft_size=fft_size,
                                               offset=up_calib_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
                 csi_u_one_sym = csi_u[:, 0, ofdm_sym_i, :, :]
-                csi_d = hdf5_lib.samps2csi_large(cal_samps[:, 0:1, :, :], 1, chunk_size, samps_per_slot, fft_size=fft_size,
+                csi_d, _ = hdf5_lib.samps2csi_large(cal_samps[:, 0:1, :, :], 1, chunk_size, samps_per_slot, fft_size=fft_size,
                                               offset=dn_calib_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
                 csi_d_one_sym = csi_d[:, 0, ofdm_sym_i, :, :]
                 calib_mat[c_start:c_stop] = np.divide(csi_d_one_sym, csi_u_one_sym)
             plot_calib(calib_mat, calib_plot_bs_nodes, ref_frame, ant_i, subcarrier_i)
             if num_ues > 2: # actual clients are present
-                csi = hdf5_lib.samps2csi_large(calib_pilot_samps[:, 2:, :, :], num_cl, chunk_size, samps_per_slot, fft_size=fft_size,
+                csi, _ = hdf5_lib.samps2csi_large(calib_pilot_samps[:, 2:, :, :], num_cl, chunk_size, samps_per_slot, fft_size=fft_size,
                                                 offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
                 uplink_csi = csi[:, :, ofdm_sym_i, :, :]
                 corr_total, sig_sc = calCorr(uplink_csi, np.transpose(np.conj(uplink_csi[ref_frame, :, :, :]), (1, 0, 2) ) )
@@ -298,24 +310,31 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
     # Plot UL data symbols
     if ul_data_avail > 0:
-        # UL Samps: #Frames, #Cell, #Uplink Symbol, #Antennas, #Samples
+        # UL Samps: #Frames, #Uplink Symbol, #Antennas, #Samples
         uplink_samples = hdf5.uplink_samples[:, cell_i, :, :, :]
         all_bs_nodes = set(range(hdf5.uplink_samples.shape[3]))
         plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
         uplink_samples = uplink_samples[:, :, plot_bs_nodes, :]
-        ref_frame = min(frame_i - n_frm_st, uplink_samples.shape[0])
+        ref_frame = frame_i #min(frame_i - n_frm_st, uplink_samples.shape[0])
         samps_mat = np.reshape(
                 uplink_samples, (uplink_samples.shape[0], uplink_samples.shape[1], uplink_samples.shape[2], samps_per_slot, 2))
         ul_samps = (samps_mat[:, :, :, :, 0] +
                 samps_mat[:, :, :, :, 1]*1j)*2**-15
 
         user_amps = np.mean(np.abs(ul_samps[:, :, ant_i, :]), axis=2)
-        plot_iq_samps(ul_samps, user_amps, n_frm_st, ref_frame, [user_i], [ant_i], data_str="Uplink Data")
+        plot_iq_samps(ul_samps, user_amps, n_frm_st, ref_frame, [ul_slot_i], [ant_i], data_str="Uplink Data")
 
-        if demodulate:
+        if demod=='zf' or demod=='conj' or demod=='mmse' or demod=='ml':
+            if noise_avail:
+                noise_samples = hdf5.noise_samples[:, cell_i, :, :, :]
+                noise, _ = hdf5_lib.samps2csi_large(noise_samples, noise_samples.shape[1], chunk_size, samps_per_slot, fft_size=fft_size,
+                                            offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
+                noise_f = noise[:, ul_slot_i, :, :, :]
+            else:
+                noise_f = None
             tx_data = hdf5_lib.load_tx_data(metadata, hdf5.dirpath)
-            equalized_symbols, tx_symbols, slot_evm, slot_evm_snr = hdf5_lib.demodulate(ul_samps[:, ul_slot_i, :, :], userCSI, tx_data, metadata, offset, ul_slot_i)
-            plot_constellation_stats(slot_evm, slot_evm_snr, equalized_symbols, tx_symbols, ref_frame, ul_slot_i)
+            equalized_symbols, demod_symbols, tx_symbols, slot_evm, slot_evm_snr, slot_ser = hdf5_lib.demodulate(ul_samps[:, ul_slot_i, :, :], userCSI, tx_data[:, :, ul_slot_i, :, :], metadata, ue_frame_offset, offset, ul_slot_i, noise_f, demod)
+            plot_constellation_stats(slot_evm, slot_evm_snr, slot_ser, equalized_symbols, tx_symbols, ref_frame, ul_slot_i)
 
     # Plot DL data symbols
     if dl_data_avail > 0:
@@ -438,7 +457,7 @@ def compute_legacy(hdf5):
         noise_meas_en = h5log.attrs.get('measured_noise', 1)
 
         # compute CSI for each user and get a nice numpy array
-        csi, iq = hdf5_lib.samps2csi(h5log['Pilot_Samples'], num_users + noise_meas_en, samps_per_user,
+        csi, SNR = hdf5_lib.samps2csi(h5log['Pilot_Samples'], num_users + noise_meas_en, samps_per_user,
                                      legacy=True)  # Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier  #also, iq samples nicely chunked out, same dims, but subcarrier is sample.
         if zoom > 0:  # zoom in too look at behavior around peak (and reduce processing time)
             csi = csi[frame - zoom:frame + zoom, :, :, :, :]
@@ -514,7 +533,7 @@ def main():
     parser = OptionParser()
     parser.add_option("--show-metadata", action="store_true", dest="show_metadata", help="Displays hdf5 metadata", default=False)
     parser.add_option("--deep-inspect", action="store_true", dest="deep_inspect", help="Run script without analysis", default=False)
-    parser.add_option("--demodulate", action="store_true", dest="demodulate", help="Demodulate uplink data", default=False)
+    parser.add_option("--demodulate", type="string", dest="demodulate", help="Demodulate method for uplink data", default="")
     parser.add_option("--ref-frame", type="int", dest="ref_frame", help="Frame number to plot", default=1000)
     parser.add_option("--ref-ul-slot", type="int", dest="ref_ul_slot", help="UL slot number to plot", default=0)
     parser.add_option("--ref-dl-slot", type="int", dest="ref_dl_slot", help="DL slot number to plot", default=0)
@@ -577,7 +596,7 @@ def main():
         print("Setting the frame to inspect/plot to {}".format(fr_strt))
         ref_frame = 0
 
-    print(">> frame to plot = {}, ref. ant = {}, ref. user = {}, no. of frames to inspect = {}, starting frame = {} <<".format(ref_frame, ref_ant, ref_user, n_frames, fr_strt))
+    print(">> frame to plot = {}, ref. ant = {}, ref. user = {}, ref ofdm_sym = {}, no. of frames to inspect = {}, starting frame = {} <<".format(ref_frame, ref_ant, ref_user, ref_ofdm_sym, n_frames, fr_strt))
 
     # Instantiate
     if legacy:
@@ -623,8 +642,8 @@ def main():
         if show_metadata:
             print(hdf5.metadata)
         else:
-            if not ul_data_avail and demodulate:
-                demodulate = False
+            if not ul_data_avail and demodulate != "":
+                demodulate = ""
                 print("Uplink data is not available, ignoring demodulate option...")
 
             if verify:

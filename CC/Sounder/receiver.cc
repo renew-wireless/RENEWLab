@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <climits>
 #include <random>
 
 #include "SoapySDR/Time.hpp"
@@ -27,6 +28,7 @@
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+static constexpr float SHRT_MAX_FLOAT = SHRT_MAX;
 
 Receiver::Receiver(
     Config* config, moodycamel::ConcurrentQueue<Event_data>* in_queue,
@@ -109,7 +111,7 @@ Receiver::~Receiver() {
 
 void Receiver::initBuffers() {
   size_t frameTimeLen = config_->samps_per_frame();
-  txFrameDelta_ = int(TIME_DELTA / (1e3 * config_->getFrameDurationSec()));
+  txFrameDelta_ = config_->getTxFrameDelta();
   txTimeDelta_ = txFrameDelta_ * frameTimeLen;
 
   zeros_.resize(2);
@@ -851,14 +853,15 @@ int Receiver::clientTxData(int tid, int frame_id, long long base_time) {
   return -1;
 }
 
-int Receiver::syncSearch(std::vector<std::complex<int16_t>> sync_buff,
+int Receiver::syncSearch(const std::vector<std::complex<int16_t>>& sync_buff,
                          size_t sync_num_samps) {
   int sync_index(-1);
   // convert data to complex float for sync detection
   std::vector<std::complex<float>> sync_buff_float(sync_num_samps, 0);
   for (size_t i = 0; i < sync_num_samps; i++) {
-    sync_buff_float[i] = (std::complex<float>(sync_buff[i].real() / 32768.0,
-                                              sync_buff[i].imag() / 32768.0));
+    sync_buff_float[i] =
+        (std::complex<float>(sync_buff[i].real() / SHRT_MAX_FLOAT,
+                             sync_buff[i].imag() / SHRT_MAX_FLOAT));
   }
   //TODO syncbuff0 is sloppy here since we recevied into syncrxbuff.data(), r bytes.
 #if defined(__x86_64__)
@@ -867,6 +870,45 @@ int Receiver::syncSearch(std::vector<std::complex<int16_t>> sync_buff,
   sync_index = CommsLib::find_beacon(sync_buff_float);
 #endif
   return sync_index;
+}
+
+float Receiver::estimateCFO(const std::vector<std::complex<int16_t>>& sync_buff,
+                            int sync_index) {
+  float cfo_phase_est = 0;
+  int beacon_start = sync_index - config_->beacon_size();
+  int beacon_half_size = config_->beacon_size() / 2;
+  std::vector<std::complex<float>> beacon0(beacon_half_size);
+  std::vector<std::complex<float>> beacon1(beacon_half_size);
+  for (int i = 0; i < beacon_half_size; i++) {
+    size_t beacon0_id = i + beacon_start;
+    size_t beacon1_id = i + beacon_start + beacon_half_size;
+    beacon0[i] =
+        std::complex<float>(sync_buff[beacon0_id].real() / SHRT_MAX_FLOAT,
+                            sync_buff[beacon0_id].imag() / SHRT_MAX_FLOAT);
+    beacon1[i] =
+        std::complex<float>(sync_buff[beacon1_id].real() / SHRT_MAX_FLOAT,
+                            sync_buff[beacon1_id].imag() / SHRT_MAX_FLOAT);
+  }
+  auto cfo_mult = CommsLib::complex_mult_avx(beacon1, beacon0, true);
+  float phase = 0, prev_phase = 0;
+  for (size_t i = 0; i < cfo_mult.size(); i++) {
+    phase = std::arg(cfo_mult.at(i));
+    float unwrapped_phase = 0;
+    if (i == 0) {
+      unwrapped_phase = phase;
+    } else {
+      float diff = phase - prev_phase;
+      if (diff > M_PI)
+        diff = diff - 2 * M_PI;
+      else if (diff < -M_PI)
+        diff = diff + 2 * M_PI;
+      unwrapped_phase = prev_phase + diff;
+    }
+    prev_phase = phase;
+    cfo_phase_est += unwrapped_phase;
+  }
+  cfo_phase_est /= (M_PI * cfo_mult.size() * config_->beacon_size());
+  return cfo_phase_est;
 }
 
 void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
@@ -930,6 +972,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   long long rxTime(0);
   int sync_index(-1);
   int rx_offset = 0;
+  float cfo_phase_est = 0;
 
   // For USRP clients skip UHD_INIT_TIME_SEC to avoid late packets
   if (kUsePureUHD == true || kUseSoapyUHD == true) {
@@ -960,6 +1003,10 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
     MLPD_INFO("Beacon detected at Time %lld, sync_index: %d\n", rxTime,
               sync_index);
     rx_offset = sync_index - config_->beacon_size() - config_->prefix();
+    cfo_phase_est = estimateCFO(syncbuff0, sync_index);
+    std::cout << "Client " << tid
+              << " Estimated CFO (Hz): " << cfo_phase_est * config_->rate()
+              << std::endl;
   }
 
   // Read rx_offset to align with the begining of a frame

@@ -87,6 +87,13 @@ void DataGenerator::GenerateData(const std::string& directory) {
                                  postfix_zpad_t.end());
             for (size_t id = 0; id < data_time_dom.size(); id++) {
               data_time_dom.at(id) *= cfg_->tx_scale();
+              if (data_time_dom.at(id).real() > 1.f ||
+                  data_time_dom.at(id).imag() > 1.f) {
+                std::printf(
+                    "Saturation detected in frame %zu slot %zu channel %zu "
+                    "sample %zu\n",
+                    f, u, h, id);
+              }
             }
             auto data_time_dom_ci16 = Utils::cfloat_to_cint16(data_time_dom);
             std::fwrite(data_freq_dom.data(),
