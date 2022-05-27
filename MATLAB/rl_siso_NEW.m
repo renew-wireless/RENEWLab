@@ -1,24 +1,24 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%	Author(s): C. Nicolas Barati nicobarati@rice.edu 
-%		Rahman Doost-Mohamamdy: doost@rice.edu
+%	Author(s): C. Nicolas Barati nicobarati@rice.edu
+%		       Rahman Doost-Mohamamdy: doost@rice.edu
 %
-% Multiple iterations of a single-shot transmissions from one client or UE
-% to one base station radio (UE stands for User Equipment).
-% The script explores Bit Error Rate (BER) as a function of Signal-to-Noise
-% Ratio (SNR) and therefore iterates over different SNR values (sim_SNR_db
-% variable). Within e   ach iteration, only a single frame transmission takes
-% place.
+% Single-shot transmissions between a single-antenna client (UE) and one
+% single-antenna base station radio (UE stands for User Equipment).
 %
 % We define two modes: OTA (Over-the-air) and SIM_MOD (simulation).
-% In simulation mode we simply use a Rayleigh channel whereas the OTA mode
-% relies on the Iris hardware for transmission and reception.
+% In simulation mode we simply use a Rayleigh channel and iterate over
+% different SNR values (sim_SNR_db variable). Within each iteration, only
+% a single frame transmission takes place.
+% In SIM_MOD, the script explores Bit Error Rate (BER) as a function of
+% Signal-to-Noise Ratio (SNR).
+% In the OTA mode we utilize the Skylark Iris hardware for transmission and reception.
+% The script supports both uplink and downlink transmissions.
+%
 % In both cases the client transmits an OFDM signal that resembles a
-% typical 802.11 WLAN waveform. If the transmission is OTA, then the user
-% specifies a schedule that tells the client when to transmit its frame
-% The base station initiates the schedule by sending a beacon signal that
-% synchronizes the client. After that, the client will simply transmit its
-% frame.
+% typical 802.11 WLAN waveform.
+% Users can trigger multiple sequential transmissions by setting the 
+% number of frames variable (N_FRM) greater than one.
 %
 %---------------------------------------------------------------------
 % Original code copyright Mango Communications, Inc.
@@ -320,10 +320,11 @@ for frm_idx = 1:numGoodFrames
 
     %% Plot Results
 
-    if PLOT
+    if PLOT && frm_idx == 1
         cf = 0;
         fst_clr = [0, 0.4470, 0.7410];
         sec_clr = [0.8500, 0.3250, 0.0980];
+
         % Tx signal
         cf = cf + 1;
         figure(cf); clf;

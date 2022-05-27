@@ -1,24 +1,24 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %	Author(s): C. Nicolas Barati nicobarati@rice.edu 
-%		Rahman Doost-Mohamamdy: doost@rice.edu
+%		          Rahman Doost-Mohamamdy: doost@rice.edu
 %   
-%    TODO OBCH: Extend to dual antenna mode in the BS
-%
-% Single-shot transmission from N_UE clients to N_BS_NODE base station
-% radios (UE stands for User Equipment). We define two modes:
+%    
+% Single-shot transmission from N_UE single-antenna clients to 
+% N_BS_NODE base station radios (UE stands for User Equipment).
+% We define two modes:
 % OTA (Over-the-air) and SIM_MODE (simulation).
 % In simulation mode we simply use a Rayleigh channel whereas the OTA mode
 % relies on the Iris hardware for transmission and reception.
 % In both cases the clients transmit an OFDM signal that resembles a
-% typical 802.11 WLAN waveform. If the transmission is OTA, then the user
-% specifies a schedule that tells all clients when to transmit their frame
-% The base station initiates the schedule by sending a beacon signal that
-% synchronizes clients. After that, all clients will transmit
-% simultaneously. We implement a frame structure that allows the base
+% typical 802.11 WLAN waveform. 
+%
+% We implement a frame structure that allows the base
 % station to capture clean (non-overlaping) training sequences for
 % equalization and demultiplexing of the concurrent data streams.
 %
+% Users can trigger multiple sequential transmissions by setting the 
+% number of frames variable (N_FRM) greater than one.
 %---------------------------------------------------------------------
 % Original code copyright Mango Communications, Inc.
 % Distributed under the WARP License http://warpproject.org/license
@@ -59,8 +59,8 @@ else
     USE_HUB                 = 1;
     TX_FRQ                  = 3.58e9;
     RX_FRQ                  = TX_FRQ;
-    ANT_BS                  = 'A';         % Currently, only support single antenna. TODO: Options: {A, AB}
-    ANT_UE                  = 'A';          % Currently, only support single antenna
+    ANT_BS                  = 'A';         % Options: {A, AB}. To use both antennas per board, set to 'AB'
+    ANT_UE                  = 'A';         % Only tested with single-antenna UE (i.e., 'A')
     TX_GN                   = 80;
     RX_GN                   = 70;
     SMPL_RT                 = 5e6;
@@ -236,10 +236,12 @@ end
 %###############################################################################
 
 
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Process Data
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % If multiple frames were sent, select one that is likely to work...
+N_BS_NODE = N_BS_ANT;    % We actually need # of BS ANT not NODES
 for iframe = 1:numGoodFrames
     fprintf(' =============================== \n');
     fprintf('Frame #%d Out of %d Triggered Frames \n', iframe, numGoodFrames);

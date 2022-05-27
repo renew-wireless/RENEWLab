@@ -317,6 +317,7 @@ class Iris_py:
                 wave_rx_b = np.zeros((in_len), dtype=np.complex64)
                 n_R = self.tdd_sched.count("R")  # How many Read frames in the tdd schedule
                 rx_frames_a = np.zeros((in_len*n_R*max_frames), dtype=np.complex64)
+                rx_frames_b = np.zeros((in_len*n_R*max_frames), dtype=np.complex64)
 
                 print("n_samp is: %d  \n" % self.n_samp)
 
@@ -327,8 +328,9 @@ class Iris_py:
                         print("reading stream: ({})".format(r1))
                         data_id = m*n_R+k
                         rx_frames_a[data_id*in_len: (data_id*in_len + in_len)] = wave_rx_a
+                        rx_frames_b[data_id*in_len: (data_id*in_len + in_len)] = wave_rx_b
 
-                return(rx_frames_a)
+                return rx_frames_a, rx_frames_b
 
         def close(self):
                 '''Cleanup streams. Rest SDRs'''

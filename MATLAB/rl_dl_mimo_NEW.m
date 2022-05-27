@@ -1,22 +1,14 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%	Author(s): C. Nicolas Barati nicobarati@rice.edu 
-%		Rahman Doost-Mohamamdy: doost@rice.edu
+%	Author(s): C. Nicolas Barati nicobarati@rice.edu
+%		       Rahman Doost-Mohamamdy: doost@rice.edu
 %
-%
-% Single-shot transmission from N_UE clients to N_BS_NODE base station
-% radios (UE stands for User Equipment). We define two modes:
-% OTA (Over-the-air) and SIM_MODE (simulation).
-% In simulation mode we simply use a Rayleigh channel whereas the OTA mode
-% relies on the Iris hardware for transmission and reception.
-% In both cases the clients transmit an OFDM signal that resembles a
-% typical 802.11 WLAN waveform. If the transmission is OTA, then the user
-% specifies a schedule that tells all clients when to transmit their frame
-% The base station initiates the schedule by sending a beacon signal that
-% synchronizes clients. After that, all clients will transmit
-% simultaneously. We implement a frame structure that allows the base
-% station to capture clean (non-overlaping) training sequences for
-% equalization and demultiplexing of the concurrent data streams.
+% - Supports Downlink MISO transmissions from multiple antennas in the
+%   mMIMO base station to one single-antenna user.
+% - Relies on explicit feedback (i.e., downlink pilots for beamforming
+%   weight computation)
+% - Supports transmission from one or two antennas per Iris board in the
+%   base station (each Iris board has two antennas)
 %
 %---------------------------------------------------------------------
 % Original code copyright Mango Communications, Inc.
@@ -42,11 +34,11 @@ WRITE_PNG_FILES         = 0;                % Enable writing plots to PNG
 SIM_MODE                = 0;
 DEBUG                   = 0;
 
-PILOT_PLOT              = 1;
-CONST_PLOT              = 1;
-CHANNEL_PLOT            = 1;
-DOWNLINK_PLOT           = 1;
-EVM_SNR_PLOT            = 1;
+PILOT_PLOT              = 0;
+CONST_PLOT              = 0;
+CHANNEL_PLOT            = 0;
+DOWNLINK_PLOT           = 0;
+EVM_SNR_PLOT            = 0;
 
 if SIM_MODE
     TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
@@ -60,8 +52,8 @@ if SIM_MODE
 else 
     %Iris params:
     TX_SCALE                = 0.8;          % Scale for Tx waveform ([0:1])
-    ANT_BS                  = 'AB';         % Options: {A, B, AB}
-    ANT_UE                  = 'A';          % Currently, only support single antenna, i.e., A
+    ANT_BS                  = 'AB';         % Options: {A, AB}
+    ANT_UE                  = 'A';          % Currently, only support single antenna UE, i.e., A
     USE_HUB                 = 1;
     TX_FRQ                  = 3.58e9;
     RX_FRQ                  = TX_FRQ;
