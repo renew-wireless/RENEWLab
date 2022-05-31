@@ -34,11 +34,11 @@ WRITE_PNG_FILES         = 0;                % Enable writing plots to PNG
 SIM_MODE                = 0;
 DEBUG                   = 0;
 
-PILOT_PLOT              = 1;
-CONST_PLOT              = 1;
-CHANNEL_PLOT            = 1;
-DOWNLINK_PLOT           = 1;
-EVM_SNR_PLOT            = 1;
+PILOT_PLOT              = 0;
+CONST_PLOT              = 0;
+CHANNEL_PLOT            = 0;
+DOWNLINK_PLOT           = 0;
+EVM_SNR_PLOT            = 0;
 
 if SIM_MODE
     TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
