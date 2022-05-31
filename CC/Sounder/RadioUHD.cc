@@ -23,7 +23,6 @@
 
 void RadioUHD::dev_init(Config* _cfg, int ch, double rxgain, double txgain) {
   // these params are sufficient to set before DC offset and IQ imbalance calibration
-  std::cout << "radioUHD.cc being called" << std::endl;
   MLPD_INFO("Init USRP channel: %d\n", ch);
   // update for UHD multi USRP
   dev_->set_tx_antenna("TX/RX", ch);
@@ -107,8 +106,6 @@ RadioUHD::RadioUHD(const std::map<std::string, std::string>& args,
   stream_args1.args = args;
   if (args.count("WIRE") != 0) stream_args1.otw_format = args.at("WIRE");
 
-  std::cout << "format is " << hostFormat << std::endl;
-
   txs_ = dev_->get_tx_stream(stream_args1);
   rxs_ = dev_->get_rx_stream(stream_args);
 }
@@ -142,8 +139,6 @@ int RadioUHD::activateRecv(const long long rxTime, const size_t numSamps,
 void RadioUHD::activateXmit(void) {
   std::cout << "activate xmit" << std::endl;
   // for USRP device start tx stream UHD_INIT_TIME_SEC sec in the future
-  std::cout << "no input yet, from example, seems no issue command is needed"
-            << std::endl;
 }
 
 void RadioUHD::deactivateRecv(void) {
@@ -156,10 +151,7 @@ void RadioUHD::deactivateRecv(void) {
   rxs_->issue_stream_cmd(stream_cmd_1);
 }
 
-void RadioUHD::deactivateXmit(void) {
-  std::cout << "no input yet, from example, seems no issue command is needed"
-            << std::endl;
-}
+void RadioUHD::deactivateXmit(void) {}
 
 RadioUHD::~RadioUHD(void) {
   deactivateRecv();
