@@ -47,14 +47,12 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
     context->cell = c;
 #ifdef THREADED_INIT
     pthread_t init_thread_;
-    std::cout << "init_launch" << std::endl;
     if (pthread_create(&init_thread_, NULL, BaseRadioSetUHD::init_launch,
                        context) != 0) {
       delete context;
       throw std::runtime_error("BaseRadioSet - init thread create failed");
     }
 #else
-    std::cout << "init" << std::endl;
     init(context);
 #endif
 
@@ -74,7 +72,6 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
         dciqCalibrationProcUHD(1);
     }
 
-    std::cout << "check point here" << std::endl;
     thread_count.store(1);
     size_t ii = 0;
     BaseRadioContext* context1 = new BaseRadioContext;
@@ -83,7 +80,6 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
     context1->tid = ii;
     context1->cell = c;
 #ifdef THREADED_INIT
-    std::cout << "config_launch" << std::endl;
     pthread_t configure_thread_;
     if (pthread_create(&configure_thread_, NULL,
                        BaseRadioSetUHD::configure_launch, context1) != 0) {
@@ -223,23 +219,17 @@ void BaseRadioSetUHD::init(BaseRadioContext* context) {
     if (_cfg->bs_channel() == "AB") {
       for (size_t ii = 0; ii < total_rx_channel; ii++) {
         new_channels[ii] = ii;
-        std::cout << new_channels[ii] << std::endl;
       }
     } else if (_cfg->bs_channel() == "A") {
       for (size_t ii = 0; ii < total_rx_channel; ii++) {
         new_channels[ii] = ii * 2;
-        std::cout << new_channels[ii] << std::endl;
       }
     } else {
       for (size_t ii = 0; ii < total_rx_channel; ii++) {
         new_channels[ii] = ii * 2 + 1;
-        std::cout << new_channels[ii] << std::endl;
       }
     }
 
-    for (size_t j = 0; j < new_channels.size(); j++) {
-      std::cout << new_channels[j] << std::endl;
-    }
     bsRadios = new RadioUHD(args, SOAPY_SDR_CS16, new_channels, _cfg);
   } catch (std::runtime_error& err) {
     std::cerr << "Ignoring uhd device ";
@@ -274,7 +264,6 @@ void BaseRadioSetUHD::configure(BaseRadioContext* context) {
   auto total_rx_channel = _cfg->num_bs_sdrs_all() * 2;
 
   for (unsigned int ch = 0; ch < total_rx_channel; ch++) {
-    std::cout << "ch to init is: " << ch << std::endl;
     double rxgain = _cfg->rx_gain().at(0);
     double txgain = _cfg->tx_gain().at(0);
 
@@ -315,7 +304,6 @@ void BaseRadioSetUHD::radioStop(void) {
 
 void BaseRadioSetUHD::radioTx(const void* const* buffs) {
   long long frameTime(0);
-  std::cout << "running tx 1" << std::endl;
   bsRadios->xmit(buffs, _cfg->samps_per_slot(), 0, frameTime);
 }
 
@@ -385,7 +373,6 @@ int BaseRadioSetUHD::radioRx(size_t radio_id, size_t cell_id,
 
 int BaseRadioSetUHD::syncTimeOffsetUHD(bool measure_ref_radio,
                                        bool adjust_trigger) {
-  std::cout << "sync time being called" << std::endl;
   int num_radios = _cfg->n_bs_sdrs().at(0) - 1;
   if (num_radios < 1) {
     std::cout << "No need to sample calibrate with one Iris! skipping ..."
