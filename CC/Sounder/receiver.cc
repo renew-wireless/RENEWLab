@@ -169,7 +169,6 @@ std::vector<pthread_t> Receiver::startRecvThreads(SampleBuffer* rx_buffer,
                                                   unsigned in_core_id) {
   assert(rx_buffer[0].buffer.size() != 0);
   thread_num_ = n_rx_threads;
-  std::cout << "rx thread num are: " << thread_num_ << std::endl;
   bs_tx_buffer_ = tx_buffer;
   std::vector<pthread_t> created_threads;
   created_threads.resize(this->thread_num_);
@@ -271,7 +270,6 @@ int Receiver::baseTxData(int radio_id, int cell, int frame_id,
     size_t cur_offset = event.offset;
     long long txFrameTime =
         base_time + (event.frame_id - frame_id) * config_->samps_per_frame();
-    std::cout << "beacon radio id is:" << radio_id << std::endl;
     if (config_->bs_hw_framer() == false)
       this->baseTxBeacon(radio_id, cell, event.frame_id, txFrameTime);
     for (size_t s = 0; s < config_->dl_slot_per_frame(); s++) {
@@ -366,7 +364,6 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
 
 #if defined(USE_UHD)
   int cha = config_->bs_channel() == "AB" ? 2 : 1;
-  std::cout << "cha is" << cha << std::endl;
   const size_t num_channels = config_->num_bs_sdrs_all() * cha;
 #else
   const size_t num_channels = config_->bs_channel().length();
@@ -1084,7 +1081,6 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
         resync_retry_cnt++;
       }
     }
-    //    std::cout<<"here"<<std::endl;
     if ((resync == true) && (resync_retry_cnt > resync_retry_max)) {
       MLPD_WARN(
           "Exceeded resync retry limit (%zu) for client "
