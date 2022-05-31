@@ -48,12 +48,12 @@ SIM_MODE                = 0;            % Enable for AWGN sim, disable to run ha
 %Iris params:
 N_BS_NODE               = 1;
 N_UE                    = 1;
-TX_FRQ                  = 3.6e9;
+TX_FRQ                  = 3.548e9;
 RX_FRQ                  = TX_FRQ;
 ANT_BS                  = 'A';          % SISO: only one antenna supported
 ANT_UE                  = 'A';          % SISO: only one antenna supported
-TX_GN                   = 80;
-RX_GN                   = 60;
+TX_GN                   = 81;
+RX_GN                   = 70;
 SMPL_RT                 = 5e6;
 TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
 N_FRM                   = 3;
@@ -162,8 +162,8 @@ else
 
     % Create two Iris node objects:
     tx_direction = 'downlink';    % Options: {'uplink', 'downlink'}
-    bs_ids = ["RF3E000356"];
-    ue_ids = ["RF3D000016"];
+    bs_ids = ["RF3E000708"];
+    ue_ids = ["RF3E000706"];
 
     % Iris nodes' parameters
     sdr_params = struct(...

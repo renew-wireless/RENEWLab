@@ -34,11 +34,11 @@ WRITE_PNG_FILES         = 0;                % Enable writing plots to PNG
 SIM_MODE                = 0;
 DEBUG                   = 0;
 
-PILOT_PLOT              = 0;
-CONST_PLOT              = 0;
-CHANNEL_PLOT            = 0;
-DOWNLINK_PLOT           = 0;
-EVM_SNR_PLOT            = 0;
+PILOT_PLOT              = 1;
+CONST_PLOT              = 1;
+CHANNEL_PLOT            = 1;
+DOWNLINK_PLOT           = 1;
+EVM_SNR_PLOT            = 1;
 
 if SIM_MODE
     TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
@@ -51,11 +51,11 @@ if SIM_MODE
 
 else 
     %Iris params:
-    TX_SCALE                = 0.8;          % Scale for Tx waveform ([0:1])
+    TX_SCALE                = 1;          % Scale for Tx waveform ([0:1])
     ANT_BS                  = 'AB';         % Options: {A, AB}
     ANT_UE                  = 'A';          % Currently, only support single antenna UE, i.e., A
     USE_HUB                 = 1;
-    TX_FRQ                  = 3.58e9;
+    TX_FRQ                  = 3.55e9;
     RX_FRQ                  = TX_FRQ;
     TX_GN                   = 81;
     RX_GN                   = 70;
@@ -69,13 +69,13 @@ else
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
-        bs_ids = ["RF3E000356","RF3E000620","RF3E000609","RF3E000604","RF3E000612","RF3E000640"];%,"RF3E000551"];
-        hub_id = ["FH4B000019"];
+        bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
+        hub_id = ["FH4B000003"];
     else
-        bs_ids = ["RF3E000246","RF3E000490","RF3E000749","RF3E000697","RF3E000724","RF3E000740","RF3E000532"];
+        bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         hub_id = [];
     end
-    ue_ids= ["RF3E000392"];%, "RF3D000016"]; % Only MISO supported at the moment
+    ue_ids= ["RF3E000706"]; % Only MISO supported at the moment
 
     N_BS_NODE               = length(bs_ids);                   % Number of nodes at the BS
     N_BS_ANT                = length(bs_ids) * length(ANT_BS);  % Number of antennas at the BS
@@ -234,6 +234,7 @@ for iue = 1:N_UE
 
         if(isempty(lts_second_peak_index2))
             fprintf('SOUNDING: NO correlation peak from BS antenna %d at UE %d. Exit now! \n', ibs, iue);
+	    mimo_handle.mimo_close();
             return;
         else
             if length(lts_second_peak_index2) > 1
