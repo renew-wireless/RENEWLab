@@ -27,18 +27,17 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
   std::vector<std::string> radio_serial_not_found;
 
   // need to be further modified
-  std::cout << "num of cells are: " << _cfg->num_cells() << std::endl;
+  MLPD_TRACE("num of cells are: %zu\n", _cfg->num_cells());
   for (size_t c = 0; c < _cfg->num_cells(); c++) {
     size_t num_radios = _cfg->n_bs_sdrs()[c];
     num_bs_antenntas[c] = num_radios * _cfg->bs_channel().length();
-    std::cout << "num bs antennas is " << num_bs_antenntas[c] << std::endl;
+    MLPD_TRACE("num of bs antennas are: %zu\n", num_bs_antenntas[c]);
     MLPD_TRACE("Setting up radio: %zu, cells: %zu\n", num_radios,
                _cfg->num_cells());
 
     std::atomic_ulong thread_count = ATOMIC_VAR_INIT(1);
 
     MLPD_TRACE("Init base radios: %zu\n", num_radios);
-    std::cout << "num of radios are: " << num_radios << std::endl;
     size_t i = 0;
     BaseRadioContext* context = new BaseRadioContext;
     context->brs = this;
@@ -74,27 +73,26 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
 
     thread_count.store(1);
     size_t ii = 0;
-    BaseRadioContext* context1 = new BaseRadioContext;
-    context1->brs = this;
-    context1->thread_count = &thread_count;
-    context1->tid = ii;
-    context1->cell = c;
+    BaseRadioContext* context_config = new BaseRadioContext;
+    context_config->brs = this;
+    context_config->thread_count = &thread_count;
+    context_config->tid = ii;
+    context_config->cell = c;
 #ifdef THREADED_INIT
     pthread_t configure_thread_;
     if (pthread_create(&configure_thread_, NULL,
-                       BaseRadioSetUHD::configure_launch, context1) != 0) {
-      delete context1;
+                       BaseRadioSetUHD::configure_launch,
+                       context_config) != 0) {
+      delete context_config;
       throw std::runtime_error("BaseRadioSet - configure thread create failed");
     }
 #else
-    configure(context1);
+    configure(context_config);
 #endif
 
     while (thread_count.load() > 0) {
     }
 
-    std::cout << "numer of mboards are: "
-              << bsRadios->RawDev()->get_num_mboards() << std::endl;
     auto dev = bsRadios->RawDev();
     for (size_t index = 0; index < bsRadios->RawDev()->get_num_mboards();
          index++) {
@@ -104,30 +102,33 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
     size_t total_rx_channel = _cfg->num_bs_sdrs_all() * 2;
     for (size_t ch = 0; ch < total_rx_channel; ch++) {
       if (ch < dev->get_rx_num_channels()) {
-        printf("RX Channel %lu\n", ch);
-        printf("Actual RX sample rate: %fMSps...\n",
-               (dev->get_rx_rate(ch) / 1e6));
-        printf("Actual RX frequency: %fGHz...\n", (dev->get_rx_freq(ch) / 1e9));
-        printf("Actual RX gain: %f...\n", (dev->get_rx_gain(ch)));
-        printf("Actual RX bandwidth: %fM...\n",
-               (dev->get_rx_bandwidth(ch) / 1e6));
-        printf("Actual RX antenna: %s...\n", (dev->get_rx_antenna(ch).c_str()));
+        std::cout << "RX Channel " << ch << std::endl;
+        std::cout << "Actual RX sample rate: " << (dev->get_rx_rate(ch) / 1e6)
+                  << "MSps" << std::endl;
+        std::cout << "Actual RX frequency: " << (dev->get_rx_freq(ch) / 1e9)
+                  << "GHz" << std::endl;
+        std::cout << "Actual RX gain: " << (dev->get_rx_gain(ch)) << std::endl;
+        std::cout << "Actual RX bandwidth: "
+                  << (dev->get_rx_bandwidth(ch) / 1e6) << "M" << std::endl;
+        std::cout << "Actual RX antenna: " << dev->get_rx_antenna(ch).c_str()
+                  << std::endl;
       }
     }
 
     for (size_t ch = 0; ch < total_rx_channel; ch++) {
       if (ch < dev->get_tx_num_channels()) {
-        printf("TX Channel %lu\n", ch);
-        printf("Actual TX sample rate: %fMSps...\n",
-               (dev->get_tx_rate(ch) / 1e6));
-        printf("Actual TX frequency: %fGHz...\n", (dev->get_tx_freq(ch) / 1e9));
-        printf("Actual TX gain: %f...\n", (dev->get_tx_gain(ch)));
-        printf("Actual TX bandwidth: %fM...\n",
-               (dev->get_tx_bandwidth(ch) / 1e6));
-        printf("Actual TX antenna: %s...\n", (dev->get_tx_antenna(ch).c_str()));
+        std::cout << "TX Channel " << ch << std::endl;
+        std::cout << "Actual TX sample rate: " << (dev->get_tx_rate(ch) / 1e6)
+                  << "MSps" << std::endl;
+        std::cout << "Actual TX frequency: " << (dev->get_tx_freq(ch) / 1e9)
+                  << "GHz" << std::endl;
+        std::cout << "Actual TX gain: " << (dev->get_tx_gain(ch)) << std::endl;
+        std::cout << "Actual TX bandwidth: "
+                  << (dev->get_tx_bandwidth(ch) / 1e6) << "M" << std::endl;
+        std::cout << "Actual TX antenna: " << (dev->get_tx_antenna(ch).c_str())
+                  << std::endl;
       }
     }
-    std::cout << std::endl;
   }
 
   if (radioNotFound == true) {
@@ -207,7 +208,6 @@ void BaseRadioSetUHD::init(BaseRadioContext* context) {
 
   args["timeout"] = "1000000";
   try {
-    bsRadios = nullptr;
     size_t total_rx_channel;
 
     if (_cfg->bs_channel() == "AB") {
