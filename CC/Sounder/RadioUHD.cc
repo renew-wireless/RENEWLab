@@ -96,7 +96,7 @@ RadioUHD::RadioUHD(const std::map<std::string, std::string>& args,
   }
 
   uhd::stream_args_t stream_args(hostFormat);
-  std::cout << "channel size is: " << channels.size() << std::endl;
+  MLPD_TRACE("channel size is: %zu\n", channels.size());
   stream_args.channels = channels;
   stream_args.args = args;
   if (args.count("WIRE") != 0) stream_args.otw_format = args.at("WIRE");
