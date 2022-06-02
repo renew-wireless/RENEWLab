@@ -189,8 +189,7 @@ endif()
 target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe gflags ${UHD_LIBRARIES}
     ${SoapySDR_LIBRARIES}
     ${HDF5_LIBRARIES}
-    ${MUFFT_LIBRARIES}
-    -lboost_system)
+    ${MUFFT_LIBRARIES})
 
 add_library(sounder_module MODULE 
     ${SOUNDER_SOURCES})
