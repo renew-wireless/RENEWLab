@@ -153,7 +153,7 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
           i);  // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
       double txgain = _cfg->cl_txgain_vec().at(ch).at(
           i);  // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
-      radio_->dev_init(_cfg, ch, rxgain, txgain);
+      radio_->dev_init(_cfg, ch, rxgain, txgain, "PGA");
     }
   }
   MLPD_TRACE("ClientRadioSet: Init complete\n");
