@@ -267,7 +267,7 @@ void BaseRadioSetUHD::configure(BaseRadioContext* context) {
     double rxgain = _cfg->rx_gain().at(0);
     double txgain = _cfg->tx_gain().at(0);
 
-    bsRadios->dev_init(_cfg, (ch), rxgain, txgain);
+    bsRadios->dev_init(_cfg, (ch), rxgain, txgain, "PGA0");
   }
   assert(thread_count->load() != 0);
   thread_count->store(thread_count->load() - 1);
