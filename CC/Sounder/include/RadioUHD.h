@@ -38,7 +38,7 @@ class RadioUHD {
   void deactivateXmit(void);
   int getTriggers(void) const;
 
-  void dev_init(Config* _cfg, int ch, double rxgain, double txgain);
+  void dev_init(Config* _cfg, int ch, double rxgain, double txgain, std::string name);
   void reset_DATA_clk_domain(void);
 };
 
