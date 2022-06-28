@@ -129,8 +129,8 @@ int CommsLib::find_beacon_avx(
   fclose(fp);
   filename = "indata.bin";
   FILE* fi = fopen(filename.c_str(), "wb");
-  float* idata_ptr = (float*)iq.data();
-  fwrite(idata_ptr, iq.size() * 2, sizeof(float), fi);
+  float* idata_ptr = (float*)raw_samples.data();
+  fwrite(idata_ptr, raw_samples.size() * 2, sizeof(float), fi);
   fclose(fi);
 #endif
 
