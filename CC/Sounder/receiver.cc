@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <chrono>
 #include <climits>
 #include <random>
 
@@ -26,9 +27,12 @@
 #include "include/macros.h"
 #include "include/utils.h"
 
+//Default to detect the beacon on first channel
+static constexpr size_t kSyncDetectChannel = 0;
+static constexpr float kBeaconDetectWindowScaler = 2.33f;
+
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-static constexpr float SHRT_MAX_FLOAT = SHRT_MAX;
 
 Receiver::Receiver(
     Config* config, moodycamel::ConcurrentQueue<Event_data>* in_queue,
@@ -803,21 +807,15 @@ int Receiver::clientTxData(int tid, int frame_id, long long base_time) {
   return -1;
 }
 
-int Receiver::syncSearch(const std::vector<std::complex<int16_t>>& sync_buff,
-                         size_t sync_num_samps) {
-  int sync_index(-1);
-  // convert data to complex float for sync detection
-  std::vector<std::complex<float>> sync_buff_float(sync_num_samps, 0);
-  for (size_t i = 0; i < sync_num_samps; i++) {
-    sync_buff_float[i] =
-        (std::complex<float>(sync_buff[i].real() / SHRT_MAX_FLOAT,
-                             sync_buff[i].imag() / SHRT_MAX_FLOAT));
-  }
-  //TODO syncbuff0 is sloppy here since we recevied into syncrxbuff.data(), r bytes.
+ssize_t Receiver::syncSearch(const std::complex<int16_t>* check_data,
+                             size_t search_window) {
+  ssize_t sync_index(-1);
+  assert(search_window <= config_->samps_per_frame());
 #if defined(__x86_64__)
-  sync_index = CommsLib::find_beacon_avx(sync_buff_float, config_->gold_cf32());
+  sync_index = CommsLib::find_beacon_avx(check_data, config_->gold_cf32(),
+                                         search_window);
 #else
-  sync_index = CommsLib::find_beacon(sync_buff_float);
+  sync_index = CommsLib::find_beacon(check_data, search_window);
 #endif
   return sync_index;
 }
@@ -825,22 +823,23 @@ int Receiver::syncSearch(const std::vector<std::complex<int16_t>>& sync_buff,
 float Receiver::estimateCFO(const std::vector<std::complex<int16_t>>& sync_buff,
                             int sync_index) {
   float cfo_phase_est = 0;
-  int beacon_start = sync_index - config_->beacon_size();
-  int beacon_half_size = config_->beacon_size() / 2;
-  std::vector<std::complex<float>> beacon0(beacon_half_size);
-  std::vector<std::complex<float>> beacon1(beacon_half_size);
+  const int beacon_start = sync_index - config_->beacon_size();
+  const int beacon_half_size = config_->beacon_size() / 2;
+  std::vector<std::complex<float>> beacon0(beacon_half_size, 0.0f);
+  std::vector<std::complex<float>> beacon1(beacon_half_size, 0.0f);
   for (int i = 0; i < beacon_half_size; i++) {
-    size_t beacon0_id = i + beacon_start;
-    size_t beacon1_id = i + beacon_start + beacon_half_size;
-    beacon0[i] =
-        std::complex<float>(sync_buff[beacon0_id].real() / SHRT_MAX_FLOAT,
-                            sync_buff[beacon0_id].imag() / SHRT_MAX_FLOAT);
-    beacon1[i] =
-        std::complex<float>(sync_buff[beacon1_id].real() / SHRT_MAX_FLOAT,
-                            sync_buff[beacon1_id].imag() / SHRT_MAX_FLOAT);
+    const size_t beacon0_id = i + beacon_start;
+    const size_t beacon1_id = i + beacon_start + beacon_half_size;
+    beacon0.at(i) =
+        std::complex<float>(sync_buff[beacon0_id].real() / SHRT_MAX,
+                            sync_buff[beacon0_id].imag() / SHRT_MAX);
+    beacon1.at(i) =
+        std::complex<float>(sync_buff[beacon1_id].real() / SHRT_MAX,
+                            sync_buff[beacon1_id].imag() / SHRT_MAX);
   }
-  auto cfo_mult = CommsLib::complex_mult_avx(beacon1, beacon0, true);
-  float phase = 0, prev_phase = 0;
+  const auto cfo_mult = CommsLib::complex_mult_avx(beacon1, beacon0, true);
+  float phase = 0.0f;
+  float prev_phase = 0.0f;
   for (size_t i = 0; i < cfo_mult.size(); i++) {
     phase = std::arg(cfo_mult.at(i));
     float unwrapped_phase = 0;
@@ -863,7 +862,7 @@ float Receiver::estimateCFO(const std::vector<std::complex<int16_t>>& sync_buff,
 
 void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   if (config_->core_alloc() == true) {
-    int core = tid + core_id;
+    const int core = tid + core_id;
 
     MLPD_INFO("Pinning client synctxrx thread %d to core %d\n", tid, core);
     if (pin_to_core(core) != 0) {
@@ -877,25 +876,18 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
             this->txFrameDelta_,
             this->txFrameDelta_ * (1e3 * config_->getFrameDurationSec()));
 
-  int SYNC_NUM_SAMPS = config_->samps_per_frame();
-  std::vector<std::complex<int16_t>> syncbuff0(SYNC_NUM_SAMPS, 0);
-  std::vector<std::complex<int16_t>> syncbuff1(SYNC_NUM_SAMPS, 0);
-  std::vector<void*> syncrxbuff(2);
-  syncrxbuff.at(0) = syncbuff0.data();
-  if (config_->cl_sdr_ch() == 2) {
-    syncrxbuff.at(1) = syncbuff1.data();
+  const size_t samples_per_slot = config_->samps_per_slot();
+  const size_t num_rx_buffs = config_->cl_sdr_ch();
+  std::vector<std::vector<std::complex<int16_t>>> samplemem(
+      num_rx_buffs, std::vector<std::complex<int16_t>>(
+                        samples_per_slot, std::complex<int16_t>(0, 0)));
+
+  std::vector<void*> rxbuff;
+  for (size_t ch = 0; ch < num_rx_buffs; ch++) {
+    rxbuff.push_back(samplemem.at(ch).data());
   }
 
-  int NUM_SAMPS = config_->samps_per_slot();
-  std::vector<std::complex<int16_t>> buff0(SYNC_NUM_SAMPS, 0);
-  std::vector<std::complex<int16_t>> buff1(SYNC_NUM_SAMPS, 0);
-  std::vector<void*> rxbuff(2);
-  rxbuff.at(0) = buff0.data();
-  if (config_->cl_sdr_ch() == 2) {
-    rxbuff.at(1) = buff1.data();
-  }
-
-  size_t ant_id = tid * config_->cl_sdr_ch();
+  const size_t ant_id = tid * config_->cl_sdr_ch();
   // use token to speed up
   moodycamel::ProducerToken local_ptok(*message_queue_);
 
@@ -904,7 +896,6 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   int buffer_chunk_size = 0;
   int buffer_id = tid + config_->bs_rx_thread_num();
   size_t packetLength = sizeof(Packet) + config_->getPacketDataLength();
-  //if (config_->dl_slot_per_frame() > 0) {
   if (config_->cl_dl_slots().at(0).empty() == false) {
     buffer_chunk_size = rx_buffer[buffer_id].buffer.size() / packetLength;
     // handle two channels at each radio
@@ -919,66 +910,60 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
     tx_buffer_size = cl_tx_buffer_[tid].buffer.size() / packetLength;
   }
 
-  long long rxTime(0);
-  int sync_index(-1);
-  int rx_offset = 0;
-  float cfo_phase_est = 0;
-
   // For USRP clients skip UHD_INIT_TIME_SEC to avoid late packets
   if (kUsePureUHD == true || kUseSoapyUHD == true) {
-    int cl_sync_ret = -1;
-    sleep(UHD_INIT_TIME_SEC);
-    while (cl_sync_ret < 0) {
-      cl_sync_ret = client_radio_set_->radioRx(tid, syncrxbuff.data(),
-                                               SYNC_NUM_SAMPS, rxTime);
+    auto start_time = std::chrono::steady_clock::now();
+    std::chrono::duration<float> elapsed_seconds{0.0};
+    int read_status = -1;
+
+    //sleep(UHD_INIT_TIME_SEC);
+    while ((read_status > 0) || (elapsed_seconds.count() < UHD_INIT_TIME_SEC)) {
+      long long ignore_time;
+      read_status = client_radio_set_->radioRx(tid, rxbuff.data(),
+                                               samples_per_slot, ignore_time);
+      elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds>(
+          std::chrono::steady_clock::now() - start_time);
     }
+    std::printf("Wait duration %f \n", elapsed_seconds.count());
   }
 
-  // Keep reading one frame worth of data until a beacon is found
-  // Perform initial beacon detection once every BEACON_INTERVAL frames
-  while ((config_->running() == true) && (sync_index < 0)) {
-    for (int find_beacon_retry = 0; find_beacon_retry < BEACON_INTERVAL;
-         find_beacon_retry++) {
-      int r;
-      r = client_radio_set_->radioRx(tid, syncrxbuff.data(), SYNC_NUM_SAMPS,
-                                     rxTime);
-      if (r != SYNC_NUM_SAMPS) {
-        MLPD_WARN("BAD SYNC Receive( %d / %d ) at Time %lld\n", r,
-                  SYNC_NUM_SAMPS, rxTime);
-      }
-    }
-    sync_index = this->syncSearch(syncbuff0, SYNC_NUM_SAMPS);
-  }
-  if (sync_index >= 0) {
-    MLPD_INFO("Beacon detected at Time %lld, sync_index: %d\n", rxTime,
-              sync_index);
-    rx_offset = sync_index - config_->beacon_size() - config_->prefix();
-    cfo_phase_est = estimateCFO(syncbuff0, sync_index);
-    std::cout << "Client " << tid
-              << " Estimated CFO (Hz): " << cfo_phase_est * config_->rate()
-              << std::endl;
-  }
+  //-------------------- New sync
+  const size_t beacon_detect_window =
+      static_cast<size_t>(static_cast<float>(config_->samps_per_slot()) *
+                          kBeaconDetectWindowScaler);
+  assert(config_->samps_per_frame() >= beacon_detect_window);
+  {
+    const ssize_t sync_index = clientSyncBeacon(tid, beacon_detect_window);
+    if (sync_index >= 0) {
+      const ssize_t adjust =
+          sync_index - (config_->beacon_size() + config_->prefix());
+      const size_t alignment_samples =
+          config_->samps_per_frame() - beacon_detect_window;
+      MLPD_INFO(
+          "clientSyncTxRx [%zu]: Beacon detected sync_index: %ld, rx sample "
+          "offset: %ld, window %zu, samples in "
+          "frame %zu, alignment removal %zu\n",
+          tid, sync_index, adjust, beacon_detect_window,
+          config_->samps_per_frame(), alignment_samples);
 
-  // Read rx_offset to align with the begining of a frame
-  assert((rx_offset >= 0) && (rx_offset <= SYNC_NUM_SAMPS));
-  if (config_->running() == true) {
-    MLPD_INFO("Start main client txrx loop... tid=%d\n", tid);
-    if (rx_offset > 0) {
-      int rx_data;
-      rx_data =
-          client_radio_set_->radioRx(tid, syncrxbuff.data(), rx_offset, rxTime);
-      if (rx_data != rx_offset) {
-        MLPD_WARN("Rx data: %d : %d failed to align sync read\n", rx_data,
-                  rx_offset);
+      //By definition alignment_samples + adjust must be > 0;
+      if (static_cast<ssize_t>(alignment_samples) + adjust < 0) {
+        throw std::runtime_error("Unexpected alignment");
       }
+      clientAdjustRx(tid, alignment_samples + adjust);
+    } else if (config_->running()) {
+      MLPD_WARN(
+          "clientSyncTxRx [%d]: Beacon could not be detected sync_index: %ld\n",
+          tid, sync_index);
+      throw std::runtime_error("rx sample offset is less than 0");
     }
   }
 
   // Main client read/write loop.
   size_t frame_id = 0;
-  size_t slot_id = 0;
   size_t buffer_offset = 0;
-  bool resync = false;
+  //sync on the frist beacon after initial detection
+  bool resync = true;
   bool resync_enable = (config_->frame_mode() == "continuous_resync");
   size_t resync_retry_cnt(0);
   size_t resync_retry_max(100);
@@ -988,82 +973,110 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   size_t resync_period = static_cast<size_t>(
       std::floor(1e9 / (max_cfo * config_->samps_per_frame())));
   size_t last_resync = frame_id;
-  std::printf("Using resync period of %zu\n", resync_period);
-  int r = 0;
-  rx_offset = 0;
+  MLPD_INFO("Start main client txrx loop... tid=%d with resync period of %zu\n",
+            tid, resync_period);
+  long long rx_beacon_time(0);
+  //Always decreases the requested rx samples
+  size_t beacon_adjust = 0;
 
   while (config_->running() == true) {
     if (config_->max_frame() > 0 && frame_id >= config_->max_frame()) {
       config_->running(false);
       break;
     }
-    r = client_radio_set_->radioRx(tid, syncrxbuff.data(),
-                                   NUM_SAMPS + rx_offset, rxTime);
-
-    if (r < 0) {
+    //Slot 0 / Beacon...
+    const int request_samples = samples_per_slot - beacon_adjust;
+    const int rx_status = client_radio_set_->radioRx(
+        tid, rxbuff.data(), request_samples, rx_beacon_time);
+    if (rx_status < 0) {
+      MLPD_ERROR("Rx status reporting error %d, exiting\n", rx_status);
       config_->running(false);
       break;
     }
     if (config_->ul_data_slot_present() == true) {
+      // Notify new frame
       this->notifyPacket(kClient, frame_id + this->txFrameDelta_, 0, tid,
-                         tx_buffer_size);  // Notify new frame
+                         tx_buffer_size);
     }
 
-    if (frame_id - last_resync >= resync_period) {
+    if ((frame_id - last_resync) >= resync_period) {
       resync = resync_enable;
       last_resync = frame_id;
       MLPD_TRACE("Enable resyncing at frame %zu\n", frame_id);
     }
-    rx_offset = 0;
     if (resync == true) {
       //Need to bound the beacon detection to the last 'r not the size of the memory (vector)
       //TODO: Use SIMD for faster conversion
       // convert data to complex float for sync detection
-      sync_index = this->syncSearch(syncbuff0, NUM_SAMPS);
+      ssize_t sync_index =
+          this->syncSearch(reinterpret_cast<std::complex<int16_t>*>(
+                               rxbuff.at(kSyncDetectChannel)),
+                           request_samples);
       if (sync_index >= 0) {
-        rx_offset = sync_index - config_->beacon_size() - config_->prefix();
-        rxTime += rx_offset;
+        const int new_rx_offset =
+            sync_index - (config_->beacon_size() + config_->prefix());
+        //Adjust tx time
+        rx_beacon_time += new_rx_offset;
         resync = false;
         resync_retry_cnt = 0;
         resync_success++;
         MLPD_INFO(
-            "Re-syncing with offset: %d, after %zu "
-            "tries, index: %d, tid %d\n",
-            rx_offset, resync_retry_cnt + 1, sync_index, tid);
+            "Re-syncing success with offset: %d, after %zu tries, index: %d, "
+            "tid %d\n",
+            new_rx_offset, resync_retry_cnt + 1, sync_index, tid);
+
+        if (sync_index >= 0) {
+          const auto cfo_phase_est =
+              estimateCFO(samplemem.at(kSyncDetectChannel), sync_index);
+          std::cout << "Client " << tid << " Estimated CFO (Hz): "
+                    << cfo_phase_est * config_->rate() << std::endl;
+        }
+
+        //Offset Alignment logic
+        //If new_rx_offset is positive -- we need to right shift (read less)
+        if (new_rx_offset >= 0) {
+          beacon_adjust = new_rx_offset;
+        } else {
+          const size_t discard_samples = (-1 * new_rx_offset);
+          //throw away samples to get back in alignment, could combine with the next beacon but would need bigger buffers
+          clientAdjustRx(tid, discard_samples);
+        }
       } else {
         resync_retry_cnt++;
+
+        if (resync_retry_cnt > resync_retry_max) {
+          MLPD_WARN(
+              "Exceeded resync retry limit (%zu) for client %d reached after "
+              "%zu resync successes at frame: %zu.  Stopping!\n",
+              resync_retry_max, tid, resync_success, frame_id);
+          resync = false;
+          resync_retry_cnt = 0;
+          config_->running(false);
+          break;
+        }
       }
-    }
-    //    std::cout<<"here"<<std::endl;
-    if ((resync == true) && (resync_retry_cnt > resync_retry_max)) {
-      MLPD_WARN(
-          "Exceeded resync retry limit (%zu) for client "
-          "%d reached after %zu resync successes at "
-          "frame: %zu.  Stopping!\n",
-          resync_retry_max, tid, resync_success, frame_id);
-      resync = false;
-      resync_retry_cnt = 0;
-      config_->running(false);
-      break;
     }
     // schedule all TX slot
     // config_->tx_advance() needs calibration based on SDR model and sampling rate
     if (config_->ul_data_slot_present() == true) {
-      while (-1 != this->clientTxData(tid, frame_id, rxTime))
-        ;
+      int tx_return = 0;
+      while (tx_return >= 0) {
+        tx_return = this->clientTxData(tid, frame_id, rx_beacon_time);
+      }
     } else {
-      this->clientTxPilots(tid, rxTime + txTimeDelta_);
+      this->clientTxPilots(tid, rx_beacon_time + txTimeDelta_);
     }  // end if config_->ul_data_slot_present()
 
-    slot_id++;
-
-    for (; slot_id < config_->slot_per_frame(); slot_id++) {
+    //Beacon + Tx Complete, process the rest of the slots
+    for (size_t slot_id = 1; slot_id < config_->slot_per_frame(); slot_id++) {
+      int rx_data_status;
+      long long rx_data_time;
       if (config_->isDlData(tid, slot_id)) {
         // Set buffer status(es) to full; fail if full already
         for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
-          int bit = 1 << (buffer_offset + ch) % sizeof(std::atomic_int);
-          int offs = (buffer_offset + ch) / sizeof(std::atomic_int);
-          int old =
+          const int bit = 1 << (buffer_offset + ch) % sizeof(std::atomic_int);
+          const int offs = (buffer_offset + ch) / sizeof(std::atomic_int);
+          const int old =
               std::atomic_fetch_or(&pkt_buf_inuse[offs], bit);  // now full
           // if buffer was full, exit
           if ((old & bit) != 0) {
@@ -1074,21 +1087,18 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
         }
 
         // Receive data into buffers
-        Packet* pkt[config_->cl_sdr_ch()];
-        void* samp[config_->cl_sdr_ch()];
+        std::vector<Packet*> pkts(config_->cl_sdr_ch());
+        std::vector<void*> dl_slot_samp(config_->cl_sdr_ch());
         for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
-          pkt[ch] = (Packet*)(buffer + (buffer_offset + ch) * packetLength);
-          samp[ch] = pkt[ch]->data;
+          pkts.at(ch) = reinterpret_cast<Packet*>(
+              buffer + (buffer_offset + ch) * packetLength);
+          dl_slot_samp.at(ch) = pkts.at(ch)->data;
         }
 
-        if ((r = this->client_radio_set_->radioRx(tid, samp, NUM_SAMPS,
-                                                  rxTime)) < 0) {
-          config_->running(false);
-          break;
-        }
-
+        rx_data_status = this->client_radio_set_->radioRx(
+            tid, dl_slot_samp.data(), samples_per_slot, rx_data_time);
         for (size_t ch = 0; ch < config_->cl_sdr_ch(); ++ch) {
-          new (pkt[ch]) Packet(frame_id, slot_id, 0, ant_id + ch);
+          new (pkts.at(ch)) Packet(frame_id, slot_id, 0, ant_id + ch);
           // push kEventRxSymbol event into the queue
           this->notifyPacket(kClient, frame_id, slot_id, ant_id + ch,
                              buffer_chunk_size,
@@ -1097,19 +1107,100 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
           buffer_offset %= buffer_chunk_size;
         }
       } else {
-        r = this->client_radio_set_->radioRx(tid, rxbuff.data(), NUM_SAMPS,
-                                             rxTime);
-        if (r < 0) {
-          config_->running(false);
-          break;
-        }
+        //Not dl data so we throw it away
+        rx_data_status = this->client_radio_set_->radioRx(
+            tid, rxbuff.data(), samples_per_slot, rx_data_time);
       }
-      if (r != NUM_SAMPS) {
-        MLPD_WARN("BAD Receive(%d/%d) at Time %lld, frame count %zu\n", r,
-                  NUM_SAMPS, rxTime, frame_id);
+      if (rx_data_status < 0) {
+        MLPD_ERROR(
+            "Rx status reporting error %d during frame %zu , slot %zu, "
+            "exiting\n",
+            rx_data_status, frame_id, slot_id);
+        config_->running(false);
+        break;
+      } else if (rx_data_status != static_cast<int>(samples_per_slot)) {
+        MLPD_WARN("BAD Receive(%d/%zu) at Time %lld, frame count %zu\n",
+                  rx_data_status, samples_per_slot, rx_data_time, frame_id);
       }
     }  // end for
     frame_id++;
-    slot_id = 0;
   }  // end while
+}
+
+//Blocking function for beacon detected or exit()
+ssize_t Receiver::clientSyncBeacon(size_t radio_id, size_t sample_window) {
+  ssize_t sync_index = -1;
+  long long rx_time = 0;
+  assert(sample_window <= config_->samps_per_frame());
+  const size_t num_rx_buffs = config_->cl_sdr_ch();
+  std::vector<std::vector<std::complex<int16_t>>> syncbuffmem(
+      num_rx_buffs, std::vector<std::complex<int16_t>>(
+                        sample_window, std::complex<int16_t>(0, 0)));
+
+  std::vector<void*> syncrxbuffs;
+  for (size_t ch = 0; ch < num_rx_buffs; ch++) {
+    syncrxbuffs.push_back(syncbuffmem.at(ch).data());
+  }
+
+  while (config_->running() && (sync_index < 0)) {
+    const int rx_status = client_radio_set_->radioRx(
+        radio_id, syncrxbuffs.data(), sample_window, rx_time);
+
+    if (rx_status < 0) {
+      MLPD_ERROR("clientSyncBeacon [%zu]: BAD SYNC Received (%d/%zu) %lld\n",
+                 radio_id, rx_status, sample_window, rx_time);
+    } else {
+      const size_t new_samples = static_cast<size_t>(rx_status);
+      if (new_samples == sample_window) {
+        MLPD_TRACE(
+            "clientSyncBeacon - Samples %zu - Window %zu - Check Beacon %ld\n",
+            new_samples, sample_window);
+
+        sync_index = syncSearch(syncbuffmem.at(kSyncDetectChannel).data(),
+                                sample_window);
+      } else {
+        MLPD_ERROR(
+            "clientSyncBeacon [%zu]: BAD SYNC - Rx samples not requested size "
+            "(%zu/%zu) %lld\n",
+            radio_id, new_samples, sample_window, rx_time);
+      }
+    }
+  }  // end while sync_index < 0
+  return sync_index;
+}
+
+/// This function blocks untill all the discard_samples are received for a given radio
+void Receiver::clientAdjustRx(size_t radio_id, size_t discard_samples) {
+  const size_t num_rx_buffs = config_->cl_sdr_ch();
+  long long rx_time = 0;
+
+  //This can be fixed and combined with other scratch memory
+  std::vector<std::vector<std::complex<int16_t>>> temp_mem(
+      num_rx_buffs, std::vector<std::complex<int16_t>>(discard_samples));
+
+  std::vector<void*> trash_memory;
+  for (size_t ch = 0; ch < num_rx_buffs; ch++) {
+    trash_memory.push_back(temp_mem.at(ch).data());
+  }
+
+  while (config_->running() && (discard_samples > 0)) {
+    const int rx_status = client_radio_set_->radioRx(
+        radio_id, trash_memory.data(), discard_samples, rx_time);
+
+    if (rx_status < 0) {
+      MLPD_ERROR(
+          "clientAdjustRx [%zu]: BAD Rx Adjust Status Received (%d/%zu) %lld\n",
+          radio_id, rx_status, discard_samples, rx_time);
+    } else {
+      size_t new_samples = static_cast<size_t>(rx_status);
+      if (new_samples <= discard_samples) {
+        discard_samples -= new_samples;
+      } else {
+        MLPD_ERROR(
+            "clientAdjustRx [%zu]: BAD radioRx more samples then requested "
+            "(%zu/%zu) %lld\n",
+            radio_id, new_samples, discard_samples, rx_time);
+      }
+    }
+  }  // request_samples > 0
 }
