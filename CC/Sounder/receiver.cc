@@ -914,25 +914,25 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   if (kUsePureUHD == true || kUseSoapyUHD == true) {
     auto start_time = std::chrono::steady_clock::now();
     std::chrono::duration<float> elapsed_seconds{0.0};
-    int read_status = -1;
 
-    //sleep(UHD_INIT_TIME_SEC);
-    while ((read_status > 0) || (elapsed_seconds.count() < UHD_INIT_TIME_SEC)) {
+    while (elapsed_seconds.count() < UHD_INIT_TIME_SEC) {
       long long ignore_time;
-      read_status = client_radio_set_->radioRx(tid, rxbuff.data(),
-                                               samples_per_slot, ignore_time);
+      client_radio_set_->radioRx(tid, rxbuff.data(), samples_per_slot,
+                                 ignore_time);
       elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds>(
           std::chrono::steady_clock::now() - start_time);
     }
-    std::printf("Wait duration %f \n", elapsed_seconds.count());
+    std::printf("Wait duration %3.2f seconds \n", elapsed_seconds.count());
   }
 
   //-------------------- New sync
   const size_t beacon_detect_window =
       static_cast<size_t>(static_cast<float>(config_->samps_per_slot()) *
                           kBeaconDetectWindowScaler);
+  size_t sync_count = 0;
+  constexpr size_t kTargetSyncCount = 2;
   assert(config_->samps_per_frame() >= beacon_detect_window);
-  {
+  while ((sync_count < kTargetSyncCount) && config_->running()) {
     const ssize_t sync_index = clientSyncBeacon(tid, beacon_detect_window);
     if (sync_index >= 0) {
       const ssize_t adjust =
@@ -941,8 +941,8 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
           config_->samps_per_frame() - beacon_detect_window;
       MLPD_INFO(
           "clientSyncTxRx [%zu]: Beacon detected sync_index: %ld, rx sample "
-          "offset: %ld, window %zu, samples in "
-          "frame %zu, alignment removal %zu\n",
+          "offset: %ld, window %zu, samples in frame %zu, alignment removal "
+          "%zu\n",
           tid, sync_index, adjust, beacon_detect_window,
           config_->samps_per_frame(), alignment_samples);
 
@@ -951,6 +951,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
         throw std::runtime_error("Unexpected alignment");
       }
       clientAdjustRx(tid, alignment_samples + adjust);
+      sync_count++;
     } else if (config_->running()) {
       MLPD_WARN(
           "clientSyncTxRx [%d]: Beacon could not be detected sync_index: %ld\n",
@@ -962,7 +963,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   // Main client read/write loop.
   size_t frame_id = 0;
   size_t buffer_offset = 0;
-  //sync on the frist beacon after initial detection
+  //sync on the first beacon after initial detection
   bool resync = true;
   bool resync_enable = (config_->frame_mode() == "continuous_resync");
   size_t resync_retry_cnt(0);
@@ -1195,6 +1196,8 @@ void Receiver::clientAdjustRx(size_t radio_id, size_t discard_samples) {
       size_t new_samples = static_cast<size_t>(rx_status);
       if (new_samples <= discard_samples) {
         discard_samples -= new_samples;
+        MLPD_INFO("clientAdjustRx [%zu]: Discarded Samples (%zu/%zu)\n",
+                  radio_id, new_samples, discard_samples);
       } else {
         MLPD_ERROR(
             "clientAdjustRx [%zu]: BAD radioRx more samples then requested "
