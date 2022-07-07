@@ -1,411 +1,155 @@
 /*
- Copyright (c) 2018-2021, Rice University
+
+ Communications Library:
+   a) Generate pilot/preamble sequences
+   b) OFDM modulation
+
+---------------------------------------------------------------------
+ Copyright (c) 2018-2019, Rice University 
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
  Author(s): Rahman Doost-Mohamamdy: doost@rice.edu
- 
----------------------------------------------------------------------
- Reads Configuration Parameters from file 
+	    Oscar Bejarano: obejarano@rice.edu
 ---------------------------------------------------------------------
 */
 
-#ifndef CONFIG_HEADER
-#define CONFIG_HEADER
-
 #include <complex.h>
+#include <math.h>
+#include <stdio.h> /* for fprintf */
+#include <stdlib.h>
+#include <string.h> /* for memcpy */
+#include <unistd.h>
 
 #include <algorithm>
-#include <atomic>
+#include <cstring>
+#include <fstream>  // std::ifstream
+#include <iostream>
+#include <thread>
 #include <vector>
 
-class Config {
+#include "fft.h"
+
+static constexpr size_t kPilotSubcarrierSpacing = 12;
+static constexpr size_t kDefaultPilotScOffset = 6;
+
+static inline double computeAbs(std::complex<double> x) { return std::abs(x); }
+
+//template <typename T>
+//static inline T computeAbs(std::complex<T> x) { return std::abs(x); }
+static inline double computePower(std::complex<double> x) {
+  return std::pow(std::abs(x), 2);
+}
+static inline double computeSquare(double x) { return x * x; }
+
+class CommsLib {
  public:
-  Config(const std::string&, const std::string&, const bool, const bool);
-  ~Config();
-
-  //Accessors
-  inline bool bs_present(void) const { return this->bs_present_; }
-  inline bool client_present(void) const { return this->client_present_; }
-  inline size_t num_bs_sdrs_all(void) const { return this->num_bs_sdrs_all_; }
-  inline size_t num_bs_antennas_all(void) const {
-    return this->num_bs_antennas_all_;
-  }
-  inline size_t num_cl_sdrs(void) const { return this->num_cl_sdrs_; }
-  inline size_t core_alloc(void) const { return this->core_alloc_; }
-  inline int slot_samp_size(void) const { return this->slot_samp_size_; }
-  inline size_t samps_per_slot(void) const { return this->samps_per_slot_; }
-  inline size_t slot_per_frame(void) const { return this->slot_per_frame_; }
-  inline size_t symbol_per_slot(void) const { return this->symbol_per_slot_; }
-  inline size_t samps_per_frame(void) const {
-    return this->samps_per_slot_ * this->slot_per_frame_;
-  }
-  inline bool ul_data_slot_present(void) const {
-    return this->ul_data_slot_present_;
-  }
-  inline bool dl_data_slot_present(void) const {
-    return this->dl_data_slot_present_;
-  }
-  inline size_t num_cells(void) const { return this->num_cells_; }
-  inline size_t guard_mult(void) const { return this->guard_mult_; }
-  inline bool bs_hw_framer(void) const { return this->bs_hw_framer_; }
-  inline bool hw_framer(void) const { return this->hw_framer_; }
-  inline int prefix(void) const { return this->prefix_; }
-  inline int postfix(void) const { return this->postfix_; }
-  inline int beacon_size(void) const { return this->beacon_size_; }
-  inline double bw_filter(void) const { return this->bw_filter_; }
-  inline double freq(void) const { return this->freq_; }
-  inline double nco(void) const { return this->nco_; }
-  inline double radio_rf_freq(void) const { return this->radio_rf_freq_; }
-  inline bool single_gain(void) const { return this->single_gain_; }
-  inline bool cl_agc_en(void) const { return this->cl_agc_en_; }
-  inline int cl_agc_gain_init(void) const { return this->cl_agc_gain_init_; }
-  inline bool imbalance_cal_en(void) const { return this->imbalance_cal_en_; }
-  inline bool sample_cal_en(void) const { return this->sample_cal_en_; }
-  inline size_t max_frame(void) const { return this->max_frame_; }
-  inline size_t ul_data_frame_num(void) const {
-    return this->ul_data_frame_num_;
-  }
-  inline size_t dl_data_frame_num(void) const {
-    return this->dl_data_frame_num_;
-  }
-  inline bool beam_sweep(void) const { return this->beam_sweep_; }
-  inline size_t beacon_channel(void) const { return this->beacon_ch_; }
-  inline size_t beacon_ant(void) const { return this->beacon_ant_; }
-  inline size_t beacon_radio(void) const { return this->beacon_radio_; }
-  inline size_t num_cl_antennas(void) const { return this->num_cl_antennas_; }
-  inline size_t fft_size(void) const { return this->fft_size_; }
-  inline size_t cp_size(void) const { return this->cp_size_; }
-  inline size_t symbol_data_subcarrier_num(void) const {
-    return this->symbol_data_subcarrier_num_;
-  }
-  inline size_t pilot_slot_per_frame(void) const {
-    return this->pilot_slot_per_frame_;
-  }
-  inline size_t noise_slot_per_frame(void) const {
-    return this->noise_slot_per_frame_;
-  }
-  inline size_t ul_slot_per_frame(void) const {
-    return this->ul_slot_per_frame_;
-  }
-  inline size_t dl_slot_per_frame(void) const {
-    return this->dl_slot_per_frame_;
-  }
-  inline const std::vector<std::vector<size_t>>& dl_slots(void) const {
-    return this->dl_slots_;
-  }
-  inline double rate(void) const { return this->rate_; }
-  inline int tx_advance(size_t id) const { return this->tx_advance_.at(id); }
-  inline size_t cl_sdr_ch(void) const { return this->cl_sdr_ch_; }
-  inline size_t bs_sdr_ch(void) const { return this->bs_sdr_ch_; }
-
-  inline bool running(void) const { return this->running_.load(); }
-  inline void running(bool value) { this->running_ = value; }
-
-  inline const std::string& frame_mode(void) const { return this->frame_mode_; }
-  inline const std::string& bs_channel(void) const { return this->bs_channel_; }
-  inline const std::string& trace_file(void) const { return this->trace_file_; }
-  inline const std::string& cl_channel(void) const { return this->cl_channel_; }
-  inline const std::string& beacon_seq(void) const { return this->beacon_seq_; }
-  inline const std::string& pilot_seq(void) const { return this->pilot_seq_; }
-  inline const std::string& data_mod(void) const { return this->data_mod_; }
-  inline const std::string& cl_data_mod(void) const {
-    return this->cl_data_mod_;
-  }
-
-  inline const std::vector<size_t>& n_bs_sdrs_agg(void) const {
-    return this->n_bs_sdrs_agg_;
-  }
-  inline bool internal_measurement(void) const {
-    return this->internal_measurement_;
-  }
-  inline bool ref_node_enable(void) const { return this->ref_node_enable_; }
-  inline size_t cal_ref_sdr_id(void) const { return this->cal_ref_sdr_id_; }
-  inline const std::vector<std::vector<std::string>>& calib_frames(void) const {
-    return this->calib_frames_;
-  }
-
-  //TODO split the following (4) in accessor and setter
-  inline std::vector<std::complex<int16_t>>& beacon_ci16(void) {
-    return this->beacon_ci16_;
-  }
-  inline std::vector<std::complex<int16_t>>& neg_beacon_ci16(void) {
-    return this->neg_beacon_ci16_;
-  }
-  inline std::vector<std::vector<std::complex<float>>>& tx_data(void) {
-    return this->tx_data_;
-  };
-  inline std::vector<std::complex<int16_t>>& pilot_ci16(void) {
-    return this->pilot_ci16_;
-  }
-  inline std::vector<size_t>& n_bs_sdrs(void) { return this->n_bs_sdrs_; }
-
-  inline const std::vector<std::string>& cl_frames(void) const {
-    return this->cl_frames_;
-  }
-  inline const std::vector<std::vector<size_t>>& cl_pilot_slots(void) const {
-    return this->cl_pilot_slots_;
-  }
-  inline const std::vector<std::vector<size_t>>& cl_ul_slots(void) const {
-    return this->cl_ul_slots_;
-  }
-  inline const std::vector<std::vector<size_t>>& cl_dl_slots(void) const {
-    return this->cl_dl_slots_;
-  }
-  inline const std::vector<std::string>& cl_sdr_ids(void) const {
-    return this->cl_sdr_ids_;
-  }
-  inline const std::vector<std::string>& ul_tx_fd_data_files(void) const {
-    return this->ul_tx_fd_data_files_;
-  }
-  inline const std::vector<std::string>& ul_tx_td_data_files(void) const {
-    return this->ul_tx_td_data_files_;
-  }
-  inline const std::vector<std::string>& dl_tx_fd_data_files(void) const {
-    return this->dl_tx_fd_data_files_;
-  }
-  inline const std::vector<std::string>& dl_tx_td_data_files(void) const {
-    return this->dl_tx_td_data_files_;
-  }
-
-  inline const std::vector<size_t>& data_ind(void) const {
-    return this->data_ind_;
-  }
-  inline const std::vector<uint32_t>& coeffs(void) const {
-    return this->coeffs_;
-  }
-  inline const std::vector<uint32_t>& pilot(void) const { return this->pilot_; }
-  inline const std::vector<std::vector<double>>& cl_txgain_vec(void) const {
-    return this->cl_txgain_vec_;
-  }
-  inline const std::vector<std::vector<double>>& cl_rxgain_vec(void) const {
-    return this->cl_rxgain_vec_;
-  }
-  inline const std::vector<uint32_t>& beacon(void) const {
-    return this->beacon_;
-  }
-
-  inline std::vector<std::vector<float>>& pilot_sym_t(void) {
-    return this->pilot_sym_t_;
-  };
-  inline std::vector<std::vector<float>>& pilot_sym_f(void) {
-    return this->pilot_sym_f_;
-  };
-  inline std::vector<std::complex<float>>& pilot_sc(void) {
-    return this->pilot_sc_;
-  };
-  inline std::vector<size_t>& pilot_sc_ind(void) {
-    return this->pilot_sc_ind_;
+  enum SequenceType {
+    STS_SEQ,
+    LTS_SEQ,
+    LTS_SEQ_F,
+    LTE_ZADOFF_CHU,
+    LTE_ZADOFF_CHU_F,
+    GOLD_IFFT,
+    HADAMARD
   };
 
-  inline const std::vector<std::string>& frames(void) const {
-    return this->frames_;
+  enum ModulationOrder { QPSK = 2, QAM16 = 4, QAM64 = 6 };
+
+  CommsLib(std::string);
+  ~CommsLib();
+
+  static std::vector<std::vector<float>> getSequence(size_t type,
+                                                     size_t seq_len = 0);
+  static std::vector<std::complex<float>> modulate(std::vector<uint8_t>, int);
+  static std::vector<size_t> getDataSc(
+      size_t fftSize, size_t DataScNum,
+      size_t PilotScOffset = kDefaultPilotScOffset);
+  static std::vector<size_t> getNullSc(size_t fftSize, size_t DataScNum);
+  static std::vector<std::complex<float>> getPilotScValue(
+      size_t fftSize, size_t DataScNum,
+      size_t PilotScOffset = kDefaultPilotScOffset);
+  static std::vector<size_t> getPilotScIndex(
+      size_t fftSize, size_t DataScNum,
+      size_t PilotScOffset = kDefaultPilotScOffset);
+  static std::vector<std::complex<float>> FFT(
+      const std::vector<std::complex<float>>&, int);
+  static std::vector<std::complex<float>> IFFT(
+      const std::vector<std::complex<float>>&, int, float scale = 0.5,
+      bool normalize = true);
+
+  static int findLTS(const std::vector<std::complex<float>>& iq, int seqLen);
+  static size_t find_pilot_seq(const std::vector<std::complex<float>>& iq,
+                               const std::vector<std::complex<float>>& pilot,
+                               size_t seqLen);
+  template <typename T>
+  //static std::vector<T> convolve(std::vector<T> const& f, std::vector<T> const& g);
+  static std::vector<T> convolve(std::vector<T> const& f,
+                                 std::vector<T> const& g) {
+    /* Convolution of two vectors
+         * Source:
+         * https://stackoverflow.com/questions/24518989/how-to-perform-1-dimensional-valid-convolution
+         */
+    int const nf = f.size();
+    int const ng = g.size();
+    int const n = nf + ng - 1;
+    std::vector<T> out(n, 0);
+    for (auto i(0); i < n; ++i) {
+      int const jmn = (i >= ng - 1) ? i - (ng - 1) : 0;
+      int const jmx = (i < nf - 1) ? i : nf - 1;
+      for (auto j(jmn); j <= jmx; ++j) {
+        out[i] += f[j] * g[i - j];
+      }
+    }
+    return out;
   }
-
-  inline const std::vector<std::vector<std::string>>& bs_sdr_ids(void) const {
-    return this->bs_sdr_ids_;
+  static float find_max_abs(const std::vector<std::complex<float>>& in);
+  static std::vector<std::complex<float>> csign(
+      const std::vector<std::complex<float>>& iq);
+  static inline int hadamard2(int i, int j) {
+    return (__builtin_parity(i & j) != 0 ? -1 : 1);
   }
-  inline const std::vector<std::complex<float>>& gold_cf32(void) const {
-    return this->gold_cf32_;
-  }
+  static std::vector<float> magnitudeFFT(
+      std::vector<std::complex<float>> const&, std::vector<float> const&,
+      size_t);
+  static std::vector<float> hannWindowFunction(size_t);
+  static double windowFunctionPower(std::vector<float> const&);
+  template <typename T>
+  static T findTone(std::vector<T> const&, double, double, size_t,
+                    const size_t delta = 10);
+  static float measureTone(std::vector<std::complex<float>> const&,
+                           std::vector<float> const&, double, double, size_t,
+                           const size_t delta = 10);
 
-  inline size_t cl_rx_thread_num(void) const { return this->cl_rx_thread_num_; }
-  inline size_t bs_rx_thread_num(void) const { return this->bs_rx_thread_num_; }
-  inline size_t recorder_thread_num(void) const {
-    return this->recorder_thread_num_;
-  }
-  inline size_t reader_thread_num(void) const {
-    return this->reader_thread_num_;
-  }
-
-  inline const std::vector<std::string>& hub_ids(void) const {
-    return this->hub_ids_;
-  }
-
-  inline const std::vector<std::string>& calib_ids(void) const {
-    return this->calib_ids_;
-  }
-
-  inline const std::vector<double>& tx_gain(void) const {
-    return this->tx_gain_;
-  }
-  inline const std::vector<double>& rx_gain(void) const {
-    return this->rx_gain_;
-  }
-  inline const std::vector<double>& cal_tx_gain(void) const {
-    return this->cal_tx_gain_;
-  }
-
-  inline const std::vector<std::vector<std::complex<float>>>& txdata_freq_dom(
-      void) const {
-    return this->txdata_freq_dom_;
-  }
-
-  inline const std::vector<std::vector<std::complex<float>>>&
-  dl_txdata_freq_dom(void) const {
-    return this->dl_txdata_freq_dom_;
-  }
-
-  inline double tx_scale(void) const { return this->tx_scale_; }
-  inline double pilot_scale(void) const { return this->pilot_scale_; }
-  inline size_t getPacketDataLength() const {
-    return (2 * this->samps_per_slot_ * sizeof(short));
-  }
-
-  /// Return the slot duration in seconds
-  inline double getSlotDurationSec() const {
-    return ((this->symbol_per_slot_ * this->samps_per_slot_) / this->rate_);
-  }
-  /// Return the frame duration in seconds
-  inline double getFrameDurationSec() const {
-    return ((this->samps_per_frame()) / this->rate_);
-  }
-  inline size_t getTxFrameDelta() const { return tx_frame_delta_; }
-
-  size_t getNumAntennas();
-  size_t getMaxNumAntennas();
-  size_t getNumBsSdrs();
-  size_t getTotNumAntennas();
-  size_t getNumRecordedSdrs();
-  int getClientId(int, int);
-  int getNoiseSlotIndex(int, int);
-  int getUlSlotIndex(int, int);
-  int getDlSlotIndex(int, int);
-  bool isPilot(int, int);
-  bool isNoise(int, int);
-  bool isUlData(int, int);
-  bool isDlData(int, int);
-  unsigned getCoreCount();
-
-  void loadULData();
-  void loadDLData();
-
- private:
-  bool bs_present_;
-  bool client_present_;
-  std::string directory_;
-
-  // common features
-  double freq_;
-  double nco_;  // baseband frequency controlled by NCO
-  double rate_;
-  double
-      radio_rf_freq_;  // RF frequency set frame_modeon the radio after NCO adjustments
-  double bw_filter_;
-  size_t fft_size_;
-  size_t cp_size_;
-  size_t ofdm_symbol_size_;
-  size_t symbol_data_subcarrier_num_;
-  size_t symbol_per_slot_;
-  size_t slot_samp_size_;
-  size_t samps_per_slot_;
-  size_t prefix_;
-  size_t postfix_;
-  size_t slot_per_frame_;
-  size_t pilot_slot_per_frame_;
-  size_t noise_slot_per_frame_;
-  size_t ul_slot_per_frame_;
-  size_t dl_slot_per_frame_;
-  float tx_scale_;
-  float pilot_scale_;
-  std::string pilot_seq_;
-  std::string beacon_seq_;
-  bool ul_data_slot_present_;
-  bool dl_data_slot_present_;
-  std::string data_mod_;
-  std::string cl_data_mod_;
-
-  // BS features
-  size_t num_cells_;
-  size_t guard_mult_;
-  std::vector<std::string> bs_sdr_file_;  // No accessor
-  std::string hub_file_;                  // No accessor
-  std::string ref_sdr;
-  size_t bs_sdr_ch_;
-  std::vector<std::vector<std::string>> bs_sdr_ids_;
-  std::vector<std::string> hub_ids_;
-  std::vector<std::string> calib_ids_;
-  std::vector<std::complex<float>> gold_cf32_;
-  std::vector<uint32_t> beacon_;
-  std::vector<std::complex<int16_t>> beacon_ci16_;
-  std::vector<std::complex<int16_t>> neg_beacon_ci16_;
-  int beacon_size_;
-  size_t beacon_ant_;
-  size_t beacon_radio_;
-  size_t beacon_ch_;
-  bool beam_sweep_;
-  std::vector<size_t> n_bs_sdrs_;
-  std::vector<size_t> n_bs_antennas_;  //No accessor
-  std::vector<size_t> n_bs_sdrs_agg_;
-  size_t num_bs_sdrs_all_;
-  size_t num_bs_antennas_all_;
-  std::string bs_channel_;
-  std::vector<std::string> frames_;
-  std::string frame_mode_;
-  bool bs_hw_framer_;
-  bool hw_framer_;
-  size_t max_frame_;
-  size_t ul_data_frame_num_;
-  size_t dl_data_frame_num_;
-  std::vector<std::vector<size_t>>
-      pilot_slots_;  // Accessed through getClientId
-  std::vector<std::vector<size_t>> noise_slots_;
-  std::vector<std::vector<size_t>>
-      ul_slots_;  // Accessed through getUlSFIndex()
-  std::vector<std::vector<size_t>> dl_slots_;
-  bool single_gain_;
-  std::vector<double> tx_gain_;
-  std::vector<double> rx_gain_;
-  std::vector<double> cal_tx_gain_;
-  bool sample_cal_en_;
-  bool imbalance_cal_en_;
-  std::string trace_file_;
-  std::vector<std::vector<std::string>> calib_frames_;
-  bool internal_measurement_;
-  bool ref_node_enable_;
-  size_t cal_ref_sdr_id_;
-  size_t tx_frame_delta_;
-
-  // Clients features
-  std::vector<std::string> cl_sdr_ids_;
-  size_t max_tx_gain_ue_;
-  size_t num_cl_sdrs_;
-  size_t cl_sdr_ch_;
-  size_t num_cl_antennas_;
-  std::string cl_channel_;
-  bool cl_agc_en_;
-  int cl_agc_gain_init_;
-  std::vector<int> tx_advance_;
-  std::vector<size_t> data_ind_;
-  std::vector<uint32_t> coeffs_;
-  std::vector<std::complex<int16_t>> pilot_ci16_;
-  std::vector<uint32_t> pilot_;
-  std::vector<std::complex<float>> pilot_sc_;
-  std::vector<size_t> pilot_sc_ind_;
-  std::vector<std::vector<float>> pilot_sym_t_;
-  std::vector<std::vector<float>> pilot_sym_f_;
-  std::vector<std::vector<std::complex<float>>> tx_data_;
-  std::vector<std::vector<std::complex<float>>> txdata_freq_dom_;
-  std::vector<std::vector<std::complex<float>>> txdata_time_dom_;
-  std::vector<std::vector<std::complex<float>>> dl_txdata_freq_dom_;
-  std::vector<std::vector<std::complex<float>>> dl_txdata_time_dom_;
-
-  std::vector<std::string> cl_frames_;
-  std::vector<std::vector<size_t>> cl_pilot_slots_;
-  std::vector<std::vector<size_t>> cl_ul_slots_;
-  std::vector<std::vector<size_t>> cl_dl_slots_;
-
-  std::vector<std::vector<double>> cl_txgain_vec_;
-  std::vector<std::vector<double>> cl_rxgain_vec_;
-  std::vector<std::string> ul_tx_td_data_files_;
-  std::vector<std::string> ul_tx_fd_data_files_;
-  std::vector<std::string> dl_tx_td_data_files_;
-  std::vector<std::string> dl_tx_fd_data_files_;
-
-  std::atomic<bool> running_;
-  bool core_alloc_;
-  size_t bs_rx_thread_num_;
-  size_t cl_rx_thread_num_;
-  size_t recorder_thread_num_;
-  size_t reader_thread_num_;
+  // Functions using AVX
+  static int find_beacon(const std::vector<std::complex<float>>& iq);
+  static int find_beacon_avx(const std::vector<std::complex<float>>& iq,
+                             const std::vector<std::complex<float>>& seq);
+  static std::vector<float> correlate_avx_s(std::vector<float> const& f,
+                                            std::vector<float> const& g);
+  static std::vector<int16_t> correlate_avx_si(std::vector<int16_t> const& f,
+                                               std::vector<int16_t> const& g);
+  static std::vector<float> abs2_avx(std::vector<std::complex<float>> const& f);
+  static std::vector<int32_t> abs2_avx(
+      std::vector<std::complex<int16_t>> const& f);
+  static std::vector<std::complex<float>> auto_corr_mult_avx(
+      std::vector<std::complex<float>> const& f, const int dly,
+      const bool conj = true);
+  static std::vector<std::complex<int16_t>> auto_corr_mult_avx(
+      std::vector<std::complex<int16_t>> const& f, const int dly,
+      const bool conj = true);
+  static std::vector<std::complex<float>> correlate_avx(
+      std::vector<std::complex<float>> const& f,
+      std::vector<std::complex<float>> const& g);
+  static std::vector<std::complex<int16_t>> correlate_avx(
+      std::vector<std::complex<int16_t>> const& f,
+      std::vector<std::complex<int16_t>> const& g);
+  static std::vector<std::complex<float>> complex_mult_avx(
+      std::vector<std::complex<float>> const& f,
+      std::vector<std::complex<float>> const& g, const bool conj);
+  static std::vector<std::complex<int16_t>> complex_mult_avx(
+      std::vector<std::complex<int16_t>> const& f,
+      std::vector<std::complex<int16_t>> const& g, const bool conj);
+  //private:
+  //    static inline float** init_qpsk();
+  //    static inline float** init_qam16();
+  //    static inline float** init_qam64();
 };
-
-#endif /* CONFIG_HEADER */
