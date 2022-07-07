@@ -6,7 +6,6 @@
  Handles received samples from massive-mimo base station 
 ----------------------------------------------------------
 */
-
 #include "include/receiver.h"
 
 #include <unistd.h>
