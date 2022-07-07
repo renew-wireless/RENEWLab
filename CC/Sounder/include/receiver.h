@@ -71,23 +71,16 @@ class Receiver {
   static void* clientTxRx_launch(void* in_context);
   void clientTxRx(int tid);
   void clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer);
-  ssize_t syncSearch(const std::complex<int16_t>* check_data,
-                     size_t search_window);
-
+  int syncSearch(const std::vector<std::complex<int16_t>>& sync_buff,
+                 size_t sync_num_samps);
   float estimateCFO(const std::vector<std::complex<int16_t>>& sync_buff,
                     int sync_index);
   void initBuffers();
   void clientTxPilots(size_t user_id, long long base_time);
   int clientTxData(int tid, int frame_id, long long base_time);
-  ssize_t clientSyncBeacon(size_t radio_id, size_t sample_window);
-  void clientAdjustRx(size_t radio_id, size_t discard_samples);
 
  private:
   Config* config_;
-  size_t num_channels_buff_;
-  size_t num_channels_;
-  size_t num_radios_;
-  size_t radio_id_;
 
 #if defined(USE_UHD)
   ClientRadioSetUHD* client_radio_set_;
