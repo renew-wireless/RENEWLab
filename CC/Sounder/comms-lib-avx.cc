@@ -12,6 +12,7 @@ find_beacon_avx: Correlation and Peak detection of a beacon with Gold code (2 re
 
 #include <assert.h>
 #include <immintrin.h>
+#include <limits.h>
 
 #include <iomanip>
 #include <queue>
@@ -21,24 +22,52 @@ find_beacon_avx: Correlation and Peak detection of a beacon with Gold code (2 re
 
 #define USE_AVX
 
-static const size_t kBytesIn256Bits = (256 / 8);
+static constexpr size_t kBytesIn256Bits = (256 / 8);
 
-#define AVX_PACKED_SP 8   //single-precision
-#define AVX_PACKED_SI 16  // short int
-#define AVX_PACKED_CS 8   // complex short int
+//single-precision
+#define AVX_PACKED_SP (8)
+// short int
+#define AVX_PACKED_SI (16)
+// complex short int
+#define AVX_PACKED_CS (8)
 
-int CommsLib::find_beacon_avx(const std::vector<std::complex<float>>& iq,
-                              const std::vector<std::complex<float>>& seq) {
+static constexpr float kShortMaxFloat = SHRT_MAX;
+
+ssize_t CommsLib::find_beacon_avx(
+    const std::complex<int16_t>* raw_samples,
+    const std::vector<std::complex<float>>& match_samples,
+    size_t check_window) {
+  //Sample window must be multiple of 64Bytes (for avx 512)
+  static constexpr size_t kWindowAlignment = 64;
+  const size_t padded_window =
+      (((check_window / kWindowAlignment) + 1) * kWindowAlignment);
+
+  //Allocate memory, only used for beacon detection
+  std::vector<std::complex<float>> sync_compare(
+      padded_window, std::complex<float>(0.0f, 0.0f));
+
+  // convert entire frame data to complex float for sync detection
+  for (size_t i = 0; i < check_window; i++) {
+    sync_compare.at(i) = (std::complex<float>(
+        static_cast<float>(raw_samples[i].real()) / kShortMaxFloat,
+        static_cast<float>(raw_samples[i].imag()) / kShortMaxFloat));
+  }
+  return CommsLib::find_beacon_avx(sync_compare, match_samples);
+}
+
+int CommsLib::find_beacon_avx(
+    const std::vector<std::complex<float>>& raw_samples,
+    const std::vector<std::complex<float>>& match_samples) {
   std::queue<int> valid_peaks;
 
   // Original LTS sequence
-  int seqLen = seq.size();
+  int seqLen = match_samples.size();
   struct timespec tv, tv2;
   clock_gettime(CLOCK_MONOTONIC, &tv);
 
   // correlate signal with beacon
   std::vector<std::complex<float>> gold_corr_avx =
-      CommsLib::correlate_avx(iq, seq);
+      CommsLib::correlate_avx(raw_samples, match_samples);
   clock_gettime(CLOCK_MONOTONIC, &tv2);
 #ifdef TEST_BENCH
   double diff1 =
@@ -100,15 +129,14 @@ int CommsLib::find_beacon_avx(const std::vector<std::complex<float>>& iq,
   fclose(fp);
   filename = "indata.bin";
   FILE* fi = fopen(filename.c_str(), "wb");
-  float* idata_ptr = (float*)iq.data();
-  fwrite(idata_ptr, iq.size() * 2, sizeof(float), fi);
+  float* idata_ptr = (float*)raw_samples.data();
+  fwrite(idata_ptr, raw_samples.size() * 2, sizeof(float), fi);
   fclose(fi);
 #endif
 
   if (valid_peaks.empty()) {
     valid_peaks.push(-1);
   }
-
   return valid_peaks.front();
 }
 
