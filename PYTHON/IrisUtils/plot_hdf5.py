@@ -200,7 +200,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             # CSI:   #Frames, #Users, #Pilot Rep, #Antennas, #Subcarrier
             # For correlation use a fft size of 64
             print("*verify_hdf5(): Calling samps2csi with fft_size = {}, offset = {}, bound = {}, cp = {} *".format(fft_size, offset, z_padding, cp))
-            csi,_ = hdf5_lib.samps2csi_large(pilot_samples, num_pilots, chunk_size, samps_per_slot, fft_size=fft_size,
+            csi, _ = hdf5_lib.samps2csi_large(pilot_samples, num_pilots, chunk_size, samps_per_slot, fft_size=fft_size,
                                             offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
 
             if corr_thresh > 0.0:
@@ -611,22 +611,23 @@ def main():
         noise_samples = hdf5.noise_samples
         downlink_samples = hdf5.downlink_samples
 
-        num_bs_ants = pilot_samples.shape[4]
-        if len(bs_nodes_str) > 0:
-            ant_ids = bs_nodes_str.split(',')
-            bs_nodes = [int(i) for i in ant_ids]
-            exclude_bs_nodes = list(set(range(num_bs_ants)) - set(bs_nodes))
-        else:
-            exclude_bs_nodes = []
-            if len(exclude_bs_nodes_str) > 0:
-                exclude_ant_ids = exclude_bs_nodes_str.split(',')
-                exclude_bs_nodes = [int(i) for i in exclude_ant_ids]
         # Check which data we have available
         pilots_avail = len(pilot_samples) > 0
         ul_data_avail = len(uplink_samples) > 0
         noise_avail = len(noise_samples) > 0
         dl_data_avail = len(downlink_samples) > 0
+        exclude_bs_nodes = []
         if pilots_avail:
+            num_bs_ants = pilot_samples.shape[4]
+            if len(bs_nodes_str) > 0:
+                ant_ids = bs_nodes_str.split(',')
+                bs_nodes = [int(i) for i in ant_ids]
+                exclude_bs_nodes = list(set(range(num_bs_ants)) - set(bs_nodes))
+            else:
+                exclude_bs_nodes = []
+                if len(exclude_bs_nodes_str) > 0:
+                    exclude_ant_ids = exclude_bs_nodes_str.split(',')
+                    exclude_bs_nodes = [int(i) for i in exclude_ant_ids]
             print("HDF5 pilot data size:")
             print(pilot_samples.shape)
         if noise_avail:
