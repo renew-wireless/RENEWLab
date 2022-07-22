@@ -175,7 +175,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg) : _cfg(cfg) {
             tddSched.replace(s, 1, "T");
           else if (c == 'D')
             tddSched.replace(s, 1, "R");
-          else
+          else if (c != 'P')
             tddSched.replace(s, 1, "G");
         }
         std::cout << "Client " << i << " schedule: " << tddSched << std::endl;
