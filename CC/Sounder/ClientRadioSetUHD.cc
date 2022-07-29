@@ -126,7 +126,7 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
   std::map<std::string, std::string> args;
   args["timeout"] = "1000000";
   args["driver"] = "uhd";
-  args["addr"] = _cfg->cl_sdr_ids().at(i);
+  args["serial"] = _cfg->cl_sdr_ids().at(i);
 
   try {
     radio_ = nullptr;
