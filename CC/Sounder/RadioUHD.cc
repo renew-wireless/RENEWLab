@@ -46,8 +46,8 @@ void RadioUHD::dev_init(Config* _cfg, int ch, double rxgain, double txgain) {
   dev_->set_rx_antenna("TX/RX", ch);
 
   // update for UHD multi USRP
-  dev_->set_rx_gain(std::min(31.5, rxgain), ch);
-  dev_->set_tx_gain(std::min(31.5, txgain), ch);
+  dev_->set_rx_gain(std::min(100.5, rxgain), ch);
+  dev_->set_tx_gain(std::min(100.5, txgain), ch);
 }
 
 void RadioUHD::drain_buffers(std::vector<void*> buffs, int symSamp) {
