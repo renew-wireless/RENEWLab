@@ -1167,9 +1167,14 @@ ssize_t Receiver::clientSyncBeacon(size_t radio_id, size_t sample_window) {
     syncrxbuffs.push_back(syncbuffmem.at(ch).data());
   }
 
+  int Beacon_interval = 10;
   while (config_->running() && (sync_index < 0)) {
-    const int rx_status = client_radio_set_->radioRx(
-        radio_id, syncrxbuffs.data(), sample_window, rx_time);
+    int rx_status = -1;
+    for (int find_beacon_retry = 0; find_beacon_retry < Beacon_interval;
+         find_beacon_retry++) {
+      rx_status = client_radio_set_->radioRx(radio_id, syncrxbuffs.data(),
+                                             sample_window, rx_time);
+    }
 
     if (rx_status < 0) {
       MLPD_ERROR("clientSyncBeacon [%zu]: BAD SYNC Received (%d/%zu) %lld\n",
