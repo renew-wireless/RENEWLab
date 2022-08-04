@@ -174,7 +174,7 @@ ClientRadioSet::ClientRadioSet(Config* cfg) : _cfg(cfg) {
           if (c == 'U') { // uplink data
             tddSched.replace(s, 1, "T");
           } else if (c == 'P') { // user pilot data
-            tddSched.replace(s, 1, "T"); 
+            tddSched.replace(s, 1, "P"); 
           } else if (c == 'D') { // downlink data
             tddSched.replace(s, 1, "R");
           } else if (c == 'N') { // noise data
