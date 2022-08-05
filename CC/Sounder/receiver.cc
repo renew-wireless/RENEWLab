@@ -30,6 +30,7 @@
 //Default to detect the beacon on first channel
 static constexpr size_t kSyncDetectChannel = 0;
 static constexpr float kBeaconDetectWindowScaler = 2.33f;
+static constexpr bool kEnableCfo = false;
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
@@ -940,7 +941,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
       const size_t alignment_samples =
           config_->samps_per_frame() - beacon_detect_window;
       MLPD_INFO(
-          "clientSyncTxRx [%zu]: Beacon detected sync_index: %ld, rx sample "
+          "clientSyncTxRx [%d]: Beacon detected sync_index: %ld, rx sample "
           "offset: %ld, window %zu, samples in frame %zu, alignment removal "
           "%zu\n",
           tid, sync_index, adjust, beacon_detect_window,
@@ -971,7 +972,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   size_t resync_success(0);
   // TODO: measure CFO from the first beacon and apply here
   const size_t max_cfo = 100;  // in ppb, For Iris
-  size_t resync_period = static_cast<size_t>(
+  const size_t resync_period = static_cast<size_t>(
       std::floor(1e9 / (max_cfo * config_->samps_per_frame())));
   size_t last_resync = frame_id;
   MLPD_INFO("Start main client txrx loop... tid=%d with resync period of %zu\n",
@@ -989,6 +990,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
     const int request_samples = samples_per_slot - beacon_adjust;
     const int rx_status = client_radio_set_->radioRx(
         tid, rxbuff.data(), request_samples, rx_beacon_time);
+    beacon_adjust = 0;
     if (rx_status < 0) {
       MLPD_ERROR("Rx status reporting error %d, exiting\n", rx_status);
       config_->running(false);
@@ -1006,9 +1008,6 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
       MLPD_TRACE("Enable resyncing at frame %zu\n", frame_id);
     }
     if (resync == true) {
-      //Need to bound the beacon detection to the last 'r not the size of the memory (vector)
-      //TODO: Use SIMD for faster conversion
-      // convert data to complex float for sync detection
       ssize_t sync_index =
           this->syncSearch(reinterpret_cast<std::complex<int16_t>*>(
                                rxbuff.at(kSyncDetectChannel)),
@@ -1022,23 +1021,20 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
         resync_retry_cnt = 0;
         resync_success++;
         MLPD_INFO(
-            "Re-syncing success with offset: %d, after %zu tries, index: %d, "
-            "tid %d\n",
-            new_rx_offset, resync_retry_cnt + 1, sync_index, tid);
+            "Re-syncing success at frame %zu with offset: %d, after %zu tries, index: %ld, tid %d\n",
+            frame_id, new_rx_offset, resync_retry_cnt + 1, sync_index, tid);
 
-        if (sync_index >= 0) {
+        if (kEnableCfo && (sync_index >= 0)) {
           const auto cfo_phase_est =
               estimateCFO(samplemem.at(kSyncDetectChannel), sync_index);
-          std::cout << "Client " << tid << " Estimated CFO (Hz): "
-                    << cfo_phase_est * config_->rate() << std::endl;
+          MLPD_INFO("Client %d Estimated CFO (Hz): %f\n",tid, cfo_phase_est * config_->rate());
         }
 
         //Offset Alignment logic
-        //If new_rx_offset is positive -- we need to right shift (read less)
-        if (new_rx_offset >= 0) {
-          beacon_adjust = new_rx_offset;
-        } else {
-          const size_t discard_samples = (-1 * new_rx_offset);
+        if (new_rx_offset < 0) {
+          beacon_adjust = (-1 * new_rx_offset);
+        } else if (new_rx_offset > 0) {
+          const size_t discard_samples = new_rx_offset;
           //throw away samples to get back in alignment, could combine with the next beacon but would need bigger buffers
           clientAdjustRx(tid, discard_samples);
         }
@@ -1196,7 +1192,7 @@ void Receiver::clientAdjustRx(size_t radio_id, size_t discard_samples) {
       size_t new_samples = static_cast<size_t>(rx_status);
       if (new_samples <= discard_samples) {
         discard_samples -= new_samples;
-        MLPD_INFO("clientAdjustRx [%zu]: Discarded Samples (%zu/%zu)\n",
+        MLPD_TRACE("clientAdjustRx [%zu]: Discarded Samples (%zu/%zu)\n",
                   radio_id, new_samples, discard_samples);
       } else {
         MLPD_ERROR(
