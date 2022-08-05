@@ -3,6 +3,9 @@ class Consts {
  public:
   static constexpr size_t kFftSize_80211 = 64;
   static constexpr size_t kNumMappedSubcarriers_80211 = 52;
+  static constexpr size_t kNumDataSubcarriers_80211 = 48;
+  static constexpr size_t kNumPilotSubcarriers_80211 = 4;
+  static constexpr size_t kNumNullSubcarriers_80211 = 12;
   // Define freq-domain STS according to
   // https://standards.ieee.org/standard/802_11a-1999.html
   static constexpr std::complex<float> sts_seq[64] = {
@@ -26,6 +29,16 @@ class Consts {
       {-1, 0}, {1, 0},  {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {1, 0},
       {1, 0},  {-1, 0}, {-1, 0}, {1, 0},  {-1, 0}, {1, 0},  {-1, 0}, {1, 0},
       {1, 0},  {1, 0},  {1, 0},  {0, 0},  {0, 0},  {0, 0},  {0, 0},  {0, 0}};
+
+  static constexpr size_t lts_data_ind[48] = {
+      6,  7,  8,  9,  10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+      23, 24, 26, 27, 28, 29, 30, 31, 33, 34, 35, 36, 37, 38, 40, 41,
+      42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 54, 55, 56, 57, 58};
+
+  static constexpr size_t lts_pilot_ind[4] = {11, 25, 39, 53};
+  static constexpr std::complex<float> lts_pilot_val[4] = {1.0, 1.0, -1.0, 1.0};
+  static constexpr size_t lts_null_ind[12] = {0,  1,  2,  3,  4,  5,
+                                              32, 59, 60, 61, 62, 63};
 
   // prime numbers [1,2048]
   static constexpr size_t prime[309] = {

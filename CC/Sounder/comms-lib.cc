@@ -340,11 +340,8 @@ std::vector<size_t> CommsLib::getDataSc(size_t fftSize, size_t DataScNum,
   std::vector<size_t> data_sc;
   if (fftSize == Consts::kFftSize_80211) {
     // We follow 802.11 PHY format here
-    size_t sc_ind[48] = {1,  2,  3,  4,  5,  6,  8,  9,  10, 11, 12, 13,
-                         14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 25, 26,
-                         38, 39, 40, 41, 42, 44, 45, 46, 47, 48, 49, 50,
-                         51, 52, 53, 54, 55, 56, 58, 59, 60, 61, 62, 63};
-    data_sc.assign(sc_ind, sc_ind + 48);
+    data_sc.assign(Consts::lts_data_ind,
+                   Consts::lts_data_ind + Consts::kNumDataSubcarriers_80211);
   } else {  // Allocate the center subcarriers as data
     size_t start_sc = (fftSize - DataScNum) / 2;
     size_t stop_sc = start_sc + DataScNum;
@@ -359,8 +356,8 @@ std::vector<size_t> CommsLib::getNullSc(size_t fftSize, size_t DataScNum) {
   std::vector<size_t> null_sc;
   if (fftSize == Consts::kFftSize_80211) {
     // We follow 802.11 PHY format here
-    int null[12] = {0, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37};
-    null_sc.assign(null, null + 12);
+    null_sc.assign(Consts::lts_null_ind,
+                   Consts::lts_null_ind + Consts::kNumNullSubcarriers_80211);
   } else {  // Allocate the boundary subcarriers as null
     size_t start_sc = (fftSize - DataScNum) / 2;
     size_t stop_sc = start_sc + DataScNum;
@@ -375,8 +372,8 @@ std::vector<std::complex<float>> CommsLib::getPilotScValue(
   std::vector<std::complex<float>> pilot_sc;
   if (fftSize == Consts::kFftSize_80211) {
     // We follow 802.11 PHY format here
-    std::complex<float> sc_val[4] = {1, 1, -1, 1};
-    pilot_sc.assign(sc_val, sc_val + 4);
+    pilot_sc.assign(Consts::lts_pilot_val,
+                    Consts::lts_pilot_val + Consts::kNumPilotSubcarriers_80211);
   } else {
     size_t start_sc = (fftSize - DataScNum) / 2;
     size_t stop_sc = start_sc + DataScNum;
@@ -401,8 +398,8 @@ std::vector<size_t> CommsLib::getPilotScIndex(size_t fftSize, size_t DataScNum,
   std::vector<size_t> pilot_sc;
   if (fftSize == Consts::kFftSize_80211) {
     // We follow 802.11 standard here
-    int sc_ind[4] = {7, 21, 43, 57};
-    pilot_sc.assign(sc_ind, sc_ind + 4);
+    pilot_sc.assign(Consts::lts_pilot_ind,
+                    Consts::lts_pilot_ind + Consts::kNumPilotSubcarriers_80211);
   } else {  // consider center subcarriers
     size_t start_sc = (fftSize - DataScNum) / 2;
     size_t stop_sc = start_sc + DataScNum;
