@@ -19,10 +19,14 @@
 
 #include "include/comms-lib.h"
 
+#include <limits.h>
+
 #include <queue>
 
 #include "include/constants.h"
 #include "include/utils.h"
+
+static constexpr float kShortMaxFloat = SHRT_MAX;
 
 int CommsLib::findLTS(const std::vector<std::complex<float>>& iq, int seqLen) {
   /*
@@ -110,8 +114,22 @@ size_t CommsLib::find_pilot_seq(const std::vector<std::complex<float>>& iq,
   return best_peak;
 }
 
+int CommsLib::find_beacon(const std::complex<int16_t>* raw_samples,
+                          size_t check_window) {
+  //Allocate memory, only used for beacon detection (consider making this static)
+  std::vector<std::complex<float>> beacon_compare(
+      check_window, std::complex<float>(0.0f, 0.0f));
+
+  // convert entire frame data to complex float for sync detection
+  for (size_t i = 0; i < check_window; i++) {
+    beacon_compare.at(i) = (std::complex<float>(
+        static_cast<float>(raw_samples[i].real()) / kShortMaxFloat,
+        static_cast<float>(raw_samples[i].imag()) / kShortMaxFloat));
+  }
+  return CommsLib::find_beacon(beacon_compare);
+}
+
 int CommsLib::find_beacon(const std::vector<std::complex<float>>& iq) {
-  //std::vector<std::vector<double>> gold_seq;
   int best_peak;
   std::queue<int> valid_peaks;
 
