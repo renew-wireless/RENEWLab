@@ -626,11 +626,11 @@ class hdf5_lib:
             #start_i = int((fft_length - nonzero_sc_size) // 2)
             #stop_i = int(start_i + nonzero_sc_size)
             nonzero_sc = np.setdiff1d(range(fft_size), zero_sc)
-            iq_fft = np.fft.fft(iq, fft_size, 4)
+            iq_fft = np.fft.fftshift(np.fft.fft(iq, fft_size, 4), 4)
             seq_freq_inv = 1 / pilot_f[nonzero_sc]
             csi = iq_fft[:, :, :, :, nonzero_sc] * seq_freq_inv
             if len(zero_sc) == 0:
-                noise = None
+                SNR = None
             else:
                 noise = iq_fft[:, :, :, :, zero_sc]
                 noise_power = np.mean(np.power(np.abs(noise), 2), 4) * len(nonzero_sc)

@@ -940,7 +940,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
       const size_t alignment_samples =
           config_->samps_per_frame() - beacon_detect_window;
       MLPD_INFO(
-          "clientSyncTxRx [%zu]: Beacon detected sync_index: %ld, rx sample "
+          "clientSyncTxRx [%d]: Beacon detected sync_index: %ld, rx sample "
           "offset: %ld, window %zu, samples in frame %zu, alignment removal "
           "%zu\n",
           tid, sync_index, adjust, beacon_detect_window,
@@ -1022,7 +1022,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
         resync_retry_cnt = 0;
         resync_success++;
         MLPD_INFO(
-            "Re-syncing success with offset: %d, after %zu tries, index: %d, "
+            "Re-syncing success with offset: %d, after %zu tries, index: %ld, "
             "tid %d\n",
             new_rx_offset, resync_retry_cnt + 1, sync_index, tid);
 
