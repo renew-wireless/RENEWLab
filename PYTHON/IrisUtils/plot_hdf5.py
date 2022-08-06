@@ -80,6 +80,10 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         else:
             _, pilot_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
         ofdm_pilot_f = pilot_f
+    fft_shifted_dataset = True
+    if fft_size == 64 and ofdm_pilot_f[1] != 0:
+        fft_shifted_dataset = False
+        ofdm_pilot_f = np.fft.fftshift(ofdm_pilot_f)
     reciprocal_calib = np.array(metadata['RECIPROCAL_CALIB'])
     ofdm_len = fft_size + cp
     symbol_per_slot = (samps_per_slot - z_padding) // ofdm_len
@@ -333,7 +337,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             else:
                 noise_f = None
             tx_data = hdf5_lib.load_tx_data(metadata, hdf5.dirpath)
-            equalized_symbols, demod_symbols, tx_symbols, slot_evm, slot_evm_snr, slot_ser = hdf5_lib.demodulate(ul_samps[:, ul_slot_i, :, :], userCSI, tx_data[:, :, ul_slot_i, :, :], metadata, ue_frame_offset, offset, ul_slot_i, noise_f, demod)
+            equalized_symbols, demod_symbols, tx_symbols, slot_evm, slot_evm_snr, slot_ser = hdf5_lib.demodulate(ul_samps[:, ul_slot_i, :, :], userCSI, tx_data[:, :, ul_slot_i, :, :], metadata, ue_frame_offset, offset, ul_slot_i, noise_f, demod, fft_shifted_dataset)
             plot_constellation_stats(slot_evm, slot_evm_snr, slot_ser, equalized_symbols, tx_symbols, ref_frame, ul_slot_i)
 
     # Plot DL data symbols

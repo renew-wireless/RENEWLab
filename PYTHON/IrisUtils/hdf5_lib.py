@@ -935,7 +935,7 @@ class hdf5_lib:
         return txdata
 
     @staticmethod
-    def demodulate(ul_samps, csi, txdata, metadata, ue_frame_offset, offset, ul_slot_i, noise_samps_f=None, method='zf'):
+    def demodulate(ul_samps, csi, txdata, metadata, ue_frame_offset, offset, ul_slot_i, noise_samps_f=None, method='zf', fft_shifted_dataset = True):
         if method.lower() == 'mmse' and noise_samps_f is None:
             print("%s requires noise samples"%(method))
             return None
@@ -975,7 +975,10 @@ class hdf5_lib:
         # UL Syms: #Frames, #Antennas, #OFDM Symbols, #Samples
         for i in range(symbol_per_slot):
             ul_syms[:, :, i, :] = ul_samps[:, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len]
-        ul_syms_f = np.fft.fft(ul_syms, fft_size, 3)
+        if fft_shifted_dataset:
+            ul_syms_f = np.fft.fftshift(np.fft.fft(ul_syms, fft_size, 3), 3)
+        else:
+            ul_syms_f = np.fft.fft(ul_syms, fft_size, 3)
 
         ul_equal_syms = np.zeros((n_frames, n_users, symbol_per_slot * data_sc_len), dtype='complex64')
 

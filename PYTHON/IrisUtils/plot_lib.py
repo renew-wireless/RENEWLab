@@ -65,6 +65,7 @@ def plot_csi(csi, corr, bs_nodes, good_frames, frame_i, ant_i, subcarrier_i, off
     axes[2, 0].set_ylabel('Magnitude')
     for i in range(csi.shape[1]):
         axes[2, 0].plot(np.abs(csi[frame_i, i, ant_i, :]).flatten(), label="user %d" % i)
+    axes[0, 0].set_ylim(0, 1)
     axes[2, 0].set_xlabel('Subcarrier')
     axes[2, 0].legend(loc='lower right', frameon=False)
 
