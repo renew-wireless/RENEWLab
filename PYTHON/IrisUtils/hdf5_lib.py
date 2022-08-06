@@ -491,7 +491,7 @@ class hdf5_lib:
         print("finished log2csi")
 
     @staticmethod
-    def samps2csi_large(samps, num_users, chunk_size=1000, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, pilot_f=[], legacy=False):
+    def samps2csi_large(samps, num_users, chunk_size=1000, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, pilot_f=[], legacy=False, fft_shifted_dataset=True):
         """Wrapper function for samps2csi_main for to speed up large logs by leveraging data-locality. Chunk_size may need to be adjusted based on your computer."""
 
         print("starting samps2csi")
@@ -500,7 +500,7 @@ class hdf5_lib:
                     # rather than memmap let's just increase swap... should be just as fast.
                     #csi = np.memmap(os.path.join(_here,'temp1.mymemmap'), dtype='complex64', mode='w+', shape=(samps.shape[0], num_users, 2, samps.shape[1],52))
                     #iq = np.memmap(os.path.join(_here,'temp2.mymemmap'), dtype='complex64', mode='w+', shape=(samps.shape[0], num_users, 2, samps.shape[1],64))
-            chunk_num = samps.shape[0]//chunk_size
+            chunk_num = samps.shape[0] // chunk_size
             csi0, SNR0 = hdf5_lib.samps2csi(
                     samps[:chunk_size, :, :, :], num_users, samps_per_user, fft_size, offset, bound, cp, pilot_f, legacy, 0)
             csi = np.empty(
@@ -510,19 +510,19 @@ class hdf5_lib:
                 (samps.shape[0], csi0.shape[1], csi0.shape[2], csi0.shape[3]), dtype='complex64')
             for i in range(1, chunk_num):
                 csi[i*chunk_size:i*chunk_size+chunk_size], SNR[i*chunk_size:i*chunk_size+chunk_size] = hdf5_lib.samps2csi(
-                        samps[i*chunk_size:(i*chunk_size+chunk_size), :, :, :], num_users, samps_per_user, fft_size, offset, bound, cp, pilot_f, legacy, i)
+                        samps[i*chunk_size:(i*chunk_size+chunk_size), :, :, :], num_users, samps_per_user, fft_size, offset, bound, cp, pilot_f, legacy, i, fft_shifted_dataset)
             if samps.shape[0] > chunk_num*chunk_size:
                 csi[chunk_num*chunk_size:], SNR[chunk_num*chunk_size:] = hdf5_lib.samps2csi(
-                    samps[chunk_num*chunk_size:, :, :, :], num_users, samps_per_user, fft_size, offset, bound, cp, pilot_f, legacy, chunk_num)
+                    samps[chunk_num*chunk_size:, :, :, :], num_users, samps_per_user, fft_size, offset, bound, cp, pilot_f, legacy, chunk_num, fft_shifted_dataset)
         else:
             csi, SNR = hdf5_lib.samps2csi(
-                samps, num_users, samps_per_user, fft_size, offset, bound, cp, pilot_f, legacy)
+                samps, num_users, samps_per_user, fft_size, offset, bound, cp, pilot_f, legacy, fft_shifted_dataset=fft_shifted_dataset)
 
         print("samps2csi_large took %f seconds" % (time.time() - samps2csi_large_start))
         return csi, SNR
 
     @staticmethod
-    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, pilot_f=[], legacy=False, chunk_id=-1):
+    def samps2csi(samps, num_users, samps_per_user=224, fft_size=64, offset=0, bound=94, cp=0, pilot_f=[], legacy=False, chunk_id=-1, fft_shifted_dataset=True):
         """Convert an Argos HDF5 log file with raw IQ in to CSI.
         Asumes 802.11 style LTS used for trace collection.
     
@@ -626,7 +626,10 @@ class hdf5_lib:
             #start_i = int((fft_length - nonzero_sc_size) // 2)
             #stop_i = int(start_i + nonzero_sc_size)
             nonzero_sc = np.setdiff1d(range(fft_size), zero_sc)
-            iq_fft = np.fft.fftshift(np.fft.fft(iq, fft_size, 4), 4)
+            if fft_shifted_dataset:
+                iq_fft = np.fft.fftshift(np.fft.fft(iq, fft_size, 4), 4)
+            else:
+                iq_fft = np.fft.fft(iq, fft_size, 4)
             seq_freq_inv = 1 / pilot_f[nonzero_sc]
             csi = iq_fft[:, :, :, :, nonzero_sc] * seq_freq_inv
             if len(zero_sc) == 0:

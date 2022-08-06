@@ -81,9 +81,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             _, pilot_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
         ofdm_pilot_f = pilot_f
     fft_shifted_dataset = True
-    if fft_size == 64 and ofdm_pilot_f[1] != 0:
+    if ofdm_pilot_f[1] != 0:
         fft_shifted_dataset = False
-        ofdm_pilot_f = np.fft.fftshift(ofdm_pilot_f)
     reciprocal_calib = np.array(metadata['RECIPROCAL_CALIB'])
     ofdm_len = fft_size + cp
     symbol_per_slot = (samps_per_slot - z_padding) // ofdm_len
@@ -205,7 +204,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             # For correlation use a fft size of 64
             print("*verify_hdf5(): Calling samps2csi with fft_size = {}, offset = {}, bound = {}, cp = {} *".format(fft_size, offset, z_padding, cp))
             csi, _ = hdf5_lib.samps2csi_large(pilot_samples, num_pilots, chunk_size, samps_per_slot, fft_size=fft_size,
-                                            offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
+                                            offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f, fft_shifted_dataset=fft_shifted_dataset)
 
             if corr_thresh > 0.0:
                 bad_nodes = find_bad_nodes(csi, corr_thresh=corr_thresh,
@@ -225,7 +224,10 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             for i in insp_ants:
                 user_amps = np.mean(np.abs(samps[:, :, i, :]), axis=2)
                 plot_iq_samps(samps, user_amps, n_frm_st, ref_frame, [user_i], [i])
-            plot_csi(userCSI, corr_total, plot_bs_nodes, pilot_frames, ref_frame, ant_i, subcarrier_i, offset)
+            csi_to_plot = userCSI
+            if not fft_shifted_dataset:
+                csi_to_plot = np.fft.fftshift(userCSI, 3)
+            plot_csi(csi_to_plot, corr_total, plot_bs_nodes, pilot_frames, ref_frame, ant_i, subcarrier_i, offset)
             if analyze:
                 if noise_avail:
                     noise_samples = hdf5.noise_samples[:, cell_i, :, :, :]
@@ -265,16 +267,16 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 print("frames [%d, %d] "%(c_start, c_stop))
                 cal_samps = calib_pilot_samps[c_start:c_stop] 
                 csi_u, _ = hdf5_lib.samps2csi_large(cal_samps[:, 1:2, :, :], 1, chunk_size, samps_per_slot, fft_size=fft_size,
-                                              offset=up_calib_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
+                                              offset=up_calib_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f, fft_shifted_dataset=fft_shifted_dataset)
                 csi_u_one_sym = csi_u[:, 0, ofdm_sym_i, :, :]
                 csi_d, _ = hdf5_lib.samps2csi_large(cal_samps[:, 0:1, :, :], 1, chunk_size, samps_per_slot, fft_size=fft_size,
-                                              offset=dn_calib_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
+                                              offset=dn_calib_offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f, fft_shifted_dataset=fft_shifted_dataset)
                 csi_d_one_sym = csi_d[:, 0, ofdm_sym_i, :, :]
                 calib_mat[c_start:c_stop] = np.divide(csi_d_one_sym, csi_u_one_sym)
             plot_calib(calib_mat, calib_plot_bs_nodes, ref_frame, ant_i, subcarrier_i)
             if num_ues > 2: # actual clients are present
                 csi, _ = hdf5_lib.samps2csi_large(calib_pilot_samps[:, 2:, :, :], num_cl, chunk_size, samps_per_slot, fft_size=fft_size,
-                                                offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f)
+                                                offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f, fft_shifted_dataset=fft_shifted_dataset)
                 uplink_csi = csi[:, :, ofdm_sym_i, :, :]
                 corr_total, sig_sc = calCorr(uplink_csi, np.transpose(np.conj(uplink_csi[ref_frame, :, :, :]), (1, 0, 2) ) )
                 plot_csi(uplink_csi, corr_total, calib_plot_bs_nodes, pilot_frames, ref_frame, ant_i, subcarrier_i, offset)
