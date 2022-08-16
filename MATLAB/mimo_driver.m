@@ -208,6 +208,7 @@ classdef mimo_driver < handle
                 nsamples = double(py.numpy.int_(data_py.data.shape(4)));
                 data = zeros(numGoodFrames, nue, nrecvSyms, nsamples);
 
+                sprintf("GoodFrames: %d, nue: %d, nrecvSyms: %d, nsamples: %d \n",numGoodFrames,nue,nrecvSyms,nsamples)
                 P1 = cellfun(@cell, cell(data_py.tolist), 'Uniform',false);
                 %P1 = vertcat(P1{:});
                 for igf = 1:numGoodFrames
@@ -215,7 +216,7 @@ classdef mimo_driver < handle
                         for ifr = 1:nrecvSyms
                             data(igf, iue, ifr, :) = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(P1{igf}{iue}{ifr}) ) ) ) + ...
                                                   1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(P1{igf}{iue}{ifr}) ) ) );
-                            %figure(100); plot(abs(squeeze(data(igf, iue, ifr, :)))); hold on;
+                            %figure(100+igf); plot(abs(squeeze(data(igf, iue, ifr, :))));
                         end
                     end
                 end

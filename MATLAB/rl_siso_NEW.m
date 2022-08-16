@@ -52,15 +52,15 @@ SIM_MODE                = 0;            % Enable for AWGN sim, disable to run ha
 %Iris params:
 N_BS_NODE               = 1;
 N_UE                    = 1;
-TX_FRQ                  = 3.548e9;
+TX_FRQ                  = 3.6e9;
 RX_FRQ                  = TX_FRQ;
 ANT_BS                  = 'A';          % SISO: only one antenna supported
 ANT_UE                  = 'A';          % SISO: only one antenna supported
 TX_GN                   = 81;
-RX_GN                   = 70;
+RX_GN                   = 65;
 SMPL_RT                 = 5e6;
 TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
-N_FRM                   = 3;
+N_FRM                   = 1;
           
 bs_ids = string.empty();
 bs_sched = string.empty();
@@ -166,14 +166,15 @@ else
 
     % Create two Iris node objects:
     tx_direction = 'hub_sync';      % Options: {'uplink', 'downlink', 'hub_sync'}
-    bs_ids = ["RF3E000708"];
-    ue_ids = ["RF3E000706"];
+    bs_ids = ["RF3E000208"];
+    ue_ids = ["RF3E000089"];
     hub_id = ["FH4B000019"];
 
     % Iris nodes' parameters
     sdr_params = struct(...
         'bs_id', bs_ids, ...
         'ue_id', ue_ids,...
+        'hub_id', hub_id,...
         'bs_ant', ANT_BS, ...
         'ue_ant', ANT_UE, ...
         'txfreq', TX_FRQ, ...
@@ -198,17 +199,16 @@ else
     if strcmp(tx_direction, 'uplink')
         [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
 
-    else if strcmp(tx_direction, 'downlink')
+    elseif strcmp(tx_direction, 'downlink')
         [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_downlink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
 
-    else if strcmp(tx_direction, 'hub_sync')
+    elseif strcmp(tx_direction, 'hub_sync')
         if isempty(hub_id)
             error('Hub ID must be specified in hub_sync transmission mode. Exit Now!');
         end
         bs_sched = ["GGGGGRG"];
         ue_sched = ["GGGGGPG"];
         [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_refnode(tx_vec_iris, N_FRM, bs_sched, ue_sched, N_ZPAD_PRE);
-
     else
         error('TX Method Not Supported. Exit Now!');
     end
