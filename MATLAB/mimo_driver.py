@@ -420,6 +420,40 @@ class MIMODriver:
         return rx_data, good_frame_id, numRxSyms
 
 
+    def txrx_refnode(self, tx_data_mat_re, tx_data_mat_im, num_frames, bs_sched, ue_sched, nsamps_pad=160, max_try=20):
+        print("[PYTHON DRIVER] TX RX REF NODE SYNC: VIA HUB...")
+        tx_data_mat = tx_data_mat_re + 1j * tx_data_mat_im
+        n_samps = tx_data_mat.shape[0]
+
+        n_users = 1
+        numRxSyms = bs_sched.count('R')
+
+        ### Write TDD Schedule ###
+        [bs.config_sdr_tdd(tdd_sched=str(bs_sched), nsamps=n_samps, prefix_len=nsamps_pad) for i, bs in enumerate(self.bs_obj)]
+        [ue.config_sdr_tdd(is_bs=True, tdd_sched=str(ue_sched), nsamps=n_samps) for i, ue in enumerate(self.ue_obj)]   # ref node is considered BS node
+
+        for i, ue in enumerate(self.ue_obj):
+            ue.burn_data_complex(tx_data_mat[:, i] if self.n_users > 1 else tx_data_mat)    # for matlab
+            #ue.burn_data_complex(tx_data_mat[:, i])   # for python
+
+        [bs.activate_stream_rx() for bs in self.bs_obj]
+        #[ue.set_corr() for ue in self.ue_obj]
+
+        rx_data = np.empty((num_frames, self.n_bs_antenna, numRxSyms, n_samps), dtype=np.complex64)
+
+        for frame in range(num_frames):
+            self.bs_trigger()
+            # Receive Data
+            rx_data_frame = [bs.recv_stream_tdd() for bs in self.bs_obj]  # Returns dimensions (num bs nodes, num channels, num samples)
+
+            rx_data[frame, :, :, :] = np.reshape(np.array(rx_data_frame[0][0]), (self.n_bs_antenna, numRxSyms, n_samps))
+
+        good_frame_id = num_frames   # dummy
+
+        self.reset_frame()
+        return rx_data, good_frame_id, numRxSyms
+
+
     def set_opt_gains(self, num_frames):
         print("Testing gain combinations to find best settings...")
         n_samps = 4096

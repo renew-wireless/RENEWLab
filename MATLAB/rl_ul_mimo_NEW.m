@@ -41,7 +41,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 WRITE_PNG_FILES         = 0;                % Enable writing plots to PNG
 SIM_MODE                = 0;
-DEBUG                   = 0;
+DEBUG                   = 1;
 PLOT                    = 0;
 
 if SIM_MODE
@@ -57,12 +57,12 @@ else
     %Iris params:
     TX_SCALE                = 0.8;          % Scale for Tx waveform ([0:1])
     USE_HUB                 = 1;
-    TX_FRQ                  = 3.548e9;
+    TX_FRQ                  = 3.6e9;
     RX_FRQ                  = TX_FRQ;
     ANT_BS                  = 'AB';         % Options: {A, AB}. To use both antennas per board, set to 'AB'
     ANT_UE                  = 'A';         % Only tested with single-antenna UE (i.e., 'A')
-    TX_GN                   = 80;
-    RX_GN                   = 65;
+    TX_GN                   = 75;
+    RX_GN                   = 60;
     SMPL_RT                 = 5e6;
     N_FRM                   = 3;
     bs_ids                  = string.empty();
@@ -73,13 +73,15 @@ else
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
-        bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
+        %bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
+        bs_ids = ["RF3E000346","RF3E000543","RF3E000594","RF3E000404"];%,"RF3E000616","RF3E000622","RF3E000601","RF3E000602"];
         hub_id = ["FH4B000003"];
     else
         bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         hub_id = [];
     end
-    ue_ids= ["RF3E000353", "RF3E000706"];
+    %ue_ids= ["RF3E000353", "RF3E000706"];
+    ue_ids= ["RF3D000016", "RF3E000392"]; %  
 
     N_BS_NODE               = length(bs_ids);           % Number of nodes/antennas at the BS
     N_BS_ANT                = length(bs_ids) * length(ANT_BS);  % Number of antennas at the BS
@@ -92,7 +94,7 @@ end
 MIMO_ALG                = 'ZF';      % MIMO ALGORITHM: ZF or Conjugate 
 
 % Waveform params
-N_OFDM_SYM              = 44;         % Number of OFDM symbols for burst, it needs to be less than 47
+N_OFDM_SYM              = 20;         % Number of OFDM symbols for burst, it needs to be less than 47
 MOD_ORDER               = 16;          % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
 
 % OFDM params
@@ -106,7 +108,7 @@ N_DATA_SYMS             = N_OFDM_SYM * length(SC_IND_DATA);       % Number of da
 N_LTS_SYM               = 2;                                      % Number of 
 N_SYM_SAMP              = N_SC + CP_LEN;                          % Number of samples that will go over the air
 N_ZPAD_PRE              = 100;                                     % Zero-padding prefix for Iris
-N_ZPAD_POST             = N_ZPAD_PRE - 14;                         % Zero-padding postfix for Iris
+N_MAX_SAMPS             = 4096;
 
 % Rx processing params
 FFT_OFFSET                    = 16;          % Number of CP samples to use in FFT (on average)
@@ -163,6 +165,7 @@ end
 tx_payload_vec = reshape(tx_payload_mat, ceil(numel(tx_payload_mat)/N_UE), N_UE);
 
 % Construct the full time-domain OFDM waveform
+N_ZPAD_POST = N_MAX_SAMPS - N_ZPAD_PRE - length(preamble) - length(tx_payload_vec);  % Zero-padding postfix for Iris
 tx_vec = [zeros(N_ZPAD_PRE, N_UE); preamble; tx_payload_vec; zeros(N_ZPAD_POST, N_UE)];
 
 % Leftover from zero padding:
@@ -215,6 +218,7 @@ else
     sdr_params = struct(...
         'bs_id', bs_ids, ...
         'ue_id', ue_ids,...
+        'hub_id', hub_id,...
         'bs_ant', ANT_BS, ...
         'ue_ant', ANT_UE, ...
         'txfreq', TX_FRQ, ...
@@ -242,7 +246,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % If multiple frames were sent, select one that is likely to work...
 N_BS_NODE = N_BS_ANT;    % We actually need # of BS ANT not NODES
-for iframe = 1:numGoodFrames
+for iframe = 1:1%numGoodFrames
     fprintf(' =============================== \n');
     fprintf('Frame #%d Out of %d Triggered Frames \n', iframe, numGoodFrames);
     % Data shape: (# good frames, # BS antenna, # number samps, # numRxSyms)  SWAPPED last two
@@ -256,15 +260,17 @@ for iframe = 1:numGoodFrames
     preamble_pk = nan(N_BS_NODE, N_UE);
     payload_rx = zeros(N_BS_NODE, data_len);
     badrx = zeros(1, N_BS_NODE);
+    lts_corr_all = zeros(N_BS_NODE, N_MAX_SAMPS);
 
     % Break into the number of R symbols in the BS schedule
     for ibs = 1:N_BS_NODE
         for isym = 1: N_UE
             currSym = squeeze(rx_vec_iris_tmp(ibs, :, isym));
             lts_corr = abs(conv(conj(fliplr(lts_t.')), sign(currSym.')));
+            lts_corr_all(ibs, 1:length(lts_corr)) = lts_corr;
 
             if DEBUG
-                figure; plot(lts_corr);
+                figure(1000+ibs); plot(lts_corr);
             end
             lts_peaks = find(lts_corr > 0.8*max(lts_corr));
             [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
@@ -280,7 +286,7 @@ for iframe = 1:numGoodFrames
                 end
 
                 % Check if valid...
-                pk_tmp = preamble_pk(ibs,isym);
+                pk_tmp = preamble_pk(ibs,isym)
                 if ((pk_tmp + data_len) > n_samp || (pk_tmp - (isym * l_pre)) < 0)
                     fprintf('INVALID correlation peak at antenna %d sched sym idx: %d \n', ibs, isym);
                     preamble_pk(ibs,isym) = nan;
@@ -431,14 +437,14 @@ for iframe = 1:numGoodFrames
         figure(cf); clf;
         for sp = 1:N_BS_NODE
             subplot(N_BS_NODE,2,2*(sp -1) + 1 );
-            plot(real(rx_vec_iris(sp,:)));
-            axis([0 length(rx_vec_iris(sp,:)) -TX_SCALE TX_SCALE])
+            plot(real(rx_vec_iris_tmp(sp,:)));
+            axis([0 length(rx_vec_iris_tmp(sp,:)) -TX_SCALE TX_SCALE])
             grid on;
             title(sprintf('BS antenna %d Rx Waveform (I)', sp));
 
             subplot(N_BS_NODE,2,2*sp);
-            plot(imag(rx_vec_iris(sp,:)), 'color' , sec_clr);
-            axis([0 length(rx_vec_iris(sp,:)) -TX_SCALE TX_SCALE]);
+            plot(imag(rx_vec_iris_tmp(sp,:)), 'color' , sec_clr);
+            axis([0 length(rx_vec_iris_tmp(sp,:)) -TX_SCALE TX_SCALE]);
             grid on;
             title(sprintf('BS antenna %d Rx Waveform (Q)', sp));
         end
@@ -449,14 +455,14 @@ for iframe = 1:numGoodFrames
         figure(cf); clf;
         for sp=1:N_UE
             subplot(N_UE,2,2*(sp -1) + 1);
-            plot(real(tx_vecs_iris(:,sp)));
-            axis([0 length(tx_vecs_iris(:,sp)) -TX_SCALE TX_SCALE])
+            plot(real(tx_vec_iris(:,sp)));
+            axis([0 length(tx_vec_iris(:,sp)) -TX_SCALE TX_SCALE])
             grid on;
             title(sprintf('UE %d Tx Waveform (I)', sp));
 
             subplot(N_UE,2,2*sp);
-            plot(imag(tx_vecs_iris(:,sp)), 'color' , sec_clr);
-            axis([0 length(tx_vecs_iris(:,sp)) -TX_SCALE TX_SCALE])
+            plot(imag(tx_vec_iris(:,sp)), 'color' , sec_clr);
+            axis([0 length(tx_vec_iris(:,sp)) -TX_SCALE TX_SCALE])
             grid on;
             title(sprintf('UE %d Tx Waveform (Q)',sp));
         end
@@ -466,7 +472,7 @@ for iframe = 1:numGoodFrames
         figure(cf); clf;
         for sp = 1:N_BS_NODE
             subplot(N_BS_NODE,1,sp);
-            plot(lts_corr(sp,:))
+            plot(lts_corr_all(sp,:))
             grid on;
             xlabel('Samples');
             y_label = sprintf('Anetnna %d',sp);

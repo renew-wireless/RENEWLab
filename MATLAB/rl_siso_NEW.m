@@ -13,7 +13,11 @@
 % In SIM_MOD, the script explores Bit Error Rate (BER) as a function of
 % Signal-to-Noise Ratio (SNR).
 % In the OTA mode we utilize the Skylark Iris hardware for transmission and reception.
-% The script supports both uplink and downlink transmissions.
+% Within the OTA mode we further define three transmission modes:
+%  a) uplink
+%  b) downlink 
+%  c) hub_sync : both base station board and UE are triggered from the hub instead
+%     of using over-the-air beacons
 %
 % In both cases the client transmits an OFDM signal that resembles a
 % typical 802.11 WLAN waveform.
@@ -161,9 +165,10 @@ else
     disp("Running: HARDWARE MODE");
 
     % Create two Iris node objects:
-    tx_direction = 'downlink';    % Options: {'uplink', 'downlink'}
+    tx_direction = 'hub_sync';      % Options: {'uplink', 'downlink', 'hub_sync'}
     bs_ids = ["RF3E000708"];
     ue_ids = ["RF3E000706"];
+    hub_id = ["FH4B000019"];
 
     % Iris nodes' parameters
     sdr_params = struct(...
@@ -192,8 +197,20 @@ else
 
     if strcmp(tx_direction, 'uplink')
         [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
-    else
+
+    else if strcmp(tx_direction, 'downlink')
         [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_downlink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
+
+    else if strcmp(tx_direction, 'hub_sync')
+        if isempty(hub_id)
+            error('Hub ID must be specified in hub_sync transmission mode. Exit Now!');
+        end
+        bs_sched = ["GGGGGRG"];
+        ue_sched = ["GGGGGPG"];
+        [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_refnode(tx_vec_iris, N_FRM, bs_sched, ue_sched, N_ZPAD_PRE);
+
+    else
+        error('TX Method Not Supported. Exit Now!');
     end
 
     mimo_handle.mimo_close();
@@ -470,7 +487,7 @@ for frm_idx = 1:numGoodFrames
     rx_evm   = sqrt(sum((real(rx_syms) - real(tx_syms)).^2 + (imag(rx_syms) - imag(tx_syms)).^2)/(length(SC_IND_DATA) * N_OFDM_SYM));
 
     fprintf('\n Frame %d Results:\n', frm_idx);
-    fprintf('Mode: %s \n', tx_direction);
+    fprintf('Transmission Mode: %s \n', tx_direction);
     fprintf('Num Bytes:   %d\n', N_DATA_SYMS * log2(MOD_ORDER) / 8);
     fprintf('Sym Errors:  %d (of %d total symbols)\n', sym_errs, N_DATA_SYMS);
     fprintf('Bit Errors:  %d (of %d total bits)\n', bit_errs, N_DATA_SYMS * log2(MOD_ORDER));

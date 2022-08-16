@@ -186,6 +186,45 @@ classdef mimo_driver < handle
         end
 
 
+        function [data, numGoodFrames, numRxSyms] = mimo_txrx_refnode(obj, tx_data_mat, n_frames, bs_sched, ue_sched, n_samps_pad)
+            disp("[MATLAB DRIVER] TX RX REF NODE: SYNC VIA HUB...")
+            results = obj.mimo_obj.txrx_refnode(py.numpy.array(real(tx_data_mat)), py.numpy.array(imag(tx_data_mat)), py.int(n_frames), bs_sched, ue_sched, py.int(n_samps_pad));
+
+            result_cell = cell(results);
+            data_py = result_cell{1,1};
+
+            if result_cell{1, 2} == 0
+                data = [];
+                numGoodFrames = 0;
+                numRxSyms = 0;
+                disp('*** Unsucessful downlink receive. Try different gain settings! *** ');
+
+            else
+                % Data shape: (# good frames, # UE, # numRxSyms, # number samps)
+                %ngoodframes = double(py.numpy.int_(data_py.data.shape(1)))
+                numGoodFrames = double(py.numpy.int_(results(2)));
+                nue = double(py.numpy.int_(data_py.data.shape(2)));
+                nrecvSyms = double(py.numpy.int_(data_py.data.shape(3)));
+                nsamples = double(py.numpy.int_(data_py.data.shape(4)));
+                data = zeros(numGoodFrames, nue, nrecvSyms, nsamples);
+
+                P1 = cellfun(@cell, cell(data_py.tolist), 'Uniform',false);
+                %P1 = vertcat(P1{:});
+                for igf = 1:numGoodFrames
+                    for iue = 1:nue
+                        for ifr = 1:nrecvSyms
+                            data(igf, iue, ifr, :) = double( py.array.array( 'd',py.numpy.nditer( py.numpy.real(P1{igf}{iue}{ifr}) ) ) ) + ...
+                                                  1i*double( py.array.array( 'd',py.numpy.nditer( py.numpy.imag(P1{igf}{iue}{ifr}) ) ) );
+                            %figure(100); plot(abs(squeeze(data(igf, iue, ifr, :)))); hold on;
+                        end
+                    end
+                end
+
+            end
+            numRxSyms = double(py.numpy.int_(results(3)));
+        end
+
+
         %function data = mimo_txrx_downlink(obj, tx_data_mat, n_frames, n_samps_pad)
         %    results = obj.mimo_obj.txrx_downlink(py.numpy.array(real(tx_data_mat)), py.numpy.array(imag(tx_data_mat)), py.int(n_frames), py.int(n_samps_pad));
         %    data = [];
