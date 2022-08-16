@@ -75,7 +75,7 @@ void DataGenerator::GenerateData(const std::string& directory) {
                 ofdm_sym[sc] = cfg_->pilot_sc().at(c);
               }
               auto tx_sym = CommsLib::IFFT(ofdm_sym, cfg_->fft_size(),
-                                           1.f / cfg_->fft_size(), false);
+                                           1.f / cfg_->fft_size(), false, true);
               tx_sym.insert(tx_sym.begin(), tx_sym.end() - cfg_->cp_size(),
                             tx_sym.end());  // add CP
               data_time_dom.insert(data_time_dom.end(), tx_sym.begin(),
@@ -166,7 +166,7 @@ void DataGenerator::GenerateData(const std::string& directory) {
                 ofdm_sym[sc] = cfg_->pilot_sc().at(c);
               }
               auto tx_sym = CommsLib::IFFT(ofdm_sym, cfg_->fft_size(),
-                                           1.f / cfg_->fft_size(), false);
+                                           1.f / cfg_->fft_size(), false, true);
               tx_sym.insert(tx_sym.begin(), tx_sym.end() - cfg_->cp_size(),
                             tx_sym.end());  // add CP
               data_time_dom.insert(data_time_dom.end(), tx_sym.begin(),

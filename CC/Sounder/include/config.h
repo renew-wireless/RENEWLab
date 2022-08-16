@@ -327,7 +327,7 @@ class Config {
   std::vector<uint32_t> beacon_;
   std::vector<std::complex<int16_t>> beacon_ci16_;
   std::vector<std::complex<int16_t>> neg_beacon_ci16_;
-  int beacon_size_;
+  size_t beacon_size_;
   size_t beacon_ant_;
   size_t beacon_radio_;
   size_t beacon_ch_;

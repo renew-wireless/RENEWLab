@@ -1021,13 +1021,15 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
         resync_retry_cnt = 0;
         resync_success++;
         MLPD_INFO(
-            "Re-syncing success at frame %zu with offset: %d, after %zu tries, index: %ld, tid %d\n",
+            "Re-syncing success at frame %zu with offset: %d, after %zu tries, "
+            "index: %ld, tid %d\n",
             frame_id, new_rx_offset, resync_retry_cnt + 1, sync_index, tid);
 
         if (kEnableCfo && (sync_index >= 0)) {
           const auto cfo_phase_est =
               estimateCFO(samplemem.at(kSyncDetectChannel), sync_index);
-          MLPD_INFO("Client %d Estimated CFO (Hz): %f\n",tid, cfo_phase_est * config_->rate());
+          MLPD_INFO("Client %d Estimated CFO (Hz): %f\n", tid,
+                    cfo_phase_est * config_->rate());
         }
 
         //Offset Alignment logic
@@ -1193,7 +1195,7 @@ void Receiver::clientAdjustRx(size_t radio_id, size_t discard_samples) {
       if (new_samples <= discard_samples) {
         discard_samples -= new_samples;
         MLPD_TRACE("clientAdjustRx [%zu]: Discarded Samples (%zu/%zu)\n",
-                  radio_id, new_samples, discard_samples);
+                   radio_id, new_samples, discard_samples);
       } else {
         MLPD_ERROR(
             "clientAdjustRx [%zu]: BAD radioRx more samples then requested "

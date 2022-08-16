@@ -71,10 +71,10 @@ class CommsLib {
       size_t fftSize, size_t DataScNum,
       size_t PilotScOffset = kDefaultPilotScOffset);
   static std::vector<std::complex<float>> FFT(
-      const std::vector<std::complex<float>>&, int);
+      const std::vector<std::complex<float>>&, int, bool fft_shift = false);
   static std::vector<std::complex<float>> IFFT(
       const std::vector<std::complex<float>>&, int, float scale = 0.5,
-      bool normalize = true);
+      bool normalize = true, bool fft_shift = false);
 
   static int findLTS(const std::vector<std::complex<float>>& iq, int seqLen);
   static size_t find_pilot_seq(const std::vector<std::complex<float>>& iq,

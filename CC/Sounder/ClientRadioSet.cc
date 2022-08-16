@@ -171,13 +171,13 @@ ClientRadioSet::ClientRadioSet(Config* cfg) : _cfg(cfg) {
         std::string tddSched = _cfg->cl_frames().at(i);
         for (size_t s = 0; s < _cfg->cl_frames().at(i).size(); s++) {
           char c = _cfg->cl_frames().at(i).at(s);
-          if (c == 'U') { // uplink data
+          if (c == 'U') {  // uplink data
             tddSched.replace(s, 1, "T");
-          } else if (c == 'P') { // user pilot data
-            tddSched.replace(s, 1, "P"); 
-          } else if (c == 'D') { // downlink data
+          } else if (c == 'P') {  // user pilot data
+            tddSched.replace(s, 1, "P");
+          } else if (c == 'D') {  // downlink data
             tddSched.replace(s, 1, "R");
-          } else if (c == 'N') { // noise data
+          } else if (c == 'N') {  // noise data
             tddSched.replace(s, 1, "G");
           } else {
             tddSched.replace(s, 1, "G");
