@@ -32,7 +32,8 @@ void RadioUHD::dev_init_set_freq(Config* _cfg, unsigned int total_channels) {
     dev_->set_tx_freq(tune_request, ch);
   }
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(550)); //sleep 110ms (~10ms after retune occurs) to allow LO to lock
+  std::this_thread::sleep_for(std::chrono::milliseconds(
+      550));  //sleep 110ms (~10ms after retune occurs) to allow LO to lock
 
   dev_->clear_command_time();
 }
