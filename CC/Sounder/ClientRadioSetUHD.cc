@@ -153,6 +153,9 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
           i);  // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
       double txgain = _cfg->cl_txgain_vec().at(ch).at(
           i);  // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
+
+      auto total_rx_channel = 2;
+      radio_->dev_init_set_freq(_cfg, total_rx_channel);
       radio_->dev_init(_cfg, ch, rxgain, txgain);
     }
   }
