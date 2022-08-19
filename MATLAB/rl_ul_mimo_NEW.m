@@ -41,7 +41,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 WRITE_PNG_FILES         = 0;                % Enable writing plots to PNG
 SIM_MODE                = 0;
-DEBUG                   = 1;
+DEBUG                   = 0;
 PLOT                    = 0;
 
 if SIM_MODE
@@ -57,14 +57,15 @@ else
     %Iris params:
     TX_SCALE                = 0.8;          % Scale for Tx waveform ([0:1])
     USE_HUB                 = 1;
-    TX_FRQ                  = 3.6e9;
+    TX_FRQ                  = 3.55e9;
     RX_FRQ                  = TX_FRQ;
     ANT_BS                  = 'AB';         % Options: {A, AB}. To use both antennas per board, set to 'AB'
     ANT_UE                  = 'A';         % Only tested with single-antenna UE (i.e., 'A')
     TX_GN                   = 75;
-    RX_GN                   = 60;
+    TX_GN_UE                = [81, 81];
+    RX_GN                   = 65;
     SMPL_RT                 = 5e6;
-    N_FRM                   = 3;
+    N_FRM                   = 5;
     bs_ids                  = string.empty();
     ue_ids                  = string.empty();
     ue_scheds               = string.empty();
@@ -74,14 +75,14 @@ else
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
         %bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
-        bs_ids = ["RF3E000346","RF3E000543","RF3E000594","RF3E000404"];%,"RF3E000616","RF3E000622","RF3E000601","RF3E000602"];
-        hub_id = ["FH4B000003"];
+        bs_ids = [,"RF3E000543","RF3E000594","RF3E000404","RF3E000616"];%,"RF3E000622","RF3E000601","RF3E000602"];
+        hub_id = ["FH4B000019"];
     else
         bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         hub_id = [];
     end
     %ue_ids= ["RF3E000353", "RF3E000706"];
-    ue_ids= ["RF3D000016", "RF3E000392"]; %  
+    ue_ids= ["RF3E000392", "RF3E000058"];
 
     N_BS_NODE               = length(bs_ids);           % Number of nodes/antennas at the BS
     N_BS_ANT                = length(bs_ids) * length(ANT_BS);  % Number of antennas at the BS
@@ -224,6 +225,7 @@ else
         'txfreq', TX_FRQ, ...
         'rxfreq', RX_FRQ, ...
         'txgain', TX_GN, ...
+        'tx_gain_ue', TX_GN_UE, ...
         'rxgain', RX_GN, ...
         'sample_rate', SMPL_RT);
 
@@ -246,7 +248,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % If multiple frames were sent, select one that is likely to work...
 N_BS_NODE = N_BS_ANT;    % We actually need # of BS ANT not NODES
-for iframe = 1:1%numGoodFrames
+for iframe = 1:numGoodFrames
     fprintf(' =============================== \n');
     fprintf('Frame #%d Out of %d Triggered Frames \n', iframe, numGoodFrames);
     % Data shape: (# good frames, # BS antenna, # number samps, # numRxSyms)  SWAPPED last two
@@ -263,14 +265,16 @@ for iframe = 1:1%numGoodFrames
     lts_corr_all = zeros(N_BS_NODE, N_MAX_SAMPS);
 
     % Break into the number of R symbols in the BS schedule
+    cnt = 0;
     for ibs = 1:N_BS_NODE
         for isym = 1: N_UE
+            cnt = cnt + 1;
             currSym = squeeze(rx_vec_iris_tmp(ibs, :, isym));
             lts_corr = abs(conv(conj(fliplr(lts_t.')), sign(currSym.')));
             lts_corr_all(ibs, 1:length(lts_corr)) = lts_corr;
 
             if DEBUG
-                figure(1000+ibs); plot(lts_corr);
+                figure(1000+cnt); plot(lts_corr);
             end
             lts_peaks = find(lts_corr > 0.8*max(lts_corr));
             [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
@@ -286,7 +290,7 @@ for iframe = 1:1%numGoodFrames
                 end
 
                 % Check if valid...
-                pk_tmp = preamble_pk(ibs,isym)
+                pk_tmp = preamble_pk(ibs,isym);
                 if ((pk_tmp + data_len) > n_samp || (pk_tmp - (isym * l_pre)) < 0)
                     fprintf('INVALID correlation peak at antenna %d sched sym idx: %d \n', ibs, isym);
                     preamble_pk(ibs,isym) = nan;
@@ -613,4 +617,8 @@ for iframe = 1:1%numGoodFrames
     fprintf("\n");
     fprintf("Condition Number: %f  \n", avgCond);
     fprintf(' =============================== \n');
+
+    figure;
+    subplot(1,2,1); plot(abs(squeeze(rx_vec_iris_tmp(1,:,1))), '-b'); hold on; plot(abs(squeeze(rx_vec_iris_tmp(1,:,2))), '--r');
+    subplot(1,2,2); plot(abs(squeeze(rx_vec_iris_tmp(1,:,3))), '-b');
 end

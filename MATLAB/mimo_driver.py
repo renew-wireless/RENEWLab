@@ -14,7 +14,7 @@ from scipy.io import savemat
 
 class MIMODriver:
     def __init__(self, hub_serial, bs_serials, ue_serials, rate,
-            tx_freq, rx_freq, tx_gain, rx_gain, bs_channels='A', ue_channels='A', beamsweep=False):
+            tx_freq, rx_freq, tx_gain, tx_gain_ue, rx_gain, bs_channels='A', ue_channels='A', beamsweep=False):
         # Init Radios
         #bs_serials_str = ""
         #for c in bs_serials:
@@ -24,11 +24,12 @@ class MIMODriver:
         #    ue_serials_str += c
         #bs_serials_list = bs_serials.split(",")
         #ue_serials_list = ue_serials.split(",")
+
         print("HUB: {}".format(hub_serial))
         print("BS NODES: {}".format(bs_serials))
         print("UE NODES: {}".format(ue_serials))
         self.bs_obj = [Iris_py(sdr, tx_freq, rx_freq, tx_gain, rx_gain, None, rate, None, bs_channels) for sdr in bs_serials]
-        self.ue_obj = [Iris_py(sdr, tx_freq, rx_freq, tx_gain, rx_gain, None, rate, None, ue_channels) for sdr in ue_serials]
+        self.ue_obj = [Iris_py(sdr, tx_freq, rx_freq, tx_gain_ue[i], rx_gain, None, rate, None, ue_channels) for i, sdr in enumerate(ue_serials)]
         self.hub = None
         if len(hub_serial) != 0:
             self.hub = Hub_py(hub_serial)
@@ -72,7 +73,7 @@ class MIMODriver:
         [ue.close() for ue in self.ue_obj]
         [bs.close() for bs in self.bs_obj]
 
-    def txrx_uplink(self, tx_data_mat_re, tx_data_mat_im, num_frames, nsamps_pad=160, max_try=20):
+    def txrx_uplink(self, tx_data_mat_re, tx_data_mat_im, num_frames, nsamps_pad=160, max_try=50):
         tx_data_mat = tx_data_mat_re + 1j * tx_data_mat_im
         n_samps = tx_data_mat.shape[0]
 
@@ -115,7 +116,7 @@ class MIMODriver:
 
         ### Write TDD Schedule ###
         [bs.config_sdr_tdd(tdd_sched=str(bs_sched_b) if i == 0 else str(bs_sched), nsamps=n_samps, prefix_len=nsamps_pad) for i, bs in enumerate(self.bs_obj)]
-        [ue.config_sdr_tdd(is_bs=False, tdd_sched=str(ue_sched[i]), nsamps=n_samps) for i, ue in enumerate(self.ue_obj)]
+        [ue.config_sdr_tdd(is_bs=False, tdd_sched=str(ue_sched[i]), nsamps=n_samps, prefix_len=nsamps_pad) for i, ue in enumerate(self.ue_obj)]
 
         for i, ue in enumerate(self.ue_obj):
             ue.burn_data_complex(tx_data_mat[:, i] if self.n_users > 1 else tx_data_mat)    # for matlab
@@ -144,9 +145,26 @@ class MIMODriver:
             for i in range(max_try):
                 self.bs_trigger()
                 # Receive Data
-                rx_data_frame = [bs.recv_stream_tdd() for bs in self.bs_obj]  # Returns dimensions (num bs nodes, num channels, num samples)
-                amp = np.mean(np.abs(rx_data_frame[0][0]))
-                good_signal = amp > 0.001
+                rx_data_frame_tmp = [bs.recv_stream_tdd() for bs in self.bs_obj]  # Returns dimensions (num bs nodes, num channels, num samples)
+                rx_data_frame = np.array(rx_data_frame_tmp)
+                rx_data_frame = rx_data_frame[:,0:2]
+
+                # Verify Data
+                low_signal_a = False
+                low_signal_b = False
+                good_signal = True
+                for iBsBoards in range(self.n_bs_sdrs):
+                    low_signal_a = rx_data_frame_tmp[iBsBoards][2]
+                    low_signal_b = rx_data_frame_tmp[iBsBoards][3]
+                    if low_signal_a is True and low_signal_b is True:
+                        print("Bad Signal At BS Board {}".format(iBsBoards))
+                        good_signal = False
+                        break
+
+                #amp = np.mean(np.abs(rx_data_frame[0][0]))
+                #amp = np.max(np.abs(rx_data_frame[0][0]))
+                #good_signal = amp > 0.01
+                
                 triggers = [ue.sdr_gettriggers() for ue in self.ue_obj]
                 new_triggers = []
                 zip_triggers = zip(triggers, old_triggers)
@@ -171,7 +189,7 @@ class MIMODriver:
                     for j in range(self.n_bs_sdrs):
                         for k in range(self.n_bs_chan):
                             # Dimensions of rx_data: (num_good_frames, self.n_bs_antenna, numRxSyms, n_samps)
-                            tmp = rx_data_frame_arr[j, k, :]
+                            tmp = rx_data_frame_arr[j, k][:]
                             rx_data[good_frame_id, ant_cnt, :, :] = np.reshape(tmp, (numRxSyms, n_samps))
                             ant_cnt = ant_cnt + 1
 
@@ -538,11 +556,12 @@ class MIMODriver:
 def main():
     parser = OptionParser()
     parser.add_option("--hub", type="string", dest="hub", help="serial number of the hub device", default="FH4B000019")
-    parser.add_option("--bs-serials", type="string", dest="bs_serials", help="serial numbers of the BS devices", default='RF3E000208') #default='RF3E000146,RF3E000356,RF3E000546')
-    parser.add_option("--ue-serials", type="string", dest="ue_serials", help="serial numbers of the UE devices", default='RF3E000089')
+    parser.add_option("--bs-serials", type="string", dest="bs_serials", help="serial numbers of the BS devices", default='RF3E000208,RF3E000146') #default='RF3E000146,RF3E000356,RF3E000546')
+    parser.add_option("--ue-serials", type="string", dest="ue_serials", help="serial numbers of the UE devices", default='RF3E000392,RF3E000241')
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--freq", type="float", dest="freq", help="Tx freq (Hz). POWDER users must set to 3.6e9", default=3.6e9)
     parser.add_option("--tx-gain", type="float", dest="tx_gain", help="Optional Tx gain (dB)", default=81.0)
+    parser.add_option("--tx-gain-ue", type="float", dest="tx_gain_ue", help="Optional Tx gain (dB)", default=[81.0, 75.0])
     parser.add_option("--rx-gain", type="float", dest="rx_gain", help="Optional Rx gain (dB)", default=65.0)
     (options, args) = parser.parse_args()
     mimo = MIMODriver(
@@ -553,6 +572,7 @@ def main():
         tx_freq=options.freq,
         rx_freq=options.freq,
         tx_gain=options.tx_gain,
+        tx_gain_ue=options.tx_gain_ue,
         rx_gain=options.rx_gain
     )
     nsamps = 1024
@@ -572,7 +592,7 @@ def main():
     wb_pilot1 = np.transpose(np.matlib.repmat(wb_pilot1, len(options.ue_serials.split(',')), 1))
     wb_pilot2 = wbz  # wb_pilot1 if both_channels else wbz
 
-    test_uplink = False
+    test_uplink = True
     if test_uplink:
         ul_rx_data, n_ul_good, numRxSyms = mimo.txrx_uplink(np.real(wb_pilot1), np.imag(wb_pilot1), 5, len(pad2))
         print("Uplink Rx Num {}, ShapeRxData: {}, NumRsyms: {}".format(n_ul_good, ul_rx_data.shape, numRxSyms))
@@ -587,7 +607,7 @@ def main():
         snd_rx_data, n_snd_good, numRxSyms = mimo.txrx_dl_sound(np.real(wb_pilot1), np.imag(wb_pilot1), 1, len(pad2))
         print("Sounding (Downlink) Rx Num {}".format(n_snd_good))
 
-    test_hubSync = True
+    test_hubSync = False
     if test_hubSync:
         snd_rx_data, n_snd_good, numRxSyms = mimo.txrx_refnode(np.real(wb_pilot1), np.imag(wb_pilot1), 3, "GGGGGRG", "GGGGGPG", len(pad2), python_mode=True)
         print("Sounding (Downlink) Rx Num {}".format(n_snd_good))

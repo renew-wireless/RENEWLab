@@ -20,6 +20,7 @@ classdef mimo_driver < handle
         tx_freq = 0;
         rx_freq = 0;
         tx_gain = 0;
+        tx_gain_ue = 0;
         rx_gain = 0;
     end
 
@@ -37,6 +38,7 @@ classdef mimo_driver < handle
                 obj.tx_freq = sdr_params.txfreq;
                 obj.rx_freq = sdr_params.rxfreq;
                 obj.tx_gain = sdr_params.txgain;
+                obj.tx_gain_ue = sdr_params.tx_gain_ue;
                 obj.rx_gain = sdr_params.rxgain;
 
                 n_bs_sdrs = length(obj.bs_serial_ids);
@@ -66,7 +68,7 @@ classdef mimo_driver < handle
                         'ue_serials', ue_id_list, ...
                         'rate', obj.sample_rate, ...
                         'tx_freq', obj.tx_freq, 'rx_freq', obj.rx_freq, ...
-                        'tx_gain', obj.tx_gain, 'rx_gain', obj.rx_gain, ...
+                        'tx_gain', obj.tx_gain, 'tx_gain_ue', obj.tx_gain_ue, 'rx_gain', obj.rx_gain, ...
                         'bs_channels', obj.bs_channels , 'ue_channels', obj.ue_channels ) );
                 
             end

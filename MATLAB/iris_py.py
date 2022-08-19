@@ -321,6 +321,8 @@ class Iris_py:
 
                 print("n_samp is: %d  \n" % self.n_samp)
 
+                low_signal_a = False
+                low_signal_b = False
                 for m in range(max_frames):
                     for k in range(n_R):
                         r1 = self.sdr.readStream(
@@ -329,8 +331,12 @@ class Iris_py:
                         data_id = m*n_R+k
                         rx_frames_a[data_id*in_len: (data_id*in_len + in_len)] = wave_rx_a
                         rx_frames_b[data_id*in_len: (data_id*in_len + in_len)] = wave_rx_b
+                        if np.max(np.abs(wave_rx_a)) < 0.01:
+                                low_signal_a = True
+                        if np.max(np.abs(wave_rx_b)) < 0.01:
+                                low_signal_b = True
 
-                return rx_frames_a, rx_frames_b
+                return rx_frames_a, rx_frames_b, low_signal_a, low_signal_b
 
         def close(self):
                 '''Cleanup streams. Rest SDRs'''
