@@ -9,6 +9,12 @@
   */
 #include "include/BaseRadioSetUHD.h"
 
+#include <boost/algorithm/string.hpp>
+#include <boost/format.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/program_options.hpp>
+#include <boost/thread.hpp>
+
 #include "SoapySDR/Formats.h"
 #include "SoapySDR/Time.hpp"
 #include "include/RadioUHD.h"
@@ -25,6 +31,8 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
   std::vector<size_t> num_bs_antenntas(_cfg->num_cells());
   radioNotFound = false;
   std::vector<std::string> radio_serial_not_found;
+
+  std::cout << "error found !!!" << std::endl;
 
   // need to be further modified
   MLPD_TRACE("num of cells are: %zu\n", _cfg->num_cells());
@@ -70,6 +78,14 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
       if (_cfg->bs_channel().find('B') != std::string::npos)
         dciqCalibrationProcUHD(1);
     }
+
+    // write TDD schedule and beacons to FPFA buffers only for Iris
+    bsRadios->RawDev()->set_time_source("external");
+    bsRadios->RawDev()->set_clock_source("external");
+    bsRadios->RawDev()->set_time_unknown_pps(uhd::time_spec_t(0.0));
+
+    // Wait for pps sync pulse
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 
     thread_count.store(1);
     size_t ii = 0;
@@ -164,13 +180,6 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
 
     // write TDD schedule and beacons to FPFA buffers only for Iris
     for (size_t c = 0; c < _cfg->num_cells(); c++) {
-      bsRadios->RawDev()->set_time_source("external");
-      bsRadios->RawDev()->set_clock_source("external");
-      uhd::time_spec_t time = uhd::time_spec_t::from_ticks(0, 1e9);
-      bsRadios->RawDev()->set_time_next_pps(time);
-
-      // Wait for pps sync pulse
-      std::this_thread::sleep_for(std::chrono::seconds(2));
       // Activate Rx and Tx streamers
       bsRadios->activateRecv();
       bsRadios->activateXmit();
@@ -269,6 +278,9 @@ void BaseRadioSetUHD::configure(BaseRadioContext* context) {
 
     bsRadios->dev_init(_cfg, (ch), rxgain, txgain);
   }
+
+  bsRadios->dev_init_set_freq(_cfg, total_rx_channel);
+
   assert(thread_count->load() != 0);
   thread_count->store(thread_count->load() - 1);
 }
