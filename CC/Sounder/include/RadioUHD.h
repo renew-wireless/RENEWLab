@@ -40,6 +40,7 @@ class RadioUHD {
 
   void dev_init(Config* _cfg, int ch, double rxgain, double txgain);
   void reset_DATA_clk_domain(void);
+  void dev_init_set_freq(Config* _cfg, unsigned int total_channels);
 };
 
 #endif /* RADIOUHD_H_ */
