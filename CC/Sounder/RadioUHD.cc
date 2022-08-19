@@ -21,20 +21,28 @@
 #include "uhd/utils/log_add.hpp"
 #endif
 
+void RadioUHD::dev_init_set_freq(Config* _cfg, unsigned int total_channels) {
+  MLPD_INFO("setting frequency \n");
+  dev_->clear_command_time();
+  dev_->set_command_time(dev_->get_time_now() + uhd::time_spec_t(0.1));
+  uhd::tune_request_t tune_request(_cfg->radio_rf_freq());
+  // update for UHD multi USRP
+  for (unsigned int ch = 0; ch < total_channels; ch++) {
+    dev_->set_rx_freq(tune_request, ch);
+    dev_->set_tx_freq(tune_request, ch);
+  }
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(550)); //sleep 110ms (~10ms after retune occurs) to allow LO to lock
+
+  dev_->clear_command_time();
+}
+
 void RadioUHD::dev_init(Config* _cfg, int ch, double rxgain, double txgain) {
   // these params are sufficient to set before DC offset and IQ imbalance calibration
   MLPD_INFO("Init USRP channel: %d\n", ch);
   // update for UHD multi USRP
   dev_->set_tx_antenna("TX/RX", ch);
   dev_->set_rx_antenna("TX/RX", ch);
-  uhd::tune_request_t tune_request(0);
-  dev_->set_rx_freq(tune_request, ch);
-  dev_->set_tx_freq(tune_request, ch);
-
-  // update for UHD multi USRP
-  tune_request = _cfg->radio_rf_freq();
-  dev_->set_rx_freq(tune_request, ch);
-  dev_->set_tx_freq(tune_request, ch);
 
   // update for UHD multi USRP
   dev_->set_rx_gain(std::min(31.5, rxgain), "PGA0", ch);
