@@ -104,6 +104,11 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
     if pilot_data_avail:
         pilot_samples = hdf5.pilot_samples[:, cell_i, :, :, :]
+
+        ## OBCH !!!!!
+        #np.save('./data_powder/noise_samps_honors_rx70.npy', pilot_samples)
+
+
         num_bs_ants = pilot_samples.shape[2]
         print("Number of antennas in dataset %d"%num_bs_ants)
         all_bs_nodes = set(range(num_bs_ants))
@@ -167,6 +172,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             print(">>>> filter_pilots time: %f \n" % ( filter_pilots_end - filter_pilots_start) )
             print(">>>> frame_sanity time: %f \n" % ( frame_sanity_end - frame_sanity_start) )
 
+
+            noise_avail = False
             if noise_avail:
                 snr_start = time.time()
                 noise_samples = hdf5.noise_samples[:, cell_i, :, :, :]
@@ -175,7 +182,18 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 snr_end = time.time()
                 print(">>>> compute_snr time: %f \n" % (snr_end - snr_start))
             else:
-                 seq_found = hdf5_lib.pilot_map_prep(pilot_samples, peak_map, ofdm_len, z_padding)
+                ## OBCH!!!!!!!!!!!!!!!!!!!
+                print(" XXXXXX OBCH XXXXX SNR ")
+                noise_avail = True
+                snr_start = time.time()
+                noise_samples = np.load('./data_powder/noise_samps_honors_rx65.npy')
+                noise_samples = noise_samples[:, 0, plot_bs_nodes, :]
+                snr, seq_found = hdf5_lib.measure_snr(pilot_samples, noise_samples, peak_map, pilot_type, ofdm_pilot, ofdm_len, z_padding)
+                np.save('./data_powder/data_samps_honors_loc8.npy', snr, seq_found)
+                snr_end = time.time()
+                print(">>>> compute_snr time: %f \n" % (snr_end - snr_start))
+                #seq_found = hdf5_lib.pilot_map_prep(pilot_samples, peak_map, ofdm_len, z_padding)
+
 
             # Plots:
             print("Plotting the results:\n")
