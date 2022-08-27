@@ -28,8 +28,8 @@
 
 #include "fft.h"
 
-static constexpr size_t kPilotSubcarrierSpacing = 12;
-static constexpr size_t kDefaultPilotScOffset = 6;
+static constexpr size_t kPilotSubcarrierSpacing = 1;
+static constexpr size_t kDefaultPilotScOffset = 0;
 
 static inline double computeAbs(std::complex<double> x) { return std::abs(x); }
 
@@ -63,6 +63,7 @@ class CommsLib {
   static std::vector<size_t> getDataSc(
       size_t fftSize, size_t DataScNum,
       size_t PilotScOffset = kDefaultPilotScOffset);
+  static std::vector<size_t> getDataSc(size_t fftSize);
   static std::vector<size_t> getNullSc(size_t fftSize, size_t DataScNum);
   static std::vector<std::complex<float>> getPilotScValue(
       size_t fftSize, size_t DataScNum,

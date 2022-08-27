@@ -370,6 +370,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
   // Clients
   cl_data_mod_ = tddConf.value("ue_modulation", "QPSK");
+  cl_ul_pilot_slots_ = tddConf.value("client_ul_pilot_syms", 0);
 
   cl_agc_en_ = tddConf.value("agc_en", false);
   cl_agc_gain_init_ = tddConf.value("agc_gain_init", 70);  // 0 to 108
@@ -569,7 +570,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   }
 #endif
 
-  data_ind_ = CommsLib::getDataSc(fft_size_, symbol_data_subcarrier_num_);
+  data_ind_ = CommsLib::getDataSc(fft_size_/*, symbol_data_subcarrier_num_*/);
   pilot_sc_ = CommsLib::getPilotScValue(fft_size_, symbol_data_subcarrier_num_);
   pilot_sc_ind_ =
       CommsLib::getPilotScIndex(fft_size_, symbol_data_subcarrier_num_);
@@ -686,7 +687,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
 void Config::loadULData() {
   // compose data slot
-  if (client_present_ && ul_data_slot_present_) {
+  if (/*client_present_ && */ul_data_slot_present_) {
     txdata_time_dom_.resize(num_cl_antennas_);
     txdata_freq_dom_.resize(num_cl_antennas_);
     // For now, we're reading one frame worth of data
@@ -704,12 +705,13 @@ void Config::loadULData() {
       std::printf("Loading UL frequency-domain data for radio %zu to %s\n", i,
                   filename_ul_data_f.c_str());
       ul_tx_fd_data_files_.push_back("ul_data_f_" + filename_tag);
+/*
       FILE* fp_tx_f = std::fopen(filename_ul_data_f.c_str(), "rb");
       if (!fp_tx_f) {
         throw std::runtime_error(filename_ul_data_f +
                                  std::string(" not found!"));
       }
-
+*/
       std::string filename_ul_data_t =
           directory_ + "/ul_data_t_" + filename_tag;
       std::printf("Loading UL time-domain data for radio %zu to %s\n", i,

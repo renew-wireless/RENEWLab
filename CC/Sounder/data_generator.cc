@@ -13,6 +13,8 @@
 #include "include/comms-lib.h"
 #include "include/utils.h"
 
+static constexpr bool kUseExistingUlBits = true;
+
 void DataGenerator::GenerateData(const std::string& directory) {
   srand(time(NULL));
 
@@ -36,9 +38,21 @@ void DataGenerator::GenerateData(const std::string& directory) {
           "_" + std::to_string(i) + ".bin";
 
       std::string filename_ul_data_b = directory + "/ul_data_b_" + filename_tag;
-      std::printf("Saving UL data bits for radio %zu to %s\n", i,
-                  filename_ul_data_b.c_str());
-      FILE* fp_tx_b = std::fopen(filename_ul_data_b.c_str(), "wb");
+      FILE* fp_tx_b;
+      bool ul_bits_file_exist = false;
+      if (kUseExistingUlBits) {
+        std::printf("Reading UL data bits for radio %zu from %s\n", i,
+                    filename_ul_data_b.c_str());
+        fp_tx_b = std::fopen(filename_ul_data_b.c_str(), "rb");
+        if (fp_tx_b != nullptr) {
+          ul_bits_file_exist = true;
+        }
+      }
+      if (ul_bits_file_exist == false) {
+        std::printf("Saving UL data bits for radio %zu to %s\n", i,
+                    filename_ul_data_b.c_str());
+        fp_tx_b = std::fopen(filename_ul_data_b.c_str(), "wb");
+      }
       std::string filename_ul_data_f = directory + "/ul_data_f_" + filename_tag;
       std::printf("Saving UL frequency-domain data for radio %zu to %s\n", i,
                   filename_ul_data_f.c_str());
@@ -57,22 +71,31 @@ void DataGenerator::GenerateData(const std::string& directory) {
                                  prefix_zpad_t.end());
             for (size_t s = 0; s < cfg_->symbol_per_slot(); s++) {
               std::vector<uint8_t> data_bits;
-              for (size_t c = 0; c < cfg_->data_ind().size(); c++) {
-                data_bits.push_back((uint8_t)(rand() % mod_order));
-              }
-              std::fwrite(data_bits.data(), cfg_->symbol_data_subcarrier_num(),
+              if (ul_bits_file_exist) {
+                data_bits.resize(cfg_->data_ind().size());
+                std::fread(data_bits.data(), cfg_->data_ind().size(),
                           sizeof(uint8_t), fp_tx_b);
-              std::vector<std::complex<float>> mod_data =
-                  CommsLib::modulate(data_bits, mod_type);
+              } else {
+                for (size_t c = 0; c < cfg_->data_ind().size(); c++) {
+                  data_bits.push_back((uint8_t)(rand() % mod_order));
+                }
+                std::fwrite(data_bits.data(), cfg_->data_ind().size(),
+                            sizeof(uint8_t), fp_tx_b);
+              }
               std::vector<std::complex<float>> ofdm_sym(cfg_->fft_size(), 0);
               size_t sc = 0;
-              for (size_t c = 0; c < cfg_->data_ind().size(); c++) {
-                sc = cfg_->data_ind()[c];
-                ofdm_sym[sc] = mod_data[c];
-              }
-              for (size_t c = 0; c < cfg_->pilot_sc().size(); c++) {
-                sc = cfg_->pilot_sc_ind().at(c);
-                ofdm_sym[sc] = cfg_->pilot_sc().at(c);
+              if (u < cfg_->cl_ul_pilot_slots()) {
+                for (size_t c = 0; c < cfg_->pilot_sc().size(); c++) {
+                  sc = cfg_->pilot_sc_ind().at(c);
+                  ofdm_sym[sc] = cfg_->pilot_sc().at(c);
+                }
+              } else {
+                std::vector<std::complex<float>> mod_data =
+                    CommsLib::modulate(data_bits, mod_type);
+                for (size_t c = 0; c < cfg_->data_ind().size(); c++) {
+                  sc = cfg_->data_ind()[c];
+                  ofdm_sym[sc] = mod_data[c];
+                }
               }
               auto tx_sym = CommsLib::IFFT(ofdm_sym, cfg_->fft_size(),
                                            1.f / cfg_->fft_size(), false, true);

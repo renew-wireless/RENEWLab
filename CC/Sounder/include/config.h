@@ -89,6 +89,9 @@ class Config {
   inline size_t dl_slot_per_frame(void) const {
     return this->dl_slot_per_frame_;
   }
+  inline size_t cl_ul_pilot_slots(void) const {
+    return this->cl_ul_pilot_slots_;
+  }
   inline const std::vector<std::vector<size_t>>& dl_slots(void) const {
     return this->dl_slots_;
   }
@@ -312,6 +315,7 @@ class Config {
   bool dl_data_slot_present_;
   std::string data_mod_;
   std::string cl_data_mod_;
+  size_t cl_ul_pilot_slots_;
 
   // BS features
   size_t num_cells_;
