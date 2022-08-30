@@ -57,11 +57,12 @@ RX_FRQ                  = TX_FRQ;
 ANT_BS                  = 'A';          % SISO: only one antenna supported
 ANT_UE                  = 'A';          % SISO: only one antenna supported
 TX_GN                   = 81;
+TX_GN_UE                = 81;
 RX_GN                   = 65;
 SMPL_RT                 = 5e6;
 TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
-N_FRM                   = 1;
-          
+N_FRM                   = 5;
+
 bs_ids = string.empty();
 bs_sched = string.empty();
 ue_ids = string.empty();
@@ -180,6 +181,7 @@ else
         'txfreq', TX_FRQ, ...
         'rxfreq', RX_FRQ, ...
         'txgain', TX_GN, ...
+        'tx_gain_ue', TX_GN_UE, ...
         'rxgain', RX_GN, ...
         'sample_rate', SMPL_RT);
 

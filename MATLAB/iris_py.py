@@ -325,9 +325,9 @@ class Iris_py:
                 low_signal_b = False
                 for m in range(max_frames):
                     for k in range(n_R):
-                        r1 = self.sdr.readStream(
+                        ret = self.sdr.readStream(
                             self.rx_stream, [wave_rx_a, wave_rx_b], int(self.n_samp))
-                        print("reading stream: ({})".format(r1))
+                        print("reading stream: (ret:{}), {}, {}, {}".format(ret, ret.timeNs, ret.timeNs>>32, (ret.timeNs>>16)&0xFFFF))
                         data_id = m*n_R+k
                         rx_frames_a[data_id*in_len: (data_id*in_len + in_len)] = wave_rx_a
                         rx_frames_b[data_id*in_len: (data_id*in_len + in_len)] = wave_rx_b

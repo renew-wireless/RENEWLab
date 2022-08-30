@@ -58,7 +58,8 @@ else
     TX_FRQ                  = 3.55e9;
     RX_FRQ                  = TX_FRQ;
     TX_GN                   = 81;
-    RX_GN                   = 70;
+    TX_GN_UE                = [81, 81];
+    RX_GN                   = 65;
     SMPL_RT                 = 5e6;
     N_FRM                   = 1;
     bs_ids                  = string.empty();
@@ -69,13 +70,14 @@ else
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
-        bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
-        hub_id = ["FH4B000003"];
+        %bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
+        bs_ids = ["RF3E000146","RF3E000122","RF3E000150","RF3E000128"];%,"RF3E000168","RF3E000136","RF3E000213","RF3E000142"];
+        hub_id = ["FH4B000019"];
     else
         bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         hub_id = [];
     end
-    ue_ids= ["RF3E000706"]; % Only MISO supported at the moment
+    ue_ids= ["RF3E000241"]; % Only MISO supported at the moment
 
     N_BS_NODE               = length(bs_ids);                   % Number of nodes at the BS
     N_BS_ANT                = length(bs_ids) * length(ANT_BS);  % Number of antennas at the BS
@@ -86,7 +88,7 @@ end
 MIMO_ALG                = 'ZF';      % MIMO ALGORITHM: ZF or Conjugate 
 
 % Waveform params
-N_OFDM_SYM              = 40;          % Number of OFDM symbols for burst, it needs to be less than 47
+N_OFDM_SYM              = 24;          % Number of OFDM symbols for burst, it needs to be less than 47
 N_LTS_SYM               = 2;           % Number of preamble symbols
 N_DATA_SYM              = N_OFDM_SYM - N_LTS_SYM;
 MOD_ORDER               = 16;          % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
@@ -202,6 +204,7 @@ else
         'txfreq', TX_FRQ, ...
         'rxfreq', RX_FRQ, ...
         'txgain', TX_GN, ...
+        'tx_gain_ue', TX_GN_UE, ...
         'rxgain', RX_GN, ...
         'sample_rate', SMPL_RT);
 
@@ -212,6 +215,7 @@ else
     end
     assert(size(rx_vec_iris_sound,3) == N_BS_ANT) 
 end
+
 
 fprintf('=============================== \n');
 fprintf('Channel Estimation and Beamweight Calculation \n');
@@ -271,6 +275,7 @@ for iue = 1:N_UE
         end
     end
 end
+
 
 % Beamweight calculation
 W = zeros(N_BS_ANT, N_UE, N_SC);

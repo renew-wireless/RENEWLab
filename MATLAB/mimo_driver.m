@@ -210,7 +210,7 @@ classdef mimo_driver < handle
                 nsamples = double(py.numpy.int_(data_py.data.shape(4)));
                 data = zeros(numGoodFrames, nue, nrecvSyms, nsamples);
 
-                sprintf("GoodFrames: %d, nue: %d, nrecvSyms: %d, nsamples: %d \n",numGoodFrames,nue,nrecvSyms,nsamples)
+                %sprintf("GoodFrames: %d, nue: %d, nrecvSyms: %d, nsamples: %d \n",numGoodFrames,nue,nrecvSyms,nsamples);
                 P1 = cellfun(@cell, cell(data_py.tolist), 'Uniform',false);
                 %P1 = vertcat(P1{:});
                 for igf = 1:numGoodFrames

@@ -618,7 +618,7 @@ for iframe = 1:numGoodFrames
     fprintf("Condition Number: %f  \n", avgCond);
     fprintf(' =============================== \n');
 
-    figure;
-    subplot(1,2,1); plot(abs(squeeze(rx_vec_iris_tmp(1,:,1))), '-b'); hold on; plot(abs(squeeze(rx_vec_iris_tmp(1,:,2))), '--r');
-    subplot(1,2,2); plot(abs(squeeze(rx_vec_iris_tmp(1,:,3))), '-b');
+    %figure;
+    %subplot(1,2,1); plot(abs(squeeze(rx_vec_iris_tmp(1,:,1))), '-b'); hold on; plot(abs(squeeze(rx_vec_iris_tmp(1,:,2))), '--r');
+    %subplot(1,2,2); plot(abs(squeeze(rx_vec_iris_tmp(1,:,3))), '-b');
 end
