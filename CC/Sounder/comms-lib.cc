@@ -346,24 +346,8 @@ std::vector<size_t> CommsLib::getDataSc(size_t fftSize, size_t DataScNum,
     size_t start_sc = (fftSize - DataScNum) / 2;
     size_t stop_sc = start_sc + DataScNum;
     for (size_t i = start_sc; i < stop_sc; i++)
-      if ((i - start_sc) % kPilotSubcarrierSpacing != PilotScOffset)
+      //if ((i - start_sc) % kPilotSubcarrierSpacing != PilotScOffset)
         data_sc.push_back(i);
-  }
-  return data_sc;
-}
-
-std::vector<size_t> CommsLib::getDataSc(size_t fftSize) {
-  std::vector<size_t> data_sc;
-  if (fftSize == 64) {
-    size_t sc_ind[48] = {1,  2,  3,  4,  5,  6,  8,  9,  10, 11, 12, 13,
-                         14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 25, 26,
-                         38, 39, 40, 41, 42, 44, 45, 46, 47, 48, 49, 50,
-                         51, 52, 53, 54, 55, 56, 58, 59, 60, 61, 62, 63};
-    data_sc.assign(sc_ind, sc_ind + 48);
-  } else {
-    for (size_t i = 0; i < fftSize; i++) {
-      data_sc.push_back(i);
-    }
   }
   return data_sc;
 }

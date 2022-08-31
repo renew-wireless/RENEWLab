@@ -63,7 +63,6 @@ class CommsLib {
   static std::vector<size_t> getDataSc(
       size_t fftSize, size_t DataScNum,
       size_t PilotScOffset = kDefaultPilotScOffset);
-  static std::vector<size_t> getDataSc(size_t fftSize);
   static std::vector<size_t> getNullSc(size_t fftSize, size_t DataScNum);
   static std::vector<std::complex<float>> getPilotScValue(
       size_t fftSize, size_t DataScNum,

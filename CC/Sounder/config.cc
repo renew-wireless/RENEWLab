@@ -570,7 +570,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   }
 #endif
 
-  data_ind_ = CommsLib::getDataSc(fft_size_/*, symbol_data_subcarrier_num_*/);
+  data_ind_ = CommsLib::getDataSc(fft_size_, symbol_data_subcarrier_num_);
   pilot_sc_ = CommsLib::getPilotScValue(fft_size_, symbol_data_subcarrier_num_);
   pilot_sc_ind_ =
       CommsLib::getPilotScIndex(fft_size_, symbol_data_subcarrier_num_);
