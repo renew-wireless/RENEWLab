@@ -957,7 +957,7 @@ class hdf5_lib:
             ul_slot_num = int(metadata['UL_SYMS'])
         elif 'UL_SLOTS' in metadata:
             ul_slot_num = int(metadata['UL_SLOTS'])
-        data_sc_ind = np.array(metadata['OFDM_DATA_SC'])
+        data_sc_ind = np.array(metadata['OFDM_PILOT_SC']) #OFDM_DATA_SC
         pilot_sc_ind = np.array(metadata['OFDM_PILOT_SC'])
         pilot_sc_val = np.array(metadata['OFDM_PILOT_SC_VALS'])
         zero_sc_ind = np.setdiff1d(range(fft_size), data_sc_ind)
@@ -970,18 +970,19 @@ class hdf5_lib:
 
         # UL Samps: #Frames, #Uplink SLOTS, #Antennas, #Samples
         n_frames = ul_samps.shape[0]
-        n_ants = ul_samps.shape[1]
+        n_slots = ul_samps.shape[1]
+        n_ants = ul_samps.shape[2]
         n_users = csi.shape[1]
-        ul_syms = np.empty((n_frames, n_ants,
+        ul_syms = np.empty((n_frames, n_slots, n_ants,
                        symbol_per_slot, fft_size), dtype='complex64')
 
-        # UL Syms: #Frames, #Antennas, #OFDM Symbols, #Samples
+        # UL Syms: #Frames, #Uplink SLOTS, #Antennas, #OFDM Symbols, #Samples
         for i in range(symbol_per_slot):
-            ul_syms[:, :, i, :] = ul_samps[:, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len]
+            ul_syms[:, :, :, i, :] = ul_samps[:, :, :, offset + cp + i*ofdm_len:offset+(i+1)*ofdm_len]
         if fft_shifted_dataset:
-            ul_syms_f = np.fft.fftshift(np.fft.fft(ul_syms, fft_size, 3), 3)
+            ul_syms_f = np.fft.fftshift(np.fft.fft(ul_syms, fft_size, 4), 4)
         else:
-            ul_syms_f = np.fft.fft(ul_syms, fft_size, 3)
+            ul_syms_f = np.fft.fft(ul_syms, fft_size, 4)
 
         ul_equal_syms = np.zeros((n_frames, n_users, symbol_per_slot * data_sc_len), dtype='complex64')
 
@@ -1055,21 +1056,37 @@ class hdf5_lib:
                     res = [k for k, l in zip(list(ul_demod_int), list(ul_tx_syms)) if k == l]
                     slot_ser[new_i, j] = (ul_demod_syms.shape[2] - len(list(res))) / ul_demod_syms.shape[2]
         else:
-            # UL Syms: #Frames, #OFDM Symbols, #Antennas, #Samples
-            ul_syms_f = np.transpose(ul_syms_f, (0, 2, 1, 3))
-            ul_syms_f = np.delete(ul_syms_f, zero_sc_ind, 3)
-            # UL DEMULT: #Frames, #OFDM Symbols, #User, #Sample (DATA + PILOT SCs)
-            ul_demult = demult(csi, ul_syms_f, noise_samps_f, method=method)
-            dims = ul_demult.shape
-            ul_demult_exp = np.empty((dims[0], dims[1], dims[2], fft_size), dtype='complex64')
-            ul_demult_exp[:, :, :, nonzero_sc_ind] = ul_demult
-            # Phase offset tracking and correction
-            phase_corr = ul_demult_exp[:, :, :, pilot_sc_ind] * np.conj(pilot_sc_val)
-            phase_err = np.angle(np.mean(phase_corr, 3))
+            phase_shift = np.empty((n_slots - 1, n_frames, symbol_per_slot, n_users, pilot_sc_ind.size))
+            phase_inc = np.zeros((n_frames, symbol_per_slot, n_users, pilot_sc_ind.size))
+            for i in range(n_slots):
+                # UL Syms Slot: #Frames, #OFDM Symbols, #Antennas, #Samples
+                ul_syms_slot_f = np.transpose(ul_syms_f[:, i, :, :, :], (0, 2, 1, 3))
+                ul_syms_slot_f = np.delete(ul_syms_slot_f, zero_sc_ind, 3)
+                # UL DEMULT: #Frames, #OFDM Symbols, #User, #Sample (DATA + PILOT SCs)
+                ul_demult = demult(csi, ul_syms_slot_f, noise_samps_f, method=method)
+                dims = ul_demult.shape
+                ul_demult_exp = np.empty((dims[0], dims[1], dims[2], fft_size), dtype='complex64')
+                ul_demult_exp[:, :, :, nonzero_sc_ind] = ul_demult
+                # Phase offset tracking and correction
+                if i < n_slots - 1: # Assume all slots but the last one are for pilot
+                    phase_corr = ul_demult_exp[:, :, :, pilot_sc_ind] * np.conj(pilot_sc_val)
+                    phase_shift[i, :, :, :, :] = np.angle(phase_corr)
+                    if i > 0:
+                        phase_inc += phase_shift[i, :, :, :, :] - phase_shift[i - 1, :, :, :, :]
+
+            print(pilot_sc_val)
+            phase_inc /= float(n_slots - 2) # Assume at least two pilot slots
+            print(phase_inc.shape)
+            phase_err = phase_shift[0, :, :, :, :] + phase_inc * float(n_slots - 1)
+            print(phase_err.shape)
+            #phase_err0 = np.angle(np.mean(phase_corr, 3))
+            #print(phase_err0.shape)
             phase_comp = np.exp(-1j*phase_err)
-            phase_comp_exp = np.tile(np.expand_dims(phase_comp, axis= 3), (1, 1, 1, len(data_sc_ind)))
+            #phase_comp_exp = np.tile(np.expand_dims(phase_comp, axis= 3), (1, 1, 1, len(data_sc_ind)))
             ul_equal_syms = ul_demult_exp[:, :, :, data_sc_ind]
-            ul_equal_syms = np.multiply(ul_equal_syms, phase_comp_exp)
+            print(ul_equal_syms.shape)
+            print(phase_comp.shape)
+            ul_equal_syms = np.multiply(ul_equal_syms, phase_comp) #phase_comp_exp
             # UL DATA: #Frames, #User, #OFDM Symbols, #DATA SCs
             ul_equal_syms = np.transpose(ul_equal_syms, (0, 2, 1, 3))
             # UL DATA: #Frames, #User, SLOT DATA SCs
