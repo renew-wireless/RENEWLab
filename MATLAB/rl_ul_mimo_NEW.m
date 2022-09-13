@@ -55,14 +55,14 @@ if SIM_MODE
 
 else 
     %Iris params:
-    TX_SCALE                = 0.8;          % Scale for Tx waveform ([0:1])
+    TX_SCALE                = 1;          % Scale for Tx waveform ([0:1])
     USE_HUB                 = 1;
-    TX_FRQ                  = 3.55e9;
+    TX_FRQ                  = 3.5475e9;
     RX_FRQ                  = TX_FRQ;
     ANT_BS                  = 'AB';         % Options: {A, AB}. To use both antennas per board, set to 'AB'
     ANT_UE                  = 'A';         % Only tested with single-antenna UE (i.e., 'A')
-    TX_GN                   = 75;
-    TX_GN_UE                = [81, 81];
+    TX_GN                   = 81;
+    TX_GN_UE                = [95, 95];
     RX_GN                   = 65;
     SMPL_RT                 = 5e6;
     N_FRM                   = 5;
@@ -75,14 +75,14 @@ else
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
         %bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
-        bs_ids = [,"RF3E000543","RF3E000594","RF3E000404","RF3E000616"];%,"RF3E000622","RF3E000601","RF3E000602"];
-        hub_id = ["FH4B000019"];
+        bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];%,"RF3E000622","RF3E000601","RF3E000602"];
+        hub_id = ["FH4B000003"];
     else
-        bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
+        bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         hub_id = [];
     end
     %ue_ids= ["RF3E000353", "RF3E000706"];
-    ue_ids= ["RF3E000392", "RF3E000058"];
+    ue_ids= ["RF3E000706", "RF3E000665"];
 
     N_BS_NODE               = length(bs_ids);           % Number of nodes/antennas at the BS
     N_BS_ANT                = length(bs_ids) * length(ANT_BS);  % Number of antennas at the BS
