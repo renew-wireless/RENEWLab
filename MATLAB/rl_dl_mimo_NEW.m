@@ -34,10 +34,10 @@ WRITE_PNG_FILES         = 0;                % Enable writing plots to PNG
 SIM_MODE                = 0;
 DEBUG                   = 0;
 
-PILOT_PLOT              = 0;
+PILOT_PLOT              = 1;
 CONST_PLOT              = 0;
 CHANNEL_PLOT            = 0;
-DOWNLINK_PLOT           = 0;
+DOWNLINK_PLOT           = 1;
 EVM_SNR_PLOT            = 0;
 
 if SIM_MODE
@@ -51,11 +51,11 @@ if SIM_MODE
 
 else 
     %Iris params:
-    TX_SCALE                = 1;          % Scale for Tx waveform ([0:1])
+    TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
     ANT_BS                  = 'AB';         % Options: {A, AB}
     ANT_UE                  = 'A';          % Currently, only support single antenna UE, i.e., A
     USE_HUB                 = 1;
-    TX_FRQ                  = 3.55e9;
+    TX_FRQ                  = 3.5475e9;
     RX_FRQ                  = TX_FRQ;
     TX_GN                   = 81;
     TX_GN_UE                = [81, 81];
@@ -65,6 +65,7 @@ else
     bs_ids                  = string.empty();
     ue_ids                  = string.empty();
     ue_scheds               = string.empty();
+    TX_ADVANCE              = 400;      %235    % !!!! IMPORTANT: DO NOT MODIFY!!!!
 
     if USE_HUB
         % Using chains of different size requires some internal
@@ -206,7 +207,8 @@ else
         'txgain', TX_GN, ...
         'tx_gain_ue', TX_GN_UE, ...
         'rxgain', RX_GN, ...
-        'sample_rate', SMPL_RT);
+        'sample_rate', SMPL_RT, ...
+        'trig_offset', TX_ADVANCE);
 
     mimo_handle = mimo_driver(sdr_params);
     [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx_dl_sound(tx_vec_train, N_FRM, N_ZPAD_PRE);

@@ -91,6 +91,7 @@ class Iris_py:
               n_samp=None,                              # Total number of samples, including zero-pads
               both_channels=False,
               agc_en=False,
+              trig_offset=None,
               ):
 
                 if serial_id is not None:
@@ -101,6 +102,7 @@ class Iris_py:
                         self.sdr = None
 
                 self.sample_rate = sample_rate
+                self.trig_offset = trig_offset
 
                 if n_samp is not None:
                     self.n_samp = int(n_samp)
@@ -235,7 +237,8 @@ class Iris_py:
                                 print("No coe was passed into config_sdr_tdd() \n")
 
                         # DEV: ueTrigTime = 153 (prefix_length=0), CBRS: ueTrigTime = 235 (prefix_length=82), tx_advance=prefix_length, corr delay is 17 cycles
-                        ueTrigTime = len(beacon) + 235
+                        ueTrigTime = len(beacon) + self.trig_offset #235
+                        print("!!! Set TX_ADVANCE to {} + beacon length {} = {} !!!".format(self.trig_offset, len(beacon), ueTrigTime))
                         sf_start = int(ueTrigTime//(self.n_samp))
                         sp_start = int(ueTrigTime % (self.n_samp))
                         print("config_sdr_tdd: UE starting symbol and sample count (%d, %d)" %

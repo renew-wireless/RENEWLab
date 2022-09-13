@@ -14,7 +14,7 @@ from scipy.io import savemat
 
 class MIMODriver:
     def __init__(self, hub_serial, bs_serials, ue_serials, rate,
-            tx_freq, rx_freq, tx_gain, tx_gain_ue, rx_gain, bs_channels='A', ue_channels='A', beamsweep=False):
+            tx_freq, rx_freq, tx_gain, tx_gain_ue, rx_gain, bs_channels='A', ue_channels='A', beamsweep=False, agc_en=False, trig_offset=235):
         # Init Radios
         #bs_serials_str = ""
         #for c in bs_serials:
@@ -28,12 +28,12 @@ class MIMODriver:
         print("HUB: {}".format(hub_serial))
         print("BS NODES: {}".format(bs_serials))
         print("UE NODES: {}".format(ue_serials))
-        self.bs_obj = [Iris_py(sdr, tx_freq, rx_freq, tx_gain, rx_gain, None, rate, None, bs_channels) for sdr in bs_serials]
+        self.bs_obj = [Iris_py(sdr, tx_freq, rx_freq, tx_gain, rx_gain, None, rate, None, bs_channels, agc_en, trig_offset) for sdr in bs_serials]
 
         if np.isscalar(tx_gain_ue):
-            self.ue_obj = [Iris_py(sdr, tx_freq, rx_freq, tx_gain_ue, rx_gain, None, rate, None, ue_channels) for sdr in ue_serials]
+            self.ue_obj = [Iris_py(sdr, tx_freq, rx_freq, tx_gain_ue, rx_gain, None, rate, None, ue_channels, agc_en, trig_offset) for sdr in ue_serials]
         else:
-            self.ue_obj = [Iris_py(sdr, tx_freq, rx_freq, tx_gain_ue[i], rx_gain, None, rate, None, ue_channels) for i, sdr in enumerate(ue_serials)]
+            self.ue_obj = [Iris_py(sdr, tx_freq, rx_freq, tx_gain_ue[i], rx_gain, None, rate, None, ue_channels, agc_en, trig_offset) for i, sdr in enumerate(ue_serials)]
 
         self.hub = None
         if len(hub_serial) != 0:
