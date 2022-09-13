@@ -52,12 +52,12 @@ SIM_MODE                = 0;            % Enable for AWGN sim, disable to run ha
 %Iris params:
 N_BS_NODE               = 1;
 N_UE                    = 1;
-TX_FRQ                  = 3.6e9;
+TX_FRQ                  = 3.5475e9;
 RX_FRQ                  = TX_FRQ;
 ANT_BS                  = 'A';          % SISO: only one antenna supported
 ANT_UE                  = 'A';          % SISO: only one antenna supported
 TX_GN                   = 81;
-TX_GN_UE                = 81;
+TX_GN_UE                = 91;
 RX_GN                   = 65;
 SMPL_RT                 = 5e6;
 TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
@@ -70,7 +70,7 @@ ue_sched = string.empty();
 
 
 % Waveform params
-N_OFDM_SYM              = 20;         % Number of OFDM symbols for burst, it needs to be less than 47
+N_OFDM_SYM              = 30;         % Number of OFDM symbols for burst, it needs to be less than 47
 MOD_ORDER               = 16;           % Modulation order (2/4/16/64 = BSPK/QPSK/16-QAM/64-QAM)
 
 % OFDM params
@@ -166,10 +166,10 @@ else
     disp("Running: HARDWARE MODE");
 
     % Create two Iris node objects:
-    tx_direction = 'hub_sync';      % Options: {'uplink', 'downlink', 'hub_sync'}
-    bs_ids = ["RF3E000208"];
-    ue_ids = ["RF3E000089"];
-    hub_id = ["FH4B000019"];
+    tx_direction = 'uplink';      % Options: {'uplink', 'downlink', 'hub_sync'}
+    bs_ids = ["RF3E000722"];
+    ue_ids = ["RF3E000665"];
+    hub_id = ["FH4B000003"];
 
     % Iris nodes' parameters
     sdr_params = struct(...
