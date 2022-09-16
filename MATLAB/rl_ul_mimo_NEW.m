@@ -55,12 +55,12 @@ if SIM_MODE
 
 else 
     %Iris params:
-    TX_SCALE                = 1;          % Scale for Tx waveform ([0:1])
+    TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
     USE_HUB                 = 1;
     TX_FRQ                  = 3.5475e9;
     RX_FRQ                  = TX_FRQ;
     ANT_BS                  = 'AB';         % Options: {A, AB}. To use both antennas per board, set to 'AB'
-    ANT_UE                  = 'A';         % Only tested with single-antenna UE (i.e., 'A')
+    ANT_UE                  = 'A';          % Only tested with single-antenna UE (i.e., 'A')
     TX_GN                   = 81;
     TX_GN_UE                = [95, 95];
     RX_GN                   = 65;
@@ -69,6 +69,7 @@ else
     bs_ids                  = string.empty();
     ue_ids                  = string.empty();
     ue_scheds               = string.empty();
+    TX_ADVANCE              = 235;          % !!!! IMPORTANT: DO NOT MODIFY - Default is 235!!!!
 
     if USE_HUB
         % Using chains of different size requires some internal
@@ -227,7 +228,8 @@ else
         'txgain', TX_GN, ...
         'tx_gain_ue', TX_GN_UE, ...
         'rxgain', RX_GN, ...
-        'sample_rate', SMPL_RT);
+        'sample_rate', SMPL_RT, ...
+        'trig_offset', TX_ADVANCE);
 
     mimo_handle = mimo_driver(sdr_params);
     [rx_vec_iris, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);

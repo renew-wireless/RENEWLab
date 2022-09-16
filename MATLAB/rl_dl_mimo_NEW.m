@@ -65,7 +65,7 @@ else
     bs_ids                  = string.empty();
     ue_ids                  = string.empty();
     ue_scheds               = string.empty();
-    TX_ADVANCE              = 400;      %235    % !!!! IMPORTANT: DO NOT MODIFY!!!!
+    TX_ADVANCE              = 400;          % !!!! IMPORTANT: DO NOT MODIFY - Default is 235!!!!
 
     if USE_HUB
         % Using chains of different size requires some internal
