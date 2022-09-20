@@ -34,10 +34,10 @@ WRITE_PNG_FILES         = 0;                % Enable writing plots to PNG
 SIM_MODE                = 0;
 DEBUG                   = 0;
 
-PILOT_PLOT              = 1;
+PILOT_PLOT              = 0;
 CONST_PLOT              = 0;
 CHANNEL_PLOT            = 0;
-DOWNLINK_PLOT           = 1;
+DOWNLINK_PLOT           = 0;
 EVM_SNR_PLOT            = 0;
 
 if SIM_MODE
@@ -58,7 +58,7 @@ else
     TX_FRQ                  = 3.5475e9;
     RX_FRQ                  = TX_FRQ;
     TX_GN                   = 81;
-    TX_GN_UE                = [81, 81];
+    TX_GN_UE                = [100, 100];
     RX_GN                   = 65;
     SMPL_RT                 = 5e6;
     N_FRM                   = 1;
@@ -66,19 +66,19 @@ else
     ue_ids                  = string.empty();
     ue_scheds               = string.empty();
     TX_ADVANCE              = 400;          % !!!! IMPORTANT: DO NOT MODIFY - Default is 235!!!!
-
     if USE_HUB
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
         %bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
-        bs_ids = ["RF3E000146","RF3E000122","RF3E000150","RF3E000128"];%,"RF3E000168","RF3E000136","RF3E000213","RF3E000142"];
-        hub_id = ["FH4B000019"];
+        bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];%,"RF3E000622","RF3E000601","RF3E000602"];
+        hub_id = ["FH4B000003"];
     else
-        bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
+        bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         hub_id = [];
     end
-    ue_ids= ["RF3E000241"]; % Only MISO supported at the moment
+    %ue_ids= ["RF3E000353", "RF3E000706"];
+    ue_ids= ["RF3E000706"];
 
     N_BS_NODE               = length(bs_ids);                   % Number of nodes at the BS
     N_BS_ANT                = length(bs_ids) * length(ANT_BS);  % Number of antennas at the BS
