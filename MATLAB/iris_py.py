@@ -330,6 +330,12 @@ class Iris_py:
                     for k in range(n_R):
                         ret = self.sdr.readStream(
                             self.rx_stream, [wave_rx_a, wave_rx_b], int(self.n_samp))
+                        if ret.ret != int(self.n_samp):
+                                print("BAD reading stream: (ret:{})".format(ret))
+                                low_signal_a = True
+                                low_signal_b = True
+                                break
+
                         print("reading stream: (ret:{}), {}, {}, {}".format(ret, ret.timeNs, ret.timeNs>>32, (ret.timeNs>>16)&0xFFFF))
                         data_id = m*n_R+k
                         rx_frames_a[data_id*in_len: (data_id*in_len + in_len)] = wave_rx_a
