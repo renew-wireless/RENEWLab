@@ -337,7 +337,7 @@ class MIMODriver:
         return rx_data, good_frame_id, numRxSyms
 
 
-    def txrx_dl_sound(self, tx_data_mat_re, tx_data_mat_im, num_frames, nsamps_pad=160, max_try=20, python_mode=False):
+    def txrx_dl_sound(self, tx_data_mat_re, tx_data_mat_im, num_frames, nsamps_pad=160, max_try=30, python_mode=False):
         tx_data_mat = tx_data_mat_re + 1j * tx_data_mat_im
         n_samps = tx_data_mat.shape[0]
 
@@ -418,7 +418,12 @@ class MIMODriver:
             triggers = []
             for u in range(self.n_users):
                 old_triggers.append(0)
+
             for i in range(max_try):
+                new_triggers = []
+                for u in range(self.n_users):
+                    new_triggers.append(0)
+
                 self.bs_trigger()
                 # Receive Data
                 rx_data_frame_tmp = [ue.recv_stream_tdd() for ue in self.ue_obj]
@@ -438,17 +443,16 @@ class MIMODriver:
                 amp = np.mean(np.abs(rx_data_frame[0][0]))
                 #good_signal = amp > 0.001
                 triggers = [ue.sdr_gettriggers() for ue in self.ue_obj]
-                new_triggers = []
-                zip_triggers = zip(triggers, old_triggers)
-                for triggers_i, old_triggers_i in zip_triggers:
-                    new_triggers.append(triggers_i - old_triggers_i)
-                print("triggers = {}, Amplitude = {}".format(new_triggers, amp))
+
                 all_triggered = True
-                for u in range(n_users):
+                for u in range(self.n_users):
+                    new_triggers[u] = triggers[u] - old_triggers[u]
+                    old_triggers[u] = triggers[u]
                     if (new_triggers[u] == 0):
                         all_triggered = False
+                print("Try: {}, Total Triggers: {}, New Trigs: {}".format(i,triggers,new_triggers))
                 if all_triggered and good_signal:
-                    break
+                    break;
 
             print("frame = {}, tries = {}, all_triggred = {}, good_signal = {}, amp = {}".format(frame, i + 1, all_triggered, good_signal, amp))
             if all_triggered and good_signal:
@@ -555,14 +559,19 @@ class MIMODriver:
         self.reset_frame()
         return txg, rxg, current_max, valid
 
-    def update_sdr_params(self, param, param_val):
+    def update_sdr_params(self, param, param_val, is_bs):
         # Update params on all boards, might want to create two separate functions, one for BS SDRs and one for UE SDRs
-        if param == 'txgain':
-            [ue.sdr_settxgain(param_val) for ue in self.ue_obj]
-            [bs.sdr_settxgain(param_val) for bs in self.bs_obj]
-        elif param == 'rxgain':
-            [ue.sdr_setrxgain(param_val) for ue in self.ue_obj]
-            [bs.sdr_setrxgain(param_val) for bs in self.bs_obj]
+        if param == 1:
+            if is_bs:
+                print("UPDATE TX GAIN DOWNLINK!!")
+                [bs.sdr_settxgain(param_val) for bs in self.bs_obj]
+            else:
+                [ue.sdr_settxgain(param_val) for ue in self.ue_obj]
+        elif param == 2:
+            if is_bs:
+                [bs.sdr_setrxgain(param_val) for bs in self.bs_obj]
+            else:
+                [ue.sdr_setrxgain(param_val) for ue in self.ue_obj]
         else:
             print("Invalid Parameter: No action taken!")
         return
@@ -592,8 +601,8 @@ class MIMODriver:
 def main():
     parser = OptionParser()
     parser.add_option("--hub", type="string", dest="hub", help="serial number of the hub device", default="FH4B000019")
-    parser.add_option("--bs-serials", type="string", dest="bs_serials", help="serial numbers of the BS devices", default='RF3E000208,RF3E000146') #default='RF3E000146,RF3E000356,RF3E000546')
-    parser.add_option("--ue-serials", type="string", dest="ue_serials", help="serial numbers of the UE devices", default='RF3E000241')
+    parser.add_option("--bs-serials", type="string", dest="bs_serials", help="serial numbers of the BS devices", default='RF3E000654,RF3E000458') #default='RF3E000146,RF3E000356,RF3E000546')
+    parser.add_option("--ue-serials", type="string", dest="ue_serials", help="serial numbers of the UE devices", default='RF3E000760')
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--freq", type="float", dest="freq", help="Tx freq (Hz). POWDER users must set to 3.6e9", default=3.6e9)
     parser.add_option("--tx-gain", type="float", dest="tx_gain", help="Optional Tx gain (dB)", default=81.0)

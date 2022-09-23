@@ -256,8 +256,8 @@ classdef mimo_driver < handle
             valid = double(py.numpy.bool_(results(4)));
         end
 
-        function mimo_update_sdr_param(obj, param, param_value)
-            obj.mimo_obj.update_sdr_params(param, param_value)
+        function mimo_update_sdr_params(obj, param, param_value, is_bs)
+            obj.mimo_obj.update_sdr_params(param, param_value, is_bs);
         end
 
         function mimo_close(obj)

@@ -123,7 +123,7 @@ class Iris_py:
                         else:
                                 self.sdr.setBandwidth(SOAPY_SDR_TX, chan, 2.5*sample_rate)
                         if tx_gain is not None:
-                                self.sdr.setGain(SOAPY_SDR_TX, chan, min(tx_gain, 81.0))
+                                self.sdr.setGain(SOAPY_SDR_TX, chan, tx_gain) #min(tx_gain, 81.0))
                         if tx_freq is not None:
                                 self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'RF', tx_freq - .75*sample_rate)
                                 self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'BB', .75*sample_rate)
@@ -331,7 +331,7 @@ class Iris_py:
                         ret = self.sdr.readStream(
                             self.rx_stream, [wave_rx_a, wave_rx_b], int(self.n_samp))
                         if ret.ret != int(self.n_samp):
-                                print("BAD reading stream: (ret:{})".format(ret))
+                                print("BAD reading stream, index {}, : (ret:{})".format(ret, k))
                                 low_signal_a = True
                                 low_signal_b = True
                                 break
@@ -342,8 +342,10 @@ class Iris_py:
                         rx_frames_b[data_id*in_len: (data_id*in_len + in_len)] = wave_rx_b
                         if np.max(np.abs(wave_rx_a)) < 0.01:
                                 low_signal_a = True
+                                print("Low Signal A Index {}".format(k))
                         if np.max(np.abs(wave_rx_b)) < 0.01:
                                 low_signal_b = True
+                                print("Low Signal B Index {}".format(k))
 
                 return rx_frames_a, rx_frames_b, low_signal_a, low_signal_b
 

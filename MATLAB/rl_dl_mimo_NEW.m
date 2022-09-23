@@ -57,7 +57,8 @@ else
     USE_HUB                 = 1;
     TX_FRQ                  = 3.5475e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = 81;
+    TX_GN                   = 95;
+    TX_GN_BF                = 81;           % BS gain during DL BF transmission
     TX_GN_UE                = [100, 100];
     RX_GN                   = 65;
     SMPL_RT                 = 5e6;
@@ -70,8 +71,14 @@ else
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
-        %bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
-        bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];%,"RF3E000622","RF3E000601","RF3E000602"];
+        bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424", ... % Chain1
+		 "RF3E000731","RF3E000747","RF3E000734", ...               % Chain1
+	         "RF3E000748","RF3E000492", ...                            % Chain5
+		 "RF3E000708","RF3E000437","RF3E000090"];                  % Chain5
+	         %"RF3E000686","RF3E000574","RF3E000595","RF3E000585"];%, ...
+		 %"RF3E000722","RF3E000494","RF3E000592","RF3E000333", ...
+	         %"RF3E000053","RF3E000177","RF3E000192","RF3E000117", ...
+		 %"RF3E000257","RF3E000430","RF3E000311","RF3E000565"];%, ...
         hub_id = ["FH4B000003"];
     else
         bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
@@ -213,6 +220,7 @@ else
     mimo_handle = mimo_driver(sdr_params);
     [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx_dl_sound(tx_vec_train, N_FRM, N_ZPAD_PRE);
     if isempty(rx_vec_iris_sound)
+	mimo_handle.mimo_close();
         error("Driver returned empty array. No good data received by base station");
     end
     assert(size(rx_vec_iris_sound,3) == N_BS_ANT) 
@@ -302,6 +310,10 @@ end
 fprintf('=============================== \n');
 fprintf('Downlink Beamforming \n');
 
+% Update TX gain
+is_bs = 1;   % Is base station node
+param = 1;   % txgain == 1 [TODO, change to string, txgain=1, rxgain=2]
+mimo_handle.mimo_update_sdr_params(param, TX_GN_BF, is_bs);
 
 if SIM_MODE
     % TODO
