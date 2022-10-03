@@ -1,9 +1,7 @@
 #!/usr/bin/python3
 """
  hdf5_lib.py
-
  Library handling recorded hdf5 file from channel sounding (see Sounder/).
-
 ---------------------------------------------------------------------
  Copyright © 2018-2019. Rice University.
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
@@ -23,6 +21,8 @@ import multiprocessing as mp
 import extract_pilots_data as epd
 from find_lts import *
 from ofdmtxrx import ofdmTxRx
+
+useAgoraUL = False
 
 #@staticmethod
 def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0, frame_to_plot=0, ref_ant=0, ref_user = 0):
@@ -301,7 +301,6 @@ class hdf5_lib:
         """
         Parse file to retrieve metadata and data.
         HDF5 file has been written in DataRecorder.cpp (in Sounder folder)
-
         Output:
             Data (hierarchy):
                 -Path
@@ -316,7 +315,6 @@ class hdf5_lib:
                 dims_pilot[2] = number of UEs
                 dims_pilot[3] = number of antennas (at BS)
                 dims_pilot[4] = samples per symbol * 2 (IQ)
-
             - Uplink Data
                 dims_data[0] = maxFrame
                 dims_data[1] = number of cells
@@ -395,12 +393,12 @@ class hdf5_lib:
             self.metadata['OFDM_PILOT_F'] = pilot_complex
 
         # Time-domain Pilot
-        pilot_vec = self.metadata['OFDM_PILOT']
+        #pilot_vec = self.metadata['OFDM_PILOT']
         # some_list[start:stop:step]
-        I = pilot_vec[0::2]
-        Q = pilot_vec[1::2]
-        pilot_complex = I + Q * 1j
-        self.metadata['OFDM_PILOT'] = pilot_complex
+        #I = pilot_vec[0::2]
+        #Q = pilot_vec[1::2]
+        #pilot_complex = I + Q * 1j
+        #self.metadata['OFDM_PILOT'] = pilot_complex
 
         if 'UL_SYMS' in self.metadata:
             n_ul_slots = self.metadata['UL_SYMS']
@@ -456,13 +454,9 @@ class hdf5_lib:
 
     def log2csi_hdf5(self, filename, offset=0):
         """Convert raw IQ log to CSI.
-
         Converts input Argos HDF5 trace to frequency domain CSI and writes it to the same filename with -csi appended.
-
         Args: filename of log
-
         Returns: None
-
         """
         print("inside log2csi")
         if legacy:
@@ -891,7 +885,7 @@ class hdf5_lib:
         return cfo
 
     @staticmethod
-    def load_tx_data(metadata, dirpath):
+    def load_tx_data(metadata, dirpath, n_users):
         if 'SYMBOL_LEN' in metadata: # to support older datasets
             samps_per_slot = int(metadata['SYMBOL_LEN'])
         elif 'SLOT_SAMP_LEN' in metadata:
@@ -910,13 +904,18 @@ class hdf5_lib:
         cl_ch_num = int(metadata['CL_CH_PER_RADIO'])
         num_cl = int(metadata['CL_NUM'])
         data_sc_ind = np.array(metadata['OFDM_DATA_SC'])
+        print('OFDM_DATA_SC', data_sc_ind)
         pilot_sc_ind = np.array(metadata['OFDM_PILOT_SC'])
+        print('OFDM_PILOT_SC', pilot_sc_ind)
         pilot_sc_val = np.array(metadata['OFDM_PILOT_SC_VALS'])
         zero_sc_ind = np.setdiff1d(range(fft_size), data_sc_ind)
         zero_sc_ind = np.setdiff1d(zero_sc_ind, pilot_sc_ind)
         nonzero_sc_ind = np.setdiff1d(range(fft_size), zero_sc_ind)
         ul_data_frame_num = int(metadata['UL_DATA_FRAME_NUM'])
-        tx_file_names = metadata['TX_FD_DATA_FILENAMES'].astype(str)
+        if useAgoraUL:
+            tx_file_names = ['ul_data_f_16QAM_304_512_1_3_1_A_0.bin']
+        else:
+            tx_file_names = metadata['TX_FD_DATA_FILENAMES'].astype(str)
         txdata = np.empty((ul_data_frame_num, num_cl, ul_slot_num,
                      symbol_per_slot,  fft_size), dtype='complex64')
         read_size = 2 * ul_data_frame_num * ul_slot_num * cl_ch_num * symbol_per_slot * fft_size
@@ -936,10 +935,25 @@ class hdf5_lib:
                     cl_ch_num, symbol_per_slot, fft_size)), (0, 2, 1, 3, 4))
                 txdata = np.fft.fftshift(txdata, 4)
             cl = cl + cl_ch_num
-        return txdata
+        
+        data_sc_len = len(metadata['OFDM_DATA_SC'])
+        ue_pilot = np.empty((n_users, data_sc_len), dtype='complex64')
+        for i in range(n_users):
+            ue_pilot_file_path = "ue_pilot_data_f_" + str(i) + ".bin"
+            if dirpath != "":
+                ue_pilot_file_path = dirpath + '/' + ue_pilot_file_path
+            with open(ue_pilot_file_path, mode='rb') as f:
+                pilot_data = list(struct.unpack('f'*(2 * fft_size), f.read(4*2*fft_size)))
+                I = np.array(pilot_data[0::2])
+                Q = np.array(pilot_data[1::2])
+                IQ = I + Q * 1j
+                IQ = np.fft.fftshift(IQ, 0)
+                ue_pilot[i, :] = IQ[data_sc_ind] 
+                print('pilot compare diff', ue_pilot[i, :] - pilot_sc_val)
+        return txdata, ue_pilot
 
     @staticmethod
-    def demodulate(ul_samps, csi, txdata, metadata, ue_frame_offset, offset, ul_slot_i, noise_samps_f=None, method='zf', fft_shifted_dataset = True):
+    def demodulate(ul_samps, csi, txdata, ue_pilot, metadata, ue_frame_offset, offset, ul_slot_i, noise_samps_f=None, method='zf', fft_shifted_dataset = True):
         if method.lower() == 'mmse' and noise_samps_f is None:
             print("%s requires noise samples"%(method))
             return None
@@ -958,7 +972,10 @@ class hdf5_lib:
             ul_slot_num = int(metadata['UL_SYMS'])
         elif 'UL_SLOTS' in metadata:
             ul_slot_num = int(metadata['UL_SLOTS'])
-        data_sc_ind = np.array(metadata['OFDM_PILOT_SC']) #OFDM_DATA_SC
+        if useAgoraUL:
+            data_sc_ind = np.array(metadata['OFDM_DATA_SC'])
+        else:
+            data_sc_ind = np.array(metadata['OFDM_PILOT_SC'])
         pilot_sc_ind = np.array(metadata['OFDM_PILOT_SC'])
         pilot_sc_val = np.array(metadata['OFDM_PILOT_SC_VALS'])
         zero_sc_ind = np.setdiff1d(range(fft_size), data_sc_ind)
@@ -976,17 +993,6 @@ class hdf5_lib:
         n_users = csi.shape[1]
         ul_syms = np.empty((n_frames, n_slots, n_ants,
                        symbol_per_slot, fft_size), dtype='complex64')
-
-        ue_pilot = np.empty((n_users, data_sc_len), dtype='complex64')
-        for i in range(n_users):
-            ue_pilot_file_path = "ue_pilot_data_f_" + str(i) + ".bin"
-            with open(ue_pilot_file_path, mode='rb') as f:
-                pilot_data = list(struct.unpack('f'*(2 * fft_size), f.read(4*2*fft_size)))
-                I = np.array(pilot_data[0::2])
-                Q = np.array(pilot_data[1::2])
-                IQ = I + Q * 1j
-                IQ = np.fft.fftshift(IQ, 0)
-                ue_pilot[i, :] = IQ[data_sc_ind] 
 
 
         # UL Syms: #Frames, #Uplink SLOTS, #Antennas, #OFDM Symbols, #Samples
@@ -1027,18 +1033,24 @@ class hdf5_lib:
 
         if method != 'ml':
             ul_syms_f_tp = np.transpose(ul_syms_f[:, :, :, :, nonzero_sc_ind], (0, 1, 3, 2, 4))
+            if useAgoraUL:
+                csi_nz = csi[:, :, :, nonzero_sc_ind]
+            else:
+                csi_nz = csi
+            print("size of csi_nz = ", csi_nz.shape)
+            print("size of ul_syms_f_tp = ", ul_syms_f_tp.shape)
             # UL DEMULT: #Frames, #OFDM Symbols, #User, #Sample (DATA + PILOT SCs)
             # We assume the first two slots are pilots used for phase tracking
             # Slot 2 onwards in Agora are data 
-            ul_demult0 = demult(csi, ul_syms_f_tp[:, 0, :, :, :], noise_samps_f, method=method)
+            ul_demult0 = demult(csi_nz, ul_syms_f_tp[:, 0, :, :, :], noise_samps_f, method=method)
             phase_corr = np.sum(ul_demult0 * np.conj(ue_pilot), axis=3)
             phase_shift0 = np.angle(phase_corr) 
-            ul_demult1 = demult(csi, ul_syms_f_tp[:, 1, :, :, :], noise_samps_f, method=method)
+            ul_demult1 = demult(csi_nz, ul_syms_f_tp[:, 1, :, :, :], noise_samps_f, method=method)
             phase_corr = np.sum(ul_demult1 * np.conj(ue_pilot), axis=3)
             phase_shift1 = np.angle(phase_corr)
             phase_shift = phase_shift1 - phase_shift0
             phase_err = phase_shift1 + phase_shift
-            ul_demult = demult(csi, ul_syms_f_tp[:, 2, :, :, :], noise_samps_f, method=method)
+            ul_demult = demult(csi_nz, ul_syms_f_tp[:, 2, :, :, :], noise_samps_f, method=method)
             phase_comp = np.exp(-1j*phase_err)
             phase_comp_ext = np.tile(np.expand_dims(phase_comp, axis=3), (1, 1, 1, data_sc_len))
             ul_equal_syms = np.multiply(ul_demult, phase_comp_ext) #phase_comp_exp
@@ -1078,7 +1090,7 @@ class hdf5_lib:
 
             # Calc. phase rotation with ZF
             pilot_sc_demult = demult(csi_f[:, :, :, pilot_sc_ind], np.transpose(ul_syms_f[:, :, :, pilot_sc_ind], (0, 2, 1, 3)), None, 'zf')
-            phase_corr = pilot_sc_demult * np.conj(pilot_sc_val)
+            phase_corr = pilot_sc_demult * np.conj(ue_pilot)
             # Frame, Symbol, User
             phase_err = np.angle(np.mean(phase_corr, 3))
             # Frame, User, Symbol
@@ -1105,7 +1117,4 @@ class hdf5_lib:
                     res = [k for k, l in zip(list(ul_demod_int), list(ul_tx_syms)) if k == l]
                     slot_ser[new_i, j] = (ul_demod_syms.shape[2] - len(list(res))) / ul_demod_syms.shape[2]
 
-
-
         return ul_equal_syms, ul_demod_syms, tx_data_syms[:, :, 2, :], slot_evm, slot_evm_snr, slot_ser
-

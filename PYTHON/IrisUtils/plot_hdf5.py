@@ -1,21 +1,16 @@
 #!/usr/bin/python3
 """
  plot_hdf5.py
-
  Plotting from HDF5 file
  Script to analyze recorded hdf5 file from channel sounding (see Sounder/).
  Usage format is:
     ./plot_hdf5.py <hdf5_file_name>
-
  Example:
     ./plot_hdf5.py ../Sounder/logs/test-hdf5.py
-
-
 ---------------------------------------------------------------------
  Copyright © 2018-2022. Rice University.
  RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
 ---------------------------------------------------------------------
-
 """
 
 import sys
@@ -38,7 +33,6 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 deep_inspect=False, corr_thresh=0.00, exclude_bs_nodes=[],
                 demod="", analyze=False):
     """Plot data in the hdf5 file to verify contents.
-
     Args:
         hdf5: An hdf5_lib object.
         frame_i: The index of the frame to be plotted.
@@ -71,7 +65,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     nonzero_sc_size = fft_size
     if 'DATA_SUBCARRIER_NUM' in metadata:
         nonzero_sc_size = metadata['DATA_SUBCARRIER_NUM']
-    ofdm_pilot = np.array(metadata['OFDM_PILOT'])
+    #ofdm_pilot = np.array(metadata['OFDM_PILOT'])
     if "OFDM_PILOT_F" in metadata.keys():
         ofdm_pilot_f = np.array(metadata['OFDM_PILOT_F'])
     else:
@@ -338,9 +332,9 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 noise_f = noise[:, ul_slot_i, :, :, :]
             else:
                 noise_f = None
-            tx_data = hdf5_lib.load_tx_data(metadata, hdf5.dirpath)
+            tx_data, ue_pilot = hdf5_lib.load_tx_data(metadata, hdf5.dirpath, userCSI.shape[1])
             equalized_symbols, demod_symbols, tx_symbols, slot_evm, slot_evm_snr, slot_ser = \
-                hdf5_lib.demodulate(ul_samps, userCSI, tx_data, metadata, ue_frame_offset, offset, ul_slot_i, noise_f, demod, fft_shifted_dataset)
+                hdf5_lib.demodulate(ul_samps, userCSI, tx_data, ue_pilot, metadata, ue_frame_offset, offset, ul_slot_i, noise_f, demod, fft_shifted_dataset)
             plot_constellation_stats(slot_evm, slot_evm_snr, slot_ser, equalized_symbols, tx_symbols, ref_frame, ul_slot_i)
 
     # Plot DL data symbols
@@ -365,7 +359,6 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 def analyze_hdf5(csi, noise, metadata, frame_i=10, subcarrier_i=7, offset=-1):
     '''
     Calculates and plots achievable rates from hdf5 traces
-
     '''
 
     samps_per_slot = int(metadata['SLOT_SAMP_LEN'])
@@ -441,99 +434,6 @@ def analyze_hdf5(csi, noise, metadata, frame_i=10, subcarrier_i=7, offset=-1):
     del csi  # free the memory
     del noise
 
-def compute_legacy(hdf5):
-    '''
-    Parse and plot data from legacy files
-    '''
-
-    print("starting legacy function")
-    starttime = time.time()
-    show_plots = True
-    zoom = 0  # samples to zoom in around frame (to look at local behavior), 0 to disable
-    pl = 0
-
-    frame = 10  # frame to compute beamweights from
-    conjdata = []
-    zfdata = []
-    # print("main checkpoint1 time expended %f" % (starttime - time.time()))
-    for h5log in [hdf5]:  # , env, mobile]:
-        # read parameters for this measurement data
-        samps_per_user = h5log.attrs['samples_per_user']
-        num_users = h5log.attrs['num_mob_ant']
-        timestep = h5log.attrs['frame_length'] / 20e6
-        noise_meas_en = h5log.attrs.get('measured_noise', 1)
-
-        # compute CSI for each user and get a nice numpy array
-        csi, SNR = hdf5_lib.samps2csi(h5log['Pilot_Samples'], num_users + noise_meas_en, samps_per_user,
-                                     legacy=True)  # Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier  #also, iq samples nicely chunked out, same dims, but subcarrier is sample.
-        if zoom > 0:  # zoom in too look at behavior around peak (and reduce processing time)
-            csi = csi[frame - zoom:frame + zoom, :, :, :, :]
-            frame = zoom  # recenter the plots (otherwise it errors)
-        noise = csi[:, -1, :, :, :]  # noise is last set of data.
-        userCSI = np.mean(csi[:, :num_users, :, :, :], 2)  # don't include noise, average over both LTSs
-
-        # example lts find:
-        user = 0
-        # so, this is pretty ugly, but we want all the samples (not just those chunked from samps2csi), so we not only convert ints to the complex floats, but also have to figure out where to chunk the user from.
-        lts_iq = h5log['Pilot_Samples'][frame, 0, user * samps_per_user:(user + 1) * samps_per_user, 0] * 1. + \
-                 h5log['Pilot_Samples'][frame, 0, user * samps_per_user:(user + 1) * samps_per_user, 1] * 1j
-        lts_iq /= 2 ** 15
-        offset = lts.findLTS(
-            lts_iq)  # Andrew wrote this, but I don't really like the way he did the convolve method...  works well enough for high SNRs.
-        offset = offset[0] + 32
-        print("LTS offset for user %d, frame %d: %d" % (user, frame, offset))
-
-        # compute beamweights based on the specified frame.
-        conjbws = np.transpose(np.conj(userCSI[frame, :, :, :]), (1, 0, 2))
-        zfbws = np.empty((userCSI.shape[2], userCSI.shape[1], userCSI.shape[3]), dtype='complex64')
-        for sc in range(userCSI.shape[3]):
-            zfbws[:, :, sc] = np.linalg.pinv(userCSI[frame, :, :, sc])
-
-        downlink = True
-        # calculate capacity based on these weights
-        # these return total capacity, per-user capacity, per-user/per-subcarrier capacity, SINR, single-user capacity(no inter-user interference), and SNR
-        conj = calCapacity(userCSI, noise, conjbws,
-                           downlink=downlink)  # conjcap_total,conjcap_u,conjcap_sc,conjSINR,conjcap_su_sc,conjcap_su_u,conjSNR
-        zf = calCapacity(userCSI, noise, zfbws,
-                         downlink=downlink)  # zfcap_total,zfcap_u,zfcap_sc,zfSINR,zfcap_su_sc,zfcap_su_u,zfSNR
-        # print("main checkpoint2 time expended %f" % (starttime - time.time()))
-
-        # plot stuff
-        if show_plots:
-            # Multiuser Conjugate
-            plt.figure(1000 * pl, figsize=(50, 10))
-            plt.plot(np.arange(0, csi.shape[0] * timestep, timestep)[:csi.shape[0]], conj[1])
-            # plt.ylim([0,2])
-            plt.xlabel('Time (s)')
-            plt.ylabel('Per User Capacity Conj (bps/Hz)')
-            plt.show(block=False)
-            # Multiuser Zeroforcing
-            plt.figure(1000 * pl + 1, figsize=(50, 10))
-            plt.plot(np.arange(0, csi.shape[0] * timestep, timestep)[:csi.shape[0]], zf[1])
-            # plt.ylim([0,2])
-            plt.xlabel('Time (s)')
-            plt.ylabel('Per User Capacity ZF (bps/Hz)')
-            plt.show(block=False)
-            # Single user (but show all users)
-            plt.figure(1000 * pl + 2, figsize=(50, 10))
-            plt.plot(np.arange(0, csi.shape[0] * timestep, timestep)[:csi.shape[0]], conj[-2])
-            # plt.ylim([0,2])
-            plt.xlabel('Time (s)')
-            plt.ylabel('SUBF Capacity Conj (bps/Hz)')
-            plt.show(block=False)
-            pl += 1
-        # print("main checkpoint3 time expended %f" % (starttime - time.time()))
-        # save for exporting to matlab (prettier plots)
-        conjdata.append(conj)
-        zfdata.append(zf)
-        # print("main checkpoint4 time expended %f" % (starttime - time.time()))
-
-        del csi, iq  # free the memory
-
-    endtime = time.time()
-    print("Total time: %f" % (endtime - starttime))
-
-
 def main():
     # Tested with inputs: ./data_in/Argos-2019-3-11-11-45-17_1x8x2.hdf5 300  (for two users)
     #                     ./data_in/Argos-2019-3-30-12-20-50_1x8x1.hdf5 300  (for one user) 
@@ -545,7 +445,6 @@ def main():
     parser.add_option("--ref-ul-slot", type="int", dest="ref_ul_slot", help="UL slot number to plot", default=0)
     parser.add_option("--ref-dl-slot", type="int", dest="ref_dl_slot", help="DL slot number to plot", default=0)
     parser.add_option("--ref-cell", type="int", dest="ref_cell", help="Cell number to plot", default=0)
-    parser.add_option("--legacy", action="store_true", dest="legacy", help="Parse and plot legacy hdf5 file", default=False)
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Reference antenna", default=0)
     parser.add_option("--ants", type="string", dest="bs_nodes", help="Bs antennas to be included in plotting", default="")
     parser.add_option("--exclude-bs-ants", type="string", dest="exclude_bs_nodes", help="Bs antennas to be excluded in plotting", default="")
@@ -586,7 +485,6 @@ def main():
     verify = options.verify
     analyze = options.analyze
     sub_sample = options.sub_sample
-    legacy = options.legacy
     corr_thresh = options.corr_thresh
     bs_nodes_str = options.bs_nodes
     exclude_bs_nodes_str = options.exclude_bs_nodes
@@ -606,64 +504,57 @@ def main():
     print(">> frame to plot = {}, ref. ant = {}, ref. user = {}, ref ofdm_sym = {}, no. of frames to inspect = {}, starting frame = {} <<".format(ref_frame, ref_ant, ref_user, ref_ofdm_sym, n_frames, fr_strt))
 
     # Instantiate
-    if legacy:
-        # TODO: Needs to be thoroughly tested!
-        # filename = 'ArgosCSI-96x8-2016-11-03-03-03-45_5GHz_static.hdf5'
-        hdf5 = h5py.File(str(filename), 'r')
-        compute_legacy(hdf5)
-    else:
-        hdf5 = hdf5_lib(filename, n_frames, fr_strt, sub_sample)
-        pilot_samples = hdf5.pilot_samples
-        uplink_samples = hdf5.uplink_samples
-        noise_samples = hdf5.noise_samples
-        downlink_samples = hdf5.downlink_samples
+    hdf5 = hdf5_lib(filename, n_frames, fr_strt, sub_sample)
+    pilot_samples = hdf5.pilot_samples
+    uplink_samples = hdf5.uplink_samples
+    noise_samples = hdf5.noise_samples
+    downlink_samples = hdf5.downlink_samples
 
-        # Check which data we have available
-        pilots_avail = len(pilot_samples) > 0
-        ul_data_avail = len(uplink_samples) > 0
-        noise_avail = len(noise_samples) > 0
-        dl_data_avail = len(downlink_samples) > 0
-        exclude_bs_nodes = []
-        if pilots_avail:
-            num_bs_ants = pilot_samples.shape[4]
-            if len(bs_nodes_str) > 0:
-                ant_ids = bs_nodes_str.split(',')
-                bs_nodes = [int(i) for i in ant_ids]
-                exclude_bs_nodes = list(set(range(num_bs_ants)) - set(bs_nodes))
-            else:
-                exclude_bs_nodes = []
-                if len(exclude_bs_nodes_str) > 0:
-                    exclude_ant_ids = exclude_bs_nodes_str.split(',')
-                    exclude_bs_nodes = [int(i) for i in exclude_ant_ids]
-            print("HDF5 pilot data size:")
-            print(pilot_samples.shape)
-        if noise_avail:
-            print("HDF5 noise data size:")
-            print(noise_samples.shape)
-        if ul_data_avail:
-            print("HDF5 uplink data size:")
-            print(uplink_samples.shape)
-        if dl_data_avail:
-            print("HDF5 downlink data size:")
-            print(downlink_samples.shape)
-
-        if show_metadata:
-            print(hdf5.metadata)
+    # Check which data we have available
+    pilots_avail = len(pilot_samples) > 0
+    ul_data_avail = len(uplink_samples) > 0
+    noise_avail = len(noise_samples) > 0
+    dl_data_avail = len(downlink_samples) > 0
+    exclude_bs_nodes = []
+    if pilots_avail:
+        num_bs_ants = pilot_samples.shape[4]
+        if len(bs_nodes_str) > 0:
+            ant_ids = bs_nodes_str.split(',')
+            bs_nodes = [int(i) for i in ant_ids]
+            exclude_bs_nodes = list(set(range(num_bs_ants)) - set(bs_nodes))
         else:
-            if not ul_data_avail and demodulate != "":
-                demodulate = ""
-                print("Uplink data is not available, ignoring demodulate option...")
+            exclude_bs_nodes = []
+            if len(exclude_bs_nodes_str) > 0:
+                exclude_ant_ids = exclude_bs_nodes_str.split(',')
+                exclude_bs_nodes = [int(i) for i in exclude_ant_ids]
+        print("HDF5 pilot data size:")
+        print(pilot_samples.shape)
+    if noise_avail:
+        print("HDF5 noise data size:")
+        print(noise_samples.shape)
+    if ul_data_avail:
+        print("HDF5 uplink data size:")
+        print(uplink_samples.shape)
+    if dl_data_avail:
+        print("HDF5 downlink data size:")
+        print(downlink_samples.shape)
 
-            if verify:
-                verify_hdf5(hdf5, ref_frame, ref_cell, ref_ofdm_sym, ref_ant,
-                            ref_user, ref_ul_slot, ref_dl_slot, ref_subcarrier,
-                            signal_offset, downlink_calib_offset,
-                            uplink_calib_offset, thresh, deep_inspect,
-                            corr_thresh, exclude_bs_nodes, demodulate, analyze)
+    if show_metadata:
+        print(hdf5.metadata)
+    else:
+        if not ul_data_avail and demodulate != "":
+            demodulate = ""
+            print("Uplink data is not available, ignoring demodulate option...")
+
+        if verify:
+            verify_hdf5(hdf5, ref_frame, ref_cell, ref_ofdm_sym, ref_ant,
+                        ref_user, ref_ul_slot, ref_dl_slot, ref_subcarrier,
+                        signal_offset, downlink_calib_offset,
+                        uplink_calib_offset, thresh, deep_inspect,
+                        corr_thresh, exclude_bs_nodes, demodulate, analyze)
     scrpt_end = time.time()
     print(">>>> Script Duration: time: %f \n" % ( scrpt_end - scrpt_strt) )
 
 
 if __name__ == '__main__':
     main()
-
