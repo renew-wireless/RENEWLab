@@ -82,7 +82,6 @@ else
         bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         hub_id = [];
     end
-    %ue_ids= ["RF3E000353", "RF3E000706"];
     ue_ids= ["RF3E000706", "RF3E000665"];
 
     N_BS_NODE               = length(bs_ids);           % Number of nodes/antennas at the BS
@@ -618,6 +617,9 @@ for iframe = 1:numGoodFrames
     fprintf("%.2f\t", snr_mat);
     fprintf("\n");
     fprintf("Condition Number: %f  \n", avgCond);
+    fprintf("Avg. EVM (%%): \n");
+    fprintf("%f%%\t", 100*aevms);
+    fprintf("\n");
     fprintf(' =============================== \n');
 
     %figure;

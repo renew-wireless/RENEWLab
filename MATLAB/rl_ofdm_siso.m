@@ -62,6 +62,7 @@ RX_GN                   = 65;
 SMPL_RT                 = 5e6;
 TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
 N_FRM                   = 5;
+TX_ADVANCE              = 235;          % !!!! IMPORTANT: DO NOT MODIFY - Default is 235!!!!
 
 bs_ids = string.empty();
 bs_sched = string.empty();
@@ -183,7 +184,8 @@ else
         'txgain', TX_GN, ...
         'tx_gain_ue', TX_GN_UE, ...
         'rxgain', RX_GN, ...
-        'sample_rate', SMPL_RT);
+        'sample_rate', SMPL_RT, ...
+	'trig_offset', TX_ADVANCE);
 
     mimo_handle = mimo_driver(sdr_params);
 
@@ -493,4 +495,5 @@ for frm_idx = 1:numGoodFrames
     fprintf('Num Bytes:   %d\n', N_DATA_SYMS * log2(MOD_ORDER) / 8);
     fprintf('Sym Errors:  %d (of %d total symbols)\n', sym_errs, N_DATA_SYMS);
     fprintf('Bit Errors:  %d (of %d total bits)\n', bit_errs, N_DATA_SYMS * log2(MOD_ORDER));
+    fprintf('Avg. EVM: %f%% \n', 100*aevms);
 end
