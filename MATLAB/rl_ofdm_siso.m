@@ -16,7 +16,7 @@
 % Within the OTA mode we further define three transmission modes:
 %  a) uplink
 %  b) downlink 
-%  c) hub_sync : both base station board and UE are triggered from the hub instead
+%  c) dl_ref_node_as_ue: both base station board and UE are triggered from the hub instead
 %     of using over-the-air beacons
 %
 % In both cases the client transmits an OFDM signal that resembles a
@@ -166,7 +166,7 @@ else
     disp("Running: HARDWARE MODE");
 
     % Create two Iris node objects:
-    tx_direction = 'uplink';      % Options: {'uplink', 'downlink', 'hub_sync'}
+    tx_direction = 'uplink';      % Options: {'uplink', 'downlink', 'dl_ref_node_as_ue'}
     bs_ids = ["RF3E000722"];
     ue_ids = ["RF3E000665"];
     hub_id = ["FH4B000003"];
@@ -204,9 +204,9 @@ else
     elseif strcmp(tx_direction, 'downlink')
         [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_downlink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
 
-    elseif strcmp(tx_direction, 'hub_sync')
+    elseif strcmp(tx_direction, 'dl_ref_node_as_ue')
         if isempty(hub_id)
-            error('Hub ID must be specified in hub_sync transmission mode. Exit Now!');
+            error('Hub ID must be specified in dl_ref_node_as_ue transmission mode. Exit Now!');
         end
         bs_sched = ["GGGGGRG"];
         ue_sched = ["GGGGGPG"];
