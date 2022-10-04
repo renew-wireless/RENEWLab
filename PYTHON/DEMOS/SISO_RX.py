@@ -110,7 +110,7 @@ pwr_circ_buff = np.zeros(num_samps_circ_buff)
 # SOAPY_SDR_DEBUG    = 7, //!< A debugging message.
 # SOAPY_SDR_TRACE    = 8, //!< A tracing message. This is the lowest priority.
 # SOAPY_SDR_SSI      = 9, //!< Streaming status indicators such as "U" (underflow) and "O" (overflow).
-logLevel = 3         # 4:WARNING, 6:WARNING+INFO, 7:WARNING+INFO+DEBUG...
+#logLevel = 3         # 4:WARNING, 6:WARNING+INFO, 7:WARNING+INFO+DEBUG...
 #SoapySDR.SoapySDR_setLogLevel(logLevel)
 #logging.basicConfig(filename='./data_out/debug_SISO_RX.log',
 #                    level=logging.DEBUG,
