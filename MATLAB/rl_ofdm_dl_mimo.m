@@ -71,24 +71,16 @@ else
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
-        %bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424", ... % Chain1
-		% "RF3E000731","RF3E000747","RF3E000734", ...               % Chain1
-	    %     "RF3E000748","RF3E000492", ...                            % Chain5
-		% "RF3E000708","RF3E000437","RF3E000090"];                  % Chain5
-        bs_ids = ["RF3E000346","RF3E000543","RF3E000594","RF3E000404"];
-	         %"RF3E000686","RF3E000574","RF3E000595","RF3E000585"];%, ...
-		 %"RF3E000722","RF3E000494","RF3E000592","RF3E000333", ...
-	         %"RF3E000053","RF3E000177","RF3E000192","RF3E000117", ...
-		 %"RF3E000257","RF3E000430","RF3E000311","RF3E000565"];%, ...
-        %hub_id = ["FH4B000003"];
-        hub_id = ["FH4B000019"];
+        bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424", ... % Chain1
+		  "RF3E000731","RF3E000747","RF3E000734", ...               % Chain1
+	          "RF3E000748","RF3E000492", ...                            % Chain5
+		  "RF3E000708","RF3E000437","RF3E000090"];                  % Chain5
+        hub_id = ["FH4B000003"];
     else
         bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         hub_id = [];
     end
-    %ue_ids= ["RF3E000353", "RF3E000706"];
-    %ue_ids= ["RF3E000706"];
-    ue_ids= ["RF3E000241"];
+    ue_ids= ["RF3E000706"];
 
     N_BS_NODE               = length(bs_ids);                   % Number of nodes at the BS
     N_BS_ANT                = length(bs_ids) * length(ANT_BS);  % Number of antennas at the BS
