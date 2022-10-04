@@ -1,18 +1,17 @@
-/*
- Copyright (c) 2018-2022, Rice University 
- RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
- 
----------------------------------------------------------------------
- Initializes and Configures Radios in the massive-MIMO base station 
----------------------------------------------------------------------
-*/
-
+/** @file BaseRadioSet.cc
+  * @brief Defination file for the BaseRadioSet class.
+  *
+  * Copyright (c) 2018-2022, Rice University
+  * RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+  * ----------------------------------------------------------
+  *  Initializes and Configures Radios in the massive-MIMO base station 
+  * ----------------------------------------------------------
+  */
 #include "include/BaseRadioSet.h"
 
-#include <SoapySDR/Errors.hpp>
-#include <SoapySDR/Formats.hpp>
-#include <SoapySDR/Time.hpp>
-
+#include "SoapySDR/Errors.hpp"
+#include "SoapySDR/Formats.hpp"
+#include "SoapySDR/Time.hpp"
 #include "include/Radio.h"
 #include "include/comms-lib.h"
 #include "include/logger.h"
@@ -21,6 +20,7 @@
 #include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
+static constexpr int kMaxTOSyncRetry = 10;
 
 BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
   std::vector<size_t> num_bs_antenntas(_cfg->num_cells());
@@ -37,7 +37,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
     // TODO: we can handle this better!
     // Single hub could potentially trigger multiple BS or RRHs
     // Leave this for future when multi-cell is enabled
-    if ((kUseUHD == false) && (_cfg->hub_ids().empty() == false) &&
+    if ((kUseSoapyUHD == false) && (_cfg->hub_ids().empty() == false) &&
         (_cfg->hub_ids().at(c).empty() == false)) {
       SoapySDR::Kwargs args;
       args["driver"] = "remote";
@@ -131,7 +131,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
     auto channels = Utils::strToChannels(_cfg->bs_channel());
 
     for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
-      auto dev = bsRadios.at(c).at(i)->dev;
+      auto* dev = bsRadios.at(c).at(i)->RawDev();
       std::cout << _cfg->bs_sdr_ids().at(c).at(i) << ": Front end "
                 << dev->getHardwareInfo()["frontend"] << std::endl;
       for (auto ch : channels) {
@@ -142,7 +142,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
           printf("Actual RX frequency: %fGHz...\n",
                  (dev->getFrequency(SOAPY_SDR_RX, ch) / 1e9));
           printf("Actual RX gain: %f...\n", (dev->getGain(SOAPY_SDR_RX, ch)));
-          if (!kUseUHD) {
+          if (!kUseSoapyUHD) {
             printf("Actual RX LNA gain: %f...\n",
                    (dev->getGain(SOAPY_SDR_RX, ch, "LNA")));
             printf("Actual RX PGA gain: %f...\n",
@@ -172,7 +172,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
           printf("Actual TX frequency: %fGHz...\n",
                  (dev->getFrequency(SOAPY_SDR_TX, ch) / 1e9));
           printf("Actual TX gain: %f...\n", (dev->getGain(SOAPY_SDR_TX, ch)));
-          if (!kUseUHD) {
+          if (!kUseSoapyUHD) {
             printf("Actual TX PAD gain: %f...\n",
                    (dev->getGain(SOAPY_SDR_TX, ch, "PAD")));
             printf("Actual TX IAMP gain: %f...\n",
@@ -196,7 +196,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
       std::cout << std::endl;
     }
     // Measure Sync Delays now!
-    if (kUseUHD == false) {
+    if (kUseSoapyUHD == false) {
       sync_delays(c);
     }
   }
@@ -210,21 +210,47 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
               << std::endl;
   } else {
     if (_cfg->sample_cal_en() == true) {
-      bool adjust = false;
       int cal_cnt = 0;
-      while (!adjust) {
-        if (++cal_cnt > 10) {
-          std::cout << "10 attemps of sample offset calibration, "
+      int offset_diff = 1;
+      // array radios delay adjust
+      while (offset_diff > 0) {
+        if (++cal_cnt > kMaxTOSyncRetry) {
+          std::cout << kMaxTOSyncRetry
+                    << " attemps of sample offset calibration, "
                        "stopping..."
                     << std::endl;
           break;
         }
-        adjust = true;
-        collectCSI(adjust);  // run 1: find offsets and adjust
+        offset_diff =
+            syncTimeOffset(false, true);  // run 1: find offsets and adjust
       }
-      collectCSI(adjust);  // run 2: verify adjustments
       usleep(100000);
-      std::cout << "sample offset calibration done!" << std::endl;
+      offset_diff = syncTimeOffset(false, false);  // run 2: verify
+      if (offset_diff > 1)
+        std::cout << "Failed ";
+      else
+        std::cout << "Successful ";
+      std::cout << "sample offset calibration!" << std::endl;
+      // ref node delay adjust
+      /*cal_cnt = 0;
+      offset_diff = 1;
+      while (offset_diff > 0) {
+        if (++cal_cnt > kMaxTOSyncRetry) {
+          std::cout << kMaxTOSyncRetry
+                    << " attemps of sample offset calibration for ref node, "
+                       "stopping..."
+                    << std::endl;
+          break;
+        }
+        offset_diff =
+            syncTimeOffset(true, true);  // run 1: find offsets and adjust
+      }
+      offset_diff = syncTimeOffset(true, false);  // run 2: verify
+      if (offset_diff > 0)
+        std::cout << "Failed ";
+      else
+        std::cout << "Successful ";
+      std::cout << "ref node sample offset calibration!" << std::endl;*/
     }
 
     nlohmann::json tddConf;
@@ -235,60 +261,50 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
 
     // write TDD schedule and beacons to FPFA buffers only for Iris
     for (size_t c = 0; c < _cfg->num_cells(); c++) {
-      if (!kUseUHD) {
-        if (_cfg->internal_measurement()) {
-          for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
-            tddConf["frames"] = json::array();
-            tddConf["frames"].push_back(_cfg->calib_frames().at(c).at(i));
-            std::cout << "Cell " << c << ", SDR " << i
-                      << " calibration schedule : "
-                      << _cfg->calib_frames().at(c).at(i) << std::endl;
-            std::string tddConfStr = tddConf.dump();
-            SoapySDR::Device* dev = bsRadios.at(c).at(i)->dev;
-            dev->writeSetting("TDD_CONFIG", tddConfStr);
-            // write pilot to FPGA buffers
+      if (!kUseSoapyUHD) {
+        size_t ndx = 0;
+        for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
+          auto* dev = bsRadios.at(c).at(i)->RawDev();
+          tddConf["frames"] = json::array();
+          if (_cfg->internal_measurement() == true) {
             for (char const& c : _cfg->bs_channel()) {
               std::string tx_ram = "TX_RAM_";
               dev->writeRegisters(tx_ram + c, 0, _cfg->pilot());
             }
-          }
-        } else {
-          tddConf["frames"] = json::array();
-          size_t frame_size = _cfg->frames().at(c).size();
-          std::string fw_frame = _cfg->frames().at(c);
-          for (size_t s = 0; s < frame_size; s++) {
-            char sym_type = fw_frame.at(s);
-            if (sym_type == 'P')
-              fw_frame.replace(s, 1, "R");  // uplink pilots
-            else if (sym_type == 'N')
-              fw_frame.replace(s, 1, "R");  // uplink data
-            else if (sym_type == 'U')
-              fw_frame.replace(s, 1, "R");  // uplink data
-            else if (sym_type == 'D')
-              fw_frame.replace(s, 1, "T");  // downlink data
-          }
-          tddConf["frames"].push_back(fw_frame);
-          std::cout << "Cell " << c
-                    << " FPGA schedule: " << _cfg->frames().at(c) << std::endl;
-          tddConf["beacon_start"] = _cfg->prefix();
-          tddConf["beacon_stop"] = _cfg->prefix() + _cfg->beacon_size();
-          std::string tddConfStr = tddConf.dump();
-          for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
-            SoapySDR::Device* dev = bsRadios.at(c).at(i)->dev;
-            dev->writeSetting("TDD_CONFIG", tddConfStr);
-          }
+            tddConf["frames"].push_back(_cfg->calib_frames().at(c).at(i));
+            std::cout << "Cell " << c << ", SDR " << i
+                      << " calibration schedule : "
+                      << _cfg->calib_frames().at(c).at(i) << std::endl;
 
-          // write beacons to FPGA buffers
-          size_t ndx = 0;
-          for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
-            SoapySDR::Device* dev = bsRadios.at(c).at(i)->dev;
+          } else {
+            tddConf["frames"] = json::array();
+            size_t frame_size = _cfg->frames().at(c).size();
+            std::string fw_frame = _cfg->frames().at(c);
+            for (size_t s = 0; s < frame_size; s++) {
+              char sym_type = fw_frame.at(s);
+              if (sym_type == 'P')
+                fw_frame.replace(s, 1, "R");  // uplink pilots
+              else if (sym_type == 'N')
+                fw_frame.replace(s, 1, "R");  // uplink data
+              else if (sym_type == 'U')
+                fw_frame.replace(s, 1, "R");  // uplink data
+              else if (sym_type == 'D')
+                fw_frame.replace(s, 1, "T");  // downlink data
+            }
+            tddConf["frames"].push_back(fw_frame);
+            std::cout << "Cell " << c
+                      << " FPGA schedule: " << _cfg->frames().at(c)
+                      << std::endl;
+          }
+          if (_cfg->internal_measurement() == false ||
+              _cfg->num_cl_antennas() > 0) {
             dev->writeRegisters("BEACON_RAM", 0, _cfg->beacon());
+            std::string tx_ram_wgt = "BEACON_RAM_WGT_";
             for (char const& ch : _cfg->bs_channel()) {
               bool isBeaconAntenna =
                   !_cfg->beam_sweep() && ndx == _cfg->beacon_ant();
               std::vector<unsigned> beacon_weights(num_bs_antenntas[c],
                                                    isBeaconAntenna ? 1 : 0);
-              std::string tx_ram_wgt = "BEACON_RAM_WGT_";
               if (_cfg->beam_sweep()) {
                 for (size_t j = 0; j < num_bs_antenntas[c]; j++)
                   beacon_weights[j] = CommsLib::hadamard2(ndx, j);
@@ -296,12 +312,14 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
               dev->writeRegisters(tx_ram_wgt + ch, 0, beacon_weights);
               ++ndx;
             }
+
             dev->writeSetting("BEACON_START",
                               std::to_string(bsRadios.at(c).size()));
+            tddConf["beacon_start"] = _cfg->prefix();
+            tddConf["beacon_stop"] = _cfg->prefix() + _cfg->beacon_size();
           }
-        }
-        for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
-          SoapySDR::Device* dev = bsRadios.at(c).at(i)->dev;
+          std::string tddConfStr = tddConf.dump();
+          dev->writeSetting("TDD_CONFIG", tddConfStr);
           dev->writeSetting(
               "TX_SW_DELAY",
               "30");  // experimentally good value for dev front-end
@@ -309,9 +327,9 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
         }
       }
 
-      if (!kUseUHD) {
+      if (!kUseSoapyUHD) {
         for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
-          SoapySDR::Device* dev = bsRadios.at(c).at(i)->dev;
+          auto* dev = bsRadios.at(c).at(i)->RawDev();
           bsRadios.at(c).at(i)->activateRecv();
           bsRadios.at(c).at(i)->activateXmit();
           dev->setHardwareTime(0, "TRIGGER");
@@ -319,7 +337,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
       } else {
         // Set freq and time source for multiple USRPs
         for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
-          SoapySDR::Device* dev = bsRadios.at(c).at(i)->dev;
+          auto* dev = bsRadios.at(c).at(i)->RawDev();
           dev->setClockSource("external");
           dev->setTimeSource("external");
           dev->setHardwareTime(0, "PPS");
@@ -363,7 +381,7 @@ void BaseRadioSet::init(BaseRadioContext* context) {
 
   auto channels = Utils::strToChannels(_cfg->bs_channel());
   SoapySDR::Kwargs args;
-  if (kUseUHD == false) {
+  if (kUseSoapyUHD == false) {
     args["driver"] = "iris";
     args["serial"] = _cfg->bs_sdr_ids().at(c).at(i);
   } else {
@@ -376,7 +394,7 @@ void BaseRadioSet::init(BaseRadioContext* context) {
     bsRadios.at(c).at(i) = nullptr;
     bsRadios.at(c).at(i) = new Radio(args, SOAPY_SDR_CS16, channels);
   } catch (std::runtime_error& err) {
-    if (kUseUHD == false) {
+    if (kUseSoapyUHD == false) {
       std::cerr << "Ignoring iris " << _cfg->bs_sdr_ids().at(c).at(i)
                 << std::endl;
     } else {
@@ -409,7 +427,7 @@ void BaseRadioSet::configure(BaseRadioContext* context) {
   //load channels
   auto channels = Utils::strToChannels(_cfg->bs_channel());
   Radio* bsRadio = bsRadios.at(c).at(i);
-  SoapySDR::Device* dev = bsRadio->dev;
+  auto* dev = bsRadio->RawDev();
   SoapySDR::Kwargs info = dev->getHardwareInfo();
   for (auto ch : channels) {
     double rxgain = _cfg->rx_gain().at(ch);
@@ -424,7 +442,7 @@ void BaseRadioSet::configure(BaseRadioContext* context) {
 SoapySDR::Device* BaseRadioSet::baseRadio(size_t cellId) {
   if (cellId < hubs.size()) return (hubs.at(cellId));
   if (cellId < bsRadios.size() && bsRadios.at(cellId).size() > 0)
-    return bsRadios.at(cellId).at(0)->dev;
+    return bsRadios.at(cellId).at(0)->RawDev();
   return NULL;
 }
 
@@ -438,19 +456,23 @@ void BaseRadioSet::sync_delays(size_t cellIdx) {
 
 void BaseRadioSet::radioTrigger(void) {
   for (size_t c = 0; c < _cfg->num_cells(); c++) {
-    SoapySDR::Device* base = baseRadio(c);
-    if (base != NULL) base->writeSetting("TRIGGER_GEN", "");
+    auto* base = baseRadio(c);
+    if (base != NULL) {
+      base->writeSetting("TRIGGER_GEN", "");
+    }
   }
 }
 
 void BaseRadioSet::radioStart() {
-  if (!kUseUHD) radioTrigger();
+  if (!kUseSoapyUHD) {
+    radioTrigger();
+  }
 }
 
 void BaseRadioSet::readSensors() {
   for (size_t c = 0; c < _cfg->num_cells(); c++) {
     for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
-      SoapySDR::Device* dev = bsRadios.at(c).at(i)->dev;
+      auto* dev = bsRadios.at(c).at(i)->RawDev();
       std::cout << "TEMPs on Iris " << i << std::endl;
       std::cout << "ZYNQ_TEMP: " << dev->readSensor("ZYNQ_TEMP") << std::endl;
       std::cout << "LMS7_TEMP  : " << dev->readSensor("LMS7_TEMP") << std::endl;
@@ -472,8 +494,8 @@ void BaseRadioSet::radioStop(void) {
   std::string tddConfStr = "{\"tdd_enabled\":false}";
   for (size_t c = 0; c < _cfg->num_cells(); c++) {
     for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
-      if (!kUseUHD) {
-        SoapySDR::Device* dev = bsRadios.at(c).at(i)->dev;
+      if (!kUseSoapyUHD) {
+        auto* dev = bsRadios.at(c).at(i)->RawDev();
         dev->writeSetting("TDD_CONFIG", tddConfStr);
         dev->writeSetting("TDD_MODE", "false");
       }
@@ -496,7 +518,7 @@ int BaseRadioSet::radioTx(size_t radio_id, size_t cell_id,
                           long long& frameTime) {
   int w;
   // for UHD device xmit from host using frameTimeNs
-  if (!kUseUHD) {
+  if (!kUseSoapyUHD) {
     w = bsRadios.at(cell_id).at(radio_id)->xmit(buffs, _cfg->samps_per_slot(),
                                                 flags, frameTime);
   } else {
@@ -507,7 +529,7 @@ int BaseRadioSet::radioTx(size_t radio_id, size_t cell_id,
 #if DEBUG_RADIO
   size_t chanMask;
   long timeoutUs(0);
-  auto* dev = bsRadios.at(cell_id).at(radio_id)->dev;
+  auto* dev = bsRadios.at(cell_id).at(radio_id)->RawDev();
   auto* txs = bsRadios.at(cell_id).at(radio_id)->txs;
   int s = dev->readStreamStatus(txs, chanMask, flags, frameTime, timeoutUs);
   std::cout << "cell " << cell_id << " radio " << radio_id << " tx returned "
@@ -540,7 +562,7 @@ int BaseRadioSet::radioRx(size_t radio_id, size_t cell_id, void* const* buffs,
     long long frameTimeNs = 0;
     ret = bsRadios.at(cell_id).at(radio_id)->recv(buffs, numSamps, frameTimeNs);
     // for UHD device recv using ticks
-    if (kUseUHD == false)
+    if (kUseSoapyUHD == false)
       frameTime = frameTimeNs;
     else
       frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate());

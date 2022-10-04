@@ -1,33 +1,30 @@
-/*
- Copyright (c) 2018-2021, Rice University
- RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
- 
-----------------------------------------------------------
- Handles received samples from massive-mimo base station 
-----------------------------------------------------------
+/** @file receiver.h
+  * @brief Declaration file for the Receiver class.
+  * Copyright (c) 2018-2022, Rice University
+  * RENEW OPEN SOURCE LICENSE: http://renew-wireless.org/license
+  * ----------------------------------------------------------
+  * Handles received samples from massive-mimo base station 
+  *----------------------------------------------------------
 */
+#ifndef DATARECEIVER_H_
+#define DATARECEIVER_H_
 
-#ifndef DATARECEIVER_HEADER
-#define DATARECEIVER_HEADER
-
-#include <arpa/inet.h>
-#include <netinet/in.h>
 #include <pthread.h>
-#include <sys/socket.h>
-#include <sys/types.h>
 
-#include <algorithm>
-#include <cassert>
-#include <chrono>
-#include <cstring>
-#include <ctime>
-#include <exception>
-#include <iostream>
-#include <numeric>
+#include <complex>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
+#if defined(USE_UHD)
+#include "BaseRadioSetUHD.h"
+#include "ClientRadioSetUHD.h"
+#else
 #include "BaseRadioSet.h"
 #include "ClientRadioSet.h"
+#endif
 #include "concurrentqueue.h"
+#include "config.h"
 #include "macros.h"
 
 class ReceiverException : public std::runtime_error {
@@ -74,16 +71,27 @@ class Receiver {
   static void* clientTxRx_launch(void* in_context);
   void clientTxRx(int tid);
   void clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer);
-  int syncSearch(std::vector<std::complex<int16_t>> sync_buff,
-                 size_t sync_num_samps);
+  ssize_t syncSearch(const std::complex<int16_t>* check_data,
+                     size_t search_window);
+
+  float estimateCFO(const std::vector<std::complex<int16_t>>& sync_buff,
+                    int sync_index);
   void initBuffers();
   void clientTxPilots(size_t user_id, long long base_time);
   int clientTxData(int tid, int frame_id, long long base_time);
+  ssize_t clientSyncBeacon(size_t radio_id, size_t sample_window);
+  void clientAdjustRx(size_t radio_id, size_t discard_samples);
 
  private:
   Config* config_;
-  ClientRadioSet* clientRadioSet_;
+
+#if defined(USE_UHD)
+  ClientRadioSetUHD* client_radio_set_;
+  BaseRadioSetUHD* base_radio_set_;
+#else
+  ClientRadioSet* client_radio_set_;
   BaseRadioSet* base_radio_set_;
+#endif
 
   size_t thread_num_;
   // pointer of message_queue_
@@ -96,11 +104,11 @@ class Receiver {
   // Data buffers
   SampleBuffer* cl_tx_buffer_;
   SampleBuffer* bs_tx_buffer_;
-  std::vector<void*> pilotbuffA;
-  std::vector<void*> pilotbuffB;
-  std::vector<void*> zeros;
-  size_t txTimeDelta;
-  size_t txFrameDelta;
+  std::vector<void*> pilotbuffA_;
+  std::vector<void*> pilotbuffB_;
+  std::vector<void*> zeros_;
+  size_t txTimeDelta_;
+  size_t txFrameDelta_;
 };
 
-#endif
+#endif  // DATARECEIVER_H_

@@ -134,11 +134,11 @@ class ofdmTxRx:
         RETURNS:
             - val: Integer value (data symbol) between 0 and 15 (i.e., 0:1:15)
         """
-
+        thresh = 2 / np.sqrt(10)
         val = (8 * (np.real(iq) > 0)) + \
-              (4 * (abs(np.real(iq)) < 0.6325)) + \
+              (4 * (abs(np.real(iq)) < thresh)) + \
               (2 * (np.imag(iq) > 0)) + \
-              (1 * (abs(np.imag(iq)) < 0.6325))
+              (1 * (abs(np.imag(iq)) < thresh))
         return val
 
     def qam64_dem(self, iq):
@@ -151,12 +151,15 @@ class ofdmTxRx:
         RETURNS:
             - val: Integer value (data symbol) between 0 and 63 (i.e., 0:1:63)
         """
+        thresh1 = 2 / np.sqrt(43)
+        thresh2 = 4 / np.sqrt(43)
+        thresh3 = 6 / np.sqrt(43)
         val = (32 * (np.real(iq) > 0)) + \
-              (16 * (abs(np.real(iq)) < 0.6172)) + \
-              (8 * ((abs(np.real(iq)) < 0.9258) and (abs(np.real(iq)) > 0.3086))) + \
+              (16 * (abs(np.real(iq)) < thresh2)) + \
+              (8 * ((abs(np.real(iq)) < thresh3) and (abs(np.real(iq)) > thresh1))) + \
               (4 * (np.imag(iq) > 0)) + \
-              (2 * (abs(np.imag(iq)) < 0.6172)) + \
-              (1 * ((abs(np.imag(iq)) < 0.9258) and (abs(np.imag(iq)) > 0.3086)))
+              (2 * (abs(np.imag(iq)) < thresh2)) + \
+              (1 * ((abs(np.imag(iq)) < thresh3) and (abs(np.imag(iq)) > thresh1)))
         return val
 
     def generate_data(self, n_ofdm_syms=100, mod_order=4, cp_length=16, datastream=[]):
@@ -238,6 +241,26 @@ class ofdmTxRx:
         sc_idx_all = [data_subcarriers, pilot_subcarriers]
 
         return signal, data_matrix, data_i, sc_idx_all, pilots_matrix
+
+    def modulation(self, in_data, mod_order):
+        """
+        Demodulate data stream of n_ofdm_syms number of symbols, according to mod_order.
+        """
+        data_i = [int(a) for a in in_data]
+        data = np.zeros(len(data_i), dtype='complex64')
+        for x in range(len(data_i)):
+            if mod_order == 2:
+                data[x] = self.bpsk_mod(data_i[x])
+            elif mod_order == 4:
+                data[x] = self.qpsk_mod(data_i[x])
+            elif mod_order == 16:
+                data[x] = self.qam16_mod(data_i[x])
+            elif mod_order == 64:
+                data[x] = self.qam64_mod(data_i[x])
+            else:
+                raise Exception("Modulation Order Not Supported. Valid orders: 2/4/16/64 for BPSK, QPSK, 16QAM, 64QAM")
+
+        return data
 
     def demodulation(self, in_data, mod_order):
         """

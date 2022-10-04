@@ -21,7 +21,7 @@ class RecorderWorker {
 
   void init(void);
   void finalize(void);
-  void record(int tid, Packet* pkt);
+  void record(int tid, Packet* pkt, NodeType node_type);
 
   inline size_t num_antennas(void) { return num_antennas_; }
   inline size_t antenna_offset(void) { return antenna_offset_; }

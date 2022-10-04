@@ -136,9 +136,6 @@ class Config {
   inline std::vector<std::complex<int16_t>>& pilot_ci16(void) {
     return this->pilot_ci16_;
   }
-  inline std::vector<std::complex<float>>& pilot_cf32(void) {
-    return this->pilot_cf32_;
-  }
   inline std::vector<size_t>& n_bs_sdrs(void) { return this->n_bs_sdrs_; }
 
   inline const std::vector<std::string>& cl_frames(void) const {
@@ -237,32 +234,31 @@ class Config {
     return this->cal_tx_gain_;
   }
 
-  inline std::vector<std::vector<std::complex<int16_t>>>& txdata_time_dom(
-      void) {
-    return this->txdata_time_dom_;
-  }
   inline const std::vector<std::vector<std::complex<float>>>& txdata_freq_dom(
       void) const {
     return this->txdata_freq_dom_;
   }
 
-  inline std::vector<std::vector<std::complex<int16_t>>>& dl_txdata_time_dom(
-      void) {
-    return this->dl_txdata_time_dom_;
-  }
   inline const std::vector<std::vector<std::complex<float>>>&
   dl_txdata_freq_dom(void) const {
     return this->dl_txdata_freq_dom_;
   }
 
+  inline double tx_scale(void) const { return this->tx_scale_; }
+  inline double pilot_scale(void) const { return this->pilot_scale_; }
   inline size_t getPacketDataLength() const {
     return (2 * this->samps_per_slot_ * sizeof(short));
   }
 
-  /// Return the frame duration in seconds
-  inline double getFrameDurationSec() const {
+  /// Return the slot duration in seconds
+  inline double getSlotDurationSec() const {
     return ((this->symbol_per_slot_ * this->samps_per_slot_) / this->rate_);
   }
+  /// Return the frame duration in seconds
+  inline double getFrameDurationSec() const {
+    return ((this->samps_per_frame()) / this->rate_);
+  }
+  inline size_t getTxFrameDelta() const { return tx_frame_delta_; }
 
   size_t getNumAntennas();
   size_t getMaxNumAntennas();
@@ -278,12 +274,14 @@ class Config {
   bool isUlData(int, int);
   bool isDlData(int, int);
   unsigned getCoreCount();
-  void loadULData(const std::string&);
-  void loadDLData(const std::string&);
+
+  void loadULData();
+  void loadDLData();
 
  private:
   bool bs_present_;
   bool client_present_;
+  std::string directory_;
 
   // common features
   double freq_;
@@ -305,8 +303,9 @@ class Config {
   size_t pilot_slot_per_frame_;
   size_t noise_slot_per_frame_;
   size_t ul_slot_per_frame_;
-  size_t dl_slot_per_frame_;  // No accessor
-  float tx_scale_;            // No accessor
+  size_t dl_slot_per_frame_;
+  float tx_scale_;
+  float pilot_scale_;
   std::string pilot_seq_;
   std::string beacon_seq_;
   bool ul_data_slot_present_;
@@ -328,7 +327,7 @@ class Config {
   std::vector<uint32_t> beacon_;
   std::vector<std::complex<int16_t>> beacon_ci16_;
   std::vector<std::complex<int16_t>> neg_beacon_ci16_;
-  int beacon_size_;
+  size_t beacon_size_;
   size_t beacon_ant_;
   size_t beacon_radio_;
   size_t beacon_ch_;
@@ -363,6 +362,7 @@ class Config {
   bool internal_measurement_;
   bool ref_node_enable_;
   size_t cal_ref_sdr_id_;
+  size_t tx_frame_delta_;
 
   // Clients features
   std::vector<std::string> cl_sdr_ids_;
@@ -377,7 +377,6 @@ class Config {
   std::vector<size_t> data_ind_;
   std::vector<uint32_t> coeffs_;
   std::vector<std::complex<int16_t>> pilot_ci16_;
-  std::vector<std::complex<float>> pilot_cf32_;
   std::vector<uint32_t> pilot_;
   std::vector<std::complex<float>> pilot_sc_;
   std::vector<size_t> pilot_sc_ind_;
@@ -385,9 +384,9 @@ class Config {
   std::vector<std::vector<float>> pilot_sym_f_;
   std::vector<std::vector<std::complex<float>>> tx_data_;
   std::vector<std::vector<std::complex<float>>> txdata_freq_dom_;
-  std::vector<std::vector<std::complex<int16_t>>> txdata_time_dom_;
+  std::vector<std::vector<std::complex<float>>> txdata_time_dom_;
   std::vector<std::vector<std::complex<float>>> dl_txdata_freq_dom_;
-  std::vector<std::vector<std::complex<int16_t>>> dl_txdata_time_dom_;
+  std::vector<std::vector<std::complex<float>>> dl_txdata_time_dom_;
 
   std::vector<std::string> cl_frames_;
   std::vector<std::vector<size_t>> cl_pilot_slots_;

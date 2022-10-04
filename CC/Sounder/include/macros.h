@@ -4,10 +4,16 @@
 #include <atomic>
 #include <vector>
 
-#ifdef USE_UHD
-static constexpr bool kUseUHD = true;
+#ifdef USE_SOAPYUHD
+static constexpr bool kUseSoapyUHD = true;
 #else
-static constexpr bool kUseUHD = false;
+static constexpr bool kUseSoapyUHD = false;
+#endif
+
+#ifdef USE_UHD
+static constexpr bool kUsePureUHD = true;
+#else
+static constexpr bool kUsePureUHD = false;
 #endif
 
 static constexpr size_t kStreamContinuous = 1;
@@ -28,7 +34,7 @@ static constexpr size_t kQueueSize = 36;
 #define RX_THREAD_NUM (4)
 
 #define MAX_FRAME_INC (2000)
-#define TIME_DELTA (40)  //ms
+#define TIME_DELTA_MS (40)  //ms
 #define SETTLE_TIME_MS (1)
 #define UHD_INIT_TIME_SEC (3)  // radio init time for UHD devices
 #define BEACON_INTERVAL (20)   // frames

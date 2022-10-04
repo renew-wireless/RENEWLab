@@ -75,7 +75,7 @@ void DataGenerator::GenerateData(const std::string& directory) {
                 ofdm_sym[sc] = cfg_->pilot_sc().at(c);
               }
               auto tx_sym = CommsLib::IFFT(ofdm_sym, cfg_->fft_size(),
-                                           1.f / cfg_->fft_size(), false);
+                                           1.f / cfg_->fft_size(), false, true);
               tx_sym.insert(tx_sym.begin(), tx_sym.end() - cfg_->cp_size(),
                             tx_sym.end());  // add CP
               data_time_dom.insert(data_time_dom.end(), tx_sym.begin(),
@@ -85,6 +85,16 @@ void DataGenerator::GenerateData(const std::string& directory) {
             }
             data_time_dom.insert(data_time_dom.end(), postfix_zpad_t.begin(),
                                  postfix_zpad_t.end());
+            for (size_t id = 0; id < data_time_dom.size(); id++) {
+              data_time_dom.at(id) *= cfg_->tx_scale();
+              if (data_time_dom.at(id).real() > 1.f ||
+                  data_time_dom.at(id).imag() > 1.f) {
+                std::printf(
+                    "Saturation detected in frame %zu slot %zu channel %zu "
+                    "sample %zu\n",
+                    f, u, h, id);
+              }
+            }
             auto data_time_dom_ci16 = Utils::cfloat_to_cint16(data_time_dom);
             std::fwrite(data_freq_dom.data(),
                         cfg_->fft_size() * cfg_->symbol_per_slot(),
@@ -156,7 +166,7 @@ void DataGenerator::GenerateData(const std::string& directory) {
                 ofdm_sym[sc] = cfg_->pilot_sc().at(c);
               }
               auto tx_sym = CommsLib::IFFT(ofdm_sym, cfg_->fft_size(),
-                                           1.f / cfg_->fft_size(), false);
+                                           1.f / cfg_->fft_size(), false, true);
               tx_sym.insert(tx_sym.begin(), tx_sym.end() - cfg_->cp_size(),
                             tx_sym.end());  // add CP
               data_time_dom.insert(data_time_dom.end(), tx_sym.begin(),

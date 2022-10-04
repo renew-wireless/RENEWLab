@@ -247,6 +247,10 @@ def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
 
         if "CBRS" in info["frontend"]:
             sdr.setGain(SOAPY_SDR_RX, ch, gain)
+        elif "UHF" in info["frontend"]:
+            sdr.setGain(SOAPY_SDR_RX, ch, "LNA", gain)  # [0:1:30]
+            sdr.setGain(SOAPY_SDR_RX, ch, "ATTN1", -6)
+            sdr.setGain(SOAPY_SDR_RX, ch, "ATTN2", -6)
         else:
             # No CBRS board gains, only changing LMS7 gains
             sdr.setGain(SOAPY_SDR_RX, ch, "LNA", gain)  # [0:1:30]

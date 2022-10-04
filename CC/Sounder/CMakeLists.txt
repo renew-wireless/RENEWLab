@@ -87,12 +87,44 @@ set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 #find_package(Threads REQUIRED)
 message(STATUS "Using Pthread Library: ${CMAKE_THREAD_LIBS_INIT}: ${CMAKE_USE_PTHREADS_INIT}")
 
-set(USE_UHD False CACHE STRING "USE_UHD defaulting to 'False'")
-message(STATUS "USE_UHD: ${USE_UHD}")
-
-if(${USE_UHD})
-  message(STATUS "Enabled USE_UHD: ${USE_UHD}")
+set(RADIO_TYPE SOAPY_IRIS CACHE STRING "RADIO_TYPE defaulting to 'SOAPY_IRIS', valid types are SOAPY_IRIS / SOAPY_UHD / PURE_UHD")
+message(STATUS "RADIO_TYPE: ${RADIO_TYPE}")
+if(RADIO_TYPE STREQUAL PURE_UHD)
+  message(STATUS "Enabled PURE_UHD radio")
   add_definitions(-DUSE_UHD)
+  # Adding dependency of UHD and boost external libraries
+  find_package(UHD "3.15.0" REQUIRED)
+  message(STATUS "Using UHD Version: ${UHD_VERSION}")
+
+  ########################################################################
+  # PURE UHD dependencies
+  ########################################################################
+  # Adding dependency of Boost to souder
+  set(BOOST_REQUIRED_COMPONENTS
+      program_options
+      system
+      thread)
+
+  if(MSVC)
+      set(BOOST_ALL_DYN_LINK "${BOOST_ALL_DYN_LINK}" CACHE BOOL "boost enable dynamic linking")
+      if(BOOST_ALL_DYN_LINK)
+          add_definitions(-DBOOST_ALL_DYN_LINK) #setup boost auto-linking in msvc
+      else(BOOST_ALL_DYN_LINK)
+          set(BOOST_REQUIRED_COMPONENTS) #empty components list for static link
+      endif(BOOST_ALL_DYN_LINK)
+  endif(MSVC)
+  find_package(Boost "1.65" REQUIRED ${BOOST_REQUIRED_COMPONENTS})
+  message(STATUS "Using Boost Version: ${Boost_VERSION}")
+
+  set(PURE_UHD_SOURCES 
+      BaseRadioSetUHD.cc
+      ClientRadioSetUHD.cc
+      RadioUHD.cc)
+elseif(RADIO_TYPE STREQUAL SOAPY_UHD)
+  message(STATUS "Enabled SOAPY UHD radio")
+  add_definitions(-DUSE_SOAPYUHD)
+else()
+  message(STATUS "Enabled SOAPY Iris radio")
 endif()
 
 ########################################################################
@@ -121,7 +153,7 @@ message(STATUS "HDF5_INCLUDE_DIRS: ${HDF5_INCLUDE_DIRS}")
 message(STATUS "HDF5_LIBRARIES: ${HDF5_LIBRARIES}")
 include_directories(${SoapySDR_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS} third_party/ third_party/nlohmann/single_include )
 
-set(SOUNDER_SOURCES 
+set(SOUNDER_SOURCES ${PURE_UHD_SOURCES}
     ClientRadioSet.cc
     config.cc
     data_generator.cc
@@ -154,7 +186,7 @@ else()
         ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-avx.a)
 endif()
 
-target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe gflags
+target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe gflags ${UHD_LIBRARIES}
     ${SoapySDR_LIBRARIES}
     ${HDF5_LIBRARIES}
     ${MUFFT_LIBRARIES})
@@ -162,7 +194,7 @@ target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe gflags
 add_library(sounder_module MODULE 
     ${SOUNDER_SOURCES})
 
-target_link_libraries(sounder_module -lpthread -lhdf5_cpp --enable-threadsafe gflags
+target_link_libraries(sounder_module -lpthread -lhdf5_cpp --enable-threadsafe gflags ${UHD_LIBRARIES}
     -Wl,--whole-archive
     ${MUFFT_LIBRARIES}
     -Wl,--no-whole-archive

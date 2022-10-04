@@ -108,7 +108,7 @@ def find_lts(iq, thresh=0.8, us=1, cp=32, flip=False, lts_seq=[]):
 	sign_fct = np.nan_to_num(sign_fct)							# Replace NaN values
 	lts_corr = np.abs(np.convolve(lts_flip_conj, sign_fct))
 
-	lts_pks = np.where(lts_corr > (thresh * np.max(lts_corr)))
+	lts_pks = np.where(lts_corr[:len(iq)] > (thresh * np.max(lts_corr)))
 	lts_pks = np.squeeze(lts_pks)
 	x_vec, y_vec = np.meshgrid(lts_pks, lts_pks)
 
@@ -139,6 +139,48 @@ def find_lts(iq, thresh=0.8, us=1, cp=32, flip=False, lts_seq=[]):
 			plt.show()
 
 	return best_pk, lts_pks, lts_corr
+
+def pilot_finder(samples, pilot_type, flip=False, pilot_seq=[], seq_length=64,cp=0):
+    """
+    Find pilots from clients to each of the base station antennas
+
+    Input:
+        samples    - Raw samples from pilots and data.
+                     Dimensions: vector [1 x num samples]
+        pilot_type - Type of TX pilot (e.g., 802.11 LTS)
+        flip       - Needed for finding LTS function
+
+    Output:
+        pilot     - Received pilot (from multiple clients)
+        tx_pilot  - Transmitted pilot (same pilot sent by all clients)
+    """
+
+    if pilot_type.find('lts') != -1:
+        # LTS-based pilot
+        lts_thresh = 0.8
+        best_pk, pilot_pks, pilot_corr = find_lts(samples, thresh=lts_thresh, flip=flip, lts_seq=pilot_seq)
+
+        # full lts contains 2.5 64-sample-LTS sequences, we need only one symbol
+        lts, lts_f = generate_training_seq(preamble_type='lts', cp=32, upsample=1)
+
+        if not (pilot_seq.size == 0):
+            # pilot provided, overwrite the one returned above
+            lts = pilot_seq
+
+        pilot_thresh = lts_thresh * np.max(pilot_corr)
+        # We'll need the transmitted version of the pilot (for channel estimation, for example)
+        tx_pilot = [lts, lts_f]
+
+    elif pilot_type.find('zadoff-chu') != -1:
+        best_pk, pilot_pks, pilot_corr = find_zc_pilot(samples, seq_length=seq_length, cp=cp, pilot_seq=pilot_seq)
+        pilot, pilot_f = generate_training_seq(preamble_type='zadoff-chu', seq_length=seq_length, cp=cp, upsample=1, reps=1)
+        tx_pilot = [pilot, pilot_f]
+        pilot_thresh = 0.8 * np.max(pilot_corr)
+
+    else:
+        raise Exception("Only LTS & Zadoff-Chu Pilots are currently supported!")
+
+    return tx_pilot, pilot_pks, pilot_corr, pilot_thresh, best_pk
 
 
 if __name__ == '__main__':

@@ -21,6 +21,7 @@ import math
 import time
 import datetime
 from scipy import signal
+import multiprocessing as mp
 import matplotlib.pyplot as plt
 from generate_sequence import *
 
@@ -359,22 +360,80 @@ def calCorr(userCSI, corr_vec):
     return corr_total, sig_sc
 
 
-def demult(csi, data, method='zf'):
+def demult(csi, data, noise=None, method='zf'):
     # TODO include cell dimension for both csi and data and symbol num for data
     """csi: Frame, User, Antenna, Subcarrier"""
     """data: Frame, Uplink Syms, Antenna, Subcarrier"""
     # Compute beamweights based on the specified frame.
+    demult_start = time.time()
     demul_data = np.empty(
         (csi.shape[0], data.shape[1], csi.shape[1], csi.shape[3]), dtype='complex64')
     bmf_w = np.empty(
         (csi.shape[0], csi.shape[3], csi.shape[2], csi.shape[1]), dtype='complex64')
     data_tp = np.transpose(data, (0, 3, 1, 2))
-    for frame in range(csi.shape[0]):
-        for sc in range(csi.shape[3]):
+    # TODO: use multi processing to accelerate code
+    for sc in range(csi.shape[3]):
+        for frame in range(csi.shape[0]):
             if method == 'zf':
                 bmf_w[frame, sc, :, :] = np.linalg.pinv(csi[frame, :, :, sc])
+            elif method == 'mmse' and noise is not None:
+                sigma = np.mean(np.mean(np.power(np.abs(noise[frame, :, :, sc]), 2), axis=0))
+                H = csi[frame, :, :, sc]
+                w_mmse = np.matmul(np.linalg.inv(np.matmul(H, np.transpose(np.conj(H))) + sigma*np.eye(H.shape[0])), H)
+                bmf_w[frame, sc, :, :] = np.transpose(np.conj(w_mmse))
             else:
-                bmf_w[frame, sc, :, :] = np.transpose(
-                    np.conj(csi[frame, :, :, sc]), (1, 0))
+                csi_conj = np.conj(csi[frame, :, :, sc])
+                w_scale = 1 / np.sum(np.multiply(csi_conj, csi[frame, :, :, sc]), 1);
+                bmf_w[frame, sc, :, :] = np.transpose(np.matmul(np.diag(w_scale), csi_conj), (1, 0))
     demul_data = np.transpose(np.matmul(data_tp, bmf_w), (0, 2, 3, 1))
+    print("demult time: %f"%(time.time() - demult_start))
     return demul_data
+
+def calcBW(csi, noise=None, method='zf'):
+    bmf_w = np.empty(
+        (csi.shape[2], csi.shape[1], csi.shape[0]), dtype='complex64')
+    for sc in range(csi.shape[2]):
+        if method == 'zf':
+            bmf_w[sc, :, :] = np.linalg.pinv(csi[:, :, sc])
+        elif method == 'mmse' and noise is not None:
+            sigma = np.mean(np.mean(np.power(np.abs(noise[:, :, sc]), 2), axis=0))
+            H = csi[:, :, sc]
+            w_mmse = np.matmul(H, np.linalg.inv(np.matmul(np.transpose(np.conj(H)), H) + sigma*np.eye(H.shape[1])))
+            bmf_w[sc, :, :] = np.conj(w_mmse)
+        else:
+            csi_conj = np.conj(csi[:, :, sc])
+            w_scale = np.sum(np.multiply(csi_conj, csi[:, :, sc]), 1);
+            bmf_w[sc, :, :] = np.transpose(np.diag(w_scale) * csi_conj, (1, 0))
+    return bmf_w
+
+### This function requires Gurobi Optimization package installed (requires a license)
+def mlDetector(csi_f, ul_syms_f, mod_syms):
+    from ml_solver import mlSolver
+    mod_syms_lin = list(set(np.real(mod_syms)))
+    n_frames = csi_f.shape[0]
+    n_ants = csi_f.shape[1]
+    n_users = csi_f.shape[2]
+    sc_per_slot = csi_f.shape[3]
+
+    # convert complex csi to real
+    csi_f_real = np.zeros((csi_f.shape[0], 2 * csi_f.shape[1], 2 * csi_f.shape[2], csi_f.shape[3]))
+    csi_f_real[:, :n_ants, :n_users, :] = np.real(csi_f)
+    csi_f_real[:, n_ants:, :n_users, :] = np.imag(csi_f)
+    csi_f_real[:, :n_ants, n_users:, :] = -np.imag(csi_f)
+    csi_f_real[:, n_ants:, n_users:, :] = np.real(csi_f)
+
+    # convert complex receive signal to real
+    ul_syms_f_real = np.zeros((n_frames, 2 * n_ants, sc_per_slot))
+    ul_syms_f_real = np.concatenate((np.real(ul_syms_f), np.imag(ul_syms_f)), axis=1)
+
+    indexing_start = time.time()
+    demod_sc_real = np.zeros((n_frames, 2 * n_users, sc_per_slot), dtype='complex64')
+    for sc in range(sc_per_slot):
+        demod_sc_real[:, :, sc] = mlSolver(csi_f_real[:, :, :, sc], ul_syms_f_real[:, :, sc], mod_syms_lin)
+    ## TODO: use multi processing to solve Maximum Likelihood detector
+    indexing_end = time.time()
+    print("ML Solver time: %f \n" % (indexing_end - indexing_start))
+
+    ul_demod_syms = demod_sc_real[:, :n_users, :] + 1j*demod_sc_real[:, n_users:, :]
+    return ul_demod_syms
+

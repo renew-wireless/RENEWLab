@@ -1,20 +1,20 @@
 /**
- * @file ClientRadioSet.h
- * @brief Declaration file for the ClientRadioSet class.
+ * @file ClientRadioSetUHD.h
+ * @brief Declaration file for the ClientRadioSetUHD class.
  */
-#ifndef CLIENT_RADIO_SET_H_
-#define CLIENT_RADIO_SET_H_
+#ifndef CLIENT_RADIO_SET_UHD_H_
+#define CLIENT_RADIO_SET_UHD_H_
 
 #include <atomic>
 #include <cstddef>
 
-#include "Radio.h"
+#include "RadioUHD.h"
 #include "config.h"
 
-class ClientRadioSet {
+class ClientRadioSetUHD {
  public:
-  ClientRadioSet(Config* cfg);
-  ~ClientRadioSet(void);
+  ClientRadioSetUHD(Config* cfg);
+  ~ClientRadioSetUHD(void);
   int triggers(int i);
   int radioRx(size_t radio_id, void* const* buffs, int numSamps,
               long long& frameTime);
@@ -25,7 +25,7 @@ class ClientRadioSet {
 
  private:
   struct ClientRadioContext {
-    ClientRadioSet* crs;
+    ClientRadioSetUHD* crs;
     std::atomic_ulong* thread_count;
     size_t tid;
   };
@@ -33,8 +33,8 @@ class ClientRadioSet {
   static void* init_launch(void* in_context);
 
   Config* _cfg;
-  std::vector<Radio*> radios;
+  RadioUHD* radio_;
   bool radioNotFound;
 };
 
-#endif /* CLIENT_RADIO_SET_H_ */
+#endif /* CLIENT_RADIO_SET_UHD_H_ */

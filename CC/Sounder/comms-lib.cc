@@ -19,11 +19,14 @@
 
 #include "include/comms-lib.h"
 
+#include <limits.h>
+
 #include <queue>
 
 #include "include/constants.h"
 #include "include/utils.h"
-//#include <itpp/itbase.h>
+
+static constexpr float kShortMaxFloat = SHRT_MAX;
 
 int CommsLib::findLTS(const std::vector<std::complex<float>>& iq, int seqLen) {
   /*
@@ -111,8 +114,22 @@ size_t CommsLib::find_pilot_seq(const std::vector<std::complex<float>>& iq,
   return best_peak;
 }
 
+int CommsLib::find_beacon(const std::complex<int16_t>* raw_samples,
+                          size_t check_window) {
+  //Allocate memory, only used for beacon detection (consider making this static)
+  std::vector<std::complex<float>> beacon_compare(
+      check_window, std::complex<float>(0.0f, 0.0f));
+
+  // convert entire frame data to complex float for sync detection
+  for (size_t i = 0; i < check_window; i++) {
+    beacon_compare.at(i) = (std::complex<float>(
+        static_cast<float>(raw_samples[i].real()) / kShortMaxFloat,
+        static_cast<float>(raw_samples[i].imag()) / kShortMaxFloat));
+  }
+  return CommsLib::find_beacon(beacon_compare);
+}
+
 int CommsLib::find_beacon(const std::vector<std::complex<float>>& iq) {
-  //std::vector<std::vector<double>> gold_seq;
   int best_peak;
   std::queue<int> valid_peaks;
 
@@ -170,12 +187,9 @@ int CommsLib::find_beacon(const std::vector<std::complex<float>>& iq) {
 #endif
 
   std::vector<float> thresh(corr_abs_filt.begin(), corr_abs_filt.end());
-  //std::vector<double> thresh(corr_abs_filt.size());
-  //std::transform(corr_abs_filt.begin(), corr_abs_filt.end(), thresh.begin(),
-  //    std::bind(std::multiplies<double>(), std::placeholders::_1, 0.0078)); // divide by 128
   // Find all peaks, and pairs that are lts_sym.size() samples apart
   for (size_t i = seqLen; i < gold_corr_size; i++) {
-    if (gold_corr_2[i] > thresh[i] / 128) valid_peaks.push(i - seqLen);
+    if (gold_corr_2[i] > thresh[i] / seqLen) valid_peaks.push(i - seqLen);
   }
 
 #ifdef TEST_BENCH
@@ -326,11 +340,8 @@ std::vector<size_t> CommsLib::getDataSc(size_t fftSize, size_t DataScNum,
   std::vector<size_t> data_sc;
   if (fftSize == Consts::kFftSize_80211) {
     // We follow 802.11 PHY format here
-    size_t sc_ind[48] = {1,  2,  3,  4,  5,  6,  8,  9,  10, 11, 12, 13,
-                         14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 25, 26,
-                         38, 39, 40, 41, 42, 44, 45, 46, 47, 48, 49, 50,
-                         51, 52, 53, 54, 55, 56, 58, 59, 60, 61, 62, 63};
-    data_sc.assign(sc_ind, sc_ind + 48);
+    data_sc.assign(Consts::lts_data_ind,
+                   Consts::lts_data_ind + Consts::kNumDataSubcarriers_80211);
   } else {  // Allocate the center subcarriers as data
     size_t start_sc = (fftSize - DataScNum) / 2;
     size_t stop_sc = start_sc + DataScNum;
@@ -345,8 +356,8 @@ std::vector<size_t> CommsLib::getNullSc(size_t fftSize, size_t DataScNum) {
   std::vector<size_t> null_sc;
   if (fftSize == Consts::kFftSize_80211) {
     // We follow 802.11 PHY format here
-    int null[12] = {0, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37};
-    null_sc.assign(null, null + 12);
+    null_sc.assign(Consts::lts_null_ind,
+                   Consts::lts_null_ind + Consts::kNumNullSubcarriers_80211);
   } else {  // Allocate the boundary subcarriers as null
     size_t start_sc = (fftSize - DataScNum) / 2;
     size_t stop_sc = start_sc + DataScNum;
@@ -361,8 +372,8 @@ std::vector<std::complex<float>> CommsLib::getPilotScValue(
   std::vector<std::complex<float>> pilot_sc;
   if (fftSize == Consts::kFftSize_80211) {
     // We follow 802.11 PHY format here
-    std::complex<float> sc_val[4] = {1, 1, -1, 1};
-    pilot_sc.assign(sc_val, sc_val + 4);
+    pilot_sc.assign(Consts::lts_pilot_val,
+                    Consts::lts_pilot_val + Consts::kNumPilotSubcarriers_80211);
   } else {
     size_t start_sc = (fftSize - DataScNum) / 2;
     size_t stop_sc = start_sc + DataScNum;
@@ -387,8 +398,8 @@ std::vector<size_t> CommsLib::getPilotScIndex(size_t fftSize, size_t DataScNum,
   std::vector<size_t> pilot_sc;
   if (fftSize == Consts::kFftSize_80211) {
     // We follow 802.11 standard here
-    int sc_ind[4] = {7, 21, 43, 57};
-    pilot_sc.assign(sc_ind, sc_ind + 4);
+    pilot_sc.assign(Consts::lts_pilot_ind,
+                    Consts::lts_pilot_ind + Consts::kNumPilotSubcarriers_80211);
   } else {  // consider center subcarriers
     size_t start_sc = (fftSize - DataScNum) / 2;
     size_t stop_sc = start_sc + DataScNum;
@@ -403,7 +414,7 @@ std::vector<size_t> CommsLib::getPilotScIndex(size_t fftSize, size_t DataScNum,
 
 std::vector<std::complex<float>> CommsLib::IFFT(
     const std::vector<std::complex<float>>& in, int fftSize, float scale,
-    bool normalize) {
+    bool normalize, bool fft_shift) {
   std::vector<std::complex<float>> out(in.size());
 
   void* fft_in = mufft_alloc(fftSize * sizeof(std::complex<float>));
@@ -411,7 +422,17 @@ std::vector<std::complex<float>> CommsLib::IFFT(
   mufft_plan_1d* mufftplan =
       mufft_create_plan_1d_c2c(fftSize, MUFFT_INVERSE, MUFFT_FLAG_CPU_ANY);
 
-  memcpy(fft_in, in.data(), fftSize * sizeof(std::complex<float>));
+  if (fft_shift) {
+    std::vector<std::complex<float>> in_freq_shifted;
+    in_freq_shifted.insert(in_freq_shifted.end(), in.begin() + fftSize / 2,
+                           in.end());
+    in_freq_shifted.insert(in_freq_shifted.end(), in.begin(),
+                           in.begin() + fftSize / 2);
+    memcpy(fft_in, in_freq_shifted.data(),
+           fftSize * sizeof(std::complex<float>));
+  } else {
+    memcpy(fft_in, in.data(), fftSize * sizeof(std::complex<float>));
+  }
   mufft_execute_plan_1d(mufftplan, fft_out, fft_in);
   memcpy(out.data(), fft_out, fftSize * sizeof(std::complex<float>));
   float max_val = 1;
@@ -433,7 +454,7 @@ std::vector<std::complex<float>> CommsLib::IFFT(
 }
 
 std::vector<std::complex<float>> CommsLib::FFT(
-    const std::vector<std::complex<float>>& in, int fftSize) {
+    const std::vector<std::complex<float>>& in, int fftSize, bool fft_shift) {
   std::vector<std::complex<float>> out(in.size());
 
   void* fft_in = mufft_alloc(fftSize * sizeof(std::complex<float>));
@@ -441,7 +462,17 @@ std::vector<std::complex<float>> CommsLib::FFT(
   mufft_plan_1d* mufftplan =
       mufft_create_plan_1d_c2c(fftSize, MUFFT_FORWARD, MUFFT_FLAG_CPU_ANY);
 
-  memcpy(fft_in, in.data(), fftSize * sizeof(std::complex<float>));
+  if (fft_shift) {
+    std::vector<std::complex<float>> in_freq_shifted;
+    in_freq_shifted.insert(in_freq_shifted.end(), in.begin() + fftSize / 2,
+                           in.end());
+    in_freq_shifted.insert(in_freq_shifted.end(), in.begin(),
+                           in.begin() + fftSize / 2);
+    memcpy(fft_in, in_freq_shifted.data(),
+           fftSize * sizeof(std::complex<float>));
+  } else {
+    memcpy(fft_in, in.data(), fftSize * sizeof(std::complex<float>));
+  }
   mufft_execute_plan_1d(mufftplan, fft_out, fft_in);
   memcpy(out.data(), fft_out, fftSize * sizeof(std::complex<float>));
 
@@ -527,15 +558,9 @@ std::vector<std::vector<float>> CommsLib::getSequence(size_t type,
     std::vector<std::complex<float>> sts_freq(
         Consts::sts_seq, Consts::sts_seq + Consts::kFftSize_80211);
 
-    // Perform ifft-shift on sts_freq
-    std::vector<std::complex<float>> sts_freq_shifted;
-    sts_freq_shifted.insert(sts_freq_shifted.end(), sts_freq.begin() + 32,
-                            sts_freq.end());
-    sts_freq_shifted.insert(sts_freq_shifted.end(), sts_freq.begin(),
-                            sts_freq.begin() + 32);
-
+    // Perform ifft with ifft-shift on sts_freq
     std::vector<std::complex<float>> sts_iq =
-        CommsLib::IFFT(sts_freq_shifted, Consts::kFftSize_80211, 1);
+        CommsLib::IFFT(sts_freq, Consts::kFftSize_80211, 1, true, true);
 
     size_t out_seq_len = seq_len > 0 ? seq_len : sts_seq_len;
     size_t frac_seq_len = out_seq_len % sts_seq_len;
@@ -552,23 +577,17 @@ std::vector<std::vector<float>> CommsLib::getSequence(size_t type,
     std::vector<std::complex<float>> lts_freq(Consts::lts_seq,
                                               Consts::lts_seq + lts_seq_len);
 
-    // Perform ifft-shift on lts_freq
-    std::vector<std::complex<float>> lts_freq_shifted;
-    lts_freq_shifted.insert(lts_freq_shifted.end(), lts_freq.begin() + 32,
-                            lts_freq.end());
-    lts_freq_shifted.insert(lts_freq_shifted.end(), lts_freq.begin(),
-                            lts_freq.begin() + 32);
-
     if (type == LTS_SEQ_F) {
       matrix[0].resize(lts_seq_len);
       matrix[1].resize(lts_seq_len);
       for (size_t i = 0; i < lts_seq_len; i++) {
-        matrix[0][i] = lts_freq_shifted[i].real();
-        matrix[1][i] = lts_freq_shifted[i].imag();
+        matrix[0][i] = lts_freq[i].real();
+        matrix[1][i] = lts_freq[i].imag();
       }
     } else {
-      std::vector<std::complex<float>> lts_iq = CommsLib::IFFT(
-          lts_freq_shifted, lts_seq_len, 1.f / lts_seq_len, false);
+      // Perform ifft with ifft-shift on lts_freq
+      std::vector<std::complex<float>> lts_iq =
+          CommsLib::IFFT(lts_freq, lts_seq_len, 1.f / lts_seq_len, false, true);
 
       size_t out_seq_len = seq_len > 0 ? seq_len : lts_seq_len;
       size_t frac_seq_len = out_seq_len % lts_seq_len;
@@ -621,7 +640,7 @@ std::vector<std::vector<float>> CommsLib::getSequence(size_t type,
       }
     } else {
       std::vector<std::complex<float>> zc_iq =
-          CommsLib::IFFT(zc_freq, zc_iq_len, 1.f / zc_iq_len, false);
+          CommsLib::IFFT(zc_freq, zc_iq_len, 1.f / zc_iq_len, false, true);
 
       for (size_t i = 0; i < zc_iq_len; i++) {
         matrix[0][i] = zc_iq[i].real();
@@ -644,15 +663,9 @@ std::vector<std::vector<float>> CommsLib::getSequence(size_t type,
       gold_freq[2 * i] = std::complex<float>(gold_code[i], gold_code[i]);
     }
 
-    // Perform ifft-shift on gold_freq
-    std::vector<std::complex<float>> gold_freq_shifted;
-    gold_freq_shifted.insert(gold_freq_shifted.end(),
-                             gold_freq.begin() + gold_seq_len, gold_freq.end());
-    gold_freq_shifted.insert(gold_freq_shifted.end(), gold_freq.begin(),
-                             gold_freq.begin() + gold_seq_len);
-
+    // Perform ifft with ifft-shift on gold_freq
     std::vector<std::complex<float>> gold_ifft_iq =
-        CommsLib::IFFT(gold_freq_shifted, 2 * gold_seq_len, 1);
+        CommsLib::IFFT(gold_freq, 2 * gold_seq_len, 1, true, true);
 
     matrix[0].resize(gold_seq_len);
     matrix[1].resize(gold_seq_len);

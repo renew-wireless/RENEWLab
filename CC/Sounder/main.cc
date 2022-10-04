@@ -11,6 +11,8 @@
 
 #include <gflags/gflags.h>
 
+#include <iostream>
+
 #include "include/data_generator.h"
 #include "include/scheduler.h"
 #include "include/signalHandler.hpp"
@@ -47,8 +49,8 @@ int main(int argc, char* argv[]) {
 
     while (cnt++ < maxTry && ret == EXIT_FAILURE) {
       try {
-        config->loadULData(FLAGS_storepath);
-        config->loadDLData(FLAGS_storepath);
+        config->loadULData();
+        config->loadDLData();
         auto dr = std::make_unique<Sounder::Scheduler>(config.get());
         dr->do_it();
         ret = EXIT_SUCCESS;
