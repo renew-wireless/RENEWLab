@@ -57,9 +57,9 @@ else
     USE_HUB                 = 1;
     TX_FRQ                  = 3.5475e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = 81;
-    TX_GN_BF                = 81;           % BS gain during DL BF transmission
-    TX_GN_UE                = [81, 81];
+    TX_GN                   = 95;
+    TX_GN_BF                = 98;           % BS gain during DL BF transmission
+    TX_GN_UE                = [100, 100];
     RX_GN                   = 65;
     SMPL_RT                 = 5e6;
     N_FRM                   = 1;
@@ -319,11 +319,7 @@ else
     ifft_in_mat = zeros(N_BS_ANT, N_SC, N_OFDM_SYM);
     for isc = 1:N_SC
         for isym = 1:N_OFDM_SYM
-            if N_UE > 1
-                ifft_in_mat(:, isc, isym) = W(:, :, isc) * precoding_in_mat(:, isc, isym);
-            else
-                ifft_in_mat(:, isc, isym) = precoding_in_mat(:, isc, isym);
-            end
+            ifft_in_mat(:, isc, isym) = W(:, :, isc) * precoding_in_mat(:, isc, isym);
         end
     end
 
@@ -373,6 +369,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 igf = numGoodFrames;
 preamble_pk = zeros(1, N_UE);
+golden_number = 20;
 for iue = 1:N_UE
 
     %%%%% Find Preamble
@@ -399,7 +396,7 @@ for iue = 1:N_UE
     end
 
     % Check if valid...
-    pk_tmp = preamble_pk(iue); 
+    pk_tmp = preamble_pk(iue) + golden_number;
     lts_ind = pk_tmp - length(preamble_common) + 1;
     dl_data_start = pk_tmp + 1;
 
