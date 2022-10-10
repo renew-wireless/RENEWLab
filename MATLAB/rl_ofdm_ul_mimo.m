@@ -83,6 +83,7 @@ else
         hub_id = [];
     end
     ue_ids= ["RF3E000706", "RF3E000665"];
+    ref_ids= [""];  % Ignore
 
     N_BS_NODE               = length(bs_ids);           % Number of nodes/antennas at the BS
     N_BS_ANT                = length(bs_ids) * length(ANT_BS);  % Number of antennas at the BS
@@ -219,6 +220,7 @@ else
     sdr_params = struct(...
         'bs_id', bs_ids, ...
         'ue_id', ue_ids,...
+        'ref_id', ref_ids, ...
         'hub_id', hub_id,...
         'bs_ant', ANT_BS, ...
         'ue_ant', ANT_UE, ...
@@ -231,7 +233,7 @@ else
         'trig_offset', TX_ADVANCE);
 
     mimo_handle = mimo_driver(sdr_params);
-    [rx_vec_iris, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
+    [rx_vec_iris, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_vec_iris, N_FRM, N_ZPAD_PRE, 'uplink', '[]', '[]');
     mimo_handle.mimo_close();
     if isempty(rx_vec_iris)
         error("Driver returned empty array. No good data received by base station");

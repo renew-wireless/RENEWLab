@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from scipy.io import savemat
 
 class MIMODriver:
-    def __init__(self, hub_serial, bs_serials, ue_serials, rate,
+    def __init__(self, hub_serial, bs_serials, ue_serials, ref_serials, rate,
             tx_freq, rx_freq, tx_gain, tx_gain_ue, rx_gain, bs_channels='A', ue_channels='A', beamsweep=False, agc_en=False, trig_offset=235):
         # Init Radios
         #bs_serials_str = ""
@@ -28,6 +28,7 @@ class MIMODriver:
         print("HUB: {}".format(hub_serial))
         print("BS NODES: {}".format(bs_serials))
         print("UE NODES: {}".format(ue_serials))
+        print("REF NODES: {}".format(ref_serials))
         self.bs_obj = [Iris_py(sdr, tx_freq, rx_freq, tx_gain, rx_gain, None, rate, None, bs_channels, agc_en, trig_offset) for sdr in bs_serials]
 
         if np.isscalar(tx_gain_ue):
@@ -39,6 +40,12 @@ class MIMODriver:
         if len(hub_serial) != 0:
             self.hub = Hub_py(hub_serial)
 
+        self.ref_obj = None
+        if len(ref_serials) != 0:
+            self.ref_obj = [Iris_py(sdr, tx_freq, rx_freq, tx_gain, rx_gain, None, rate, None, 'A', agc_en, trig_offset) for sdr in ref_serials]
+        else:
+            self.n_refs = len(ref_serials)
+
         # Setup Radios and Streams
         if self.hub is not None:
             self.hub.sync_delays()
@@ -49,6 +56,7 @@ class MIMODriver:
 
         [ue.setup_stream_rx() for ue in self.ue_obj]
         [bs.setup_stream_rx() for bs in self.bs_obj]
+        [ref.setup_stream_rx() for ref in self.ref_obj]
         if beamsweep == True:
             [bs.burn_beacon() for bs in self.bs_obj]
             # also write beamweights
@@ -61,6 +69,7 @@ class MIMODriver:
         self.n_bs_antenna = len(bs_serials) * self.n_bs_chan
         self.n_bs_sdrs = len(bs_serials)
 
+
     def bs_trigger(self):
         if self.hub is not None:
             self.hub.set_trigger()
@@ -70,10 +79,49 @@ class MIMODriver:
     def reset_frame(self):
         [ue.reset_hw_time() for ue in self.ue_obj]
         [bs.reset_hw_time() for bs in self.bs_obj]
+        [ref.reset_hw_time() for ref in self.ref_obj]
 
     def close(self):
         [ue.close() for ue in self.ue_obj]
         [bs.close() for bs in self.bs_obj]
+        [ref.close() for ref in self.ref_obj]
+
+    def timing_cal(self, tx_data_mat_re, tx_data_mat_im, nsamps_pad=160, num_frames=1):
+        '''Calibrate timing offset due to base station chain length difference'''
+        tx_data_mat = tx_data_mat_re + 1j * tx_data_mat_im
+        n_samps = tx_data_mat.shape[0]
+
+        ### Build TDD Schedule ###
+        ref_sched = 'GGPGG'
+        bs_sched  = 'GGRGG'
+        numRxSyms = bs_sched.count('R')
+
+        ### Write TDD Schedule ###
+        [bs.config_sdr_tdd(tdd_sched=str(bs_sched), nsamps=n_samps, prefix_len=nsamps_pad) for i, bs in enumerate(self.bs_obj)]
+        [ref.config_sdr_tdd(is_bs=True, tdd_sched=str(ref_sched), nsamps=n_samps, prefix_len=nsamps_pad) for i, ref in enumerate(self.ref_obj)]   # ref node is considered BS node
+
+        for i, ref in enumerate(self.ref_obj):
+            if python_mode:
+                ref.burn_data_complex(tx_data_mat[:, i])   # for python
+            else:
+                ref.burn_data_complex(tx_data_mat[:, i] if self.n_refs > 1 else tx_data_mat)    # for matlab
+
+        [bs.activate_stream_rx() for bs in self.bs_obj]
+
+        rx_data = np.empty((num_frames, self.n_bs_antenna, numRxSyms, n_samps), dtype=np.complex64)
+
+        for frame in range(num_frames):
+            self.bs_trigger()
+            # Receive Data
+            rx_data_frame = [bs.recv_stream_tdd() for bs in self.bs_obj]  # Returns dimensions (num bs nodes, num channels, num samples)
+            #rx_data_frame = np.array(rx_data_frame)
+            #print("Dimensions: {}, {}, {}".format(rx_data_frame.shape, rx_data_frame[0].shape, rx_data_frame[0][0].shape))
+            rx_data[frame, :, :, :] = np.reshape(np.array(rx_data_frame[0][0]), (self.n_bs_antenna, numRxSyms, n_samps))
+
+        good_frame_id = num_frames   # dummy
+        self.reset_frame()
+        #savemat("./testtest.mat", {'dataOBCH': rx_data, 'txdataOBCH': tx_data_mat, 'rxdataOBCH': rx_data_frame})
+        return rx_data, good_frame_id, numRxSyms
 
     def txrx_uplink(self, tx_data_mat_re, tx_data_mat_im, num_frames, nsamps_pad=160, max_try=50, python_mode=False):
         tx_data_mat = tx_data_mat_re + 1j * tx_data_mat_im

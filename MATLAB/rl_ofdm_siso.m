@@ -16,7 +16,7 @@
 % Within the OTA mode we further define three transmission modes:
 %  a) uplink
 %  b) downlink 
-%  c) dl_ref_node_as_ue: both base station board and UE are triggered from the hub instead
+%  c) dl-refnode-as-ue: both base station board and UE are triggered from the hub instead
 %     of using over-the-air beacons
 %
 % In both cases the client transmits an OFDM signal that resembles a
@@ -167,15 +167,17 @@ else
     disp("Running: HARDWARE MODE");
 
     % Create two Iris node objects:
-    tx_direction = 'uplink';      % Options: {'uplink', 'downlink', 'dl_ref_node_as_ue'}
+    tx_direction = 'uplink';      % Options: {'uplink', 'downlink', 'dl-refnode-as-ue'}
     bs_ids = ["RF3E000722"];
     ue_ids = ["RF3E000665"];
     hub_id = ["FH4B000003"];
+    ref_ids= [""];  % Ignore
 
     % Iris nodes' parameters
     sdr_params = struct(...
         'bs_id', bs_ids, ...
         'ue_id', ue_ids,...
+        'ref_id', ref_ids, ...
         'hub_id', hub_id,...
         'bs_ant', ANT_BS, ...
         'ue_ant', ANT_UE, ...
@@ -200,23 +202,18 @@ else
         mimo_handle.mimo_update_sdr_param('rxgain', rxg_opt);
     end
 
-    if strcmp(tx_direction, 'uplink')
-        [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
-
-    elseif strcmp(tx_direction, 'downlink')
-        [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_downlink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
-
-    elseif strcmp(tx_direction, 'dl_ref_node_as_ue')
+    if strcmp(tx_direction, 'dl-refnode-as-ue')
         if isempty(hub_id)
             error('Hub ID must be specified in dl_ref_node_as_ue transmission mode. Exit Now!');
         end
         bs_sched = ["GGGGGRG"];
         ue_sched = ["GGGGGPG"];
-        [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_refnode(tx_vec_iris, N_FRM, bs_sched, ue_sched, N_ZPAD_PRE);
     else
-        error('TX Method Not Supported. Exit Now!');
+        bs_sched = [""];    % Dummy... set up inside driver
+        ue_sched = [""];    % Dummy... set up inside driver
     end
 
+    [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx(tx_vec_iris, N_FRM, N_ZPAD_PRE, tx_direction, bs_sched, ue_sched);
     mimo_handle.mimo_close();
 
 end

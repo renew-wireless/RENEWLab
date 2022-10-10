@@ -57,9 +57,9 @@ else
     USE_HUB                 = 1;
     TX_FRQ                  = 3.5475e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = 95;
-    TX_GN_BF                = 98;           % BS gain during DL BF transmission
-    TX_GN_UE                = [100, 100];
+    TX_GN                   = 81;
+    TX_GN_BF                = 81;           % BS gain during DL BF transmission
+    TX_GN_UE                = [81, 81];
     RX_GN                   = 65;
     SMPL_RT                 = 5e6;
     N_FRM                   = 1;
@@ -71,16 +71,19 @@ else
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
-        bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424", ... % Chain1
-		  "RF3E000731","RF3E000747","RF3E000734", ...               % Chain1
-	          "RF3E000748","RF3E000492", ...                            % Chain5
-		  "RF3E000708","RF3E000437","RF3E000090"];                  % Chain5
-        hub_id = ["FH4B000003"];
+        %bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424", ... % Chain1
+		%  "RF3E000731","RF3E000747","RF3E000734", ...               % Chain1
+	    %      "RF3E000748","RF3E000492", ...                            % Chain5
+		%  "RF3E000708","RF3E000437","RF3E000090"];                  % Chain5
+        %hub_id = ["FH4B000003"];
+        bs_ids = ["RF3E000122","RF3E000150","RF3E000128","RF3E000168","RF3E000136","RF3E000213","RF3E000142"];
+        hub_id = ["FH4B000019"];
     else
         bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         hub_id = [];
     end
-    ue_ids= ["RF3E000706"];
+    ue_ids = ["RF3E000241"];
+    ref_ids= ["RF3E000089"];
 
     N_BS_NODE               = length(bs_ids);                   % Number of nodes at the BS
     N_BS_ANT                = length(bs_ids) * length(ANT_BS);  % Number of antennas at the BS
@@ -110,7 +113,7 @@ N_ZPAD_POST             = nan;                                    % Zero-padding
 MAX_NUM_SAMPS           = 4096;                                   % DO NOT MODIFY: Max number of samples in FPGA buffer.
 
 % Rx processing params
-FFT_OFFSET                    = 16;          % Number of CP samples to use in FFT (on average)
+FFT_OFFSET                    = 0;          % Number of CP samples to use in FFT (on average)
 DO_APPLY_PHASE_ERR_CORRECTION = 1;           % Enable Residual CFO estimation/correction
 
 %% Define the preamble
@@ -201,6 +204,7 @@ else
     sdr_params = struct(...
         'bs_id', bs_ids, ...
         'ue_id', ue_ids, ...
+        'ref_id', ref_ids, ...
         'hub_id', hub_id,...
         'bs_ant', ANT_BS, ...
         'ue_ant', ANT_UE, ...
@@ -213,7 +217,7 @@ else
         'trig_offset', TX_ADVANCE);
 
     mimo_handle = mimo_driver(sdr_params);
-    [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx_dl_sound(tx_vec_train, N_FRM, N_ZPAD_PRE);
+    [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_vec_train, N_FRM, N_ZPAD_PRE, 'dl-sounding', '[]', '[]');
     if isempty(rx_vec_iris_sound)
 	mimo_handle.mimo_close();
         error("Driver returned empty array. No good data received by base station");
@@ -353,7 +357,7 @@ else
     N_SAMPS = N_ZPAD_PRE + length(tx_pilot_mat(1,:)) + (N_SYM_SAMP * N_DATA_SYM) + N_ZPAD_POST;
     assert(N_SAMPS == MAX_NUM_SAMPS);
 
-    [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_downlink(tx_payload, N_FRM, N_ZPAD_PRE);
+    [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx(tx_payload, N_FRM, N_ZPAD_PRE, 'downlink', '[]', '[]');
     mimo_handle.mimo_close();
 
     if isempty(rx_vec_iris_tmp)
@@ -369,7 +373,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 igf = numGoodFrames;
 preamble_pk = zeros(1, N_UE);
-golden_number = 20;
+
 for iue = 1:N_UE
 
     %%%%% Find Preamble
@@ -379,7 +383,7 @@ for iue = 1:N_UE
     [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
     [lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
 
-    if DEBUG
+    if 1 %DEBUG
         figure; subplot(2,1,1); plot(abs(curr_vec)); subplot(2,1,2); plot(lts_corr); title(sprintf('DL DATA: UE %d,',iue));
     end
 
@@ -396,7 +400,7 @@ for iue = 1:N_UE
     end
 
     % Check if valid...
-    pk_tmp = preamble_pk(iue) + golden_number;
+    pk_tmp = preamble_pk(iue);
     lts_ind = pk_tmp - length(preamble_common) + 1;
     dl_data_start = pk_tmp + 1;
 
