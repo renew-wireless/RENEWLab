@@ -16,7 +16,7 @@
 % Within the OTA mode we further define three transmission modes:
 %  a) uplink
 %  b) downlink 
-%  c) dl-refnode-as-ue: both base station board and UE are triggered from the hub instead
+%  c) ul-refnode-as-ue: both base station board and UE are triggered from the hub instead
 %     of using over-the-air beacons
 %
 % In both cases the client transmits an OFDM signal that resembles a
@@ -171,7 +171,7 @@ else
     bs_ids = ["RF3E000722"];
     ue_ids = ["RF3E000665"];
     hub_id = ["FH4B000003"];
-    ref_ids= [""];  % Ignore
+    ref_ids= [];  % Ignore
 
     % Iris nodes' parameters
     sdr_params = struct(...
@@ -187,7 +187,7 @@ else
         'tx_gain_ue', TX_GN_UE, ...
         'rxgain', RX_GN, ...
         'sample_rate', SMPL_RT, ...
-	'trig_offset', TX_ADVANCE);
+	    'trig_offset', TX_ADVANCE);
 
     mimo_handle = mimo_driver(sdr_params);
 
@@ -202,12 +202,12 @@ else
         mimo_handle.mimo_update_sdr_param('rxgain', rxg_opt);
     end
 
-    if strcmp(tx_direction, 'dl-refnode-as-ue')
+    if strcmp(tx_direction, 'ul-refnode-as-ue')
         if isempty(hub_id)
             error('Hub ID must be specified in dl_ref_node_as_ue transmission mode. Exit Now!');
         end
-        bs_sched = ["GGGGGRG"];
-        ue_sched = ["GGGGGPG"];
+        bs_sched = ["R"];
+        ue_sched = ["P"];
     else
         bs_sched = [""];    % Dummy... set up inside driver
         ue_sched = [""];    % Dummy... set up inside driver

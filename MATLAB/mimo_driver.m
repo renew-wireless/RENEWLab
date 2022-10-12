@@ -33,7 +33,7 @@ classdef mimo_driver < handle
                 
                 obj.bs_serial_ids = sdr_params.bs_id;
                 obj.ue_serial_ids = sdr_params.ue_id;
-                obj.ref_serial_ids = sdr_params.ref_ids;
+                obj.ref_serial_ids = sdr_params.ref_id;
                 if isfield(sdr_params, 'hub_id')
                     obj.hub_serial = sdr_params.hub_id;
                 end
@@ -100,7 +100,7 @@ classdef mimo_driver < handle
                     results = obj.mimo_obj.txrx_downlink(py.numpy.array(real(tx_data_mat)), py.numpy.array(imag(tx_data_mat)), py.int(n_frames), py.int(n_samps_pad));
                 case 'dl-sounding'
                     results = obj.mimo_obj.txrx_dl_sound(py.numpy.array(real(tx_data_mat)), py.numpy.array(imag(tx_data_mat)), py.int(n_frames), py.int(n_samps_pad));
-                case 'dl-refnode-as-ue'
+                case 'ul-refnode-as-ue'
                     results = obj.mimo_obj.txrx_refnode(py.numpy.array(real(tx_data_mat)), py.numpy.array(imag(tx_data_mat)), py.int(n_frames), bs_sched, ue_sched, py.int(n_samps_pad));
                 case 'calibration'
                     results = obj.mimo_obj.txrx_calib(py.numpy.array(real(tx_data_mat)), py.numpy.array(imag(tx_data_mat)), py.int(n_frames), bs_sched, ue_sched, py.int(n_samps_pad));
