@@ -102,8 +102,6 @@ classdef mimo_driver < handle
                     results = obj.mimo_obj.txrx_dl_sound(py.numpy.array(real(tx_data_mat)), py.numpy.array(imag(tx_data_mat)), py.int(n_frames), py.int(n_samps_pad));
                 case 'ul-refnode-as-ue'
                     results = obj.mimo_obj.txrx_refnode(py.numpy.array(real(tx_data_mat)), py.numpy.array(imag(tx_data_mat)), py.int(n_frames), bs_sched, ue_sched, py.int(n_samps_pad));
-                case 'calibration'
-                    results = obj.mimo_obj.txrx_calib(py.numpy.array(real(tx_data_mat)), py.numpy.array(imag(tx_data_mat)), py.int(n_frames), bs_sched, ue_sched, py.int(n_samps_pad));
                 otherwise
                     disp('Invalid Mode!')
             end

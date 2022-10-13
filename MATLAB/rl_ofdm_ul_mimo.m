@@ -75,7 +75,6 @@ else
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
-        %bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];%,"RF3E000622","RF3E000601","RF3E000602"];
         hub_id = ["FH4B000003"];
     else
@@ -83,7 +82,7 @@ else
         hub_id = [];
     end
     ue_ids= ["RF3E000706", "RF3E000665"];
-    ref_ids= [""];  % Ignore
+    ref_ids= [];  % Ignore
 
     N_BS_NODE               = length(bs_ids);           % Number of nodes/antennas at the BS
     N_BS_ANT                = length(bs_ids) * length(ANT_BS);  % Number of antennas at the BS

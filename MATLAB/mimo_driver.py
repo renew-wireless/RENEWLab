@@ -90,42 +90,6 @@ class MIMODriver:
         if self.n_refs != 0:
             [ref.close() for ref in self.ref_obj]
 
-    def txrx_calib(self, tx_data_mat_re, tx_data_mat_im, nsamps_pad=160, num_frames=1):
-        '''Calibrate timing offset due to base station chain length difference'''
-        tx_data_mat = tx_data_mat_re + 1j * tx_data_mat_im
-        n_samps = tx_data_mat.shape[0]
-
-        ### Build TDD Schedule ###
-        ref_sched = 'GGPGG'
-        bs_sched  = 'GGRGG'
-        numRxSyms = bs_sched.count('R')
-
-        ### Write TDD Schedule ###
-        [bs.config_sdr_tdd(tdd_sched=str(bs_sched), nsamps=n_samps, prefix_len=nsamps_pad) for i, bs in enumerate(self.bs_obj)]
-        [ref.config_sdr_tdd(is_bs=True, tdd_sched=str(ref_sched), nsamps=n_samps, prefix_len=nsamps_pad) for i, ref in enumerate(self.ref_obj)]   # ref node is considered BS node
-
-        for i, ref in enumerate(self.ref_obj):
-            if python_mode:
-                ref.burn_data_complex(tx_data_mat[:, i])   # for python
-            else:
-                ref.burn_data_complex(tx_data_mat[:, i] if self.n_refs > 1 else tx_data_mat)    # for matlab
-
-        [bs.activate_stream_rx() for bs in self.bs_obj]
-
-        rx_data = np.empty((num_frames, self.n_bs_antenna, numRxSyms, n_samps), dtype=np.complex64)
-
-        for frame in range(num_frames):
-            self.bs_trigger()
-            # Receive Data
-            rx_data_frame = [bs.recv_stream_tdd() for bs in self.bs_obj]  # Returns dimensions (num bs nodes, num channels, num samples)
-            #rx_data_frame = np.array(rx_data_frame)
-            #print("Dimensions: {}, {}, {}".format(rx_data_frame.shape, rx_data_frame[0].shape, rx_data_frame[0][0].shape))
-            rx_data[frame, :, :, :] = np.reshape(np.array(rx_data_frame[0][0]), (self.n_bs_antenna, numRxSyms, n_samps))
-
-        good_frame_id = num_frames   # dummy
-        self.reset_frame()
-        #savemat("./testtest.mat", {'dataOBCH': rx_data, 'txdataOBCH': tx_data_mat, 'rxdataOBCH': rx_data_frame})
-        return rx_data, good_frame_id, numRxSyms
 
     def txrx_uplink(self, tx_data_mat_re, tx_data_mat_im, num_frames, nsamps_pad=160, max_try=50, python_mode=False):
         tx_data_mat = tx_data_mat_re + 1j * tx_data_mat_im
@@ -260,12 +224,6 @@ class MIMODriver:
 
         tx_data_mat = tx_data_mat_re + 1j * tx_data_mat_im
 
-        ################################
-        print(tx_data_mat.shape)
-        print(len(tx_data_mat.shape))
-        print(tx_data_mat.shape[0])
-        ################################
-
         n_users = self.n_users
         n_bs_antenna = self.n_bs_antenna
         n_bs_nodes = self.n_bs_sdrs
@@ -391,18 +349,26 @@ class MIMODriver:
 
     def txrx_dl_sound(self, tx_data_mat_re, tx_data_mat_im, num_frames, nsamps_pad=160, max_try=30, python_mode=False):
         tx_data_mat = tx_data_mat_re + 1j * tx_data_mat_im
-        n_samps = tx_data_mat.shape[0]
 
-        if len(tx_data_mat.shape) > 1:
-            n_users = tx_data_mat.shape[1]
+        ################################
+        print(tx_data_mat.shape)
+        print(len(tx_data_mat.shape))
+        print(tx_data_mat.shape[0])
+        ################################
+
+        n_users = self.n_users
+        n_bs_antenna = self.n_bs_antenna
+        n_bs_nodes = self.n_bs_sdrs
+
+        if len(tx_data_mat.shape) == 1:
+            n_samps = tx_data_mat.shape[0]
         else:
-            n_users = 1
-        if n_users != self.n_users:
-            print("Input data size (dim 2) does not match number of UEs!")
-            return
+            n_samps = tx_data_mat.shape[1]
+
         if n_samps > 4096:
-            print("Input data size (dim 1) exceeds pilot buffer size!")
+            print("Input data size exceeds pilot buffer size!")
             return
+
 
         ### Build TDD Schedule ###
         bs_sched_tmp = list(''.join([char*2*(self.n_bs_sdrs) for char in 'G']))
@@ -450,10 +416,9 @@ class MIMODriver:
 
         for i, bs in enumerate(self.bs_obj):
             if python_mode:
-                bs.burn_data_complex(tx_data_mat[0])  # For python
+                bs.burn_data_complex(tx_data_mat[0])  # For python (needs more testing)
             else:
-                bs.burn_data_complex(tx_data_mat)     # for matlab
-
+                bs.burn_data_complex(tx_data_mat[i, :] if n_bs_antenna > 1 else tx_data_mat) # for matlab
 
         [ue.activate_stream_rx() for ue in self.ue_obj]
         [ue.set_corr() for ue in self.ue_obj]
@@ -524,7 +489,7 @@ class MIMODriver:
         return rx_data, good_frame_id, numRxSyms
 
 
-    def txrx_refnode(self, tx_data_mat_re, tx_data_mat_im, num_frames, bs_sched, ue_sched, nsamps_pad=160, max_try=20, python_mode=False):
+    def txrx_refnode(self, tx_data_mat_re, tx_data_mat_im, num_frames, bs_sched, ref_sched, nsamps_pad=160, max_try=20, python_mode=False):
         print("[PYTHON DRIVER] TX RX REF NODE SYNC: VIA HUB...")
         tx_data_mat = tx_data_mat_re + 1j * tx_data_mat_im
         n_samps = tx_data_mat.shape[0]
@@ -534,21 +499,20 @@ class MIMODriver:
 
         ### Write TDD Schedule ###
         [bs.config_sdr_tdd(tdd_sched=str(bs_sched), nsamps=n_samps, prefix_len=nsamps_pad) for i, bs in enumerate(self.bs_obj)]
-        [ue.config_sdr_tdd(tdd_sched=str(ue_sched), nsamps=n_samps, prefix_len=nsamps_pad) for i, ue in enumerate(self.ue_obj)]   # ref node is considered BS node
+        [ref.config_sdr_tdd(tdd_sched=str(ref_sched), nsamps=n_samps, prefix_len=nsamps_pad) for i, ref in enumerate(self.ref_obj)]   # ref node is considered BS node
 
         #fig, axs = plt.subplots(2)
         #axs[0].plot(np.real(np.squeeze(tx_data_mat[:, 0])))
 
-        for i, ue in enumerate(self.ue_obj):
+        for i, ref in enumerate(self.ref_obj):
             if python_mode:
-                ue.burn_data_complex(tx_data_mat[:, i],tx_data_mat[:, i])   # for python
+                ref.burn_data_complex(tx_data_mat[:, i],tx_data_mat[:, i])   # for python
             else:
                 print("Matlab Mode")
-                ue.burn_data_complex(tx_data_mat,tx_data_mat)    # for matlab
+                ref.burn_data_complex(tx_data_mat,tx_data_mat)    # for matlab
 
         [bs.activate_stream_rx() for bs in self.bs_obj]
         rx_data = np.empty((num_frames, self.n_bs_antenna, numRxSyms, n_samps), dtype=np.complex64)
-        rx_data_frame = np.empty((1,1), dtype=np.complex64)
 
         for frame in range(num_frames):
             print("Trigger")
@@ -556,8 +520,13 @@ class MIMODriver:
             # Receive Data
             rx_data_frame = [bs.recv_stream_tdd() for bs in self.bs_obj]  # Returns dimensions (num bs nodes, num channels, num samples)
             #rx_data_frame = np.array(rx_data_frame)
-            #print("Dimensions: {}, {}, {}".format(rx_data_frame.shape, rx_data_frame[0].shape, rx_data_frame[0][0].shape))
-            rx_data[frame, :, :, :] = np.reshape(np.array(rx_data_frame[0][0]), (self.n_bs_antenna, numRxSyms, n_samps))
+            #rx_data[frame, i, :, :] = np.reshape(np.array(rx_data_frame[0][i]), (self.n_bs_antenna, numRxSyms, n_samps))
+            for i, bs in enumerate(self.bs_obj):
+                if self.n_bs_chan > 1:
+                    rx_data[frame, i*2, :, :] = np.reshape(np.array(rx_data_frame[i][0]), (numRxSyms, n_samps))
+                    rx_data[frame, i*2+1, :, :] = np.reshape(np.array(rx_data_frame[i][1]), (numRxSyms, n_samps))
+                else:
+                    rx_data[frame, i, :, :] = np.reshape(np.array(rx_data_frame[i][0]), (numRxSyms, n_samps))
  
         #axs[1].plot(np.real(np.squeeze(rx_data[0,0,0,:])))
         #plt.show()

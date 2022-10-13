@@ -167,11 +167,11 @@ else
     disp("Running: HARDWARE MODE");
 
     % Create two Iris node objects:
-    tx_direction = 'uplink';      % Options: {'uplink', 'downlink', 'dl-refnode-as-ue'}
+    tx_direction = 'uplink';      % Options: {'uplink', 'downlink', 'ul-refnode-as-ue'}
     bs_ids = ["RF3E000722"];
     ue_ids = ["RF3E000665"];
     hub_id = ["FH4B000003"];
-    ref_ids= [];  % Ignore
+    ref_ids= [];      % Must have the REF node serial if tx_direction mode is 'ul-refnode-as-ue'
 
     % Iris nodes' parameters
     sdr_params = struct(...
@@ -204,7 +204,10 @@ else
 
     if strcmp(tx_direction, 'ul-refnode-as-ue')
         if isempty(hub_id)
-            error('Hub ID must be specified in dl_ref_node_as_ue transmission mode. Exit Now!');
+            error('Hub ID must be specified in ul-refnode-as-ue transmission mode. Exit Now!');
+        end
+        if isempty(ref_ids)
+            error('Reference Node ID must be specified in ul-refnode-as-ue transmission mode. Exit Now!');
         end
         bs_sched = ["R"];
         ue_sched = ["P"];
