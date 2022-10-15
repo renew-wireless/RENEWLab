@@ -187,7 +187,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   prefix_ = tddConf.value("ofdm_tx_zero_prefix", 0);
   postfix_ = tddConf.value("ofdm_tx_zero_postfix", 0);
   symbol_data_subcarrier_num_ = tddConf.value("ofdm_data_num", fft_size_);
-  pilot_seq_ = tddConf.value("pilot_seq", "lts");
+  pilot_seq_ =
+      tddConf.value("pilot_seq", fft_size_ == 64 ? "lts" : "zadoff-chu");
   data_mod_ = tddConf.value("modulation", "QPSK");
   single_gain_ = tddConf.value("single_gain", true);
 
