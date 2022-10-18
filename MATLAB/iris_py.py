@@ -193,7 +193,7 @@ class Iris_py:
 
         def sdr_settxgain(self, tx_gain):
                 for chan in [0, 1]:
-                    self.sdr.setGain(SOAPY_SDR_TX, chan, min(tx_gain, 81.0))
+                    self.sdr.setGain(SOAPY_SDR_TX, chan, tx_gain) #min(tx_gain, 81.0))
 
         def sdr_setrxgain(self, rx_gain):
                 for chan in [0, 1]:

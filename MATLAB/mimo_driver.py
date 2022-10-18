@@ -414,11 +414,14 @@ class MIMODriver:
         [bs.config_sdr_tdd(tdd_sched=str(bs_sched[i]), nsamps=n_samps, prefix_len=nsamps_pad) for i, bs in enumerate(self.bs_obj)]
         [ue.config_sdr_tdd(is_bs=False, tdd_sched=str(ue_sched[i]), nsamps=n_samps, prefix_len=nsamps_pad) for i, ue in enumerate(self.ue_obj)]
 
+        savemat("./testtest.mat", {'tx_data_mat': tx_data_mat});
         for i, bs in enumerate(self.bs_obj):
             if python_mode:
                 bs.burn_data_complex(tx_data_mat[0])  # For python (needs more testing)
             else:
-                bs.burn_data_complex(tx_data_mat[i, :] if n_bs_antenna > 1 else tx_data_mat) # for matlab
+                print('OBCH - Burn data. BS Node: {}'.format(i))
+                #bs.burn_data_complex(tx_data_mat[i, :] if n_bs_antenna > 1 else tx_data_mat) # for matlab
+                bs.burn_data_complex(tx_data_mat[i, :], tx_data_mat[i, :]) # for matlab
 
         [ue.activate_stream_rx() for ue in self.ue_obj]
         [ue.set_corr() for ue in self.ue_obj]

@@ -58,9 +58,9 @@ else
     USE_HUB                 = 1;
     TX_FRQ                  = 3.5475e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = 81;
-    TX_GN_BF                = 81;           % BS gain during DL BF transmission
-    TX_GN_UE                = [95, 95];
+    TX_GN                   = 95;
+    TX_GN_BF                = 98;           % BS gain during DL BF transmission
+    TX_GN_UE                = [100, 100];
     RX_GN                   = 65;
     SMPL_RT                 = 5e6;
     N_FRM                   = 1;            % Not tested with N_FRM > 1
@@ -74,10 +74,19 @@ else
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
-        bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424", ...  % Chain1
-		          "RF3E000731","RF3E000747","RF3E000734", ...               % Chain1
-	              "RF3E000748","RF3E000492", ...                            % Chain5
-		          "RF3E000708","RF3E000437","RF3E000090"];                  % Chain5
+        %bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424", ...  % Chain1
+	%          "RF3E000731","RF3E000747","RF3E000734", ...               % Chain1
+	%          "RF3E000748","RF3E000492", ...                            % Chain5
+	%          "RF3E000708","RF3E000437","RF3E000090"];                  % Chain5
+	chain1A = ["RF3E000731","RF3E000747","RF3E000734"];               % Chain1A
+	chain1B = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];  % Chain1B
+        chain2A = ["RF3E000053","RF3E000177","RF3E000192","RF3E000117"];  % Chain2A
+	chain2B = ["RF3E000257","RF3E000430","RF3E000311","RF3E000565"];  % Chain2B
+	chain3A = ["RF3E000686","RF3E000574","RF3E000595","RF3E000585"];  % Chain3
+	chain4A = ["RF3E000722","RF3E000494","RF3E000592","RF3E000333"];  % Chain4
+	chain5A = ["RF3E000748","RF3E000492"];  % Chain5A
+	chain5B = ["RF3E000708","RF3E000437","RF3E000090"];  % Chain5B
+	bs_ids = [chain1B, chain1A, chain3A];
         hub_id = ["FH4B000003"];
         %bs_ids = ["RF3E000146","RF3E000122","RF3E000150"];%,"RF3E000128"],"RF3E000168","RF3E000136","RF3E000213","RF3E000142", ...
         %"RF3E000356","RF3E000546","RF3E000620","RF3E000609","RF3E000604","RF3E000612","RF3E000640","RF3E000551"];
@@ -86,8 +95,8 @@ else
         bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         hub_id = [];
     end
-    ue_ids = ["RF3E000665"];
-    ref_ids= ["RF3E000297"];
+    ue_ids = ["RF3E000706"];
+    ref_ids= ["RF3E000274"];
 
     N_BS_NODE               = length(bs_ids);                   % Number of nodes at the BS
     N_BS_ANT                = length(bs_ids) * length(ANT_BS);  % Number of antennas at the BS
@@ -201,7 +210,8 @@ else
 
     fprintf('Running: HARDWARE MODE \n');
     fprintf('=============================== \n');
-    fprintf('Initiate Sounding Process \n');
+    fprintf('======== Initialization ======= \n');
+    fprintf('=============================== \n');
     % Iris nodes' parameters
     sdr_params = struct(...
         'bs_id', bs_ids, ...
@@ -221,31 +231,26 @@ else
     mimo_handle = mimo_driver(sdr_params);
 
     % Calibrate timing offsets across boards in different-length chains
-    fprintf('=============================== \n');
-    fprintf('Timing Offset Calibration \n');
+    fprintf('=========================== \n ======== Timing Offset Cal ========= \n =========================== \n');
     N_CAL_FRM = 1;
     N_REF = 1;
     bs_sched_cal = ["R"];
     ref_sched_cal = ["P"];
-    [rx_vec_iris_cal, ~, ~] = mimo_handle.mimo_txrx(tx_vec_train, N_CAL_FRM, N_ZPAD_PRE, 'ul-refnode-as-ue', bs_sched_cal, ref_sched_cal);
+    [rx_vec_iris, ~, ~] = mimo_handle.mimo_txrx(tx_vec_train, N_CAL_FRM, N_ZPAD_PRE, 'ul-refnode-as-ue', bs_sched_cal, ref_sched_cal);
     % Find peaks in uplink pilots sent by reference node, at BS each antenna
     % Dimensions of rx_vec_iris_cal: (num_frames, n_bs_antenna, numRxSyms, n_samps)
-    [~, ~, peaks] = channel_estimation_fun(rx_vec_iris_cal, N_BS_ANT, N_REF, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'calibration', frm_idx);
-
-    % Validate...
-    [tmp_validate] = time_offset_cal(peaks, squeeze(rx_vec_iris_cal), N_BS_ANT);
-    tmp_validate = reshape(tmp_validate, 1, N_BS_ANT, 1, MAX_NUM_SAMPS);
-    [~, ~, peaksval] = channel_estimation_fun(tmp_validate, N_BS_ANT, N_REF, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'calibration', frm_idx);
-    diffBefore = max(abs(peaks - peaks(1)));
-    diffAfter = max(abs(peaksval - peaksval(1)));
-    fprintf("Validate Calibration: MaxOffsetBefore: %d, MaxOffsetAfter: %d \n", diffBefore,diffAfter);
-    % End validation
+    [~, ~, peaks, err_flag] = channel_estimation_fun(rx_vec_iris, N_BS_ANT, N_REF, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'calibration', frm_idx);
+    if err_flag
+        mimo_handle.mimo_close();
+	error();
+    end
 
     % Sounding
     % Apply offsets from calibration and sound!
+    fprintf('=========================== \n ======== Sounding ========= \n =========================== \n');
     tx_mat_train = repmat(tx_vec_train.', N_BS_ANT,1);
-    [tx_mat_train] = time_offset_cal(peaks, squeeze(tx_mat_train), N_BS_ANT);
-    [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_mat_train, N_FRM, N_ZPAD_PRE, 'dl-sounding', '[]', '[]');
+    [tx_mat_train_cal] = time_offset_cal(peaks, squeeze(tx_mat_train), N_BS_ANT, lts_t);
+    [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_mat_train_cal, N_FRM, N_ZPAD_PRE, 'dl-sounding', '[]', '[]');
     if isempty(rx_vec_iris_sound)
 	    mimo_handle.mimo_close();
         error("Driver returned empty array. No good data received by base station");
@@ -257,7 +262,13 @@ end
 fprintf('=============================== \n');
 fprintf('Channel Estimation and Beamweight Calculation \n');
 % Channel estimation
-[H, H_tmp, peaks] = channel_estimation_fun(rx_vec_iris_sound, N_BS_ANT, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'sounding', frm_idx);
+[H, H_tmp, peaks, err_flag] = channel_estimation_fun(rx_vec_iris_sound, N_BS_ANT, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'sounding', frm_idx);
+if err_flag
+    mimo_handle.mimo_close();
+    error();
+end
+
+return;
 
 % Beamweight calculation
 W = zeros(N_BS_ANT, N_UE, N_SC);
@@ -279,8 +290,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % No need to send explicit feedback to base station, simply use the computed
 % weights
-fprintf('=============================== \n');
-fprintf('Downlink Beamforming \n');
+fprintf('=========================== \n ======== Downlink BF ========= \n =========================== \n');
 
 % Update TX gain
 is_bs = 1;   % Is base station node
@@ -326,8 +336,21 @@ else
     N_SAMPS = N_ZPAD_PRE + length(tx_pilot_mat(1,:)) + (N_SYM_SAMP * N_DATA_SYM) + N_ZPAD_POST;
     assert(N_SAMPS == MAX_NUM_SAMPS);
 
+    disp(peaks);
+    [tx_payload_cal] = time_offset_cal(peaks, squeeze(tx_payload), N_BS_ANT, lts_t);
 
-    [tx_payload_cal] = time_offset_cal(peaks, squeeze(tx_payload), N_BS_ANT);
+    %% VALIDATE
+    [~, ~, peaksval, err_flag] = channel_estimation_fun(tx_payload_cal, N_BS_ANT, N_REF, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'verify', frm_idx);
+    if err_flag
+        mimo_handle.mimo_close();
+        error();
+    end
+    diffBefore = max(abs(peaks - peaks(1)));
+    diffAfter = max(abs(peaksval - peaksval(1)));
+    fprintf("Validate Calibration DLL!!!!!: MaxOffsetBefore: %d, MaxOffsetAfter: %d \n", diffBefore,diffAfter);
+    % End validation
+
+
     [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx(tx_payload_cal, N_FRM, N_ZPAD_PRE, 'downlink', '[]', '[]');
     mimo_handle.mimo_close();
 
@@ -345,7 +368,11 @@ end
 %%%%% Find Preambles (downlink beamforming mode: 'dl-bf')
 % Replace number of BS with number of streams for channel estimation in DL BF transmission
 N_STREAMS = 1;
-[H, ~, preamble_pk] = channel_estimation_fun(rx_vec_iris_tmp, N_STREAMS, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'dl-bf', frm_idx);
+[H, ~, preamble_pk, err_flag] = channel_estimation_fun(rx_vec_iris_tmp, N_STREAMS, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'dl-bf', frm_idx);
+if err_flag
+    mimo_handle.mimo_close();
+    error();
+end
 rx_H_est = squeeze(H);
 
 for iue = 1:N_UE
@@ -526,9 +553,12 @@ for iue = 1:N_UE
 end
 
 
-function [H, rx_H_est, preamble_pk] = channel_estimation_fun(data_vec, N_BS_ANT, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, mode, frm_idx)
+function [H, rx_H_est, preamble_pk, err_flag] = channel_estimation_fun(data_vec, N_BS_ANT, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, mode, frm_idx)
     global DEBUG;
-
+    H = [];
+    rx_H_est = [];
+    err_flag = 0;
+    fprintf("==== Channel Estimation Stage: %s ==== \n", mode);
     % We expect as many pilots as there are number of BS antennas
     preamble_pk = nan(N_BS_ANT, N_UE);
     H = zeros(N_UE, N_BS_ANT, N_SC);
@@ -546,6 +576,8 @@ function [H, rx_H_est, preamble_pk] = channel_estimation_fun(data_vec, N_BS_ANT,
                 % Data shape: (# good frames, # UEs, numRxSyms==1, numSamps)
                 curr_vec = squeeze(data_vec(frm_idx, iue, 1, :));
                 %curr_vec = curr_vec.';
+	    elseif strcmp(mode, 'verify')
+		curr_vec = squeeze(data_vec(ibs,:));
             end
 
             lts_corr = abs(conv(conj(fliplr(lts_t.')), sign(curr_vec.')));
@@ -560,9 +592,9 @@ function [H, rx_H_est, preamble_pk] = channel_estimation_fun(data_vec, N_BS_ANT,
             % Stop if no valid correlation peak was found
             if(isempty(lts_second_peak_index))
                 fprintf('%s: NO correlation peak from BS antenna %d at UE %d. Exit now! \n', mode, ibs, iue);
-                %figure; subplot(2,1,1); plot(abs(curr_vec)); subplot(2,1,2); plot(lts_corr); title(sprintf('%s UE %d, BS %d',mode,iue,ibs));
-                mimo_handle.mimo_close();
-                error();
+                figure; subplot(2,1,1); plot(abs(curr_vec)); subplot(2,1,2); plot(lts_corr); title(sprintf('%s UE %d, BS %d',mode,iue,ibs));
+                err_flag = 1;
+                return;
             else
                 if length(lts_second_peak_index) > 1
                     preamble_pk(ibs, iue) = lts_peaks(lts_second_peak_index(2));
@@ -577,6 +609,7 @@ function [H, rx_H_est, preamble_pk] = channel_estimation_fun(data_vec, N_BS_ANT,
                 if lts_ind <= 0
                     fprintf('INVALID correlation peak from BS antenna %d at UE %d. Exit now! \n', ibs, iue);
                     %figure; subplot(2,1,1); plot(abs(curr_vec)); subplot(2,1,2); plot(lts_corr); title(sprintf('%s UE %d, BS %d',mode,iue,ibs));
+		    err_flag = 1;
                     return;
                 else
                     fprintf('LTS Index: %d \n', lts_ind);
@@ -596,14 +629,16 @@ function [H, rx_H_est, preamble_pk] = channel_estimation_fun(data_vec, N_BS_ANT,
                 %rx_H_est = (lts_f.') .* (rx_lts1_f + rx_lts2_f) / 2;
                 rx_H_est = lts_f .* (rx_lts1_f + rx_lts2_f) / 2;
                 rx_H_est_sound = rx_H_est;
-                H(iue, ibs, :) = rx_H_est;
+                if ~strcmp(mode, 'verify')
+		    H(iue, ibs, :) = rx_H_est;
+		end
             end
         end
     end
 end
 
 
-function [cal_data_vec] = time_offset_cal(corr_peaks, data, N_BS_ANT)
+function [cal_data_vec] = time_offset_cal(corr_peaks, data, N_BS_ANT, lts_t)
 
     % Sample offset calibration
     samp_offset_array = corr_peaks - corr_peaks(1);
@@ -612,13 +647,34 @@ function [cal_data_vec] = time_offset_cal(corr_peaks, data, N_BS_ANT)
     for ibs =1:N_BS_ANT
         curr_offset = samp_offset_array(ibs);
 
-        if curr_offset < 0
+	if curr_offset < 0
             rx_mat_calibrated_tmp(ibs, 1+abs(curr_offset):end) = data(ibs, 1:end-abs(curr_offset));
         elseif  curr_offset > 0
             rx_mat_calibrated_tmp(ibs, 1:end-curr_offset) = data(ibs, 1+curr_offset:end);
         else
             rx_mat_calibrated_tmp(ibs, :) = data(ibs, :);
         end
+
+	curr_vec = rx_mat_calibrated_tmp(ibs, :);
+        lts_corr = abs(conv(conj(fliplr(lts_t.')), sign(curr_vec.')));
+        lts_peaks = find(lts_corr > 0.8*max(lts_corr));
+        [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
+        [lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
+
+        if(isempty(lts_second_peak_index))
+            fprintf('%s: NO correlation peak from BS antenna %d. Exit now! \n', 'VERIFY', ibs);
+        else
+            if length(lts_second_peak_index) > 1
+                preamble_pk(ibs) = lts_peaks(lts_second_peak_index(2));
+            else
+                preamble_pk(ibs) = lts_peaks(lts_second_peak_index(1));
+            end
+
+            pk_tmp = preamble_pk(ibs);
+            lts_ind = pk_tmp - 160 + 1;
+	end
+	fprintf("LTS INDEX VERIFY: %d (Offset: %d) \n", lts_ind, curr_offset);
     end
+
     cal_data_vec = rx_mat_calibrated_tmp;
 end
