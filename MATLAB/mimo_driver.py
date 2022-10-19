@@ -280,8 +280,15 @@ class MIMODriver:
         [bs.config_sdr_tdd(tdd_sched=str(bs_sched_b) if i == 0 else str(bs_sched), nsamps=n_samps, prefix_len=nsamps_pad, dualpilot=dual_pilot) for i, bs in enumerate(self.bs_obj)]
         [ue.config_sdr_tdd(is_bs=False, tdd_sched=str(ue_sched[i]), nsamps=n_samps, prefix_len=nsamps_pad) for i, ue in enumerate(self.ue_obj)]
 
+        #for i, bs in enumerate(self.bs_obj):
+        #    bs.burn_data_complex(tx_data_mat[i, :] if n_bs_antenna > 1 else tx_data_mat)
+
         for i, bs in enumerate(self.bs_obj):
-            bs.burn_data_complex(tx_data_mat[i, :] if n_bs_antenna > 1 else tx_data_mat)
+            #bs.burn_data_complex(tx_data_mat[i, :] if n_bs_antenna > 1 else tx_data_mat) # for matlab
+            if self.n_bs_chan > 1:
+                bs.burn_data_complex(tx_data_mat[2*i, :], tx_data_mat[2*i+1, :])
+            else:
+                bs.burn_data_complex(tx_data_mat[i, :], tx_data_mat[i, :])
 
         [ue.activate_stream_rx() for ue in self.ue_obj]
         [ue.set_corr() for ue in self.ue_obj]
@@ -419,9 +426,11 @@ class MIMODriver:
             if python_mode:
                 bs.burn_data_complex(tx_data_mat[0])  # For python (needs more testing)
             else:
-                print('OBCH - Burn data. BS Node: {}'.format(i))
                 #bs.burn_data_complex(tx_data_mat[i, :] if n_bs_antenna > 1 else tx_data_mat) # for matlab
-                bs.burn_data_complex(tx_data_mat[i, :], tx_data_mat[i, :]) # for matlab
+                if self.n_bs_chan > 1:
+                    bs.burn_data_complex(tx_data_mat[2*i, :], tx_data_mat[2*i+1, :]) # for matlab
+                else:
+                    bs.burn_data_complex(tx_data_mat[i, :], tx_data_mat[i, :]) # for matlab
 
         [ue.activate_stream_rx() for ue in self.ue_obj]
         [ue.set_corr() for ue in self.ue_obj]

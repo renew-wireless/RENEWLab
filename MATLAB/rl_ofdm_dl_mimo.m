@@ -79,14 +79,14 @@ else
 	%          "RF3E000748","RF3E000492", ...                            % Chain5
 	%          "RF3E000708","RF3E000437","RF3E000090"];                  % Chain5
 	chain1A = ["RF3E000731","RF3E000747","RF3E000734"];               % Chain1A
-	chain1B = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];  % Chain1B
-        chain2A = ["RF3E000053","RF3E000177","RF3E000192","RF3E000117"];  % Chain2A
+	chain1B = ["RF3E000654"];%,"RF3E000458"];%,"RF3E000463","RF3E000424"];  % Chain1B
+        chain2A = ["RF3E000053","RF3E000192","RF3E000117"];  % Chain2A
 	chain2B = ["RF3E000257","RF3E000430","RF3E000311","RF3E000565"];  % Chain2B
 	chain3A = ["RF3E000686","RF3E000574","RF3E000595","RF3E000585"];  % Chain3
 	chain4A = ["RF3E000722","RF3E000494","RF3E000592","RF3E000333"];  % Chain4
 	chain5A = ["RF3E000748","RF3E000492"];  % Chain5A
 	chain5B = ["RF3E000708","RF3E000437","RF3E000090"];  % Chain5B
-	bs_ids = [chain1B, chain1A, chain3A];
+	bs_ids = [chain1B, chain1A, chain2A, chain2B];
         hub_id = ["FH4B000003"];
         %bs_ids = ["RF3E000146","RF3E000122","RF3E000150"];%,"RF3E000128"],"RF3E000168","RF3E000136","RF3E000213","RF3E000142", ...
         %"RF3E000356","RF3E000546","RF3E000620","RF3E000609","RF3E000604","RF3E000612","RF3E000640","RF3E000551"];
@@ -96,7 +96,7 @@ else
         hub_id = [];
     end
     ue_ids = ["RF3E000706"];
-    ref_ids= ["RF3E000274"];
+    ref_ids= [];
 
     N_BS_NODE               = length(bs_ids);                   % Number of nodes at the BS
     N_BS_ANT                = length(bs_ids) * length(ANT_BS);  % Number of antennas at the BS
@@ -230,29 +230,15 @@ else
 
     mimo_handle = mimo_driver(sdr_params);
 
-    % Calibrate timing offsets across boards in different-length chains
-    fprintf('=========================== \n ======== Timing Offset Cal ========= \n =========================== \n');
-    N_CAL_FRM = 1;
-    N_REF = 1;
-    bs_sched_cal = ["R"];
-    ref_sched_cal = ["P"];
-    [rx_vec_iris, ~, ~] = mimo_handle.mimo_txrx(tx_vec_train, N_CAL_FRM, N_ZPAD_PRE, 'ul-refnode-as-ue', bs_sched_cal, ref_sched_cal);
-    % Find peaks in uplink pilots sent by reference node, at BS each antenna
-    % Dimensions of rx_vec_iris_cal: (num_frames, n_bs_antenna, numRxSyms, n_samps)
-    [~, ~, peaks, err_flag] = channel_estimation_fun(rx_vec_iris, N_BS_ANT, N_REF, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'calibration', frm_idx);
-    if err_flag
-        mimo_handle.mimo_close();
-	error();
-    end
-
     % Sounding
     % Apply offsets from calibration and sound!
     fprintf('=========================== \n ======== Sounding ========= \n =========================== \n');
     tx_mat_train = repmat(tx_vec_train.', N_BS_ANT,1);
-    [tx_mat_train_cal] = time_offset_cal(peaks, squeeze(tx_mat_train), N_BS_ANT, lts_t);
-    [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_mat_train_cal, N_FRM, N_ZPAD_PRE, 'dl-sounding', '[]', '[]');
+    %[tx_mat_train_cal] = time_offset_cal(peaks, squeeze(tx_mat_train), N_BS_ANT, lts_t);
+    [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_mat_train, N_FRM, N_ZPAD_PRE, 'dl-sounding', '[]', '[]');
+    rx_vec_iris_sound_tmp = rx_vec_iris_sound;
     if isempty(rx_vec_iris_sound)
-	    mimo_handle.mimo_close();
+        mimo_handle.mimo_close();
         error("Driver returned empty array. No good data received by base station");
     end
     assert(size(rx_vec_iris_sound,3) == N_BS_ANT);
@@ -262,13 +248,35 @@ end
 fprintf('=============================== \n');
 fprintf('Channel Estimation and Beamweight Calculation \n');
 % Channel estimation
+clear peaks;
 [H, H_tmp, peaks, err_flag] = channel_estimation_fun(rx_vec_iris_sound, N_BS_ANT, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'sounding', frm_idx);
 if err_flag
     mimo_handle.mimo_close();
     error();
 end
 
-return;
+
+
+%%%%%% OBCH !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! CHECK DL SOUNDING FRAMES (CAL)
+%fprintf('=============================== \n');
+%fprintf('VERIFICATION !!!!!! Channel Estimation and Beamweight Calculation \n');
+%[tx_mat_train_cal] = time_offset_cal(peaks, squeeze(tx_mat_train), N_BS_ANT, lts_t);
+%clear rx_vec_iris_sound;
+%[rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_mat_train_cal, N_FRM, N_ZPAD_PRE, 'dl-sounding', '[]', '[]');
+%if isempty(rx_vec_iris_sound)
+%    mimo_handle.mimo_close();
+%    error("Driver returned empty array. No good data received by base station");
+%end
+%fprintf('VERIFICATION PART 2 - ESTIMATION \n');
+%[H, H_tmp, peaks, err_flag] = channel_estimation_fun(rx_vec_iris_sound, N_BS_ANT, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'sounding', frm_idx);
+%if err_flag
+%    mimo_handle.mimo_close();
+%    error();
+%end
+%mimo_handle.mimo_close();
+%return;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Beamweight calculation
 W = zeros(N_BS_ANT, N_UE, N_SC);
@@ -336,21 +344,10 @@ else
     N_SAMPS = N_ZPAD_PRE + length(tx_pilot_mat(1,:)) + (N_SYM_SAMP * N_DATA_SYM) + N_ZPAD_POST;
     assert(N_SAMPS == MAX_NUM_SAMPS);
 
+    fprintf("XXXX OBCH XXXX PEAKS FROM DL SOUNDING: \n");
     disp(peaks);
+    disp(size(tx_payload))
     [tx_payload_cal] = time_offset_cal(peaks, squeeze(tx_payload), N_BS_ANT, lts_t);
-
-    %% VALIDATE
-    [~, ~, peaksval, err_flag] = channel_estimation_fun(tx_payload_cal, N_BS_ANT, N_REF, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'verify', frm_idx);
-    if err_flag
-        mimo_handle.mimo_close();
-        error();
-    end
-    diffBefore = max(abs(peaks - peaks(1)));
-    diffAfter = max(abs(peaksval - peaksval(1)));
-    fprintf("Validate Calibration DLL!!!!!: MaxOffsetBefore: %d, MaxOffsetAfter: %d \n", diffBefore,diffAfter);
-    % End validation
-
-
     [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx(tx_payload_cal, N_FRM, N_ZPAD_PRE, 'downlink', '[]', '[]');
     mimo_handle.mimo_close();
 
@@ -576,8 +573,6 @@ function [H, rx_H_est, preamble_pk, err_flag] = channel_estimation_fun(data_vec,
                 % Data shape: (# good frames, # UEs, numRxSyms==1, numSamps)
                 curr_vec = squeeze(data_vec(frm_idx, iue, 1, :));
                 %curr_vec = curr_vec.';
-	    elseif strcmp(mode, 'verify')
-		curr_vec = squeeze(data_vec(ibs,:));
             end
 
             lts_corr = abs(conv(conj(fliplr(lts_t.')), sign(curr_vec.')));
@@ -592,7 +587,6 @@ function [H, rx_H_est, preamble_pk, err_flag] = channel_estimation_fun(data_vec,
             % Stop if no valid correlation peak was found
             if(isempty(lts_second_peak_index))
                 fprintf('%s: NO correlation peak from BS antenna %d at UE %d. Exit now! \n', mode, ibs, iue);
-                figure; subplot(2,1,1); plot(abs(curr_vec)); subplot(2,1,2); plot(lts_corr); title(sprintf('%s UE %d, BS %d',mode,iue,ibs));
                 err_flag = 1;
                 return;
             else
@@ -608,7 +602,6 @@ function [H, rx_H_est, preamble_pk, err_flag] = channel_estimation_fun(data_vec,
 
                 if lts_ind <= 0
                     fprintf('INVALID correlation peak from BS antenna %d at UE %d. Exit now! \n', ibs, iue);
-                    %figure; subplot(2,1,1); plot(abs(curr_vec)); subplot(2,1,2); plot(lts_corr); title(sprintf('%s UE %d, BS %d',mode,iue,ibs));
 		    err_flag = 1;
                     return;
                 else
@@ -629,9 +622,7 @@ function [H, rx_H_est, preamble_pk, err_flag] = channel_estimation_fun(data_vec,
                 %rx_H_est = (lts_f.') .* (rx_lts1_f + rx_lts2_f) / 2;
                 rx_H_est = lts_f .* (rx_lts1_f + rx_lts2_f) / 2;
                 rx_H_est_sound = rx_H_est;
-                if ~strcmp(mode, 'verify')
-		    H(iue, ibs, :) = rx_H_est;
-		end
+		H(iue, ibs, :) = rx_H_est;
             end
         end
     end
@@ -646,7 +637,6 @@ function [cal_data_vec] = time_offset_cal(corr_peaks, data, N_BS_ANT, lts_t)
 
     for ibs =1:N_BS_ANT
         curr_offset = samp_offset_array(ibs);
-
 	if curr_offset < 0
             rx_mat_calibrated_tmp(ibs, 1+abs(curr_offset):end) = data(ibs, 1:end-abs(curr_offset));
         elseif  curr_offset > 0
