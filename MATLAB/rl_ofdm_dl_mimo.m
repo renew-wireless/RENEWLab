@@ -58,9 +58,9 @@ else
     USE_HUB                 = 1;
     TX_FRQ                  = 3.5475e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = 95;
-    TX_GN_BF                = 98;           % BS gain during DL BF transmission
-    TX_GN_UE                = [100, 100];
+    TX_GN                   = 81;
+    TX_GN_BF                = 81;           % BS gain during DL BF transmission
+    TX_GN_UE                = [81, 81];
     RX_GN                   = 65;
     SMPL_RT                 = 5e6;
     N_FRM                   = 1;            % Not tested with N_FRM > 1
@@ -68,34 +68,30 @@ else
     bs_ids                  = string.empty();
     ue_ids                  = string.empty();
     ue_scheds               = string.empty();
-    TX_ADVANCE              = 400;          % !!!! IMPORTANT: DO NOT MODIFY - POWDER default is 400, RENEW(Rice) default is 235!!!!
+    TX_ADVANCE              = 235;          % !!!! IMPORTANT: DO NOT MODIFY - POWDER default is 400, RENEW(Rice) default is 235!!!!
 
     if USE_HUB
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
-        %bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424", ...  % Chain1
-	%          "RF3E000731","RF3E000747","RF3E000734", ...               % Chain1
-	%          "RF3E000748","RF3E000492", ...                            % Chain5
-	%          "RF3E000708","RF3E000437","RF3E000090"];                  % Chain5
-	chain1A = ["RF3E000731","RF3E000747","RF3E000734"];               % Chain1A
-	chain1B = ["RF3E000654"];%,"RF3E000458"];%,"RF3E000463","RF3E000424"];  % Chain1B
-        chain2A = ["RF3E000053","RF3E000192","RF3E000117"];  % Chain2A
-	chain2B = ["RF3E000257","RF3E000430","RF3E000311","RF3E000565"];  % Chain2B
-	chain3A = ["RF3E000686","RF3E000574","RF3E000595","RF3E000585"];  % Chain3
-	chain4A = ["RF3E000722","RF3E000494","RF3E000592","RF3E000333"];  % Chain4
-	chain5A = ["RF3E000748","RF3E000492"];  % Chain5A
-	chain5B = ["RF3E000708","RF3E000437","RF3E000090"];  % Chain5B
-	bs_ids = [chain1B, chain1A, chain2A, chain2B];
-        hub_id = ["FH4B000003"];
-        %bs_ids = ["RF3E000146","RF3E000122","RF3E000150"];%,"RF3E000128"],"RF3E000168","RF3E000136","RF3E000213","RF3E000142", ...
+        %chain1A = ["RF3E000731","RF3E000747","RF3E000734"];                    % Chain1A
+        %chain1B = ["RF3E000654"];%,"RF3E000458"];%,"RF3E000463","RF3E000424"]; % Chain1B
+        %chain2A = ["RF3E000053","RF3E000192","RF3E000117"];                    % Chain2A
+        %chain2B = ["RF3E000257","RF3E000430","RF3E000311","RF3E000565"];       % Chain2B
+        %chain3A = ["RF3E000686","RF3E000574","RF3E000595","RF3E000585"];       % Chain3
+        %chain4A = ["RF3E000722","RF3E000494","RF3E000592","RF3E000333"];       % Chain4
+        %chain5A = ["RF3E000748","RF3E000492"];                                 % Chain5A
+        %chain5B = ["RF3E000708","RF3E000437","RF3E000090"];                    % Chain5B
+        %bs_ids = [chain1B, chain1A, chain2A, chain2B];
+        %hub_id = ["FH4B000003"];
+        bs_ids = ["RF3E000146","RF3E000122","RF3E000150","RF3E000128"];%,"RF3E000168","RF3E000136","RF3E000213","RF3E000142", ...
         %"RF3E000356","RF3E000546","RF3E000620","RF3E000609","RF3E000604","RF3E000612","RF3E000640","RF3E000551"];
-        %hub_id = ["FH4B000019"];
+        hub_id = ["FH4B000019"];
     else
         bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         hub_id = [];
     end
-    ue_ids = ["RF3E000706"];
+    ue_ids = ["RF3E000392"];
     ref_ids= [];
 
     N_BS_NODE               = length(bs_ids);                   % Number of nodes at the BS
@@ -230,11 +226,8 @@ else
 
     mimo_handle = mimo_driver(sdr_params);
 
-    % Sounding
-    % Apply offsets from calibration and sound!
     fprintf('=========================== \n ======== Sounding ========= \n =========================== \n');
     tx_mat_train = repmat(tx_vec_train.', N_BS_ANT,1);
-    %[tx_mat_train_cal] = time_offset_cal(peaks, squeeze(tx_mat_train), N_BS_ANT, lts_t);
     [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_mat_train, N_FRM, N_ZPAD_PRE, 'dl-sounding', '[]', '[]');
     rx_vec_iris_sound_tmp = rx_vec_iris_sound;
     if isempty(rx_vec_iris_sound)
@@ -254,29 +247,6 @@ if err_flag
     mimo_handle.mimo_close();
     error();
 end
-
-
-
-%%%%%% OBCH !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! CHECK DL SOUNDING FRAMES (CAL)
-%fprintf('=============================== \n');
-%fprintf('VERIFICATION !!!!!! Channel Estimation and Beamweight Calculation \n');
-%[tx_mat_train_cal] = time_offset_cal(peaks, squeeze(tx_mat_train), N_BS_ANT, lts_t);
-%clear rx_vec_iris_sound;
-%[rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_mat_train_cal, N_FRM, N_ZPAD_PRE, 'dl-sounding', '[]', '[]');
-%if isempty(rx_vec_iris_sound)
-%    mimo_handle.mimo_close();
-%    error("Driver returned empty array. No good data received by base station");
-%end
-%fprintf('VERIFICATION PART 2 - ESTIMATION \n');
-%[H, H_tmp, peaks, err_flag] = channel_estimation_fun(rx_vec_iris_sound, N_BS_ANT, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'sounding', frm_idx);
-%if err_flag
-%    mimo_handle.mimo_close();
-%    error();
-%end
-%mimo_handle.mimo_close();
-%return;
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Beamweight calculation
 W = zeros(N_BS_ANT, N_UE, N_SC);
@@ -344,9 +314,6 @@ else
     N_SAMPS = N_ZPAD_PRE + length(tx_pilot_mat(1,:)) + (N_SYM_SAMP * N_DATA_SYM) + N_ZPAD_POST;
     assert(N_SAMPS == MAX_NUM_SAMPS);
 
-    fprintf("XXXX OBCH XXXX PEAKS FROM DL SOUNDING: \n");
-    disp(peaks);
-    disp(size(tx_payload))
     [tx_payload_cal] = time_offset_cal(peaks, squeeze(tx_payload), N_BS_ANT, lts_t);
     [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx(tx_payload_cal, N_FRM, N_ZPAD_PRE, 'downlink', '[]', '[]');
     mimo_handle.mimo_close();
@@ -602,7 +569,7 @@ function [H, rx_H_est, preamble_pk, err_flag] = channel_estimation_fun(data_vec,
 
                 if lts_ind <= 0
                     fprintf('INVALID correlation peak from BS antenna %d at UE %d. Exit now! \n', ibs, iue);
-		    err_flag = 1;
+		            err_flag = 1;
                     return;
                 else
                     fprintf('LTS Index: %d \n', lts_ind);
@@ -622,7 +589,7 @@ function [H, rx_H_est, preamble_pk, err_flag] = channel_estimation_fun(data_vec,
                 %rx_H_est = (lts_f.') .* (rx_lts1_f + rx_lts2_f) / 2;
                 rx_H_est = lts_f .* (rx_lts1_f + rx_lts2_f) / 2;
                 rx_H_est_sound = rx_H_est;
-		H(iue, ibs, :) = rx_H_est;
+		        H(iue, ibs, :) = rx_H_est;
             end
         end
     end
@@ -637,7 +604,7 @@ function [cal_data_vec] = time_offset_cal(corr_peaks, data, N_BS_ANT, lts_t)
 
     for ibs =1:N_BS_ANT
         curr_offset = samp_offset_array(ibs);
-	if curr_offset < 0
+	    if curr_offset < 0
             rx_mat_calibrated_tmp(ibs, 1+abs(curr_offset):end) = data(ibs, 1:end-abs(curr_offset));
         elseif  curr_offset > 0
             rx_mat_calibrated_tmp(ibs, 1:end-curr_offset) = data(ibs, 1+curr_offset:end);
@@ -645,7 +612,8 @@ function [cal_data_vec] = time_offset_cal(corr_peaks, data, N_BS_ANT, lts_t)
             rx_mat_calibrated_tmp(ibs, :) = data(ibs, :);
         end
 
-	curr_vec = rx_mat_calibrated_tmp(ibs, :);
+        % VALIDATION!
+	    curr_vec = rx_mat_calibrated_tmp(ibs, :);
         lts_corr = abs(conv(conj(fliplr(lts_t.')), sign(curr_vec.')));
         lts_peaks = find(lts_corr > 0.8*max(lts_corr));
         [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
@@ -662,8 +630,8 @@ function [cal_data_vec] = time_offset_cal(corr_peaks, data, N_BS_ANT, lts_t)
 
             pk_tmp = preamble_pk(ibs);
             lts_ind = pk_tmp - 160 + 1;
-	end
-	fprintf("LTS INDEX VERIFY: %d (Offset: %d) \n", lts_ind, curr_offset);
+	    end
+	    fprintf("LTS INDEX VERIFY: %d (Offset: %d) \n", lts_ind, curr_offset);
     end
 
     cal_data_vec = rx_mat_calibrated_tmp;

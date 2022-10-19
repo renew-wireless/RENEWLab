@@ -358,9 +358,9 @@ class MIMODriver:
         tx_data_mat = tx_data_mat_re + 1j * tx_data_mat_im
 
         ################################
-        print(tx_data_mat.shape)
-        print(len(tx_data_mat.shape))
-        print(tx_data_mat.shape[0])
+        #print(tx_data_mat.shape)
+        #print(len(tx_data_mat.shape))
+        #print(tx_data_mat.shape[0])
         ################################
 
         n_users = self.n_users
