@@ -52,7 +52,7 @@ if SIM_MODE
 else 
     %Iris params:
     TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
-    ANT_BS                  = 'AB';         % Options: {A, AB}
+    ANT_BS                  = 'A';         % Options: {A, AB}
     ANT_UE                  = 'A';          % Currently, only support single antenna UE, i.e., A
     USE_HUB                 = 1;
     TX_FRQ                  = 3.5475e9;
