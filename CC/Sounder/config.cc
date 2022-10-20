@@ -184,6 +184,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   symbol_per_slot_ = tddConf.value("ofdm_symbol_per_slot", 1);
   fft_size_ = tddConf.value("fft_size", 0);
   cp_size_ = tddConf.value("cp_size", 0);
+  dl_pilots_en_ = tddConf.value("enable_dl_pilots", false);
   prefix_ = tddConf.value("ofdm_tx_zero_prefix", 0);
   postfix_ = tddConf.value("ofdm_tx_zero_postfix", 0);
   symbol_data_subcarrier_num_ = tddConf.value("ofdm_data_num", fft_size_);
