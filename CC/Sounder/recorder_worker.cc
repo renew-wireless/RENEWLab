@@ -60,6 +60,9 @@ void RecorderWorker::init(void) {
   // Length of cyclic prefix
   this->hdf5_->write_attribute("CP_LEN", this->cfg_->cp_size());
 
+  // Downlink Pilots Enabled Flag
+  this->hdf5_->write_attribute("DL_PILOTS_EN", this->cfg_->dl_pilots_en());
+
   // Beacon sequence type (string)
   this->hdf5_->write_attribute("BEACON_SEQ_TYPE", this->cfg_->beacon_seq());
 
