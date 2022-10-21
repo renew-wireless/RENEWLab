@@ -238,9 +238,6 @@ class MIMODriver:
             return
 
         ### Build TDD Schedule ###
-        # Each channel has its own separate ram. So you can write different data into them. 
-        # When dual pilot is enabled, what happens is that we write 0 to the second half of RAM_A and to the first half of RAM_B. 
-        # And that's how we get orthogonal pilots.
         # To send from both antennas, simply use 'PG', write data to both, and enable both channels.
         bs_sched_b = 'BGPG'   # Beacon node
         bs_sched   = 'GGPG'
@@ -271,13 +268,8 @@ class MIMODriver:
         numRxSyms = bs_sched.count('P')
         print("NumRxSyms: {}, n_samps: {}, n_users: {}, bs_sched_b: {}, bs_sched: {}, ue_sched: {}".format(numRxSyms,n_samps,n_users,bs_sched_b,bs_sched,ue_sched))
 
-        if self.n_bs_chan > 1:
-            dual_pilot = True
-        else:
-            dual_pilot = False
-
         ### Write TDD Schedule ###
-        [bs.config_sdr_tdd(tdd_sched=str(bs_sched_b) if i == 0 else str(bs_sched), nsamps=n_samps, prefix_len=nsamps_pad, dualpilot=dual_pilot) for i, bs in enumerate(self.bs_obj)]
+        [bs.config_sdr_tdd(tdd_sched=str(bs_sched_b) if i == 0 else str(bs_sched), nsamps=n_samps, prefix_len=nsamps_pad) for i, bs in enumerate(self.bs_obj)]
         [ue.config_sdr_tdd(is_bs=False, tdd_sched=str(ue_sched[i]), nsamps=n_samps, prefix_len=nsamps_pad) for i, ue in enumerate(self.ue_obj)]
 
         #for i, bs in enumerate(self.bs_obj):
