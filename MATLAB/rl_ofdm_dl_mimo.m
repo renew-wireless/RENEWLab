@@ -53,7 +53,7 @@ if SIM_MODE
 else 
     %Iris params:
     TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
-    ANT_BS                  = 'AB';         % Options: {A, AB}
+    ANT_BS                  = 'A';         % Options: {A, AB}
     ANT_UE                  = 'A';          % Currently, only support single antenna UE, i.e., A
     USE_HUB                 = 1;
     TX_FRQ                  = 3.5475e9;
@@ -82,18 +82,18 @@ else
         chain4A = ["RF3E000722","RF3E000494","RF3E000592","RF3E000333"];       % Chain4
         chain5A = ["RF3E000748","RF3E000492"];                                 % Chain5A
         chain5B = ["RF3E000708","RF3E000437","RF3E000090"];                    % Chain5B
-        bs_ids = [chain1B, chain1A, chain2B];
-        hub_id = ["FH4B000003"];
-        %bs_ids = ["RF3E000208","RF3E000636","RF3E000632"];%,"RF3E000568", ...
+        %bs_ids = [chain1B, chain1A, chain2B];
+        %hub_id = ["FH4B000003"];
+        bs_ids = ["RF3E000208","RF3E000636","RF3E000632"];%,"RF3E000568", ...
                   %"RF3E000558","RF3E000633","RF3E000566","RF3E000635"];
                   %,"RF3E000136","RF3E000213","RF3E000142", ...
                   %"RF3E000356","RF3E000546","RF3E000620","RF3E000609","RF3E000604","RF3E000612","RF3E000640","RF3E000551"];
-        %hub_id = ["FH4B000019"];
+        hub_id = ["FH4B000019"];
     else
         bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         hub_id = [];
     end
-    ue_ids = ["RF3E000665"];
+    ue_ids = ["RF3E000392"];
     ref_ids= [];
 
     N_BS_NODE               = length(bs_ids);                   % Number of nodes at the BS
@@ -229,6 +229,8 @@ else
     mimo_handle = mimo_driver(sdr_params);
 
     fprintf('=========================== \n ======== Sounding ========= \n =========================== \n');
+    % Scale the Tx vector to +/- 1
+    tx_vec_train = TX_SCALE .* tx_vec_train ./ max(abs(tx_vec_train));
     tx_mat_train = repmat(tx_vec_train.', N_BS_ANT,1);
     [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_mat_train, N_FRM, N_ZPAD_PRE, 'dl-sounding', '[]', '[]');
     rx_vec_iris_sound_tmp = rx_vec_iris_sound;
@@ -252,6 +254,7 @@ end
 
 % Beamweight calculation
 W = zeros(N_BS_ANT, N_UE, N_SC);
+Wtmp = zeros(N_BS_ANT, N_UE, N_SC);
 if strcmp(MIMO_ALG, 'ZF')
     for isc =1:N_SC
         currH = squeeze(H(:, :, isc));
@@ -289,6 +292,7 @@ else
             ifft_in_mat(:, isc, isym) = W(:, :, isc) * precoding_in_mat(:, isc, isym);
         end
     end
+    ifft_in_mat(isnan(ifft_in_mat)) = 0;
 
     % IFFT
     tx_payload_mat = zeros(N_BS_ANT, N_SYM_SAMP, N_DATA_SYM);
@@ -311,6 +315,8 @@ else
     frame_length = length(tx_payload_mat(1,:)) + length(tx_pilot_mat(1,:));
     N_ZPAD_POST = MAX_NUM_SAMPS - frame_length - N_ZPAD_PRE;
     tx_payload = [zeros(N_BS_ANT, N_ZPAD_PRE) tx_pilot_mat tx_payload_vec zeros(N_BS_ANT, N_ZPAD_POST)];
+    % Scale the Tx vector to +/- 1
+    tx_payload = TX_SCALE .* tx_payload ./ max(max(abs(tx_payload)));
 
     N_DATA_SAMP = N_SYM_SAMP * N_DATA_SYM;
     N_SAMPS = N_ZPAD_PRE + length(tx_pilot_mat(1,:)) + (N_SYM_SAMP * N_DATA_SYM) + N_ZPAD_POST;
@@ -549,7 +555,7 @@ function [H, rx_H_est, preamble_pk, err_flag] = channel_estimation_fun(data_vec,
             [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
             [lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
 
-            if DEBUG
+            if 1 %DEBUG
                 figure; subplot(2,1,1); plot(abs(curr_vec)); subplot(2,1,2); plot(lts_corr); title(sprintf('%s UE %d, BS %d',mode,iue,ibs));
             end
 
