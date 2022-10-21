@@ -74,24 +74,26 @@ else
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
-        %chain1A = ["RF3E000731","RF3E000747","RF3E000734"];                    % Chain1A
-        %chain1B = ["RF3E000654"];%,"RF3E000458"];%,"RF3E000463","RF3E000424"]; % Chain1B
-        %chain2A = ["RF3E000053","RF3E000192","RF3E000117"];                    % Chain2A
-        %chain2B = ["RF3E000257","RF3E000430","RF3E000311","RF3E000565"];       % Chain2B
-        %chain3A = ["RF3E000686","RF3E000574","RF3E000595","RF3E000585"];       % Chain3
-        %chain4A = ["RF3E000722","RF3E000494","RF3E000592","RF3E000333"];       % Chain4
-        %chain5A = ["RF3E000748","RF3E000492"];                                 % Chain5A
-        %chain5B = ["RF3E000708","RF3E000437","RF3E000090"];                    % Chain5B
-        %bs_ids = [chain1B, chain1A, chain2A, chain2B];
-        %hub_id = ["FH4B000003"];
-        bs_ids = ["RF3E000146","RF3E000122","RF3E000150","RF3E000128"];%,"RF3E000168","RF3E000136","RF3E000213","RF3E000142", ...
-        %"RF3E000356","RF3E000546","RF3E000620","RF3E000609","RF3E000604","RF3E000612","RF3E000640","RF3E000551"];
-        hub_id = ["FH4B000019"];
+        chain1A = ["RF3E000731","RF3E000747","RF3E000734"];                    % Chain1A
+        chain1B = ["RF3E000654"];%,"RF3E000458"];%,"RF3E000463","RF3E000424"]; % Chain1B
+        chain2A = ["RF3E000053","RF3E000192","RF3E000117"];                    % Chain2A
+        chain2B = ["RF3E000257","RF3E000430","RF3E000311","RF3E000565"];       % Chain2B
+        chain3A = ["RF3E000686","RF3E000574","RF3E000595","RF3E000585"];       % Chain3
+        chain4A = ["RF3E000722","RF3E000494","RF3E000592","RF3E000333"];       % Chain4
+        chain5A = ["RF3E000748","RF3E000492"];                                 % Chain5A
+        chain5B = ["RF3E000708","RF3E000437","RF3E000090"];                    % Chain5B
+        bs_ids = [chain1B, chain1A, chain2B];
+        hub_id = ["FH4B000003"];
+        %bs_ids = ["RF3E000208","RF3E000636","RF3E000632"];%,"RF3E000568", ...
+                  %"RF3E000558","RF3E000633","RF3E000566","RF3E000635"];
+                  %,"RF3E000136","RF3E000213","RF3E000142", ...
+                  %"RF3E000356","RF3E000546","RF3E000620","RF3E000609","RF3E000604","RF3E000612","RF3E000640","RF3E000551"];
+        %hub_id = ["FH4B000019"];
     else
         bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         hub_id = [];
     end
-    ue_ids = ["RF3E000392"];
+    ue_ids = ["RF3E000665"];
     ref_ids= [];
 
     N_BS_NODE               = length(bs_ids);                   % Number of nodes at the BS

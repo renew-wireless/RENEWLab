@@ -417,11 +417,16 @@ class MIMODriver:
         numRxSyms = ue_sched[0].count('R')
         print("NumRxSyms: {}, n_samps: {}, n_users: {}, bs_sched: {}, ue_sched: {}".format(numRxSyms,n_samps,n_users,bs_sched,ue_sched))
 
+        if self.n_bs_chan > 1:
+            dual_pilot = True
+        else:
+            dual_pilot = False
+
         ### Write TDD Schedule ###
-        [bs.config_sdr_tdd(tdd_sched=str(bs_sched[i]), nsamps=n_samps, prefix_len=nsamps_pad) for i, bs in enumerate(self.bs_obj)]
+        [bs.config_sdr_tdd(tdd_sched=str(bs_sched[i]), nsamps=n_samps, prefix_len=nsamps_pad, dualpilot=dual_pilot) for i, bs in enumerate(self.bs_obj)]
         [ue.config_sdr_tdd(is_bs=False, tdd_sched=str(ue_sched[i]), nsamps=n_samps, prefix_len=nsamps_pad) for i, ue in enumerate(self.ue_obj)]
 
-        savemat("./testtest.mat", {'tx_data_mat': tx_data_mat});
+        #savemat("./testtest.mat", {'tx_data_mat': tx_data_mat});
         for i, bs in enumerate(self.bs_obj):
             if python_mode:
                 bs.burn_data_complex(tx_data_mat[0])  # For python (needs more testing)
