@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-""" 
-        Author(s): C. Nicolas Barati nicobarati@rice.edu 
+"""
+        Author(s): C. Nicolas Barati nicobarati@rice.edu
                 Rahman Doost-Mohamamdy: doost@rice.edu
                 Oscar Bejarano: obejarano@rice.edu
 
@@ -180,7 +180,7 @@ class Iris_py:
 
         def unset_corr(self):
                 corr_conf = {"corr_enabled": False}
-                self.sdr.writeRegister("IRIS30", 60, 
+                self.sdr.writeRegister("IRIS30", 60,
                     self.sdr.readRegister("IRIS30", 60) & 0xFFFE)
 
         def sdr_setrxfreq(self, rx_freq):
@@ -193,7 +193,7 @@ class Iris_py:
 
         def sdr_settxgain(self, tx_gain):
                 for chan in [0, 1]:
-                    self.sdr.setGain(SOAPY_SDR_TX, chan, min(tx_gain, 81.0))
+                    self.sdr.setGain(SOAPY_SDR_TX, chan, tx_gain) #min(tx_gain, 81.0))
 
         def sdr_setrxgain(self, rx_gain):
                 for chan in [0, 1]:
