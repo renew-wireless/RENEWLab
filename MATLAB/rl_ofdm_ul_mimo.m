@@ -1,23 +1,23 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%	Author(s): C. Nicolas Barati nicobarati@rice.edu 
+%	Author(s): C. Nicolas Barati nicobarati@rice.edu
 %		          Rahman Doost-Mohamamdy: doost@rice.edu
-%   
-%    
-% Single-shot transmission from N_UE single-antenna clients to 
+%
+%
+% Single-shot transmission from N_UE single-antenna clients to
 % N_BS_NODE base station radios (UE stands for User Equipment).
 % We define two modes:
 % OTA (Over-the-air) and SIM_MODE (simulation).
 % In simulation mode we simply use a Rayleigh channel whereas the OTA mode
 % relies on the Iris hardware for transmission and reception.
 % In both cases the clients transmit an OFDM signal that resembles a
-% typical 802.11 WLAN waveform. 
+% typical 802.11 WLAN waveform.
 %
 % We implement a frame structure that allows the base
 % station to capture clean (non-overlaping) training sequences for
 % equalization and demultiplexing of the concurrent data streams.
 %
-% Users can trigger multiple sequential transmissions by setting the 
+% Users can trigger multiple sequential transmissions by setting the
 % number of frames variable (N_FRM) greater than one.
 %---------------------------------------------------------------------
 % Original code copyright Mango Communications, Inc.
@@ -53,7 +53,7 @@ if SIM_MODE
     bs_ids                  = ones(1, N_BS_NODE);
     ue_ids                  = ones(1, N_UE);
 
-else 
+else
     %Iris params:
     TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
     USE_HUB                 = 1;
@@ -75,7 +75,6 @@ else
         % Using chains of different size requires some internal
         % calibration on the BS. This functionality will be added later.
         % For now, we use only the 4-node chains:
-        %bs_ids = ["RF3E000731","RF3E000747","RF3E000734","RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];%,"RF3E000622","RF3E000601","RF3E000602"];
         hub_id = ["FH4B000003"];
     else
@@ -83,6 +82,7 @@ else
         hub_id = [];
     end
     ue_ids= ["RF3E000706", "RF3E000665"];
+    ref_ids= [];  % Ignore
 
     N_BS_NODE               = length(bs_ids);           % Number of nodes/antennas at the BS
     N_BS_ANT                = length(bs_ids) * length(ANT_BS);  % Number of antennas at the BS
@@ -92,7 +92,7 @@ else
 end
 
 % MIMO params
-MIMO_ALG                = 'ZF';      % MIMO ALGORITHM: ZF or Conjugate 
+MIMO_ALG                = 'ZF';      % MIMO ALGORITHM: ZF or Conjugate
 
 % Waveform params
 N_OFDM_SYM              = 20;         % Number of OFDM symbols for burst, it needs to be less than 47
@@ -106,7 +106,7 @@ N_SC                    = 64;                                     % Number of su
 CP_LEN                  = 16;                                     % Cyclic prefix length
 CP_LEN_LTS              = 32;
 N_DATA_SYMS             = N_OFDM_SYM * length(SC_IND_DATA);       % Number of data symbols (one per data-bearing subcarrier per OFDM symbol) per UE
-N_LTS_SYM               = 2;                                      % Number of 
+N_LTS_SYM               = 2;                                      % Number of
 N_SYM_SAMP              = N_SC + CP_LEN;                          % Number of samples that will go over the air
 N_ZPAD_PRE              = 100;                                     % Zero-padding prefix for Iris
 N_MAX_SAMPS             = 4096;
@@ -121,7 +121,7 @@ lts_f = [0 1 -1 -1 1 1 -1 1 -1 1 -1 -1 -1 -1 -1 1 1 -1 -1 1 -1 1 -1 1 1 1 1 0 0 
     1 1 -1 -1 1 1 -1 1 -1 1 1 1 1 1 1 -1 -1 1 1 -1 1 -1 1 1 1 1].';
 lts_t = ifft(lts_f, N_SC); %time domain
 
-% Arrange time-orthogonal pilots 
+% Arrange time-orthogonal pilots
 preamble_common = [lts_t(33:64); repmat(lts_t,N_LTS_SYM,1)];
 l_pre = length(preamble_common);
 pre_z = zeros(size(preamble_common));
@@ -205,7 +205,7 @@ if SIM_MODE
         H_ul = sqrt(hvar/2).*randn(N_BS_NODE, N_UE) + 1i*randn(N_BS_NODE, N_UE);
         y0 = H_ul*tx_data_tmp.';
     end
-    
+
     y = y0 + W_ul;
     numRxSyms = N_UE+1;    % Pilots plus data slots
     rx_vec_iris = reshape(y, [N_FRM, N_BS_NODE, n_samp, numRxSyms]);
@@ -219,6 +219,7 @@ else
     sdr_params = struct(...
         'bs_id', bs_ids, ...
         'ue_id', ue_ids,...
+        'ref_id', ref_ids, ...
         'hub_id', hub_id,...
         'bs_ant', ANT_BS, ...
         'ue_ant', ANT_UE, ...
@@ -231,14 +232,14 @@ else
         'trig_offset', TX_ADVANCE);
 
     mimo_handle = mimo_driver(sdr_params);
-    [rx_vec_iris, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
+    [rx_vec_iris, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_vec_iris, N_FRM, N_ZPAD_PRE, 'uplink', '[]', '[]');
     mimo_handle.mimo_close();
     if isempty(rx_vec_iris)
         error("Driver returned empty array. No good data received by base station");
     end
 
     rx_vec_iris = permute(rx_vec_iris, [1,2,4,3]);
-    
+
 end
 %###############################################################################
 
@@ -331,7 +332,7 @@ for iframe = 1:numGoodFrames
     badrx(badrx == N_UE) = 1;  % line order matters (2)
 
     % Verify
-    if sum(badrx) >= N_BS_NODE - 1 
+    if sum(badrx) >= N_BS_NODE - 1
         fprintf('[WARNING] Bad Frame (Frame #%d). Not enough BS antennas captured signal. Continue... \n', iframe);
         continue;
     end
@@ -385,16 +386,16 @@ for iframe = 1:numGoodFrames
     channel_condition = double.empty();
     channel_condition_db = double.empty();
     for j=1:length(nz_sc)
-        
+
         if(strcmp(MIMO_ALG,'ZF'))
         % Pseudo-inverse:(H'*H)^(-1)*H':
             HH_inv = inv((squeeze(H_hat(:,:, nz_sc(j) ) )' * squeeze(H_hat(:,:, nz_sc(j) ) ) ) ) * squeeze(H_hat(:,:, nz_sc(j) ) )';
             x = HH_inv*squeeze(Y_data(:,nz_sc(j),:));
         else
-            % Do yourselves: Conj BF: 
+            % Do yourselves: Conj BF:
             % Normalization coeff:
             H_pow = diag(abs (H_hat(:,:, nz_sc(j) )' * H_hat(:,:, nz_sc(j) ) ));
-            % Apply BF: 
+            % Apply BF:
             x = (H_hat(:,:, nz_sc(j) )') * squeeze(Y_data(:,nz_sc(j),:))./ repmat(H_pow, 1, N_OFDM_SYM);
         end
         syms_eq(:,nz_sc(j),:) = x;

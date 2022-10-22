@@ -15,13 +15,13 @@
 % In the OTA mode we utilize the Skylark Iris hardware for transmission and reception.
 % Within the OTA mode we further define three transmission modes:
 %  a) uplink
-%  b) downlink 
-%  c) dl_ref_node_as_ue: both base station board and UE are triggered from the hub instead
+%  b) downlink
+%  c) ul-refnode-as-ue: both base station board and UE are triggered from the hub instead
 %     of using over-the-air beacons
 %
 % In both cases the client transmits an OFDM signal that resembles a
 % typical 802.11 WLAN waveform.
-% Users can trigger multiple sequential transmissions by setting the 
+% Users can trigger multiple sequential transmissions by setting the
 % number of frames variable (N_FRM) greater than one.
 %
 %---------------------------------------------------------------------
@@ -80,7 +80,7 @@ SC_IND_DATA             = [2:7 9:21 23:27 39:43 45:57 59:64];     % Data subcarr
 N_SC                    = 64;                                     % Number of subcarriers
 CP_LEN                  = 16;                                     % Cyclic prefix length
 N_DATA_SYMS             = N_OFDM_SYM * length(SC_IND_DATA);       % Number of data symbols (one per data-bearing subcarrier per OFDM symbol)
-N_LTS_SYM               = 2;                                      % Number of 
+N_LTS_SYM               = 2;                                      % Number of
 N_SYM_SAMP              = N_SC + CP_LEN;                          % Number of samples that will go over the air
 N_ZPAD_PRE              = 90;                                     % Zero-padding prefix for Iris
 N_ZPAD_POST             = nan;                                    % (defined below) Zero-padding postfix for Iris
@@ -151,12 +151,12 @@ if SIM_MODE
     snr = 20;
     tx_var = mean(mean(abs(tx_vec_iris).^2 )) * (64/48);
     nvar =  tx_var / 10^(0.1*snr); % noise variance per data sample
-        
+
     H_ul = ones(size(tx_vec_iris.'));
     % noise vector
     W_ul = sqrt(nvar/2).* (randn(N_BS_NODE, length(tx_vec_iris)) + ...
         1i*randn(N_BS_NODE, length(tx_vec_iris)) );
-    
+
     % output vector
     rx_vec_iris_tmp = H_ul.*tx_vec_iris.' + W_ul;
     rx_vec_iris_tmp = rx_vec_iris_tmp.';
@@ -167,15 +167,17 @@ else
     disp("Running: HARDWARE MODE");
 
     % Create two Iris node objects:
-    tx_direction = 'uplink';      % Options: {'uplink', 'downlink', 'dl_ref_node_as_ue'}
+    tx_direction = 'uplink';      % Options: {'uplink', 'downlink', 'ul-refnode-as-ue'}
     bs_ids = ["RF3E000722"];
     ue_ids = ["RF3E000665"];
     hub_id = ["FH4B000003"];
+    ref_ids= [];      % Must have the REF node serial if tx_direction mode is 'ul-refnode-as-ue'
 
     % Iris nodes' parameters
     sdr_params = struct(...
         'bs_id', bs_ids, ...
         'ue_id', ue_ids,...
+        'ref_id', ref_ids, ...
         'hub_id', hub_id,...
         'bs_ant', ANT_BS, ...
         'ue_ant', ANT_UE, ...
@@ -185,7 +187,7 @@ else
         'tx_gain_ue', TX_GN_UE, ...
         'rxgain', RX_GN, ...
         'sample_rate', SMPL_RT, ...
-	'trig_offset', TX_ADVANCE);
+	    'trig_offset', TX_ADVANCE);
 
     mimo_handle = mimo_driver(sdr_params);
 
@@ -200,23 +202,21 @@ else
         mimo_handle.mimo_update_sdr_param('rxgain', rxg_opt);
     end
 
-    if strcmp(tx_direction, 'uplink')
-        [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
-
-    elseif strcmp(tx_direction, 'downlink')
-        [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_downlink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
-
-    elseif strcmp(tx_direction, 'dl_ref_node_as_ue')
+    if strcmp(tx_direction, 'ul-refnode-as-ue')
         if isempty(hub_id)
-            error('Hub ID must be specified in dl_ref_node_as_ue transmission mode. Exit Now!');
+            error('Hub ID must be specified in ul-refnode-as-ue transmission mode. Exit Now!');
         end
-        bs_sched = ["GGGGGRG"];
-        ue_sched = ["GGGGGPG"];
-        [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_refnode(tx_vec_iris, N_FRM, bs_sched, ue_sched, N_ZPAD_PRE);
+        if isempty(ref_ids)
+            error('Reference Node ID must be specified in ul-refnode-as-ue transmission mode. Exit Now!');
+        end
+        bs_sched = ["R"];
+        ue_sched = ["P"];
     else
-        error('TX Method Not Supported. Exit Now!');
+        bs_sched = [""];    % Dummy... set up inside driver
+        ue_sched = [""];    % Dummy... set up inside driver
     end
 
+    [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx(tx_vec_iris, N_FRM, N_ZPAD_PRE, tx_direction, bs_sched, ue_sched);
     mimo_handle.mimo_close();
 
 end
@@ -270,8 +270,8 @@ for frm_idx = 1:numGoodFrames
     rx_lts1_f = fft(rx_lts1);
     rx_lts2_f = fft(rx_lts2);
 
-    % Do yourselves: Calculate channel estimate from average of 2 training symbols: 
-    rx_H_est = mean([rx_lts1_f./lts_f.'   rx_lts2_f./ lts_f.'], 2); 
+    % Do yourselves: Calculate channel estimate from average of 2 training symbols:
+    rx_H_est = mean([rx_lts1_f./lts_f.'   rx_lts2_f./ lts_f.'], 2);
 
     %% Rx payload processing
     % Extract the payload samples (integer number of OFDM symbols following preamble)
