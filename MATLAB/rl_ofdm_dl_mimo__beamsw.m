@@ -107,7 +107,7 @@ else
         cb_size = 25
         doSweep = true
         [BS_array, BS_code, BS_angles] = replicate_RENEW_array(2,4,TX_FRQ, cb_size, false);
-        N_reps = 200 % number of beamsweeps to perform
+        N_reps = 25 % number of beamsweeps to perform
         max_try = 25 % max try to receive DL data
         done_reps = 0;
         file_prefix = datestr(now, 'yy_mm_dd__HH_MM_SS_FFF'); % use datetime to keep track of the channel conditions
@@ -118,6 +118,7 @@ else
             n_codes = length(BS_angles); % test also the predefined codebook
         end
         BER_vs_code = zeros(N_reps,n_codes+1, 1);
+        MAX_BER_VAL = 1.0;
 
 
     else
@@ -283,7 +284,7 @@ for nr=1:N_reps
                     disp('--> Retry Sounding...')
                     [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_mat_train, N_FRM, N_ZPAD_PRE, 'dl-sounding', '[]', '[]');
                 else
-                    close_and_save();
+                    close_and_save(mimo_handle, done_reps, BER_vs_code, file_prefix);
                     error("Driver returned empty array. No good data received by base station");
                 end
                 n_try_sounding = n_try_sounding + 1
@@ -296,8 +297,8 @@ for nr=1:N_reps
             clear peaks;
             [H, H_tmp, peaks, err_flag] = channel_estimation_fun(rx_vec_iris_sound, N_BS_ANT, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'sounding', frm_idx);
             if err_flag
-                mimo_handle.mimo_close();
-                error();
+                close_and_save(mimo_handle, done_reps, BER_vs_code, file_prefix);
+                error('Error during channel_estimation_fun.');
             end
         end
 
@@ -431,7 +432,7 @@ for nr=1:N_reps
                 %error("Driver returned empty array. No good data received by UE");
                 %exit(0);
                 fprintf("Driver returned empty array. No good data received by UE\n");
-                BER_vs_code(nr, ix_ang+1, 1) = 1;     % max error if nothing is received
+                BER_vs_code(nr, ix_ang+1, 1) = MAX_BER_VAL;     % max error if nothing is received
                 continue;   % to allow check of other codes
 
             end
@@ -448,7 +449,7 @@ for nr=1:N_reps
             %mimo_handle.mimo_close();
             %error();
             fprintf('SOUNDING: Error occurred during channel estimation. BER=1 recorded and continue.. \n');
-            BER_vs_code(nr, ix_ang+1, 1) = 1;     % max error if nothing is received
+            BER_vs_code(nr, ix_ang+1, 1) = MAX_BER_VAL;     % max error if nothing is received
             continue;   % to allow check of other codes
         end
         rx_H_est = squeeze(H);
@@ -499,7 +500,7 @@ for nr=1:N_reps
             if N_DATA_SC_RX ~= N_DATA_SC
                 disp('Missing Data. Exit now!');
                 %return;
-                BER_vs_code(nr, ix_ang+1, 1) = 1;     % max error if nothing is received
+                BER_vs_code(nr, ix_ang+1, 1) = MAX_BER_VAL;     % max error if nothing is received
                 continue;   % to allow check of other codes
             end
             rx_syms = reshape(payload_dl_syms_mat, 1, N_DATA_SC);
@@ -522,7 +523,7 @@ for nr=1:N_reps
             fprintf('Bit Errors: \t %d (of %d total bits)\n', bit_errs, N_DATA_SC * log2(MOD_ORDER));
             fprintf('EVM: \t %f%%, SNR: %f \n', 100*aevms, snr);
 
-            BER_vs_code(nr, ix_ang+1, 1) = bit_errs / (N_DATA_SC * log2(MOD_ORDER))
+            BER_vs_code(nr, ix_ang+1, 1) = bit_errs / (N_DATA_SC * log2(MOD_ORDER));
         end
 
 
@@ -651,8 +652,7 @@ for nr=1:N_reps
 end
 
 % close the array only after the loop
-mimo_handle.mimo_close();
-save(strcat('dataset/',file_prefix,'__BER_vs_code.mat'), 'BER_vs_code');
+close_and_save(mimo_handle, done_reps, BER_vs_code, file_prefix);
 
 %mean_bers = []
 %disp("Summary of BERs for each code")
@@ -680,11 +680,11 @@ save(strcat('dataset/',file_prefix,'__BER_vs_code.mat'), 'BER_vs_code');
 %ylabel('BER')
 %xlabel('Angle / Code')
 
-function close_and_save()
+function close_and_save(mimo_handle, done_reps, BER_vs_code, file_prefix)
     mimo_handle.mimo_close();
     if done_reps > 0
-        BER_vs_code = BER_vs_code(1:done_reps, :);
-        save(strcat('dataset/',file_prefix,'__BER_vs_code.mat'), 'BER_vs_code'); % TODO move this to the end of the script (use a boolean here and avoid code repetition)
+        BER_vs_code = BER_vs_code(1:done_reps, :) % store and display
+        save(strcat('dataset/',file_prefix,'__BER_vs_code.mat'), 'BER_vs_code');
     end
 end
 

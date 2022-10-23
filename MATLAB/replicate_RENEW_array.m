@@ -23,7 +23,7 @@ function [Array, codebook, angles] = replicate_RENEW_array(M_y,M_x, Frequency, c
     % Create an isotropic antenna element
     Elem = phased.IsotropicAntennaElement;
     Elem.BackBaffled = true;
-    Elem.FrequencyRange = [0 3547500000];
+    Elem.FrequencyRange = [0 Frequency]; % NOTE Frequency has to be a single value
     Array.Element = Elem;
     
     % Assign Frequencies and Propagation Speed
