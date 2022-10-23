@@ -105,9 +105,9 @@ else
         mimo_handle = false;
 
         cb_size = 25
-        doSweep = false
+        doSweep = true
         [BS_array, BS_code, BS_angles] = replicate_RENEW_array(2,4,TX_FRQ, cb_size, false);
-        N_reps = 20 % number of beamsweeps to perform
+        N_reps = 200 % number of beamsweeps to perform
         max_try = 25 % max try to receive DL data
         done_reps = 0;
         file_prefix = datestr(now, 'yy_mm_dd__HH_MM_SS_FFF'); % use datetime to keep track of the channel conditions
@@ -276,21 +276,17 @@ for nr=1:N_reps
             tx_mat_train = repmat(tx_vec_train.', N_BS_ANT,1);
             [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_mat_train, N_FRM, N_ZPAD_PRE, 'dl-sounding', '[]', '[]');
 
-            n_try = 1
+            n_try_sounding = 1
             while isempty(rx_vec_iris_sound)
 
-                if (n_try < max_try)
+                if (n_try_sounding < max_try)
                     disp('--> Retry Sounding...')
                     [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_mat_train, N_FRM, N_ZPAD_PRE, 'dl-sounding', '[]', '[]');
                 else
-                    mimo_handle.mimo_close();
-                    if done_reps > 0
-                        BER_vs_code = BER_vs_code(1:done_reps, :);
-                        save(strcat('dataset/',file_prefix,'__BER_vs_code.mat'), 'BER_vs_code'); % TODO move this to the end of the script (use a boolean here and avoid code repetition)
-                    end
+                    close_and_save();
                     error("Driver returned empty array. No good data received by base station");
                 end
-                n_try = n_try + 1
+                n_try_sounding = n_try_sounding + 1
             end
 
             assert(size(rx_vec_iris_sound,3) == N_BS_ANT)
@@ -334,16 +330,6 @@ for nr=1:N_reps
                 return;
             end
 
-        else
-            % codebook
-            disp("***********************")
-            disp("Using angle:")
-            disp(BS_angles(ix_ang))
-            disp("***********************")
-            W_temp = BS_code(ix_ang,:,1);
-            for isc =1:N_SC
-                W(:, :, isc) = W_temp;
-            end
 
         end
 
@@ -367,11 +353,20 @@ for nr=1:N_reps
 
         else
 
+
             % Apply precoding weights to data (in freq. domain)
             ifft_in_mat = zeros(N_BS_ANT, N_SC, N_OFDM_SYM);
             for isc = 1:N_SC
                 for isym = 1:N_OFDM_SYM
-                    ifft_in_mat(:, isc, isym) = W(:, :, isc) * precoding_in_mat(:, isc, isym);
+                    if ix_ang == 0
+                        % apply in digital domain only when using channel estimation + ZF/MRT
+                        ifft_in_mat(:, isc, isym) = W(:, :, isc) * precoding_in_mat(:, isc, isym);
+                    else
+                        % for codebook derived precoders (i.e. steering vector function)
+                        % apply the precoding in time domain (later)
+                        ifft_in_mat(:, isc, isym) = precoding_in_mat(:, isc, isym);
+                    end
+
                 end
             end
 
@@ -382,6 +377,7 @@ for nr=1:N_reps
             for ibs = 1:N_BS_ANT
                 pilot1 = squeeze(ifft(ifft_in_mat(ibs, :, 1)));
                 pilot2 = squeeze(ifft(ifft_in_mat(ibs, :, 2)));
+                                        % CP
                 tx_pilot_mat(ibs, :) = [pilot2(33:64) pilot1 pilot2];
 
                 for isym = N_LTS_SYM+1:N_OFDM_SYM
@@ -393,6 +389,28 @@ for nr=1:N_reps
             % Reshape to a vector and append zeros to fill out remaining of buffer (not necessary)
             % Total frame length 4096 = N_SAMPS
             tx_payload_vec = reshape(tx_payload_mat, N_BS_ANT, numel(tx_payload_mat(1, :, :)));
+
+            % here we apply the time-domain (i.e. analog) beamforming using the codebook
+            if ix_ang > 0
+                % codebook
+                disp("***********************")
+                disp("Using angle:")
+                disp(BS_angles(ix_ang))
+                disp("***********************")
+                W_temp = BS_code(ix_ang,:,1);
+
+                % TODO double check
+                %   (1) do we need a conj transpose on W_temp here? or maybe just conjugate?
+                %   [DONE] (2) output should be [Nsamps * Nt]
+                %   (3)
+                %disp(size(W_temp))
+                %disp(size(tx_pilot_mat))
+                %disp(size(tx_payload_vec))
+                %pause()
+                tx_pilot_mat = tx_pilot_mat .* (W_temp' ./ sqrt(N_BS_ANT));
+                tx_payload_vec = tx_payload_vec .* (W_temp' ./ sqrt(N_BS_ANT));
+            end
+
             frame_length = length(tx_payload_mat(1,:)) + length(tx_pilot_mat(1,:));
             N_ZPAD_POST = MAX_NUM_SAMPS - frame_length - N_ZPAD_PRE;
             tx_payload = [zeros(N_BS_ANT, N_ZPAD_PRE) tx_pilot_mat tx_payload_vec zeros(N_BS_ANT, N_ZPAD_POST)];
@@ -661,6 +679,15 @@ save(strcat('dataset/',file_prefix,'__BER_vs_code.mat'), 'BER_vs_code');
 %semilogy(BS_angles,mean_bers(2:end), 'o-')
 %ylabel('BER')
 %xlabel('Angle / Code')
+
+function close_and_save()
+    mimo_handle.mimo_close();
+    if done_reps > 0
+        BER_vs_code = BER_vs_code(1:done_reps, :);
+        save(strcat('dataset/',file_prefix,'__BER_vs_code.mat'), 'BER_vs_code'); % TODO move this to the end of the script (use a boolean here and avoid code repetition)
+    end
+end
+
 
 function [H, rx_H_est, preamble_pk, err_flag] = channel_estimation_fun(data_vec, N_BS_ANT, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, mode, frm_idx)
     global DEBUG;
