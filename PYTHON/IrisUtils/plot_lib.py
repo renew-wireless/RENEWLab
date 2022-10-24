@@ -50,6 +50,32 @@ def plot_csi(csi, corr, bs_nodes, good_frames, frame_i, ant_i, subcarrier_i, off
     lines, labels = axes[-1, 0].get_legend_handles_labels()
     fig.legend(lines, labels, loc = 'upper right', frameon=False)
 
+    fig, axes = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
+    axes[0, 0].set_title(data_str + " Pilot CSI Stats Across Subcarriers - Cell 0 - Frame %d - Ant %d" % (frame_i, ant_i))
+    axes[0, 0].set_ylabel('Magnitude user 0')
+    axes[0, 0].plot(np.abs(csi[frame_i, 0, ant_i, :]).flatten())
+    axes[0, 0].set_ylim(0, 1)
+    axes[0, 0].set_xlabel('Subcarrier')
+
+    axes[1, 0].set_ylabel('Phase user 0')
+    axes[1, 0].plot(np.angle(csi[frame_i, 0, ant_i, :].flatten()))
+    axes[1, 0].set_ylim(-np.pi, np.pi)
+    axes[1, 0].set_xlabel('Subcarrier')
+
+    axes[2, 0].set_ylabel('Magnitude')
+    for i in range(csi.shape[1]):
+        axes[2, 0].plot(np.abs(csi[frame_i, i, ant_i, :]).flatten(), label="user %d" % i)
+    axes[0, 0].set_ylim(0, 1)
+    axes[2, 0].set_xlabel('Subcarrier')
+    axes[2, 0].legend(loc='lower right', frameon=False)
+
+    axes[3, 0].set_ylabel('Phase')
+    for i in range(csi.shape[1]):
+        axes[3, 0].plot(np.angle(csi[frame_i, i, ant_i, :]).flatten(), label="user %d" % i)
+    axes[3, 0].set_xlabel('Subcarrier')
+    axes[3, 0].set_ylim(-np.pi, np.pi)
+    axes[3, 0].legend(loc='lower right', frameon=False)
+
 def plot_calib(calib_mat, bs_nodes, frame_i, ant_i, subcarrier_i, unwrap=True):
     if unwrap:
         calib_mat_phase = np.unwrap(np.angle(calib_mat))

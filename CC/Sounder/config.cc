@@ -479,9 +479,10 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
   beacon_size_ = beacon_ci16_.size();
 
-  if (samps_per_slot_ < (beacon_size_ + prefix_ + postfix_)) {
+  if (slot_samp_size_ < beacon_size_) {
     std::string msg = "Minimum supported slot_samp_size is ";
     msg += std::to_string(beacon_size_);
+    msg += ". Current slot_samp_size is " + std::to_string(slot_samp_size_);
     throw std::invalid_argument(msg);
   }
 

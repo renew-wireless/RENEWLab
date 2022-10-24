@@ -43,7 +43,7 @@ void Hdf5Lib::closeFile() {
 int Hdf5Lib::createDataset(H5std_string dataset_name,
                            std::array<hsize_t, kDsDimsNum> tot_dims,
                            std::array<hsize_t, kDsDimsNum> chunk_dims) {
-  std::string ds_name("/" + this->group_name_ + "/" + dataset_name);
+  const std::string ds_name("/" + this->group_name_ + "/" + dataset_name);
   std::array<hsize_t, kDsDimsNum> max_ds_dims = tot_dims;
   max_ds_dims.at(0) = H5S_UNLIMITED;
   H5::DataSpace ds_dataspace(kDsDimsNum, tot_dims.data(), max_ds_dims.data());
@@ -118,13 +118,15 @@ void Hdf5Lib::openDataset() {
 }
 
 void Hdf5Lib::removeDataset(std::string dataset_name) {
-  std::string ds_name("/" + this->group_name_ + "/" + dataset_name);
-  size_t ds_id = ds_name_id[dataset_name];
-  MLPD_TRACE("%s Dataset exists during garbage collection\n",
-             dataset_str_.at(ds_id).c_str());
-  this->datasets_.at(ds_id)->close();
-  this->datasets_.at(ds_id) = nullptr;
-  delete this->datasets_.at(ds_id);
+  const std::string ds_name("/" + this->group_name_ + "/" + dataset_name);
+  const size_t ds_id = ds_name_id[dataset_name];
+
+  if (this->datasets_.at(ds_id) != nullptr) {
+    MLPD_TRACE("%s Dataset removed\n", dataset_str_.at(ds_id).c_str());
+    this->datasets_.at(ds_id)->close();
+    delete this->datasets_.at(ds_id);
+    this->datasets_.at(ds_id) = nullptr;
+  }
 }
 
 void Hdf5Lib::closeDataset() {
@@ -132,21 +134,20 @@ void Hdf5Lib::closeDataset() {
 
   if (this->file_ != nullptr) {
     for (size_t i = 0; i < dataset_str_.size(); i++) {
-      //assert(datasets_.at(i) != nullptr);
+      assert(datasets_.at(i) != nullptr);
       try {
         H5::Exception::dontPrint();
         this->extendDataset(dataset_str_.at(i), this->target_prim_dim_size);
         this->prop_list_.at(i).close();
         this->datasets_.at(i)->close();
-        //delete this->pilot_dataset_;
       }
       // catch failure caused by the H5File operations
       catch (H5::FileIException& error) {
         error.printErrorStack();
         throw;
       }
-      this->datasets_.at(i) = nullptr;
       delete this->datasets_.at(i);
+      this->datasets_.at(i) = nullptr;
     }
     this->file_->close();
     MLPD_INFO("Saving HD5F: %llu frames saved on CPU %d\n",
@@ -155,8 +156,8 @@ void Hdf5Lib::closeDataset() {
 }
 
 bool Hdf5Lib::extendDataset(std::string dataset_name, size_t prim_dim_size) {
-  std::string ds_name("/" + this->group_name_ + "/" + dataset_name);
-  size_t ds_id = ds_name_id[dataset_name];
+  const std::string ds_name("/" + this->group_name_ + "/" + dataset_name);
+  const size_t ds_id = ds_name_id[dataset_name];
   if (dims_.at(ds_id).at(0) <= prim_dim_size) {
     hsize_t new_dim_size = dims_.at(ds_id).at(0) + kDsExtendStep;
     if (this->max_prim_dim_size != 0) {
@@ -178,8 +179,8 @@ herr_t Hdf5Lib::writeDataset(std::string dataset_name,
                              std::array<hsize_t, kDsDimsNum> target_id,
                              std::array<hsize_t, kDsDimsNum> wrt_dim,
                              short* wrt_data) {
-  std::string ds_name("/" + this->group_name_ + "/" + dataset_name);
-  size_t ds_id = ds_name_id[dataset_name];
+  const std::string ds_name("/" + this->group_name_ + "/" + dataset_name);
+  const size_t ds_id = ds_name_id[dataset_name];
   herr_t ret = 0;
   // Select a hyperslab in extended portion of the dataset
   try {
@@ -252,7 +253,8 @@ std::vector<short> Hdf5Lib::readDataset(
     MLPD_WARN("DataSet: Failed to write to dataset at primary dim index: %llu",
               target_id.at(0));
 
-    int ndims = this->datasets_.at(ds_id)->getSpace().getSimpleExtentNdims();
+    const int ndims =
+        this->datasets_.at(ds_id)->getSpace().getSimpleExtentNdims();
 
     std::stringstream ss;
     ss.str(std::string());

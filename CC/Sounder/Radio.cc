@@ -16,7 +16,8 @@
 #include "include/macros.h"
 
 void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain) {
-  // Set sampling rate
+  SoapySDR::Kwargs info = dev_->getHardwareInfo();
+
   dev_->setSampleRate(SOAPY_SDR_RX, ch, _cfg->rate());
   dev_->setSampleRate(SOAPY_SDR_TX, ch, _cfg->rate());
 
@@ -37,7 +38,6 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain) {
 
   dev_->setFrequency(SOAPY_SDR_RX, ch, "RF", _cfg->radio_rf_freq());
   dev_->setFrequency(SOAPY_SDR_TX, ch, "RF", _cfg->radio_rf_freq());
-
   if (kUseSoapyUHD == false) {
     // Unified gains for both lime and frontend
     if (_cfg->single_gain()) {
@@ -48,21 +48,38 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain) {
       MLPD_INFO("Tx gain: %lf, Rx gain: %lf\n", dev_->getGain(SOAPY_SDR_TX, ch),
                 dev_->getGain(SOAPY_SDR_RX, ch));
     } else {
+      if (info["frontend"].find("CBRS") != std::string::npos) {
+        if (_cfg->radio_rf_freq() > 3e9) {
+          dev_->setGain(SOAPY_SDR_RX, ch, "ATTN", -6);  //[-18,0]
+        } else if ((_cfg->radio_rf_freq() > 2e9) &&
+                   (_cfg->radio_rf_freq() < 3e9)) {
+          dev_->setGain(SOAPY_SDR_RX, ch, "ATTN", -18);  //[-18,0]
+        } else {
+          dev_->setGain(SOAPY_SDR_RX, ch, "ATTN", -12);  //[-18,0]
+        }
+        dev_->setGain(SOAPY_SDR_RX, ch, "LNA2", 17);  //[0,17]
+      } else if (info["frontend"].find("UHF") != std::string::npos) {
+        dev_->setGain(SOAPY_SDR_RX, ch, "ATTN1", -6);  //[-18,0]
+        dev_->setGain(SOAPY_SDR_RX, ch, "ATTN2", -6);  //[-18,0]
+      }
       dev_->setGain(
           SOAPY_SDR_RX, ch, "LNA",
           std::min(30.0, rxgain));  // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
       dev_->setGain(SOAPY_SDR_RX, ch, "TIA", 0);
       dev_->setGain(SOAPY_SDR_RX, ch, "PGA", 0);
-      dev_->setGain(SOAPY_SDR_RX, ch, "LNA2",
-                    17);  // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
-      dev_->setGain(SOAPY_SDR_RX, ch, "ATTN",
-                    _cfg->radio_rf_freq() < 3e9 ? -12 : 0);
-      dev_->setGain(
-          SOAPY_SDR_TX, ch, "PAD",
-          std::min(42.0, txgain));  // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
+
+      if (info["frontend"].find("CBRS") != std::string::npos) {
+        dev_->setGain(SOAPY_SDR_TX, ch, "ATTN", -6);  //[-18,0] by 3
+        dev_->setGain(SOAPY_SDR_TX, ch, "PA2", 0);    //[0|15]
+      }
+      if (info["frontend"].find("DEV") != std::string::npos) {
+        dev_->setGain(SOAPY_SDR_TX, ch, "PAD", txgain);
+      } else {
+        dev_->setGain(
+            SOAPY_SDR_TX, ch, "PAD",
+            std::min(42.0, txgain));  // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
+      }
       dev_->setGain(SOAPY_SDR_TX, ch, "IAMP", 0);
-      dev_->setGain(SOAPY_SDR_TX, ch, "PA2", 0);
-      dev_->setGain(SOAPY_SDR_TX, ch, "ATTN", -6);
     }
   } else {
     dev_->setGain(SOAPY_SDR_RX, ch, "PGA0", std::min(31.5, rxgain));
@@ -70,7 +87,10 @@ void Radio::dev_init(Config* _cfg, int ch, double rxgain, double txgain) {
   }
 
   // DC Offset for Iris
-  if (!kUseSoapyUHD) dev_->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
+  if (!kUseSoapyUHD) {
+    dev_->setDCOffsetMode(SOAPY_SDR_RX, ch, true);
+    dev_->writeSetting("RESET_DATA_LOGIC", "");
+  }
 }
 
 void Radio::drain_buffers(std::vector<void*> buffs, int symSamp) {
