@@ -296,6 +296,7 @@ for nr=1:N_reps
                         %error("-----> Driver returned empty array. No good data received by base station");
 
                         disp("-----> Driver returned empty array. No good data received by base station");
+                        break; % interrupt the retry loop
                     end
                     n_try_sounding = n_try_sounding + 1
                 end
@@ -443,6 +444,10 @@ for nr=1:N_reps
                     %disp(size(tx_pilot_mat))
                     %disp(size(tx_payload_vec))
                     %pause()
+                    % WITHOUT CONJUGATE on weights
+                    %tx_pilot_mat = tx_pilot_mat .* (W_temp.' ./ sqrt(N_BS_ANT));
+                    %tx_payload_vec = tx_payload_vec .* (W_temp.' ./ sqrt(N_BS_ANT));
+                    % WITH CONJUGATE on weights
                     tx_pilot_mat = tx_pilot_mat .* (W_temp' ./ sqrt(N_BS_ANT));
                     tx_payload_vec = tx_payload_vec .* (W_temp' ./ sqrt(N_BS_ANT));
                 end
