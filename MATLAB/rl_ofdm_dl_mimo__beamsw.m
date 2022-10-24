@@ -107,8 +107,9 @@ else
         cb_size = 25
         doSweep = true
         [BS_array, BS_code, BS_angles] = replicate_RENEW_array(2,4,TX_FRQ, cb_size, false);
-        N_reps = 25 % number of beamsweeps to perform
-        max_try = 25 % max try to receive DL data
+        N_reps = 200 % number of beamsweeps to perform
+        max_try_sounding = 10 % max try to receive DL data
+        max_try_iter = 50
         done_reps = 0;
         file_prefix = datestr(now, 'yy_mm_dd__HH_MM_SS_FFF'); % use datetime to keep track of the channel conditions
         mkdir('dataset')
@@ -118,7 +119,8 @@ else
             n_codes = length(BS_angles); % test also the predefined codebook
         end
         BER_vs_code = zeros(N_reps,n_codes+1, 1);
-        MAX_BER_VAL = 1.0;
+        MAX_BER_VAL = 1;
+        %MAX_BER_VAL = 0.5;  % typical random bit experienced
 
 
     else
@@ -207,445 +209,505 @@ for nr=1:N_reps
 
     for ix_ang = 0:n_codes
 
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %                       SOUNDING (DL TRAINING)
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        if SIM_MODE
-            disp("Running: RAYLEIGH FADING CHANNEL SIMULATION MODE");
+        do_try = true;
+        n_try_iter = 0;
+        while do_try
 
-            % TODO: this part has not been tested
-            rx_vec_iris = zeros(N_UE, N_BS_NODE, length(tx_vec_train));
-            h_train_all = zeros(N_UE, N_BS_NODE, length(tx_vec_train));
+            do_try = false; % unless this is re set by an error handling, this will be executed until successful
 
-            for bsidx = 1:N_BS_ANT
-                % Rayleigh Fading Channel
-                tx_var = mean(mean(abs(tx_vec_train).^2 )) * (64/48);
-                nvar =  tx_var / 10^(0.1*SNR_db); % noise variance per data sample
-                % noise vector
-                W_ul = sqrt(nvar/2) * (randn(1, length(tx_vec_train)) + ...
-                    1i*randn(1, length(tx_vec_train)) );
-                hvar = 1;
-                if N_UE == 1
-                    H_ul_tmp = sqrt(hvar/2).*randn(1, length(tx_vec_train)) + 1i*randn(1, length(tx_vec_train));
-                    H_ul_tmp = sqrt(abs(H_ul_tmp).^2);
-                    H_ul_tmp = smoothdata(H_ul_tmp, 2, 'movmean',15);
-                    y0 = H_ul_tmp.*tx_vec_train.';
-                    h_train_all(1, bsidx, :) = H_ul_tmp;
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            %                       SOUNDING (DL TRAINING)
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            if SIM_MODE
+                disp("Running: RAYLEIGH FADING CHANNEL SIMULATION MODE");
 
-                else
-                    H_ul_tmp = sqrt(hvar/2).*randn(1, N_UE) + 1i*randn(1, N_UE);
-                    y0 = H_ul_tmp*tx_vec_train.';
-                end
+                % TODO: this part has not been tested
+                rx_vec_iris = zeros(N_UE, N_BS_NODE, length(tx_vec_train));
+                h_train_all = zeros(N_UE, N_BS_NODE, length(tx_vec_train));
 
-                y = y0 + W_ul;
-                rx_vec_iris(1, bsidx, :) = y;   % Modify for UE > 1
-                numGoodFrames = 1;
-            end
+                for bsidx = 1:N_BS_ANT
+                    % Rayleigh Fading Channel
+                    tx_var = mean(mean(abs(tx_vec_train).^2 )) * (64/48);
+                    nvar =  tx_var / 10^(0.1*SNR_db); % noise variance per data sample
+                    % noise vector
+                    W_ul = sqrt(nvar/2) * (randn(1, length(tx_vec_train)) + ...
+                        1i*randn(1, length(tx_vec_train)) );
+                    hvar = 1;
+                    if N_UE == 1
+                        H_ul_tmp = sqrt(hvar/2).*randn(1, length(tx_vec_train)) + 1i*randn(1, length(tx_vec_train));
+                        H_ul_tmp = sqrt(abs(H_ul_tmp).^2);
+                        H_ul_tmp = smoothdata(H_ul_tmp, 2, 'movmean',15);
+                        y0 = H_ul_tmp.*tx_vec_train.';
+                        h_train_all(1, bsidx, :) = H_ul_tmp;
 
-        else
-
-            fprintf('Running: HARDWARE MODE \n');
-            fprintf('=============================== \n');
-            fprintf('Initiate Sounding Process \n');
-            % Iris nodes' parameters
-            sdr_params = struct(...
-                'bs_id', bs_ids, ...
-                'ue_id', ue_ids, ...
-                'ref_id', ref_ids, ...
-                'hub_id', hub_id,...
-                'bs_ant', ANT_BS, ...
-                'ue_ant', ANT_UE, ...
-                'txfreq', TX_FRQ, ...
-                'rxfreq', RX_FRQ, ...
-                'txgain', TX_GN, ...
-                'tx_gain_ue', TX_GN_UE, ...
-                'rxgain', RX_GN, ...
-                'sample_rate', SMPL_RT, ...
-                'trig_offset', TX_ADVANCE);
-
-            if (islogical(mimo_handle))
-                if mimo_handle == false
-                    mimo_handle = mimo_driver(sdr_params);
-                end
-            end
-
-        end
-
-        if ix_ang == 0      % only for the first time to compute the ZF/MRT output
-
-            tx_vec_train = TX_SCALE .* tx_vec_train ./ max(abs(tx_vec_train));
-            tx_mat_train = repmat(tx_vec_train.', N_BS_ANT,1);
-            [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_mat_train, N_FRM, N_ZPAD_PRE, 'dl-sounding', '[]', '[]');
-
-            n_try_sounding = 1
-            while isempty(rx_vec_iris_sound)
-
-                if (n_try_sounding < max_try)
-                    disp('--> Retry Sounding...')
-                    [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_mat_train, N_FRM, N_ZPAD_PRE, 'dl-sounding', '[]', '[]');
-                else
-                    close_and_save(mimo_handle, done_reps, BER_vs_code, file_prefix);
-                    error("Driver returned empty array. No good data received by base station");
-                end
-                n_try_sounding = n_try_sounding + 1
-            end
-
-            assert(size(rx_vec_iris_sound,3) == N_BS_ANT)
-            fprintf('=============================== \n');
-            fprintf('Channel Estimation and Beamweight Calculation \n');
-
-            clear peaks;
-            [H, H_tmp, peaks, err_flag] = channel_estimation_fun(rx_vec_iris_sound, N_BS_ANT, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'sounding', frm_idx);
-            if err_flag
-                close_and_save(mimo_handle, done_reps, BER_vs_code, file_prefix);
-                error('Error during channel_estimation_fun.');
-            end
-        end
-
-        % Beamweight calculation
-        W = zeros(N_BS_ANT, N_UE, N_SC);
-        if ix_ang == 0
-            % ZF/default case
-            if strcmp(MIMO_ALG, 'ZF')
-                for isc =1:N_SC
-                    currH = squeeze(H(:, :, isc));
-                    currH(isnan(currH)) = 0;   % Remove nan
-                    currH(isinf(currH)) = 0;   % Remove inf... I believe pinv() in R2021b no longer breaks with non-finite vals.
-                    W(:, :, isc) = pinv(currH);
-                    save(strcat('dataset/',file_prefix,'_rep_',num2str(nr),'_WH_sounding_',MIMO_ALG,'.mat'), 'H', 'W')
-                end
-            elseif strcmp(MIMO_ALG, 'MRT')
-                for isc =1:N_SC
-                    currH = squeeze(H(:, :, isc));
-                    currH(isnan(currH)) = 0;   % Remove nan
-                    currH(isinf(currH)) = 0;   % Remove inf... I believe pinv() in R2021b no longer breaks with non-finite vals.
-                    %currH = currH.' % we need column vector
-                    currW = currH' ./ norm(currH) ;
-                    currW(isnan(currW)) = 0;
-                    currW(isinf(currW)) = 0;
-                    W(:, :, isc) = currW;
-                    save(strcat('dataset/',file_prefix,'_rep_',num2str(nr),'_WH_sounding_',MIMO_ALG,'.mat'), 'H', 'W')
-                end
-            else
-                fprintf("Only Zero-Forcing (ZF) and Maximum Ratio Transmitter (MRT) are Currently Supported");
-                return;
-            end
-
-
-        end
-
-
-
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %                       DOWNLINK BEAMFORMING
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        % No need to send explicit feedback to base station, simply use the computed
-        % weights
-        fprintf('=============================== \n');
-        fprintf('Downlink Beamforming \n');
-
-        % Update TX gain
-        is_bs = 1;   % Is base station node
-        param = 1;   % txgain == 1 [TODO, change to string, txgain=1, rxgain=2]
-        mimo_handle.mimo_update_sdr_params(param, TX_GN_BF, is_bs);
-
-        if SIM_MODE
-            % TODO
-
-        else
-
-
-            % Apply precoding weights to data (in freq. domain)
-            ifft_in_mat = zeros(N_BS_ANT, N_SC, N_OFDM_SYM);
-            for isc = 1:N_SC
-                for isym = 1:N_OFDM_SYM
-                    if ix_ang == 0
-                        % apply in digital domain only when using channel estimation + ZF/MRT
-                        ifft_in_mat(:, isc, isym) = W(:, :, isc) * precoding_in_mat(:, isc, isym);
                     else
-                        % for codebook derived precoders (i.e. steering vector function)
-                        % apply the precoding in time domain (later)
-                        ifft_in_mat(:, isc, isym) = precoding_in_mat(:, isc, isym);
+                        H_ul_tmp = sqrt(hvar/2).*randn(1, N_UE) + 1i*randn(1, N_UE);
+                        y0 = H_ul_tmp*tx_vec_train.';
+                    end
+
+                    y = y0 + W_ul;
+                    rx_vec_iris(1, bsidx, :) = y;   % Modify for UE > 1
+                    numGoodFrames = 1;
+                end
+
+            else
+
+                fprintf('Running: HARDWARE MODE \n');
+                fprintf('=============================== \n');
+                fprintf('Initiate Sounding Process \n');
+                % Iris nodes' parameters
+                sdr_params = struct(...
+                    'bs_id', bs_ids, ...
+                    'ue_id', ue_ids, ...
+                    'ref_id', ref_ids, ...
+                    'hub_id', hub_id,...
+                    'bs_ant', ANT_BS, ...
+                    'ue_ant', ANT_UE, ...
+                    'txfreq', TX_FRQ, ...
+                    'rxfreq', RX_FRQ, ...
+                    'txgain', TX_GN, ...
+                    'tx_gain_ue', TX_GN_UE, ...
+                    'rxgain', RX_GN, ...
+                    'sample_rate', SMPL_RT, ...
+                    'trig_offset', TX_ADVANCE);
+
+                if (islogical(mimo_handle))
+                    if mimo_handle == false
+                        mimo_handle = mimo_driver(sdr_params);
+                    end
+                end
+
+            end
+
+            if ix_ang == 0      % only for the first time to compute the ZF/MRT output
+
+                tx_vec_train = TX_SCALE .* tx_vec_train ./ max(abs(tx_vec_train));
+                tx_mat_train = repmat(tx_vec_train.', N_BS_ANT,1);
+                [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_mat_train, N_FRM, N_ZPAD_PRE, 'dl-sounding', '[]', '[]');
+
+                n_try_sounding = 1;
+                while isempty(rx_vec_iris_sound)
+
+                    if (n_try_sounding < max_try_sounding)
+                        disp('--> Retry Sounding...')
+                        [rx_vec_iris_sound, numGoodFrames, numRxSyms] = mimo_handle.mimo_txrx(tx_mat_train, N_FRM, N_ZPAD_PRE, 'dl-sounding', '[]', '[]');
+                    else
+                        %close_and_save(mimo_handle, done_reps, BER_vs_code, file_prefix);
+                        %error("-----> Driver returned empty array. No good data received by base station");
+
+                        disp("-----> Driver returned empty array. No good data received by base station");
+                    end
+                    n_try_sounding = n_try_sounding + 1
+                end
+
+                if isempty(rx_vec_iris_sound)   % if at this point this is still empty...
+                    % HANDLE ERROR
+                    fprintf(strcat("This iteration will be repeated (until successful) (up to",num2str(max_try_iter)," tries)\n"));
+                    n_try_iter = n_try_iter + 1;
+                    if n_try_iter < max_try_iter
+                        do_try = true;
+                        continue; % go to the next iteration
+                    else
+                        BER_vs_code(nr, ix_ang+1, 1) = MAX_BER_VAL;  % max error if nothing is received several times
+                        break;
+                    end
+                end
+
+
+                assert(size(rx_vec_iris_sound,3) == N_BS_ANT)
+                fprintf('=============================== \n');
+                fprintf('Channel Estimation and Beamweight Calculation \n');
+
+                clear peaks;
+                [H, H_tmp, peaks, err_flag] = channel_estimation_fun(rx_vec_iris_sound, N_BS_ANT, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'sounding', frm_idx);
+                if err_flag
+                    %close_and_save(mimo_handle, done_reps, BER_vs_code, file_prefix);
+                    %error('Error during channel_estimation_fun.');
+                    disp('Error during channel_estimation_fun.');
+                    % HANDLE ERROR
+                    fprintf(strcat("This iteration will be repeated (until successful) (up to",num2str(max_try_iter)," tries)\n"));
+                    n_try_iter = n_try_iter + 1;
+                    if n_try_iter < max_try_iter
+                        do_try = true;
+                        continue; % go to the next iteration
+                    else
+                        BER_vs_code(nr, ix_ang+1, 1) = MAX_BER_VAL;  % max error if nothing is received several times
+                        break;
+                    end
+                end
+            end
+
+            % Beamweight calculation
+            W = zeros(N_BS_ANT, N_UE, N_SC);
+            if ix_ang == 0
+                % ZF/default case
+                if strcmp(MIMO_ALG, 'ZF')
+                    for isc =1:N_SC
+                        currH = squeeze(H(:, :, isc));
+                        currH(isnan(currH)) = 0;   % Remove nan
+                        currH(isinf(currH)) = 0;   % Remove inf... I believe pinv() in R2021b no longer breaks with non-finite vals.
+                        W(:, :, isc) = pinv(currH);
+                        save(strcat('dataset/',file_prefix,'_rep_',num2str(nr),'_WH_sounding_',MIMO_ALG,'.mat'), 'H', 'W')
+                    end
+                elseif strcmp(MIMO_ALG, 'MRT')
+                    for isc =1:N_SC
+                        currH = squeeze(H(:, :, isc));
+                        currH(isnan(currH)) = 0;   % Remove nan
+                        currH(isinf(currH)) = 0;   % Remove inf... I believe pinv() in R2021b no longer breaks with non-finite vals.
+                        %currH = currH.' % we need column vector
+                        currW = currH' ./ norm(currH) ;
+                        currW(isnan(currW)) = 0;
+                        currW(isinf(currW)) = 0;
+                        W(:, :, isc) = currW;
+                        save(strcat('dataset/',file_prefix,'_rep_',num2str(nr),'_WH_sounding_',MIMO_ALG,'.mat'), 'H', 'W')
+                    end
+                else
+                    fprintf("Only Zero-Forcing (ZF) and Maximum Ratio Transmitter (MRT) are Currently Supported");
+                    return;
+                end
+
+
+            end
+
+
+
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            %                       DOWNLINK BEAMFORMING
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % No need to send explicit feedback to base station, simply use the computed
+            % weights
+            fprintf('=============================== \n');
+            fprintf('Downlink Beamforming \n');
+
+            % Update TX gain
+            is_bs = 1;   % Is base station node
+            param = 1;   % txgain == 1 [TODO, change to string, txgain=1, rxgain=2]
+            mimo_handle.mimo_update_sdr_params(param, TX_GN_BF, is_bs);
+
+            if SIM_MODE
+                % TODO
+
+            else
+
+
+                % Apply precoding weights to data (in freq. domain)
+                ifft_in_mat = zeros(N_BS_ANT, N_SC, N_OFDM_SYM);
+                for isc = 1:N_SC
+                    for isym = 1:N_OFDM_SYM
+                        if ix_ang == 0
+                            % apply in digital domain only when using channel estimation + ZF/MRT
+                            ifft_in_mat(:, isc, isym) = W(:, :, isc) * precoding_in_mat(:, isc, isym);
+                        else
+                            % for codebook derived precoders (i.e. steering vector function)
+                            % apply the precoding in time domain (later)
+                            ifft_in_mat(:, isc, isym) = precoding_in_mat(:, isc, isym);
+                        end
+
+                    end
+                end
+
+                % IFFT
+                tx_payload_mat = zeros(N_BS_ANT, N_SYM_SAMP, N_DATA_SYM);
+                tx_pilot_mat = zeros(N_BS_ANT, length(lts_t)*2.5);
+
+                for ibs = 1:N_BS_ANT
+                    pilot1 = squeeze(ifft(ifft_in_mat(ibs, :, 1)));
+                    pilot2 = squeeze(ifft(ifft_in_mat(ibs, :, 2)));
+                                            % CP
+                    tx_pilot_mat(ibs, :) = [pilot2(33:64) pilot1 pilot2];
+
+                    for isym = N_LTS_SYM+1:N_OFDM_SYM
+                        tx_sym = squeeze(ifft(ifft_in_mat(ibs, :, isym)));
+                        tx_payload_mat(ibs, :, isym - N_LTS_SYM) = [tx_sym(end - CP_LEN + 1: end) tx_sym].';
+                    end
+                end
+
+                % Reshape to a vector and append zeros to fill out remaining of buffer (not necessary)
+                % Total frame length 4096 = N_SAMPS
+                tx_payload_vec = reshape(tx_payload_mat, N_BS_ANT, numel(tx_payload_mat(1, :, :)));
+
+                % here we apply the time-domain (i.e. analog) beamforming using the codebook
+                if ix_ang > 0
+                    % codebook
+                    disp("***********************")
+                    disp("Using angle:")
+                    disp(BS_angles(ix_ang))
+                    disp("***********************")
+                    W_temp = BS_code(ix_ang,:,1);
+
+                    % TODO double check
+                    %   (1) do we need a conj transpose on W_temp here? or maybe just conjugate?
+                    %   [DONE] (2) output should be [Nsamps * Nt]
+                    %   (3)
+                    %disp(size(W_temp))
+                    %disp(size(tx_pilot_mat))
+                    %disp(size(tx_payload_vec))
+                    %pause()
+                    tx_pilot_mat = tx_pilot_mat .* (W_temp' ./ sqrt(N_BS_ANT));
+                    tx_payload_vec = tx_payload_vec .* (W_temp' ./ sqrt(N_BS_ANT));
+                end
+
+                frame_length = length(tx_payload_mat(1,:)) + length(tx_pilot_mat(1,:));
+                N_ZPAD_POST = MAX_NUM_SAMPS - frame_length - N_ZPAD_PRE;
+                tx_payload = [zeros(N_BS_ANT, N_ZPAD_PRE) tx_pilot_mat tx_payload_vec zeros(N_BS_ANT, N_ZPAD_POST)];
+
+                % NOTE: Add preamble to one antenna for sync (workaround to offset from beamformed preamble)
+                %syncSeq = zeros(size(tx_payload,1), length(lts_lcp));
+                %syncSeq(1, :) = lts_lcp;
+                %tx_payload = [syncSeq tx_payload];
+                N_DATA_SAMP = N_SYM_SAMP * N_DATA_SYM;
+                N_SAMPS = N_ZPAD_PRE + length(tx_pilot_mat(1,:)) + (N_SYM_SAMP * N_DATA_SYM) + N_ZPAD_POST;
+                assert(N_SAMPS == MAX_NUM_SAMPS);
+
+                [tx_payload_cal] = time_offset_cal(peaks, squeeze(tx_payload), N_BS_ANT, lts_t);
+                [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx(tx_payload_cal, N_FRM, N_ZPAD_PRE, 'downlink', '[]', '[]');
+                %mimo_handle.mimo_close(); % instead of closing here, we close the MIMO array at the end of the beamsweep
+
+                if isempty(rx_vec_iris_tmp)
+                    %error("Driver returned empty array. No good data received by UE");
+                    %exit(0);
+                    fprintf("Driver returned empty array. No good data received by UE\n");
+                    % HANDLE ERROR
+                    fprintf(strcat("This iteration will be repeated (until successful) (up to",num2str(max_try_iter)," tries)\n"));
+                    n_try_iter = n_try_iter + 1;
+                    if n_try_iter < max_try_iter
+                        do_try = true;
+                        continue; % go to the next iteration
+                    else
+                        BER_vs_code(nr, ix_ang+1, 1) = MAX_BER_VAL;  % max error if nothing is received
+                        break;
                     end
 
                 end
+
             end
 
-            % IFFT
-            tx_payload_mat = zeros(N_BS_ANT, N_SYM_SAMP, N_DATA_SYM);
-            tx_pilot_mat = zeros(N_BS_ANT, length(lts_t)*2.5);
 
-            for ibs = 1:N_BS_ANT
-                pilot1 = squeeze(ifft(ifft_in_mat(ibs, :, 1)));
-                pilot2 = squeeze(ifft(ifft_in_mat(ibs, :, 2)));
-                                        % CP
-                tx_pilot_mat(ibs, :) = [pilot2(33:64) pilot1 pilot2];
-
-                for isym = N_LTS_SYM+1:N_OFDM_SYM
-                    tx_sym = squeeze(ifft(ifft_in_mat(ibs, :, isym)));
-                    tx_payload_mat(ibs, :, isym - N_LTS_SYM) = [tx_sym(end - CP_LEN + 1: end) tx_sym].';
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            %                        PROCESS DOWNLINK DATA
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            N_STREAMS = 1;
+            [H, ~, preamble_pk, err_flag] = channel_estimation_fun(rx_vec_iris_tmp, N_STREAMS, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'dl-bf', frm_idx);
+            if err_flag
+                %mimo_handle.mimo_close();
+                %error();
+                fprintf('SOUNDING: Error occurred during channel estimation.\n');
+                % HANDLE ERROR
+                % HANDLE ERROR
+                fprintf(strcat("This iteration will be repeated (until successful) (up to",num2str(max_try_iter)," tries)\n"));
+                n_try_iter = n_try_iter + 1;
+                if n_try_iter < max_try_iter
+                    do_try = true;
+                    continue; % go to the next iteration
+                else
+                    BER_vs_code(nr, ix_ang+1, 1) = MAX_BER_VAL;  % max error if nothing is received
+                    break;
                 end
             end
+            rx_H_est = squeeze(H);
 
-            % Reshape to a vector and append zeros to fill out remaining of buffer (not necessary)
-            % Total frame length 4096 = N_SAMPS
-            tx_payload_vec = reshape(tx_payload_mat, N_BS_ANT, numel(tx_payload_mat(1, :, :)));
+            for iue = 1:N_UE
 
-            % here we apply the time-domain (i.e. analog) beamforming using the codebook
-            if ix_ang > 0
-                % codebook
-                disp("***********************")
-                disp("Using angle:")
-                disp(BS_angles(ix_ang))
-                disp("***********************")
-                W_temp = BS_code(ix_ang,:,1);
+                peak = preamble_pk(1, iue);
+                dl_data_start = peak + 1;
+                curr_vec = squeeze(rx_vec_iris_tmp(frm_idx, iue, 1, :));
 
-                % TODO double check
-                %   (1) do we need a conj transpose on W_temp here? or maybe just conjugate?
-                %   [DONE] (2) output should be [Nsamps * Nt]
-                %   (3)
-                %disp(size(W_temp))
-                %disp(size(tx_pilot_mat))
-                %disp(size(tx_payload_vec))
-                %pause()
-                tx_pilot_mat = tx_pilot_mat .* (W_temp' ./ sqrt(N_BS_ANT));
-                tx_payload_vec = tx_payload_vec .* (W_temp' ./ sqrt(N_BS_ANT));
-            end
+                %%%%% Retrieve data and apply corrections
+                %data_samples = dl_data_start + N_DATA_SAMP;
+                rx_vec_downlink = curr_vec;
+                N_RX_DATA_SYMS = min(N_DATA_SYM, floor((length(curr_vec) - dl_data_start) / N_SYM_SAMP));
+                end_idx = min(N_SAMPS, dl_data_start + N_RX_DATA_SYMS * N_SYM_SAMP - 1);
+                rx_dl_data_vec = rx_vec_downlink(dl_data_start: end_idx);
+                rx_dl_data_mat = reshape(rx_dl_data_vec, N_SYM_SAMP, N_RX_DATA_SYMS);
 
-            frame_length = length(tx_payload_mat(1,:)) + length(tx_pilot_mat(1,:));
-            N_ZPAD_POST = MAX_NUM_SAMPS - frame_length - N_ZPAD_PRE;
-            tx_payload = [zeros(N_BS_ANT, N_ZPAD_PRE) tx_pilot_mat tx_payload_vec zeros(N_BS_ANT, N_ZPAD_POST)];
-
-            % NOTE: Add preamble to one antenna for sync (workaround to offset from beamformed preamble)
-            %syncSeq = zeros(size(tx_payload,1), length(lts_lcp));
-            %syncSeq(1, :) = lts_lcp;
-            %tx_payload = [syncSeq tx_payload];
-            N_DATA_SAMP = N_SYM_SAMP * N_DATA_SYM;
-            N_SAMPS = N_ZPAD_PRE + length(tx_pilot_mat(1,:)) + (N_SYM_SAMP * N_DATA_SYM) + N_ZPAD_POST;
-            assert(N_SAMPS == MAX_NUM_SAMPS);
-
-            [tx_payload_cal] = time_offset_cal(peaks, squeeze(tx_payload), N_BS_ANT, lts_t);
-            [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx(tx_payload_cal, N_FRM, N_ZPAD_PRE, 'downlink', '[]', '[]');
-            %mimo_handle.mimo_close(); % instead of closing here, we close the MIMO array at the end of the beamsweep
-
-            if isempty(rx_vec_iris_tmp)
-                %error("Driver returned empty array. No good data received by UE");
-                %exit(0);
-                fprintf("Driver returned empty array. No good data received by UE\n");
-                BER_vs_code(nr, ix_ang+1, 1) = MAX_BER_VAL;     % max error if nothing is received
-                continue;   % to allow check of other codes
-
-            end
-
-        end
-
-
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %                        PROCESS DOWNLINK DATA
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        N_STREAMS = 1;
-        [H, ~, preamble_pk, err_flag] = channel_estimation_fun(rx_vec_iris_tmp, N_STREAMS, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'dl-bf', frm_idx);
-        if err_flag
-            %mimo_handle.mimo_close();
-            %error();
-            fprintf('SOUNDING: Error occurred during channel estimation. BER=1 recorded and continue.. \n');
-            BER_vs_code(nr, ix_ang+1, 1) = MAX_BER_VAL;     % max error if nothing is received
-            continue;   % to allow check of other codes
-        end
-        rx_H_est = squeeze(H);
-
-        for iue = 1:N_UE
-
-            peak = preamble_pk(1, iue);
-            dl_data_start = peak + 1;
-            curr_vec = squeeze(rx_vec_iris_tmp(frm_idx, iue, 1, :));
-
-            %%%%% Retrieve data and apply corrections
-            %data_samples = dl_data_start + N_DATA_SAMP;
-            rx_vec_downlink = curr_vec;
-            N_RX_DATA_SYMS = min(N_DATA_SYM, floor((length(curr_vec) - dl_data_start) / N_SYM_SAMP));
-            end_idx = min(N_SAMPS, dl_data_start + N_RX_DATA_SYMS * N_SYM_SAMP - 1);
-            rx_dl_data_vec = rx_vec_downlink(dl_data_start: end_idx);
-            rx_dl_data_mat = reshape(rx_dl_data_vec, N_SYM_SAMP, N_RX_DATA_SYMS);
-
-            if(CP_LEN > 0)
-                rx_dl_data_mat = rx_dl_data_mat(CP_LEN+1-FFT_OFFSET:end-FFT_OFFSET, :);
-            end
-            rx_dl_f_mat = fft(rx_dl_data_mat, N_SC, 1);
-            N_RX_DATA_OFDM_SYMS = N_RX_DATA_SYMS;
-
-            dl_syms_eq_mat = zeros(N_SC, N_RX_DATA_OFDM_SYMS);
-            for i=1:N_RX_DATA_OFDM_SYMS
-                dl_syms_eq_mat(:,i) = squeeze(rx_dl_f_mat(:,i))./rx_H_est;
-            end
-
-            pilots_eq_mat = dl_syms_eq_mat(SC_IND_PILOTS,:);
-            pilots_eq_mat_comp = pilots_eq_mat.*repmat(pilots, 1, N_RX_DATA_OFDM_SYMS);
-
-            pilot_dl_phase_err = squeeze(angle(mean(pilots_eq_mat_comp,1)));
-
-            pilot_dl_phase_corr = zeros(N_SC, N_RX_DATA_OFDM_SYMS);
-            for i=1:N_SC
-                pilot_dl_phase_corr(i,:) = exp(-1i*pilot_dl_phase_err);
-            end
-
-            % Apply the pilot phase correction per symbol
-            dl_syms_eq_pc_mat = dl_syms_eq_mat.* pilot_dl_phase_corr;
-            payload_dl_syms_mat = dl_syms_eq_pc_mat(SC_IND_DATA, :);
-
-
-            %%%%% Demodulate
-            N_DATA_SC_RX = N_RX_DATA_OFDM_SYMS * length(SC_IND_DATA);
-
-            if N_DATA_SC_RX ~= N_DATA_SC
-                disp('Missing Data. Exit now!');
-                %return;
-                BER_vs_code(nr, ix_ang+1, 1) = MAX_BER_VAL;     % max error if nothing is received
-                continue;   % to allow check of other codes
-            end
-            rx_syms = reshape(payload_dl_syms_mat, 1, N_DATA_SC);
-            rx_data = demod_sym(rx_syms ,MOD_ORDER);
-
-
-            %%%%% Calculate EVM & SNR
-            % Do yourselves. Calculate EVM and effective SNR:
-            evm_mat = abs(payload_dl_syms_mat - squeeze(tx_syms_mat(iue, :, :))).^2;
-            aevms = mean(evm_mat(:)); % needs to be a scalar
-            snr = 10*log10(1./aevms); % calculate in dB scale.
-
-            sym_errs = sum(tx_data ~= rx_data);
-            bit_errs = length(find(dec2bin(bitxor(tx_data, rx_data),8) == '1'));
-            rx_evm   = sqrt(sum((real(rx_syms) - real(tx_syms)).^2 + (imag(rx_syms) - imag(tx_syms)).^2)/(length(SC_IND_DATA) * N_DATA_SYM));
-
-            fprintf('\nResults:\n');
-            fprintf('Num Bytes:  \t  %d\n', N_DATA_SC * log2(MOD_ORDER) / 8);
-            fprintf('Sym Errors:  \t %d (of %d total symbols)\n', sym_errs, N_DATA_SC);
-            fprintf('Bit Errors: \t %d (of %d total bits)\n', bit_errs, N_DATA_SC * log2(MOD_ORDER));
-            fprintf('EVM: \t %f%%, SNR: %f \n', 100*aevms, snr);
-
-            BER_vs_code(nr, ix_ang+1, 1) = bit_errs / (N_DATA_SC * log2(MOD_ORDER));
-        end
-
-
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %                               PLOTTER
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        for iue = 1:N_UE
-            cf = 0 + 10^iue;
-            fst_clr = [0, 0.4470, 0.7410];
-            sec_clr = [0.8500, 0.3250, 0.0980];
-
-            if PILOT_PLOT
-                cf = cf + 1;
-                figure(cf); clf;
-                numRows = 5;
-                numCols = 5;
-                for ibs = 1:N_BS_ANT
-                    subplot(numRows,numCols,ibs);
-                    plot(abs(squeeze(rx_vec_iris_sound(1, iue, ibs, :))));
+                if(CP_LEN > 0)
+                    rx_dl_data_mat = rx_dl_data_mat(CP_LEN+1-FFT_OFFSET:end-FFT_OFFSET, :);
                 end
+                rx_dl_f_mat = fft(rx_dl_data_mat, N_SC, 1);
+                N_RX_DATA_OFDM_SYMS = N_RX_DATA_SYMS;
+
+                dl_syms_eq_mat = zeros(N_SC, N_RX_DATA_OFDM_SYMS);
+                for i=1:N_RX_DATA_OFDM_SYMS
+                    dl_syms_eq_mat(:,i) = squeeze(rx_dl_f_mat(:,i))./rx_H_est;
+                end
+
+                pilots_eq_mat = dl_syms_eq_mat(SC_IND_PILOTS,:);
+                pilots_eq_mat_comp = pilots_eq_mat.*repmat(pilots, 1, N_RX_DATA_OFDM_SYMS);
+
+                pilot_dl_phase_err = squeeze(angle(mean(pilots_eq_mat_comp,1)));
+
+                pilot_dl_phase_corr = zeros(N_SC, N_RX_DATA_OFDM_SYMS);
+                for i=1:N_SC
+                    pilot_dl_phase_corr(i,:) = exp(-1i*pilot_dl_phase_err);
+                end
+
+                % Apply the pilot phase correction per symbol
+                dl_syms_eq_pc_mat = dl_syms_eq_mat.* pilot_dl_phase_corr;
+                payload_dl_syms_mat = dl_syms_eq_pc_mat(SC_IND_DATA, :);
+
+
+                %%%%% Demodulate
+                N_DATA_SC_RX = N_RX_DATA_OFDM_SYMS * length(SC_IND_DATA);
+
+                if N_DATA_SC_RX ~= N_DATA_SC
+                    disp('Missing Data. Exit now!');
+                    %return;
+                    % HANDLE ERROR
+                    fprintf(strcat("This iteration will be repeated (until successful) (up to",num2str(max_try_iter)," tries)\n"));
+                    n_try_iter = n_try_iter + 1;
+                    if n_try_iter < max_try_iter
+                        do_try = true;
+                        continue; % go to the next iteration
+                    else
+                        BER_vs_code(nr, ix_ang+1, 1) = MAX_BER_VAL;  % max error if nothing is received
+                        break;
+                    end
+                end
+                rx_syms = reshape(payload_dl_syms_mat, 1, N_DATA_SC);
+                rx_data = demod_sym(rx_syms ,MOD_ORDER);
+
+
+                %%%%% Calculate EVM & SNR
+                % Do yourselves. Calculate EVM and effective SNR:
+                evm_mat = abs(payload_dl_syms_mat - squeeze(tx_syms_mat(iue, :, :))).^2;
+                aevms = mean(evm_mat(:)); % needs to be a scalar
+                snr = 10*log10(1./aevms); % calculate in dB scale.
+
+                sym_errs = sum(tx_data ~= rx_data);
+                bit_errs = length(find(dec2bin(bitxor(tx_data, rx_data),8) == '1'));
+                rx_evm   = sqrt(sum((real(rx_syms) - real(tx_syms)).^2 + (imag(rx_syms) - imag(tx_syms)).^2)/(length(SC_IND_DATA) * N_DATA_SYM));
+
+                fprintf('\nResults:\n');
+                fprintf('Num Bytes:  \t  %d\n', N_DATA_SC * log2(MOD_ORDER) / 8);
+                fprintf('Sym Errors:  \t %d (of %d total symbols)\n', sym_errs, N_DATA_SC);
+                fprintf('Bit Errors: \t %d (of %d total bits)\n', bit_errs, N_DATA_SC * log2(MOD_ORDER));
+                fprintf('EVM: \t %f%%, SNR: %f \n', 100*aevms, snr);
+
+                BER_vs_code(nr, ix_ang+1, 1) = bit_errs / (N_DATA_SC * log2(MOD_ORDER));
             end
 
 
-            if CHANNEL_PLOT
-                cf = cf + 1;
-                figure(cf); clf;
-                x = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1));
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            %                               PLOTTER
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            for iue = 1:N_UE
+                cf = 0 + 10^iue;
+                fst_clr = [0, 0.4470, 0.7410];
+                sec_clr = [0.8500, 0.3250, 0.0980];
 
-                subplot(1,2,1);
-                rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
-                rx_H_est_plot(SC_IND_DATA) = rx_H_est_sound(SC_IND_DATA);
-                rx_H_est_plot(SC_IND_PILOTS) = rx_H_est_sound(SC_IND_PILOTS);
-                bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
-                axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
-                grid on;
-                title('Channel Estimates (Magnitude)')
-                xlabel('Baseband Frequency (MHz)')
+                if PILOT_PLOT
+                    cf = cf + 1;
+                    figure(cf); clf;
+                    numRows = 5;
+                    numCols = 5;
+                    for ibs = 1:N_BS_ANT
+                        subplot(numRows,numCols,ibs);
+                        plot(abs(squeeze(rx_vec_iris_sound(1, iue, ibs, :))));
+                    end
+                end
 
-                subplot(1,2,2);
-                rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
-                rx_H_est_plot(SC_IND_DATA) = rx_H_est(SC_IND_DATA);
-                rx_H_est_plot(SC_IND_PILOTS) = rx_H_est(SC_IND_PILOTS);
-                bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
-                axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
-                grid on;
-                title('Channel Estimates (Magnitude)')
-                xlabel('Baseband Frequency (MHz)')
-            end
 
-            if CONST_PLOT
-                cf = cf + 1;
-                figure(cf); clf;
+                if CHANNEL_PLOT
+                    cf = cf + 1;
+                    figure(cf); clf;
+                    x = (20/N_SC) * (-(N_SC/2):(N_SC/2 - 1));
 
-                plot(payload_dl_syms_mat(:),'o','MarkerSize',2, 'color', sec_clr);
-                axis square; axis(1.5*[-1 1 -1 1]);
-                xlabel('Inphase')
-                ylabel('Quadrature')
-                grid on;
-                hold on;
+                    subplot(1,2,1);
+                    rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
+                    rx_H_est_plot(SC_IND_DATA) = rx_H_est_sound(SC_IND_DATA);
+                    rx_H_est_plot(SC_IND_PILOTS) = rx_H_est_sound(SC_IND_PILOTS);
+                    bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
+                    axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
+                    grid on;
+                    title('Channel Estimates (Magnitude)')
+                    xlabel('Baseband Frequency (MHz)')
 
-                plot(squeeze(tx_syms_mat(1,:,:)),'*', 'MarkerSize',16, 'LineWidth',2, 'color', fst_clr);
-                title('Tx and Rx Constellations')
-                legend('Rx','Tx','Location','EastOutside');
-            end
+                    subplot(1,2,2);
+                    rx_H_est_plot = repmat(complex(NaN,NaN),1,length(rx_H_est));
+                    rx_H_est_plot(SC_IND_DATA) = rx_H_est(SC_IND_DATA);
+                    rx_H_est_plot(SC_IND_PILOTS) = rx_H_est(SC_IND_PILOTS);
+                    bar(x, fftshift(abs(rx_H_est_plot)),1,'LineWidth', 1);
+                    axis([min(x) max(x) 0 1.1*max(abs(rx_H_est_plot))])
+                    grid on;
+                    title('Channel Estimates (Magnitude)')
+                    xlabel('Baseband Frequency (MHz)')
+                end
 
-            % Downlink Rx Vector and Constellation Plots
-            if DOWNLINK_PLOT
-                cf = cf + 1;
-                figure(cf);clf;
+                if CONST_PLOT
+                    cf = cf + 1;
+                    figure(cf); clf;
 
-                subplot(2,1,1);
-                plot(real(squeeze(rx_vec_iris_tmp(1,iue,1,:))));
-                xline(dl_data_start,'--r')
-                axis([0 N_SAMPS -1 1])
-                grid on;
-                title('Downlink Data - Received Data (Real)');
+                    plot(payload_dl_syms_mat(:),'o','MarkerSize',2, 'color', sec_clr);
+                    axis square; axis(1.5*[-1 1 -1 1]);
+                    xlabel('Inphase')
+                    ylabel('Quadrature')
+                    grid on;
+                    hold on;
 
-                subplot(2,1,2);
-                plot(lts_corr);
-                axis([0 N_SAMPS -1 6])
-                grid on;
-                title('Downlink Data - LTS Correlation');
-            end
+                    plot(squeeze(tx_syms_mat(1,:,:)),'*', 'MarkerSize',16, 'LineWidth',2, 'color', fst_clr);
+                    title('Tx and Rx Constellations')
+                    legend('Rx','Tx','Location','EastOutside');
+                end
 
-            if EVM_SNR_PLOT
-                % EVM & SNR
-                cf = cf + 1;
-                figure(cf); clf;
-                subplot(2,1,1)
-                plot(100*evm_mat(:),'o','MarkerSize',1)
-                axis tight
-                hold on
-                plot([1 length(evm_mat(:))], 100*[aevms, aevms],'color', sec_clr,'LineWidth',4)
-                myAxis = axis;
-                h = text(round(.05*length(evm_mat(:))), 100*aevms+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', snr));
-                set(h,'Color',[1 0 0])
-                set(h,'FontWeight','bold')
-                set(h,'FontSize',10)
-                set(h,'EdgeColor',[1 0 0])
-                set(h,'BackgroundColor',[1 1 1])
-                hold off
-                xlabel('Data Symbol Index')
-                ylabel('EVM (%)');
-                legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
-                title('EVM vs. Data Symbol Index')
-                grid on
+                % Downlink Rx Vector and Constellation Plots
+                if DOWNLINK_PLOT
+                    cf = cf + 1;
+                    figure(cf);clf;
 
-                subplot(2,1,2)
-                imagesc(1:N_DATA_SYM, (SC_IND_DATA - N_SC/2), 100*fftshift(evm_mat,1))
+                    subplot(2,1,1);
+                    plot(real(squeeze(rx_vec_iris_tmp(1,iue,1,:))));
+                    xline(dl_data_start,'--r')
+                    axis([0 N_SAMPS -1 1])
+                    grid on;
+                    title('Downlink Data - Received Data (Real)');
 
-                grid on
-                xlabel('OFDM Symbol Index')
-                ylabel('Subcarrier Index')
-                title('EVM vs. (Subcarrier & OFDM Symbol)')
-                h = colorbar;
-                set(get(h,'title'),'string','EVM (%)');
-                myAxis = caxis();
-                if (myAxis(2)-myAxis(1)) < 5
-                    caxis([myAxis(1), myAxis(1)+5])
+                    subplot(2,1,2);
+                    plot(lts_corr);
+                    axis([0 N_SAMPS -1 6])
+                    grid on;
+                    title('Downlink Data - LTS Correlation');
+                end
+
+                if EVM_SNR_PLOT
+                    % EVM & SNR
+                    cf = cf + 1;
+                    figure(cf); clf;
+                    subplot(2,1,1)
+                    plot(100*evm_mat(:),'o','MarkerSize',1)
+                    axis tight
+                    hold on
+                    plot([1 length(evm_mat(:))], 100*[aevms, aevms],'color', sec_clr,'LineWidth',4)
+                    myAxis = axis;
+                    h = text(round(.05*length(evm_mat(:))), 100*aevms+ .1*(myAxis(4)-myAxis(3)), sprintf('Effective SNR: %.1f dB', snr));
+                    set(h,'Color',[1 0 0])
+                    set(h,'FontWeight','bold')
+                    set(h,'FontSize',10)
+                    set(h,'EdgeColor',[1 0 0])
+                    set(h,'BackgroundColor',[1 1 1])
+                    hold off
+                    xlabel('Data Symbol Index')
+                    ylabel('EVM (%)');
+                    legend('Per-Symbol EVM','Average EVM','Location','NorthWest');
+                    title('EVM vs. Data Symbol Index')
+                    grid on
+
+                    subplot(2,1,2)
+                    imagesc(1:N_DATA_SYM, (SC_IND_DATA - N_SC/2), 100*fftshift(evm_mat,1))
+
+                    grid on
+                    xlabel('OFDM Symbol Index')
+                    ylabel('Subcarrier Index')
+                    title('EVM vs. (Subcarrier & OFDM Symbol)')
+                    h = colorbar;
+                    set(get(h,'title'),'string','EVM (%)');
+                    myAxis = caxis();
+                    if (myAxis(2)-myAxis(1)) < 5
+                        caxis([myAxis(1), myAxis(1)+5])
+                    end
                 end
             end
         end
+
     end
 
     done_reps = done_reps + 1;
