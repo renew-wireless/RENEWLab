@@ -111,10 +111,26 @@ void Scheduler::gc(void) {
   this->receiver_.reset();
   if (this->cfg_->bs_rx_thread_num() > 0) {
     for (size_t i = 0; i < this->cfg_->bs_rx_thread_num(); i++) {
-      delete[] this->rx_buffer_[i].pkt_buf_inuse;
+      delete (this->rx_buffer_[i].pkt_buf_inuse);
     }
     delete[] this->rx_buffer_;
   }
+  if (this->cfg_->num_bs_sdrs_all() > 0) {
+    for (size_t i = 0; i < this->cfg_->num_bs_sdrs_all(); i++) {
+      delete (this->bs_tx_buffer_[i].pkt_buf_inuse);
+    }
+    delete[] this->bs_tx_buffer_;
+  }
+
+  for (auto &queue_ptr : tx_queue_) {
+    delete queue_ptr;
+  }
+  for (auto &ptok_ptr : tx_ptoks_ptr_) {
+    delete ptok_ptr;
+  }
+
+  tx_queue_.clear();
+  tx_ptoks_ptr_.clear();
 }
 
 Scheduler::~Scheduler() { this->gc(); }
@@ -193,11 +209,10 @@ void Scheduler::do_it() {
           "total %zu\n",
           i, (i * thread_antennas), ((i + 1) * thread_antennas) - 1,
           thread_antennas);
-      Sounder::RecorderThread* new_recorder = new Sounder::RecorderThread(
+      auto& new_recorder = recorders_.emplace_back(std::make_unique<Sounder::RecorderThread>(
           this->cfg_, i, thread_core, (this->rx_thread_buff_size_ * kQueueSize),
-          (i * thread_antennas), thread_antennas, true);
+          (i * thread_antennas), thread_antennas, true));
       new_recorder->Start();
-      this->recorders_.push_back(new_recorder);
     }
     if (cfg_->bs_rx_thread_num() > 0) {
       // create socket buffer and socket threads
@@ -296,11 +311,8 @@ void Scheduler::do_it() {
 
   /* Force the recorders to process all of the data they have left and exit cleanly
          * Send a stop to all the recorders to allow the finalization to be done in parrallel */
-  for (auto recorder : this->recorders_) {
+  for (auto& recorder : this->recorders_) {
     recorder->Stop();
-  }
-  for (auto recorder : this->recorders_) {
-    delete recorder;
   }
   this->recorders_.clear();
 }

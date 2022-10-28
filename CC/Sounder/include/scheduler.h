@@ -40,7 +40,7 @@ class Scheduler {
   size_t cl_tx_thread_buff_size_;
 
   //RecorderWorker worker_;
-  std::vector<Sounder::RecorderThread*> recorders_;
+  std::vector<std::unique_ptr<Sounder::RecorderThread>> recorders_;
   std::vector<Sounder::Hdf5Reader*> readers_;
   size_t max_frame_number_;
 

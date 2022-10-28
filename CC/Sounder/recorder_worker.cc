@@ -32,7 +32,7 @@ RecorderWorker::RecorderWorker(Config* in_cfg, size_t antenna_offset,
 RecorderWorker::~RecorderWorker() { this->finalize(); }
 
 void RecorderWorker::init(void) {
-  this->hdf5_ = new Hdf5Lib(this->hdf5_name_, "Data");
+  this->hdf5_ = std::make_unique<Hdf5Lib>(this->hdf5_name_, "Data");
   // Write Atrributes
   // ******* COMMON ******** //
   // TX/RX Frequencyfile
@@ -238,6 +238,7 @@ void RecorderWorker::init(void) {
   if (this->cfg_->bs_rx_thread_num() > 0 &&
       this->cfg_->pilot_slot_per_frame() > 0) {
     // pilots
+    std::cout << " HEREEEEEEEEEEEEEE: " << this->cfg_->pilot_slot_per_frame() << std::endl;
     datasets.push_back("Pilot_Samples");
     std::array<hsize_t, kDsDimsNum> dims_pilot = {
         MAX_FRAME_INC, this->cfg_->num_cells(),
@@ -330,7 +331,7 @@ void RecorderWorker::record(int tid, Packet* pkt, NodeType node_type) {
     std::array<hsize_t, kDsDimsNum> hdfoffset = {pkt->frame_id, pkt->cell_id, 0,
                                                  antenna_index, 0};
     std::array<hsize_t, kDsDimsNum> count = {1, 1, 1, 1, IQ};
-    if (this->cfg_->internal_measurement() == true) {
+    if (this->cfg_->internal_measurement() == true || this->cfg_->dl_pilots_en() == true) {
       if (node_type == kClient) {
         this->hdf5_->extendDataset(std::string("DownlinkData"), pkt->frame_id);
         hdfoffset[kDsDimSymbol] = this->cfg_->getDlSlotIndex(0, pkt->slot_id);

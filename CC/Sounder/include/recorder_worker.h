@@ -12,6 +12,7 @@
 #include "config.h"
 #include "hdf5_lib.h"
 #include "receiver.h"
+#include <memory>
 
 namespace Sounder {
 class RecorderWorker {
@@ -29,7 +30,7 @@ class RecorderWorker {
  private:
   Config* cfg_;
   H5std_string hdf5_name_;
-  Hdf5Lib* hdf5_;
+  std::unique_ptr<Hdf5Lib> hdf5_;
   std::vector<std::string> datasets;
 
   size_t max_frame_number_;

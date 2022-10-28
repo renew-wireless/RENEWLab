@@ -540,9 +540,9 @@ def main():
     parser.add_option("--show-metadata", action="store_true", dest="show_metadata", help="Displays hdf5 metadata", default=False)
     parser.add_option("--deep-inspect", action="store_true", dest="deep_inspect", help="Run script without analysis", default=False)
     parser.add_option("--demodulate", type="string", dest="demodulate", help="Demodulate method for uplink data", default="")
-    parser.add_option("--ref-frame", type="int", dest="ref_frame", help="Frame number to plot", default=1000)
+    parser.add_option("--ref-frame", type="int", dest="ref_frame", help="Frame number to plot", default=100)
     parser.add_option("--ref-ul-slot", type="int", dest="ref_ul_slot", help="UL slot number to plot", default=0)
-    parser.add_option("--ref-dl-slot", type="int", dest="ref_dl_slot", help="DL slot number to plot", default=0)
+    parser.add_option("--ref-dl-slot", type="int", dest="ref_dl_slot", help="DL slot number to plot", default=2)
     parser.add_option("--ref-cell", type="int", dest="ref_cell", help="Cell number to plot", default=0)
     parser.add_option("--legacy", action="store_true", dest="legacy", help="Parse and plot legacy hdf5 file", default=False)
     parser.add_option("--ref-ant", type="int", dest="ref_ant", help="Reference antenna", default=0)
@@ -623,6 +623,7 @@ def main():
         noise_avail = len(noise_samples) > 0
         dl_data_avail = len(downlink_samples) > 0
         exclude_bs_nodes = []
+        print("pilots? {}, ul_data? {}, noise? {}, dl_data? {}".format(pilots_avail,ul_data_avail,noise_avail,dl_data_avail))
         if pilots_avail:
             num_bs_ants = pilot_samples.shape[4]
             if len(bs_nodes_str) > 0:

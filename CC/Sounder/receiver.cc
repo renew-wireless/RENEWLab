@@ -638,7 +638,6 @@ void Receiver::clientTxRx(int tid) {
                        ? 0
                        : config_->cl_ul_slots().at(tid).at(0);
   int NUM_SAMPS = config_->samps_per_slot();
-
   if (config_->core_alloc() == true) {
     int core =
         tid + 1 + config_->bs_rx_thread_num() + config_->recorder_thread_num();
@@ -934,6 +933,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   constexpr size_t kTargetSyncCount = 2;
   assert(config_->samps_per_frame() >= beacon_detect_window);
   while ((sync_count < kTargetSyncCount) && config_->running()) {
+    std::cout << " SYYYYYYYYYYYYYNC " << std::endl; 
     const ssize_t sync_index = clientSyncBeacon(tid, beacon_detect_window);
     if (sync_index >= 0) {
       const ssize_t adjust =
@@ -1063,7 +1063,9 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
         tx_return = this->clientTxData(tid, frame_id, rx_beacon_time);
       }
     } else {
-      this->clientTxPilots(tid, rx_beacon_time + txTimeDelta_);
+      if (config_->cl_pilot_slots().at(tid).size() > 0) {
+        this->clientTxPilots(tid, rx_beacon_time + txTimeDelta_);
+      }
     }  // end if config_->ul_data_slot_present()
 
     //Beacon + Tx Complete, process the rest of the slots

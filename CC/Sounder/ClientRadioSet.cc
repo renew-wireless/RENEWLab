@@ -34,7 +34,7 @@ static void freeRadios(std::vector<Radio*>& radios) {
 
 ClientRadioSet::ClientRadioSet(Config* cfg) : _cfg(cfg) {
   size_t num_radios = _cfg->num_cl_sdrs();
-
+  
   //load channels
   auto channels = Utils::strToChannels(_cfg->cl_channel());
   radios.clear();
