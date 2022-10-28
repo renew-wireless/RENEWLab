@@ -1063,7 +1063,9 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
         tx_return = this->clientTxData(tid, frame_id, rx_beacon_time);
       }
     } else {
-      this->clientTxPilots(tid, rx_beacon_time + txTimeDelta_);
+      if (config_->cl_pilot_slots().at(tid).size() > 0) {
+        this->clientTxPilots(tid, rx_beacon_time + txTimeDelta_);
+      }
     }  // end if config_->ul_data_slot_present()
 
     //Beacon + Tx Complete, process the rest of the slots

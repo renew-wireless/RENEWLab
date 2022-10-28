@@ -266,16 +266,31 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
         for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
           auto* dev = bsRadios.at(c).at(i)->RawDev();
           tddConf["frames"] = json::array();
-          if (_cfg->internal_measurement() == true) {
+          if (_cfg->internal_measurement() == true || _cfg->dl_pilots_en() == true) {
             for (char const& c : _cfg->bs_channel()) {
               std::string tx_ram = "TX_RAM_";
               dev->writeRegisters(tx_ram + c, 0, _cfg->pilot());
             }
-            tddConf["frames"].push_back(_cfg->calib_frames().at(c).at(i));
-            std::cout << "Cell " << c << ", SDR " << i
-                      << " calibration schedule : "
-                      << _cfg->calib_frames().at(c).at(i) << std::endl;
+            //tddConf["frames"].push_back(_cfg->calib_frames().at(c).at(i));
+            size_t frame_size = _cfg->calib_frames().at(c).at(i).size();
+            std::string fw_frame = _cfg->calib_frames().at(c).at(i);
+            for (size_t s = 0; s < frame_size; s++) {
+              char sym_type = fw_frame.at(s);
+              if (sym_type == 'D')
+                fw_frame.replace(s, 1, "T");  // downlink data
+            }
+            std::cout << "XXXX OBCH XXXX FRAME: " << fw_frame << std::endl;
+            tddConf["frames"].push_back(fw_frame);
 
+            std::string mode;
+            if (_cfg->dl_pilots_en() == true) {
+              mode = "Downlink Pilots";
+            } else {
+              mode = "Calibration";
+            }
+              std::cout << "Cell " << c << ", SDR " << i << " "<< mode
+                        << " Schedule : "
+                        << _cfg->calib_frames().at(c).at(i) << std::endl;
           } else {
             tddConf["frames"] = json::array();
             size_t frame_size = _cfg->frames().at(c).size();

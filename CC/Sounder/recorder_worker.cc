@@ -60,6 +60,9 @@ void RecorderWorker::init(void) {
   // Length of cyclic prefix
   this->hdf5_->write_attribute("CP_LEN", this->cfg_->cp_size());
 
+  // Downlink Pilots Enabled Flag
+  this->hdf5_->write_attribute("DL_PILOTS_EN", this->cfg_->dl_pilots_en());
+
   // Beacon sequence type (string)
   this->hdf5_->write_attribute("BEACON_SEQ_TYPE", this->cfg_->beacon_seq());
 
@@ -327,7 +330,7 @@ void RecorderWorker::record(int tid, Packet* pkt, NodeType node_type) {
     std::array<hsize_t, kDsDimsNum> hdfoffset = {pkt->frame_id, pkt->cell_id, 0,
                                                  antenna_index, 0};
     std::array<hsize_t, kDsDimsNum> count = {1, 1, 1, 1, IQ};
-    if (this->cfg_->internal_measurement() == true) {
+    if (this->cfg_->internal_measurement() == true || this->cfg_->dl_pilots_en() == true) {
       if (node_type == kClient) {
         this->hdf5_->extendDataset(std::string("DownlinkData"), pkt->frame_id);
         hdfoffset[kDsDimSymbol] = this->cfg_->getDlSlotIndex(0, pkt->slot_id);

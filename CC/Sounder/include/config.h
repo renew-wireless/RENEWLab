@@ -74,6 +74,7 @@ class Config {
   inline size_t num_cl_antennas(void) const { return this->num_cl_antennas_; }
   inline size_t fft_size(void) const { return this->fft_size_; }
   inline size_t cp_size(void) const { return this->cp_size_; }
+  inline bool dl_pilots_en(void) const { return this->dl_pilots_en_; }
   inline size_t symbol_data_subcarrier_num(void) const {
     return this->symbol_data_subcarrier_num_;
   }
@@ -292,6 +293,7 @@ class Config {
   double bw_filter_;
   size_t fft_size_;
   size_t cp_size_;
+  bool dl_pilots_en_;
   size_t ofdm_symbol_size_;
   size_t symbol_data_subcarrier_num_;
   size_t symbol_per_slot_;
