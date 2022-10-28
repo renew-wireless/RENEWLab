@@ -362,9 +362,6 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
       pilot_slot_per_frame_ =
           num_channels * n_bs_sdrs_[0];  // Two pilots per board (up/down)
     }
-    noise_slot_per_frame_ = 0;
-    ul_slot_per_frame_ = 0;
-    dl_slot_per_frame_ = 0;
   } else {
     auto jBsFrames = tddConf.value("frame_schedule", json::array());
     frames_.assign(jBsFrames.begin(), jBsFrames.end());
