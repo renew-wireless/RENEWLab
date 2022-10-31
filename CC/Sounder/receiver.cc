@@ -1030,7 +1030,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
             frame_id, new_rx_offset, resync_retry_cnt + 1, sync_index, tid);
 
         if (kEnableCfo && (sync_index >= 0)) {
-          const auto cfo_phase_est =
+          [[maybe_unused]] const auto cfo_phase_est =
               estimateCFO(samplemem.at(kSyncDetectChannel), sync_index);
           MLPD_INFO("Client %d Estimated CFO (Hz): %f\n", tid,
                     cfo_phase_est * config_->rate());

@@ -323,7 +323,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     }
   } else {
     // NEW CODE - Supports only one UE (uplink pilots) /////////////////////////////////////////////////////////////////////
-    if (dl_pilots_en2_ == true) {
+    if (dl_pilots_en_ == true) {
       const size_t num_channels = bs_channel_.size();
       bs_array_frames_.resize(num_cells_);
 
