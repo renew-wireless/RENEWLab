@@ -281,7 +281,8 @@ int Receiver::baseTxData(int radio_id, int cell, int frame_id,
         //txTime = ((size_t)event.frame_id << 32) |
         //         (config_->dl_slots().at(cell).at(s) << 16);            // OBCH!!!!!!!!!!!!!!! check this....
         txTime = ((size_t)event.frame_id << 32) |
-                 (config_->dl_slots().at(radio_id).at(s) << 16);            // OBCH!!!!!!!!!!!!!!! check this....
+                 (config_->dl_slots().at(radio_id).at(s)
+                  << 16);  // OBCH!!!!!!!!!!!!!!! check this....
       }
       if ((kUsePureUHD == true || kUseSoapyUHD == true) &&
           s < (config_->dl_slot_per_frame() - 1))

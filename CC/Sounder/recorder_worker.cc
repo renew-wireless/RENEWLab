@@ -102,7 +102,8 @@ void RecorderWorker::init(void) {
   // Downlink Pilots (different schedule for different BS boards)
   std::vector<std::string> bs_frame_sched_different;
   for (auto&& v : this->cfg_->bs_array_frames()) {
-    bs_frame_sched_different.insert(bs_frame_sched_different.end(), v.begin(), v.end());
+    bs_frame_sched_different.insert(bs_frame_sched_different.end(), v.begin(),
+                                    v.end());
   }
   this->hdf5_->write_attribute("BS_FRAME_SCHED_DIFF", bs_frame_sched_different);
 
@@ -337,7 +338,8 @@ void RecorderWorker::record(int tid, Packet* pkt, NodeType node_type) {
     std::array<hsize_t, kDsDimsNum> hdfoffset = {pkt->frame_id, pkt->cell_id, 0,
                                                  antenna_index, 0};
     std::array<hsize_t, kDsDimsNum> count = {1, 1, 1, 1, IQ};
-    if (this->cfg_->internal_measurement() == true || this->cfg_->dl_pilots_en() == true) {
+    if (this->cfg_->internal_measurement() == true ||
+        this->cfg_->dl_pilots_en() == true) {
       if (node_type == kClient) {
         this->hdf5_->extendDataset(std::string("DownlinkData"), pkt->frame_id);
         hdfoffset[kDsDimSymbol] = this->cfg_->getDlSlotIndex(0, pkt->slot_id);

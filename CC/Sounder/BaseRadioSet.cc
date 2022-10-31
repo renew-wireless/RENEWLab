@@ -266,7 +266,8 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
         for (size_t i = 0; i < bsRadios.at(c).size(); i++) {
           auto* dev = bsRadios.at(c).at(i)->RawDev();
           tddConf["frames"] = json::array();
-          if (_cfg->internal_measurement() == true || _cfg->dl_pilots_en() == true) {
+          if (_cfg->internal_measurement() == true ||
+              _cfg->dl_pilots_en() == true) {
             for (char const& c : _cfg->bs_channel()) {
               std::string tx_ram = "TX_RAM_";
               dev->writeRegisters(tx_ram + c, 0, _cfg->pilot());
@@ -287,9 +288,9 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
             } else {
               mode = "Calibration";
             }
-              std::cout << "Cell " << c << ", SDR " << i << " "<< mode
-                        << " Schedule : "
-                        << _cfg->calib_frames().at(c).at(i) << std::endl;
+            std::cout << "Cell " << c << ", SDR " << i << " " << mode
+                      << " Schedule : " << _cfg->calib_frames().at(c).at(i)
+                      << std::endl;
           } else {
             tddConf["frames"] = json::array();
 
@@ -318,9 +319,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
 
             tddConf["frames"].push_back(fw_frame);
             std::cout << "Cell " << c << ", SDR " << i
-                      << " Schedule : "
-                      << fw_frame << std::endl;
-
+                      << " Schedule : " << fw_frame << std::endl;
           }
           if (_cfg->internal_measurement() == false ||
               _cfg->num_cl_antennas() > 0) {

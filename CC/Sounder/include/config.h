@@ -125,7 +125,8 @@ class Config {
     return this->calib_frames_;
   }
 
-  inline const std::vector<std::vector<std::string>>& bs_array_frames(void) const {
+  inline const std::vector<std::vector<std::string>>& bs_array_frames(
+      void) const {
     return this->bs_array_frames_;
   }
 
