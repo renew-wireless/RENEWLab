@@ -279,7 +279,6 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
               if (sym_type == 'D')
                 fw_frame.replace(s, 1, "T");  // downlink data
             }
-            std::cout << "XXXX OBCH XXXX FRAME: " << fw_frame << std::endl;
             tddConf["frames"].push_back(fw_frame);
 
             std::string mode;
@@ -293,8 +292,18 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
                         << _cfg->calib_frames().at(c).at(i) << std::endl;
           } else {
             tddConf["frames"] = json::array();
-            size_t frame_size = _cfg->frames().at(c).size();
-            std::string fw_frame = _cfg->frames().at(c);
+
+            size_t frame_size;
+            std::string fw_frame;
+
+            if (_cfg->dl_pilots_en2() == true) {
+              frame_size = _cfg->bs_array_frames().at(c).at(i).size();
+              fw_frame = _cfg->bs_array_frames().at(c).at(i);
+            } else {
+              frame_size = _cfg->frames().at(c).size();
+              fw_frame = _cfg->frames().at(c);
+            }
+
             for (size_t s = 0; s < frame_size; s++) {
               char sym_type = fw_frame.at(s);
               if (sym_type == 'P')
@@ -306,10 +315,12 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
               else if (sym_type == 'D')
                 fw_frame.replace(s, 1, "T");  // downlink data
             }
+
             tddConf["frames"].push_back(fw_frame);
-            std::cout << "Cell " << c
-                      << " FPGA schedule: " << _cfg->frames().at(c)
-                      << std::endl;
+            std::cout << "Cell " << c << ", SDR " << i
+                      << " Schedule : "
+                      << fw_frame << std::endl;
+
           }
           if (_cfg->internal_measurement() == false ||
               _cfg->num_cl_antennas() > 0) {

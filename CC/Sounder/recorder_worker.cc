@@ -99,6 +99,13 @@ void RecorderWorker::init(void) {
   // Frame schedule (vec of strings for now, this should change to matrix when we go to multi-cell)
   this->hdf5_->write_attribute("BS_FRAME_SCHED", this->cfg_->frames());
 
+  // Downlink Pilots (different schedule for different BS boards)
+  std::vector<std::string> bs_frame_sched_different;
+  for (auto&& v : this->cfg_->bs_array_frames()) {
+    bs_frame_sched_different.insert(bs_frame_sched_different.end(), v.begin(), v.end());
+  }
+  this->hdf5_->write_attribute("BS_FRAME_SCHED_DIFF", bs_frame_sched_different);
+
   // RX Gain RF channel A
   this->hdf5_->write_attribute("BS_RX_GAIN_A", this->cfg_->rx_gain().at(0));
 

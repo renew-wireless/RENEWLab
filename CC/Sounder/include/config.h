@@ -75,6 +75,7 @@ class Config {
   inline size_t fft_size(void) const { return this->fft_size_; }
   inline size_t cp_size(void) const { return this->cp_size_; }
   inline bool dl_pilots_en(void) const { return this->dl_pilots_en_; }
+  inline bool dl_pilots_en2(void) const { return this->dl_pilots_en2_; }
   inline size_t symbol_data_subcarrier_num(void) const {
     return this->symbol_data_subcarrier_num_;
   }
@@ -122,6 +123,10 @@ class Config {
   inline size_t cal_ref_sdr_id(void) const { return this->cal_ref_sdr_id_; }
   inline const std::vector<std::vector<std::string>>& calib_frames(void) const {
     return this->calib_frames_;
+  }
+
+  inline const std::vector<std::vector<std::string>>& bs_array_frames(void) const {
+    return this->bs_array_frames_;
   }
 
   //TODO split the following (4) in accessor and setter
@@ -294,6 +299,7 @@ class Config {
   size_t fft_size_;
   size_t cp_size_;
   bool dl_pilots_en_;
+  bool dl_pilots_en2_;
   size_t ofdm_symbol_size_;
   size_t symbol_data_subcarrier_num_;
   size_t symbol_per_slot_;
@@ -361,6 +367,7 @@ class Config {
   bool imbalance_cal_en_;
   std::string trace_file_;
   std::vector<std::vector<std::string>> calib_frames_;
+  std::vector<std::vector<std::string>> bs_array_frames_;
   bool internal_measurement_;
   bool ref_node_enable_;
   size_t cal_ref_sdr_id_;

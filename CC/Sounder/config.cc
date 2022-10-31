@@ -184,7 +184,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   symbol_per_slot_ = tddConf.value("ofdm_symbol_per_slot", 1);
   fft_size_ = tddConf.value("fft_size", 0);
   cp_size_ = tddConf.value("cp_size", 0);
-  dl_pilots_en_ = tddConf.value("enable_dl_pilots", false);
+  dl_pilots_en_ = tddConf.value("enable_dl_pilotsXXX", false);
+  dl_pilots_en2_ = tddConf.value("enable_dl_pilots", false);
   prefix_ = tddConf.value("ofdm_tx_zero_prefix", 0);
   postfix_ = tddConf.value("ofdm_tx_zero_postfix", 0);
   symbol_data_subcarrier_num_ = tddConf.value("ofdm_data_num", fft_size_);
@@ -363,49 +364,110 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
           num_channels * n_bs_sdrs_[0];  // Two pilots per board (up/down)
     }
   } else {
-    auto jBsFrames = tddConf.value("frame_schedule", json::array());
-    frames_.assign(jBsFrames.begin(), jBsFrames.end());
-    assert(frames_.size() == num_cells_);
-    pilot_slots_ = Utils::loadSlots(frames_, 'P');
-    noise_slots_ = Utils::loadSlots(frames_, 'N');
-    ul_slots_ = Utils::loadSlots(frames_, 'U');
-    dl_slots_ = Utils::loadSlots(frames_, 'D');
-    slot_per_frame_ = frames_.at(0).size();
-    pilot_slot_per_frame_ = pilot_slots_.at(0).size();
-    noise_slot_per_frame_ = noise_slots_.at(0).size();
-    ul_slot_per_frame_ = ul_slots_.at(0).size();
-    dl_slot_per_frame_ = dl_slots_.at(0).size();
-    // read commons from client json config
-    if (client_serial_present == false) {
-      num_cl_antennas_ =
-          std::count(frames_.at(0).begin(), frames_.at(0).end(), 'P');
-      num_cl_sdrs_ = num_cl_antennas_ / cl_sdr_ch_;
-    }
-    if (tddConf.find("ue_frame_schedule") == tddConf.end()) {
-      cl_frames_.resize(num_cl_sdrs_);
-      for (size_t i = 0; i < cl_frames_.size(); i++) {
-        cl_frames_.at(i) = frames_.at(0);
-        for (size_t s = 0; s < frames_.at(0).length(); s++) {
-          char c = frames_.at(0).at(s);
-          if (c == 'B') {
-            cl_frames_.at(i).replace(s, 1,
-                                     "G");  // Dummy RX used in PHY scheduler
-          } else if (c == 'P' and
-                     ((cl_sdr_ch_ == 1 and pilot_slots_.at(0).at(i) != s) or
-                      (cl_sdr_ch_ == 2 and
-                       (pilot_slots_.at(0).at(2 * i) != s and
-                        pilot_slots_.at(0).at(i * 2 + 1) != s)))) {
-            cl_frames_.at(i).replace(s, 1, "G");
-          } else if (c != 'P' && c != 'U' && c != 'D') {
-            cl_frames_.at(i).replace(s, 1, "G");
+
+    if (dl_pilots_en2_ == true) {  // NEW CODE - Supports only one UE (uplink pilots) /////////////////////////////////////////////////////////////////////
+      size_t num_channels = bs_channel_.size();
+      bs_array_frames_.resize(num_cells_);
+      for (size_t c = 0; c < num_cells_; c++) {
+        bs_array_frames_[c].resize(n_bs_sdrs_[c]);
+
+        // If downlink pilots enabled
+        size_t beacon_slot = 0;
+        size_t frame_length = beacon_slot + 2 + 2 + n_bs_antennas_[c] + 15; // +2 to pad with Gs, +2 to add two uplink pilots
+
+        for (size_t i = 0; i < n_bs_sdrs_[c] + 1; i++) {
+          bs_array_frames_[c][i] = std::string(frame_length, 'G');
+          bs_array_frames_[c][i].replace(0, 1, "B");
+          bs_array_frames_[c][i].replace(beacon_slot + 2, 1, "P");  // Two uplink pilots from one UE
+          for (size_t ch = 0; ch < num_channels; ch++) {
+            bs_array_frames_[c][i].replace(beacon_slot + 4 + i * num_channels + ch, 1, "D");
           }
         }
-        std::cout << "Client " << i << " schedule: " << cl_frames_.at(i)
-                  << std::endl;
+
+        for (std::string const& s : bs_array_frames_[c]) std::cout << s << std::endl;
       }
-    } else {
-      auto jClFrames = tddConf.value("ue_frame_schedule", json::array());
-      cl_frames_.assign(jClFrames.begin(), jClFrames.end());
+
+      // Assume all BS nodes will transmit the same number of downlink/uplink pilots, etc. Grab the first one
+      pilot_slots_ = Utils::loadSlots(bs_array_frames_.at(0), 'P');
+      noise_slots_ = Utils::loadSlots(bs_array_frames_.at(0), 'N');
+      ul_slots_ = Utils::loadSlots(bs_array_frames_.at(0), 'U');
+      dl_slots_ = Utils::loadSlots(bs_array_frames_.at(0), 'D');
+      slot_per_frame_ = bs_array_frames_.at(0).at(0).size();
+      pilot_slot_per_frame_ = pilot_slots_.at(0).size();
+      noise_slot_per_frame_ = noise_slots_.at(0).size();
+      ul_slot_per_frame_ = ul_slots_.at(0).size();
+      dl_slot_per_frame_ = dl_slots_.at(0).size();
+
+      // read commons from client json config
+      if (client_serial_present == false) {
+        num_cl_antennas_ =
+            std::count(bs_array_frames_.at(0).at(0).begin(), bs_array_frames_.at(0).at(0).end(), 'P');
+        num_cl_sdrs_ = num_cl_antennas_ / cl_sdr_ch_;
+      }
+      std::cout << "XXX OBCH XXX Slots: " << slot_per_frame_ << " Pilots: " << pilot_slot_per_frame_ << " Noise: " << noise_slot_per_frame_ << " UL Slots: " << ul_slot_per_frame_ << " DL Slots: " << dl_slot_per_frame_ << " Client SDRs: " << num_cl_sdrs_<< std::endl;
+
+      cl_frames_.resize(num_cl_sdrs_);
+      std::string empty_frame = std::string(slot_per_frame_, 'G');
+      for (size_t i = 0; i < num_cl_sdrs_; i++) {
+        cl_frames_.at(i) = empty_frame;
+        for (size_t n = 0; n < n_bs_sdrs_.at(0); n++) {
+          for (size_t ch = 0; ch < num_channels; ch++) {
+            size_t slot = 4 + n * num_channels + ch;
+            std::cout << "Replacing slot " << slot << std::endl;
+            cl_frames_.at(i).replace(slot, 1, "D");  // downlink symbol for UEs
+          }
+          cl_frames_.at(i).replace(2, 1, "P");      // replace third slot with P
+        }
+        std::cout << "Client " << i << " schedule: " << cl_frames_.at(i) << std::endl;
+        frames_.assign(bs_array_frames_.at(0).begin(), bs_array_frames_.at(0).end());
+      }
+
+    } else {     // ORIGINAL CODE                  ///////////////////////////////////////////////////////
+
+      auto jBsFrames = tddConf.value("frame_schedule", json::array());
+      frames_.assign(jBsFrames.begin(), jBsFrames.end());
+      assert(frames_.size() == num_cells_);
+      pilot_slots_ = Utils::loadSlots(frames_, 'P');
+      noise_slots_ = Utils::loadSlots(frames_, 'N');
+      ul_slots_ = Utils::loadSlots(frames_, 'U');
+      dl_slots_ = Utils::loadSlots(frames_, 'D');
+      slot_per_frame_ = frames_.at(0).size();
+      pilot_slot_per_frame_ = pilot_slots_.at(0).size();
+      noise_slot_per_frame_ = noise_slots_.at(0).size();
+      ul_slot_per_frame_ = ul_slots_.at(0).size();
+      dl_slot_per_frame_ = dl_slots_.at(0).size();
+      // read commons from client json config
+      if (client_serial_present == false) {
+        num_cl_antennas_ =
+            std::count(frames_.at(0).begin(), frames_.at(0).end(), 'P');
+        num_cl_sdrs_ = num_cl_antennas_ / cl_sdr_ch_;
+      }
+      if (tddConf.find("ue_frame_schedule") == tddConf.end()) {
+        cl_frames_.resize(num_cl_sdrs_);
+        for (size_t i = 0; i < cl_frames_.size(); i++) {
+          cl_frames_.at(i) = frames_.at(0);
+          for (size_t s = 0; s < frames_.at(0).length(); s++) {
+            char c = frames_.at(0).at(s);
+            if (c == 'B') {
+              cl_frames_.at(i).replace(s, 1,
+                                      "G");  // Dummy RX used in PHY scheduler
+            } else if (c == 'P' and
+                      ((cl_sdr_ch_ == 1 and pilot_slots_.at(0).at(i) != s) or
+                        (cl_sdr_ch_ == 2 and
+                        (pilot_slots_.at(0).at(2 * i) != s and
+                          pilot_slots_.at(0).at(i * 2 + 1) != s)))) {
+              cl_frames_.at(i).replace(s, 1, "G");
+            } else if (c != 'P' && c != 'U' && c != 'D') {
+              cl_frames_.at(i).replace(s, 1, "G");
+            }
+          }
+          std::cout << "Client " << i << " schedule: " << cl_frames_.at(i)
+                    << std::endl;
+        }
+      } else {
+        auto jClFrames = tddConf.value("ue_frame_schedule", json::array());
+        cl_frames_.assign(jClFrames.begin(), jClFrames.end());
+      }
     }
   }
 
@@ -470,7 +532,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   ofdm_symbol_size_ = fft_size_ + cp_size_;
   slot_samp_size_ = symbol_per_slot_ * ofdm_symbol_size_;
   samps_per_slot_ = slot_samp_size_ + prefix_ + postfix_;
-  assert((internal_measurement_ && num_cl_antennas_ == 0) ||
+  assert((internal_measurement_ && num_cl_antennas_ == 0) || (dl_pilots_en2_) ||
          slot_per_frame_ == cl_frames_.at(0).size());
 
   ul_data_slot_present_ =
@@ -484,7 +546,6 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         (dl_slots_.at(0).empty() == false)) ||
        (client_present_ == true && cl_dl_slots_.at(0).empty() == false));
 
-  std::cout << "XXXXXXXXXX OBCH XXXXXXX DL DATA SLOT PRESENT???   " << dl_data_slot_present_ << std::endl;
   std::vector<std::complex<int16_t>> prefix_zpad(prefix_, 0);
   std::vector<std::complex<int16_t>> postfix_zpad(postfix_, 0);
 
