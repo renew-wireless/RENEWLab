@@ -288,12 +288,12 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     }
     slot_per_frame_ = calib_frames_.at(0).at(0).size();
     std::cout << "Slot Per Frame: " << slot_per_frame_ << std::endl;
-	noise_slot_per_frame_ = 0;
+    noise_slot_per_frame_ = 0;
     ul_slot_per_frame_ = 0;
     dl_slot_per_frame_ = 0;
     if (ref_node_enable_ == true) {
-	// Two pilots (up/down) plus additional user pilots
-      pilot_slot_per_frame_ = 2 + num_cl_antennas_; 
+      // Two pilots (up/down) plus additional user pilots
+      pilot_slot_per_frame_ = 2 + num_cl_antennas_;
       if (num_cl_antennas_ > 0) {
         cl_frames_.resize(num_cl_sdrs_);
         std::string empty_frame = std::string(slot_per_frame_, 'G');
@@ -433,8 +433,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
         std::cout << "Client " << i << " schedule: " << cl_frames_.at(i)
                   << std::endl;
       }
-	 frames_.assign(bs_array_frames_.at(ref_frame_id).begin(),
-                    bs_array_frames_.at(ref_frame_id).end());
+      frames_.assign(bs_array_frames_.at(ref_frame_id).begin(),
+                     bs_array_frames_.at(ref_frame_id).end());
 
     } else {  // ORIGINAL CODE                  ///////////////////////////////////////////////////////
 
@@ -464,7 +464,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
           for (size_t s = 0; s < frames_.at(0).length(); s++) {
             char c = frames_.at(0).at(s);
             if (c == 'B') {
-               // Dummy RX used in PHY scheduler
+              // Dummy RX used in PHY scheduler
               cl_frames_.at(i).replace(s, 1, "G");
             } else if (c == 'P' and
                        ((cl_sdr_ch_ == 1 and pilot_slots_.at(0).at(i) != s) or
