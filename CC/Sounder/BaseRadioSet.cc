@@ -282,7 +282,7 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
             size_t frame_size;
             std::string fw_frame;
 
-            if (_cfg->dl_pilots_en2() == true) {
+            if (_cfg->dl_pilots_en() == true) {
               frame_size = _cfg->bs_array_frames().at(c).at(i).size();
               fw_frame = _cfg->bs_array_frames().at(c).at(i);
             } else {
