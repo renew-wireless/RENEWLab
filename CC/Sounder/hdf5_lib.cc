@@ -21,14 +21,18 @@ namespace Sounder {
 Hdf5Lib::Hdf5Lib(H5std_string hdf5_name, H5std_string group_name)
     : hdf5_name_(hdf5_name), group_name_(group_name) {
   MLPD_INFO("Creating output HD5F file: %s\n", this->hdf5_name_.c_str());
-  this->file_ = new H5::H5File(this->hdf5_name_, H5F_ACC_TRUNC);
-  this->group_ = this->file_->createGroup("/" + this->group_name_);
+  this->file_ = std::make_unique<H5::H5File>(hdf5_name_, H5F_ACC_TRUNC);
+  this->group_ =
+      std::make_unique<H5::Group>(file_->createGroup("/" + group_name_));
+  ///Disable for debugging
+  H5::Exception::dontPrint();
 }
 
 Hdf5Lib::~Hdf5Lib() {
   for (size_t i = 0; i < dataset_str_.size(); i++) {
     this->removeDataset(dataset_str_.at(i));
   }
+  this->group_->close();
   this->closeFile();
 }
 
@@ -36,8 +40,7 @@ void Hdf5Lib::closeFile() {
   if (this->file_ != nullptr) {
     MLPD_TRACE("File exists exists during garbage collection\n");
     this->file_->close();
-    delete this->file_;
-    this->file_ = nullptr;
+    this->file_.reset();
   }
 }
 int Hdf5Lib::createDataset(H5std_string dataset_name,
@@ -77,7 +80,7 @@ int Hdf5Lib::createDataset(H5std_string dataset_name,
   prop_list_.push_back(ds_prop);
   dataspace_.push_back(ds_dataspace);
   dims_.push_back(tot_dims);
-  datasets_.push_back(nullptr);
+  datasets_.emplace_back(std::unique_ptr<H5::DataSet>(nullptr));
   size_t map_size = ds_name_id.size();
   ds_name_id[dataset_name] = map_size;
   return 0;
@@ -90,7 +93,8 @@ void Hdf5Lib::openDataset() {
     std::string ds_name("/" + this->group_name_ + "/" +
                         this->dataset_str_.at(i));
     try {
-      datasets_.at(i) = new H5::DataSet(this->file_->openDataSet(ds_name));
+      datasets_.at(i) =
+          std::make_unique<H5::DataSet>(this->file_->openDataSet(ds_name));
       H5::DataSpace filespace(datasets_.at(i)->getSpace());
       prop_list_.at(i).copy(datasets_.at(i)->getCreatePlist());
       if (kPrintDataSetInfo == true) {
@@ -124,8 +128,7 @@ void Hdf5Lib::removeDataset(std::string dataset_name) {
   if (this->datasets_.at(ds_id) != nullptr) {
     MLPD_TRACE("%s Dataset removed\n", dataset_str_.at(ds_id).c_str());
     this->datasets_.at(ds_id)->close();
-    delete this->datasets_.at(ds_id);
-    this->datasets_.at(ds_id) = nullptr;
+    this->datasets_.at(ds_id).reset();
   }
 }
 
@@ -146,8 +149,7 @@ void Hdf5Lib::closeDataset() {
         error.printErrorStack();
         throw;
       }
-      delete this->datasets_.at(i);
-      this->datasets_.at(i) = nullptr;
+      this->datasets_.at(i).reset();
     }
     this->file_->close();
     MLPD_INFO("Saving HD5F: %llu frames saved on CPU %d\n",
@@ -282,7 +284,7 @@ void Hdf5Lib::write_attribute(const char name[], double val) {
   hsize_t dims[] = {1};
   H5::DataSpace attr_ds = H5::DataSpace(1, dims);
   H5::Attribute att =
-      this->group_.createAttribute(name, H5::PredType::NATIVE_DOUBLE, attr_ds);
+      this->group_->createAttribute(name, H5::PredType::NATIVE_DOUBLE, attr_ds);
   att.write(H5::PredType::NATIVE_DOUBLE, &val);
 }
 
@@ -292,7 +294,7 @@ void Hdf5Lib::write_attribute(const char name[],
   hsize_t dims[] = {size};
   H5::DataSpace attr_ds = H5::DataSpace(1, dims);
   H5::Attribute att =
-      this->group_.createAttribute(name, H5::PredType::NATIVE_DOUBLE, attr_ds);
+      this->group_->createAttribute(name, H5::PredType::NATIVE_DOUBLE, attr_ds);
   att.write(H5::PredType::NATIVE_DOUBLE, &val[0]);
 }
 
@@ -302,7 +304,7 @@ void Hdf5Lib::write_attribute(const char name[],
   hsize_t dims[] = {2 * size};
   H5::DataSpace attr_ds = H5::DataSpace(1, dims);
   H5::Attribute att =
-      this->group_.createAttribute(name, H5::PredType::STD_I16BE, attr_ds);
+      this->group_->createAttribute(name, H5::PredType::STD_I16BE, attr_ds);
   short val_pair[2 * size];
   for (size_t j = 0; j < size; j++) {
     val_pair[2 * j + 0] = std::real(val[j]);
@@ -317,7 +319,7 @@ void Hdf5Lib::write_attribute(const char name[],
   hsize_t dims[] = {2 * size};
   H5::DataSpace attr_ds = H5::DataSpace(1, dims);
   H5::Attribute att =
-      this->group_.createAttribute(name, H5::PredType::NATIVE_DOUBLE, attr_ds);
+      this->group_->createAttribute(name, H5::PredType::NATIVE_DOUBLE, attr_ds);
   double val_pair[2 * size];
   for (size_t j = 0; j < size; j++) {
     val_pair[2 * j + 0] = std::real(val[j]);
@@ -330,7 +332,7 @@ void Hdf5Lib::write_attribute(const char name[], size_t val) {
   hsize_t dims[] = {1};
   H5::DataSpace attr_ds = H5::DataSpace(1, dims);
   H5::Attribute att =
-      this->group_.createAttribute(name, H5::PredType::STD_U32BE, attr_ds);
+      this->group_->createAttribute(name, H5::PredType::STD_U32BE, attr_ds);
   uint32_t val_uint = val;
   att.write(H5::PredType::NATIVE_UINT, &val_uint);
 }
@@ -339,7 +341,7 @@ void Hdf5Lib::write_attribute(const char name[], int val) {
   hsize_t dims[] = {1};
   H5::DataSpace attr_ds = H5::DataSpace(1, dims);
   H5::Attribute att =
-      this->group_.createAttribute(name, H5::PredType::STD_I32BE, attr_ds);
+      this->group_->createAttribute(name, H5::PredType::STD_I32BE, attr_ds);
   att.write(H5::PredType::NATIVE_INT, &val);
 }
 
@@ -349,7 +351,7 @@ void Hdf5Lib::write_attribute(const char name[],
   hsize_t dims[] = {size};
   H5::DataSpace attr_ds = H5::DataSpace(1, dims);
   H5::Attribute att =
-      this->group_.createAttribute(name, H5::PredType::STD_U32BE, attr_ds);
+      this->group_->createAttribute(name, H5::PredType::STD_U32BE, attr_ds);
   std::vector<uint32_t> val_uint;
   for (size_t i = 0; i < val.size(); i++)
     val_uint.push_back((uint32_t)val.at(i));
@@ -361,7 +363,7 @@ void Hdf5Lib::write_attribute(const char name[], const std::string& val) {
   H5::DataSpace attr_ds = H5::DataSpace(1, dims);
   H5::StrType strdatatype(H5::PredType::C_S1,
                           H5T_VARIABLE);  // of variable length characters
-  H5::Attribute att = this->group_.createAttribute(name, strdatatype, attr_ds);
+  H5::Attribute att = this->group_->createAttribute(name, strdatatype, attr_ds);
   att.write(strdatatype, val);
 }
 
@@ -373,7 +375,7 @@ void Hdf5Lib::write_attribute(const char name[],
                           H5T_VARIABLE);  // of variable length characters
   hsize_t dims[] = {size};
   H5::DataSpace attr_ds = H5::DataSpace(1, dims);
-  H5::Attribute att = this->group_.createAttribute(name, strdatatype, attr_ds);
+  H5::Attribute att = this->group_->createAttribute(name, strdatatype, attr_ds);
   const char* cStrArray[size];
 
   for (size_t i = 0; i < size; ++i) cStrArray[i] = val[i].c_str();

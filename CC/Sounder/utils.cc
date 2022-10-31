@@ -117,18 +117,22 @@ std::vector<uint32_t> Utils::cint16_to_uint32(
 
 std::vector<std::vector<size_t>> Utils::loadSlots(
     const std::vector<std::string>& frames, char s) {
-  std::vector<std::vector<size_t>> slotId;
-  size_t frameSize = frames.size();
-  slotId.resize(frameSize);
-  for (size_t f = 0; f < frameSize; f++) {
-    std::string fr = frames[f];
-    for (size_t g = 0; g < fr.size(); g++) {
-      if (fr[g] == s) {
-        slotId[f].push_back(g);
+  const size_t num_frames = frames.size();
+  std::vector<std::vector<size_t>> slot_id(num_frames);
+
+  for (size_t frame_id = 0; frame_id < num_frames; frame_id++) {
+    const auto& input_frame = frames.at(frame_id);
+    auto& output_frame = slot_id.at(frame_id);
+
+    size_t slot_idx = 0;
+    for (const char& id : input_frame) {
+      if (id == s) {
+        output_frame.emplace_back(slot_idx);
       }
+      slot_idx++;
     }
   }
-  return slotId;
+  return slot_id;
 }
 
 void Utils::loadDevices(const std::string& filename,
