@@ -147,7 +147,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     } else {
       num_cells_ = 0;
       bs_present_ = false;
-      if (internal_measurement_ == true || dl_pilots_en_ == true) {
+      if (internal_measurement_ == true) {
         MLPD_ERROR("No BS devices are present in the serial file!");
         exit(1);
       }
@@ -184,8 +184,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   symbol_per_slot_ = tddConf.value("ofdm_symbol_per_slot", 1);
   fft_size_ = tddConf.value("fft_size", 0);
   cp_size_ = tddConf.value("cp_size", 0);
-  dl_pilots_en_ = tddConf.value("enable_dl_pilotsXXX", false);
-  dl_pilots_en2_ = tddConf.value("enable_dl_pilots", false);
+  dl_pilots_en_ = tddConf.value("enable_dl_pilots", false);
   prefix_ = tddConf.value("ofdm_tx_zero_prefix", 0);
   postfix_ = tddConf.value("ofdm_tx_zero_postfix", 0);
   symbol_data_subcarrier_num_ = tddConf.value("ofdm_data_num", fft_size_);
@@ -225,15 +224,15 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   bs_hw_framer_ = tddConf.value("bs_hw_framer", true);
 
   // Schedule for internal measurements
-  if (internal_measurement_ == true || dl_pilots_en_ == true) {
+  if (internal_measurement_ == true) {
     calib_frames_.resize(num_cells_);
     size_t num_channels = bs_channel_.size();
     for (size_t c = 0; c < num_cells_; c++) {
       cal_ref_sdr_id_ = n_bs_sdrs_[c] - 1;
       calib_frames_[c].resize(n_bs_sdrs_[c]);
 
-      // For measurements with single reference node (only when DL pilots disabled)
-      if (ref_node_enable_ == true && dl_pilots_en_ == false) {
+      // For measurements with single reference node
+      if (ref_node_enable_ == true) {
         size_t beacon_slot = 0;
         if (num_cl_antennas_ > 0)
           beacon_slot = 1;  // add a "B" in the front for UE sync
@@ -260,27 +259,6 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                   beacon_slot + num_channels * n_bs_sdrs_[c] + p, 1, "R");
           }
         }
-      } else if (dl_pilots_en_ == true) {
-        // If downlink pilots enabled
-        size_t beacon_slot = 0;
-        if (num_cl_antennas_ > 0)
-          beacon_slot = 1;  // add a "B" in the front for UE sync
-        size_t frame_length =
-            beacon_slot + 1 + n_bs_antennas_[c] + num_cl_antennas_;
-        calib_frames_[c][cal_ref_sdr_id_] = std::string(frame_length, 'G');
-
-        for (size_t i = 0; i < n_bs_sdrs_[c]; i++) {
-          calib_frames_[c][i] = std::string(frame_length, 'G');
-          if (num_cl_antennas_ > 0) calib_frames_[c][i].replace(0, 1, "B");
-          for (size_t ch = 0; ch < num_channels; ch++) {
-            calib_frames_[c][i].replace(beacon_slot + 1 + i * num_channels + ch,
-                                        1, "D");
-            // Use last two symbols to send uplink pilots
-            //calib_frames_[c][i].replace(beacon_slot + 1 + n_bs_sdrs_[c] * num_channels + ch, 1, "P");
-          }
-        }
-        // Assume all BS nodes will transmit the same number of downlink pilots. Grab the first one
-        dl_slots_ = Utils::loadSlots(calib_frames_[c], 'D');
       } else {
         // For full matrix measurements (all bs nodes transmit and receive)
         size_t frame_length = num_channels * n_bs_sdrs_[c] * guard_mult_;
@@ -293,7 +271,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
                                         "P");
           }
           for (size_t k = 0; k < n_bs_sdrs_[c]; k++) {
-            if (i != k && dl_pilots_en_ == false) {
+            if (i != k) {
               for (size_t ch = 0; ch < num_channels; ch++) {
                 calib_frames_[c][k].replace(guard_mult_ * i * num_channels + ch,
                                             1, "R");
@@ -310,58 +288,34 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     }
     slot_per_frame_ = calib_frames_.at(0).at(0).size();
     std::cout << "Slot Per Frame: " << slot_per_frame_ << std::endl;
-    noise_slot_per_frame_ = 0;
+	noise_slot_per_frame_ = 0;
     ul_slot_per_frame_ = 0;
     dl_slot_per_frame_ = 0;
-    if (ref_node_enable_ == true || dl_pilots_en_ == true) {
-      //pilot_slot_per_frame_ = 2 + num_cl_antennas_;  // Two pilots (up/down) plus additional user pilots
-      // Two pilots (up/down) plus additional user pilots ()
-      pilot_slot_per_frame_ = dl_pilots_en_ ? 0 : 2 + num_cl_antennas_;
-      std::cout << "PILOT SLOT PER FRAME " << pilot_slot_per_frame_
-                << std::endl;
+    if (ref_node_enable_ == true) {
+	// Two pilots (up/down) plus additional user pilots
+      pilot_slot_per_frame_ = 2 + num_cl_antennas_; 
       if (num_cl_antennas_ > 0) {
         cl_frames_.resize(num_cl_sdrs_);
         std::string empty_frame = std::string(slot_per_frame_, 'G');
         for (size_t i = 0; i < num_cl_sdrs_; i++) {
           cl_frames_.at(i) = empty_frame;
-
-          if (dl_pilots_en_ == false) {
-            for (size_t n = 0; n < n_bs_sdrs_.at(0); n++) {
-              if (n != cal_ref_sdr_id_) {
-                for (size_t ch = 0; ch < num_channels; ch++) {
-                  size_t slot = 1 + n * num_channels + ch;
-                  std::cout << "Replacing slot " << slot << std::endl;
-                  // downlink symbol for UEs
-                  cl_frames_.at(i).replace(slot, 1, "D");
-                }
-              }
-            }
-            for (size_t ch = 0; ch < cl_sdr_ch_; ch++) {
-              size_t slot = 1 + n_bs_antennas_[0] + ch;
-              cl_frames_.at(i).replace(slot, 1, "P");
-            }
-          } else {
-            // if (dl_pilots_en_ == true)
-            for (size_t n = 0; n < n_bs_sdrs_.at(0); n++) {
+          for (size_t n = 0; n < n_bs_sdrs_.at(0); n++) {
+            if (n != cal_ref_sdr_id_) {
               for (size_t ch = 0; ch < num_channels; ch++) {
-                size_t slot = 2 + n * num_channels + ch;
+                size_t slot = 1 + n * num_channels + ch;
                 std::cout << "Replacing slot " << slot << std::endl;
                 // downlink symbol for UEs
                 cl_frames_.at(i).replace(slot, 1, "D");
               }
             }
-            // Send pilots in the last two symbols
-            /*for (size_t ch = 0; ch < cl_sdr_ch_; ch++) {
-              size_t slot = 2 + n_bs_antennas_[0] + cl_sdr_ch_ * i + ch;
-              cl_frames_.at(i).replace(slot, 1, "P");
-            }*/
+          }
+          for (size_t ch = 0; ch < cl_sdr_ch_; ch++) {
+            size_t slot = 1 + n_bs_antennas_[0] + cl_sdr_ch_ * i + ch;
+            cl_frames_.at(i).replace(slot, 1, "P");
           }
           std::cout << "Client " << i << " schedule: " << cl_frames_.at(i)
                     << std::endl;
         }
-        // We assume all UEs will record the same number of downlink symbols. Use the last
-        dl_slot_per_frame_ =
-            std::count(cl_frames_.at(0).begin(), cl_frames_.at(0).end(), 'D');
       }
     } else {
       pilot_slot_per_frame_ =
@@ -478,10 +432,9 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
         std::cout << "Client " << i << " schedule: " << cl_frames_.at(i)
                   << std::endl;
-        // *********** ??? Why here
-        frames_.assign(bs_array_frames_.at(ref_frame_id).begin(),
-                       bs_array_frames_.at(ref_frame_id).end());
       }
+	 frames_.assign(bs_array_frames_.at(ref_frame_id).begin(),
+                    bs_array_frames_.at(ref_frame_id).end());
 
     } else {  // ORIGINAL CODE                  ///////////////////////////////////////////////////////
 
@@ -594,11 +547,11 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   ofdm_symbol_size_ = fft_size_ + cp_size_;
   slot_samp_size_ = symbol_per_slot_ * ofdm_symbol_size_;
   samps_per_slot_ = slot_samp_size_ + prefix_ + postfix_;
-  assert((internal_measurement_ && num_cl_antennas_ == 0) || (dl_pilots_en2_) ||
+  assert((internal_measurement_ && num_cl_antennas_ == 0) || (dl_pilots_en_) ||
          slot_per_frame_ == cl_frames_.at(0).size());
 
   ul_data_slot_present_ =
-      (internal_measurement_ == false) && (dl_pilots_en_ == false) &&
+      (internal_measurement_ == false) &&
       ((bs_present_ == true && (ul_slots_.at(0).empty() == false)) ||
        (client_present_ == true && cl_ul_slots_.at(0).empty() == false));
 

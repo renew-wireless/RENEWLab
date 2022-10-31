@@ -175,8 +175,6 @@ void DataGenerator::GenerateData(const std::string& directory) {
                             tx_sym.end());  // add CP
               data_time_dom.insert(data_time_dom.end(), tx_sym.begin(),
                                    tx_sym.end());
-              //data_freq_dom.insert(data_freq_dom.end(), ofdm_sym.begin(),
-              //                     ofdm_sym.end());
               if (cfg_->dl_pilots_en()) {
                 data_freq_dom.insert(data_freq_dom.end(), ofdm_sym.begin(),
                                      ofdm_sym.end());
@@ -187,8 +185,6 @@ void DataGenerator::GenerateData(const std::string& directory) {
             }
             data_time_dom.insert(data_time_dom.end(), postfix_zpad_t.begin(),
                                  postfix_zpad_t.end());
-            //auto data_time_dom_ci16 = Utils::cfloat_to_cint16(data_time_dom);
-            // Sending DL pilots or data?
             auto data_time_dom_ci16 =
                 cfg_->dl_pilots_en() ? cfg_->pilot_ci16()
                                      : Utils::cfloat_to_cint16(data_time_dom);
