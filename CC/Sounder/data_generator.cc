@@ -175,7 +175,7 @@ void DataGenerator::GenerateData(const std::string& directory) {
                             tx_sym.end());  // add CP
               data_time_dom.insert(data_time_dom.end(), tx_sym.begin(),
                                    tx_sym.end());
-              if (cfg_->dl_pilots_en()) {
+              if (cfg_->dl_pilots_en() == false) {
                 data_freq_dom.insert(data_freq_dom.end(), ofdm_sym.begin(),
                                      ofdm_sym.end());
               } else {
