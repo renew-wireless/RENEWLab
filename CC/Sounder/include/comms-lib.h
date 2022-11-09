@@ -80,6 +80,9 @@ class CommsLib {
   static size_t find_pilot_seq(const std::vector<std::complex<float>>& iq,
                                const std::vector<std::complex<float>>& pilot,
                                size_t seqLen);
+  static std::vector<std::complex<float>> complex_mult(std::vector<std::complex<float>> const& f,
+                                                       std::vector<std::complex<float>> const& g, const bool conj);
+
   template <typename T>
   //static std::vector<T> convolve(std::vector<T> const& f, std::vector<T> const& g);
   static std::vector<T> convolve(std::vector<T> const& f,

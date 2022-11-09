@@ -698,6 +698,28 @@ std::vector<std::vector<float>> CommsLib::getSequence(size_t type,
   return matrix;
 }
 
+std::vector<std::complex<float>> CommsLib::complex_mult(
+    std::vector<std::complex<float>> const& f,
+    std::vector<std::complex<float>> const& g, const bool conj) {
+  size_t length1 = g.size();
+  size_t length0 = f.size();
+  size_t res_len = std::min(length0, length1);
+  std::vector<std::complex<float>> out(res_len, 0);
+
+  for (size_t i = 0; i < res_len; i++) {
+      std::complex<float> s1 = f[i];
+      std::complex<float> s2 = g[i];
+      std::complex<float> s12;
+      if (conj == true) {
+	      s12 = s2 * std::conj(s1);
+      } else {
+	      s12 = s2 * s1;
+      }
+      out[i] = s12;
+  }
+  return out;
+}
+
 /*
 int main(int argc, char* argv[])
 {
