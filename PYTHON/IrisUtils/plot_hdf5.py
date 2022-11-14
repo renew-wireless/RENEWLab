@@ -53,10 +53,12 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     n_frm_end = hdf5.n_frm_end
     n_frm_st = hdf5.n_frm_st
     metadata = hdf5.metadata
+
     if 'SYMBOL_LEN' in metadata: # to support older datasets
         samps_per_slot = int(metadata['SYMBOL_LEN'])
     elif 'SLOT_SAMP_LEN' in metadata:
         samps_per_slot = int(metadata['SLOT_SAMP_LEN'])
+    dl_pilot_en = int(hdf5.metadata["DL_PILOTS_EN"])
     num_pilots = int(metadata['PILOT_NUM'])
     num_cl = int(metadata['CL_NUM'])
     prefix_len = int(metadata['PREFIX_LEN'])
@@ -355,9 +357,11 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 samps_mat[:, :, :, :, 1]*1j)*2**-15
 
         user_amps = np.mean(np.abs(dl_samps[:, :, ant_i, :]), axis=2)
-        plot_iq_samps(dl_samps, user_amps, n_frm_st, ref_frame, [user_i], [ant_i], data_str="Downlink Data")
 
-
+        if dl_pilot_en:
+            plot_iq_samps(dl_samps, user_amps, n_frm_st, ref_frame, [dl_slot_i], [ant_i], data_str="Downlink Pilots")
+        else:
+            plot_iq_samps(dl_samps, user_amps, n_frm_st, ref_frame, [user_i], [ant_i], data_str="Downlink Data")
 
     plt.show()
 
