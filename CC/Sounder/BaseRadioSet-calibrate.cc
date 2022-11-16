@@ -166,29 +166,23 @@ static void adjustCalibrationGains(std::vector<SoapySDR::Device*> rxDevs,
     }
     toneLevels[r] = toneLevel;
     cout << "Node " << r << ": toneLevel3=" << toneLevel << endl;
-#if DEBUG_PLOT
-    auto fftMag = CommsLib::magnitudeFFT(samps, win, N);
-    std::vector<double> magDouble(N);
-    std::transform(
-        fftMag.begin(), fftMag.end(), magDouble.begin(),
-        [](float cf) { return 10 * std::max(std::log10((double)cf), -20.0); });
-    //std::vector<double> sampsDouble(N);
-    //std::transform(samps.begin(), samps.end(), sampsDouble.begin(),
-    //    [](std::complex<float> cf) {
-    //        return cf.real();
-    //    });
-    plt::figure_size(1200, 780);
-    //plt::plot(sampsDouble);
-    plt::plot(magDouble);
-    plt::xlim(0, (int)N);
-    plt::ylim(-100, 100);
-    //plt::ylim(-1, 1);
-    plt::title("Spectrum figure After Gain Adjustment, FFT Window POWER " +
-               std::to_string(windowGain));
-    plt::legend();
-    plt::save("rx" + std::to_string(rxDevsSize) + "_" + std::to_string(r) +
-              "_ch" + std::to_string(channel) + ".png");
-#endif
+    if (kDebugPlot) {
+      auto fftMag = CommsLib::magnitudeFFT(samps, win, N);
+      std::vector<double> magDouble(N);
+      std::transform(fftMag.begin(), fftMag.end(), magDouble.begin(),
+                     [](float cf) {
+                       return 10 * std::max(std::log10((double)cf), -20.0);
+                     });
+      //plt::figure_size(1200, 780);
+      //plt::plot(magDouble);
+      //plt::xlim(0, (int)N);
+      //plt::ylim(-100, 100);
+      //plt::title("Spectrum figure After Gain Adjustment, FFT Window POWER " +
+      //           std::to_string(windowGain));
+      //plt::legend();
+      //plt::save("rx" + std::to_string(rxDevsSize) + "_" + std::to_string(r) +
+      //          "_ch" + std::to_string(channel) + ".png");
+    }
   }
 
   std::cout << rxDevsSize - remainingRadios << " radios reached target level"

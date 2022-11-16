@@ -531,15 +531,10 @@ int BaseRadioSet::radioTx(size_t radio_id, size_t cell_id,
     w = bsRadios.at(cell_id).at(radio_id)->xmit(buffs, _cfg->samps_per_slot(),
                                                 flags, frameTimeNs);
   }
-#if DEBUG_RADIO
-  size_t chanMask;
-  long timeoutUs(0);
-  auto* dev = bsRadios.at(cell_id).at(radio_id)->RawDev();
-  auto* txs = bsRadios.at(cell_id).at(radio_id)->txs;
-  int s = dev->readStreamStatus(txs, chanMask, flags, frameTime, timeoutUs);
-  std::cout << "cell " << cell_id << " radio " << radio_id << " tx returned "
-            << w << " and status " << s << std::endl;
-#endif
+  if (kDebugRadio) {
+    std::cout << "cell " << cell_id << " radio " << radio_id << " tx returned "
+              << w << std::endl;
+  }
   return w;
 }
 
@@ -571,15 +566,15 @@ int BaseRadioSet::radioRx(size_t radio_id, size_t cell_id, void* const* buffs,
       frameTime = frameTimeNs;
     else
       frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate());
-#if DEBUG_RADIO
-    if (ret != numSamps)
-      std::cout << "recv returned " << ret << " from radio " << radio_id
-                << ", in cell " << cell_id << ". Expected: " << numSamps
-                << std::endl;
-    else
-      std::cout << "radio " << radio_id << " in cell " << cell_id
-                << ". Received " << ret << " at " << frameTime << std::endl;
-#endif
+    if (kDebugRadio) {
+      if (ret != numSamps)
+        std::cout << "recv returned " << ret << " from radio " << radio_id
+                  << ", in cell " << cell_id << ". Expected: " << numSamps
+                  << std::endl;
+      else
+        std::cout << "radio " << radio_id << " in cell " << cell_id
+                  << ". Received " << ret << " at " << frameTime << std::endl;
+    }
   } else {
     MLPD_WARN("Invalid radio id: %zu in cell %zu\n", radio_id, cell_id);
     ret = 0;

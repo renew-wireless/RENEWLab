@@ -28,9 +28,6 @@ static constexpr size_t kQueueSize = 36;
 static constexpr bool kDebugPrint = false;
 static constexpr bool kDebugRadio = false;
 static constexpr bool kDebugPlot = false;
-#define DEBUG_PRINT (0)
-#define DEBUG_RADIO (0)
-#define DEBUG_PLOT (0)
 
 // TASK & SOCKET thread number
 #define RECORDER_THREAD_NUM (1)

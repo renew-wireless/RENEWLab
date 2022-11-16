@@ -345,11 +345,11 @@ int ClientRadioSet::radioRx(size_t radio_id, void* const* buffs, int numSamps,
       long long frameTimeNs(0);
       ret = radios.at(radio_id)->recv(buffs, numSamps, frameTimeNs);
       frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate());
-#if DEBUG_RADIO
-      if (frameTimeNs < 2e9)
-        std::cout << "client " << radio_id << " received " << ret << " at "
-                  << frameTimeNs << std::endl;
-#endif
+      if (kDebugRadio) {
+        if (frameTimeNs < 2e9)
+          std::cout << "client " << radio_id << " received " << ret << " at "
+                    << frameTimeNs << std::endl;
+      }
     }
     return ret;
   }
