@@ -346,7 +346,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
     # Plot DL data symbols
     if dl_data_avail > 0:
-        # DL Samps: #Frames, #Cell, #Downlink Symbol, #Antennas, #Samples
+        # DL Samps: #Frames, #Cell, #Downlink Symbol, #Users, #Samples
         downlink_samples = hdf5.downlink_samples[:, cell_i, :, :, :]
         frm_plt = min(frame_i, downlink_samples.shape[0] + n_frm_st)
         # Verify frame_i does not exceed max number of collected frames
@@ -355,11 +355,63 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 downlink_samples, (downlink_samples.shape[0], downlink_samples.shape[1], downlink_samples.shape[2], samps_per_slot, 2))
         dl_samps = (samps_mat[:, :, :, :, 0] +
                 samps_mat[:, :, :, :, 1]*1j)*2**-15
+        num_users = dl_samps.shape[2]
+        num_dl_slots = dl_samps.shape[1]
+        print("Number of DL antennas in dataset %d"%num_dl_slots)
+        all_bs_nodes = set(range(num_dl_slots))
+        plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
+        dl_samps = dl_samps[:, plot_bs_nodes, :, :]
 
-        user_amps = np.mean(np.abs(dl_samps[:, :, ant_i, :]), axis=2)
+        good_users = []
+        insp_users = [] # antennas to be inspected
+        if user_i > num_users - 1:
+            insp_users = range(num_users)
+        else:
+            insp_users = [user_i]
+        for i in insp_users:
+            amps = np.mean(np.abs(dl_samps[:, ant_i, i, :]), axis=1)
+            pilot_frames = [i for i in range(len(amps)) if amps[i] > thresh]
+            if len(pilot_frames) > 0:
+                good_users = good_users + [i]
+            else:
+                print("no valid frames where found in antenna %d. Decision threshold (average pilot amplitude) was %f" % (i, thresh))
+        if len(good_users) == 0:
+            print("no valid frames found in data belonging to ant %d. Exitting ..." % ant_i)
+            return
+
+
+        user_amps = np.mean(np.abs(dl_samps[:, :, user_i, :]), axis=2)
 
         if dl_pilot_en:
-            plot_iq_samps(dl_samps, user_amps, n_frm_st, ref_frame, [dl_slot_i], [ant_i], data_str="Downlink Pilots")
+            # Compute CSI from IQ samples
+            # Samps: #Frames, #DL Slots, #Users, #Samples
+            # CSI:   #Frames, #DL Slots, #Pilot Rep, #Users, #Subcarrier
+            # For correlation use a fft size of 64
+            dl_csi, _ = hdf5_lib.samps2csi_large(downlink_samples, num_dl_slots, chunk_size, samps_per_slot, fft_size=fft_size,
+                                            offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f, fft_shifted_dataset=fft_shifted_dataset)
+
+            if corr_thresh > 0.0:
+                bad_nodes = find_bad_nodes(dl_csi, corr_thresh=corr_thresh,
+                                           user=ant_i)
+                if bad_nodes:
+                    print(">>> Warning! List of bad nodes (1-based): {bad_nodes}".
+                          format(bad_nodes=bad_nodes))
+                else:
+                    print(">>> All Iris nodes are good!")
+
+            if ofdm_sym_i >= symbol_per_slot:  # if out of range index, do average
+                antCSI = np.mean(csi, 2)
+            else:
+                antCSI = dl_csi[:, :, ofdm_sym_i, :, :]
+            corr_total, sig_sc = calCorr(antCSI, np.transpose(np.conj(antCSI[ref_frame, :, :, :]), (1, 0, 2) ) )
+
+            for i in insp_users:
+                user_amps = np.mean(np.abs(dl_samps[:, :, i, :]), axis=2)
+                plot_iq_samps(dl_samps, user_amps, n_frm_st, ref_frame, [dl_slot_i], [ant_i], data_str="Downlink Pilots")
+            csi_to_plot = np.transpose(antCSI, (0, 2, 1, 3))
+            if not fft_shifted_dataset:
+                csi_to_plot = np.fft.fftshift(antCSI, 3)
+            plot_csi(csi_to_plot, corr_total, plot_bs_nodes, pilot_frames, ref_frame, user_i, subcarrier_i, offset)
         else:
             plot_iq_samps(dl_samps, user_amps, n_frm_st, ref_frame, [user_i], [ant_i], data_str="Downlink Data")
 
