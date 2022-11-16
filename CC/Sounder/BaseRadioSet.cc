@@ -271,10 +271,10 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
               std::string tx_ram = "TX_RAM_";
               dev->writeRegisters(tx_ram + c, 0, _cfg->pilot());
             }
-            tddConf["frames"].push_back(_cfg->calib_frames().at(c).at(i));
+            tddConf["frames"].push_back(_cfg->bs_array_frames().at(c).at(i));
             std::cout << "Cell " << c << ", SDR " << i
                       << " calibration schedule : "
-                      << _cfg->calib_frames().at(c).at(i) << std::endl;
+                      << _cfg->bs_array_frames().at(c).at(i) << std::endl;
 
           } else {
             tddConf["frames"] = json::array();
@@ -282,13 +282,8 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
             size_t frame_size;
             std::string fw_frame;
 
-            if (_cfg->dl_pilots_en() == true) {
-              frame_size = _cfg->bs_array_frames().at(c).at(i).size();
-              fw_frame = _cfg->bs_array_frames().at(c).at(i);
-            } else {
-              frame_size = _cfg->frames().at(c).size();
-              fw_frame = _cfg->frames().at(c);
-            }
+            frame_size = _cfg->bs_array_frames().at(c).at(i).size();
+            fw_frame = _cfg->bs_array_frames().at(c).at(i);
 
             for (size_t s = 0; s < frame_size; s++) {
               char sym_type = fw_frame.at(s);

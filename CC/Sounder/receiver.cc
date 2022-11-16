@@ -506,8 +506,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
 
         // only write received pilot or data into samp
         // otherwise use samp_buffer as a dummy buffer
-        if (config_->isPilot(frame_id, slot_id) ||
-            config_->isUlData(frame_id, slot_id))
+        if (config_->isPilot(cell, radio_id, slot_id) ||
+            config_->isUlData(cell, radio_id, slot_id))
           r = this->base_radio_set_->radioRx(radio_id, cell, samp, rxTimeBs);
         else
           r = this->base_radio_set_->radioRx(radio_id, cell, samp_buffer.data(),
@@ -535,8 +535,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
                                rxTimeBs + txTimeDelta_);
           }  // end if config_->dul_data_slot_present()
         }
-        if (!config_->isPilot(frame_id, slot_id) &&
-            !config_->isUlData(frame_id, slot_id)) {
+        if (!config_->isPilot(cell, radio_id, slot_id) &&
+            !config_->isUlData(cell, radio_id, slot_id)) {
           for (size_t ch = 0; ch < num_packets; ++ch) {
             const int bit = 1 << (cursor + ch) % sizeof(std::atomic_int);
             const int offs = (cursor + ch) / sizeof(std::atomic_int);
@@ -576,7 +576,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
           // Mapping (compress schedule to eliminate Gs)
           size_t adv = int(slot_id / (config_->guard_mult() * num_channels));
           slot_id = slot_id - ((config_->guard_mult() - 1) * 2 * adv);
-        } else if (config_->getClientId(frame_id, slot_id) ==
+        } else if (config_->getClientId(ant_id / num_channels, slot_id) ==
                    0) {  // first received pilot
           if (config_->dl_data_slot_present() == true) {
             while (-1 != baseTxData(radio_id, cell, frame_id, frameTime))

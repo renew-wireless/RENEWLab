@@ -117,12 +117,12 @@ std::vector<uint32_t> Utils::cint16_to_uint32(
 
 std::vector<std::vector<size_t>> Utils::loadSlots(
     const std::vector<std::string>& frames, char s) {
-  const size_t num_frames = frames.size();
-  std::vector<std::vector<size_t>> slot_id(num_frames);
+  const size_t num_radios = frames.size();
+  std::vector<std::vector<size_t>> slot_id(num_radios);
 
-  for (size_t frame_id = 0; frame_id < num_frames; frame_id++) {
-    const auto& input_frame = frames.at(frame_id);
-    auto& output_frame = slot_id.at(frame_id);
+  for (size_t radio_id = 0; radio_id < num_radios; radio_id++) {
+    const auto& input_frame = frames.at(radio_id);
+    auto& output_frame = slot_id.at(radio_id);
 
     size_t slot_idx = 0;
     for (const char& id : input_frame) {

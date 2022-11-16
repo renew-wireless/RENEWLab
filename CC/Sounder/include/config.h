@@ -120,10 +120,6 @@ class Config {
   }
   inline bool ref_node_enable(void) const { return this->ref_node_enable_; }
   inline size_t cal_ref_sdr_id(void) const { return this->cal_ref_sdr_id_; }
-  inline const std::vector<std::vector<std::string>>& calib_frames(void) const {
-    return this->calib_frames_;
-  }
-
   inline const std::vector<std::vector<std::string>>& bs_array_frames(
       void) const {
     return this->bs_array_frames_;
@@ -202,10 +198,6 @@ class Config {
     return this->pilot_sc_ind_;
   };
 
-  inline const std::vector<std::string>& frames(void) const {
-    return this->frames_;
-  }
-
   inline const std::vector<std::vector<std::string>>& bs_sdr_ids(void) const {
     return this->bs_sdr_ids_;
   }
@@ -275,18 +267,30 @@ class Config {
   int getNoiseSlotIndex(int, int);
   int getUlSlotIndex(int, int);
   int getDlSlotIndex(int, int);
-  bool isPilot(int, int);
-  bool isNoise(int, int);
-  bool isUlData(int, int);
+  bool isPilot(int, int, int);
+  bool isNoise(int, int, int);
+  bool isUlData(int, int, int);
   bool isDlData(int, int);
   unsigned getCoreCount();
 
+  void genPilots();
   void loadULData();
   void loadDLData();
+
+  enum BsSchedType {
+    CALIB_STAR_TOPO,
+    CALIB_FULLY_CONN,
+    DL_SOUNDING,
+    USER_INPUT
+  };
+  void genBsSchedule(BsSchedType type);
+  void genClientSchedule(BsSchedType type);
+  void loadTopology(std::string, const bool, const bool);
 
  private:
   bool bs_present_;
   bool client_present_;
+  bool client_serial_present_;  // no accessor
   std::string directory_;
 
   // common features
@@ -345,7 +349,6 @@ class Config {
   size_t num_bs_sdrs_all_;
   size_t num_bs_antennas_all_;
   std::string bs_channel_;
-  std::vector<std::string> frames_;
   std::string frame_mode_;
   bool bs_hw_framer_;
   bool hw_framer_;
@@ -365,7 +368,6 @@ class Config {
   bool sample_cal_en_;
   bool imbalance_cal_en_;
   std::string trace_file_;
-  std::vector<std::vector<std::string>> calib_frames_;
   std::vector<std::vector<std::string>> bs_array_frames_;
   bool internal_measurement_;
   bool ref_node_enable_;

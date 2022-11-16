@@ -96,16 +96,10 @@ void RecorderWorker::init(void) {
   this->hdf5_->write_attribute("BS_CH_PER_RADIO",
                                this->cfg_->bs_channel().length());
 
-  // Frame schedule (vec of strings for now, this should change to matrix when we go to multi-cell)
-  this->hdf5_->write_attribute("BS_FRAME_SCHED", this->cfg_->frames());
-
-  // Downlink Pilots (different schedule for different BS boards)
-  std::vector<std::string> bs_frame_sched_different;
-  for (auto&& v : this->cfg_->bs_array_frames()) {
-    bs_frame_sched_different.insert(bs_frame_sched_different.end(), v.begin(),
-                                    v.end());
-  }
-  this->hdf5_->write_attribute("BS_FRAME_SCHED_DIFF", bs_frame_sched_different);
+  // Frame schedule (string vector)
+  // TODO: This should change to matrix when we go to multi-cell
+  this->hdf5_->write_attribute("BS_FRAME_SCHED",
+                               this->cfg_->bs_array_frames().at(0));
 
   // RX Gain RF channel A
   this->hdf5_->write_attribute("BS_RX_GAIN_A", this->cfg_->rx_gain().at(0));
@@ -296,6 +290,7 @@ void RecorderWorker::record(int tid, Packet* pkt, NodeType node_type) {
   (void)tid;
   /* TODO: remove TEMP check */
   size_t end_antenna = (this->antenna_offset_ + this->num_antennas_) - 1;
+  size_t num_channels = this->cfg_->bs_channel().size();
 
   if ((pkt->ant_id < this->antenna_offset_) || (pkt->ant_id > end_antenna)) {
     MLPD_ERROR("Antenna id is not within range of this recorder %d, %zu:%zu",
@@ -307,15 +302,15 @@ void RecorderWorker::record(int tid, Packet* pkt, NodeType node_type) {
   //Generates a ton of messages
   //MLPD_TRACE( "Tid: %d -- frame_id %u, antenna: %u\n", tid, pkt->frame_id, pkt->ant_id);
 
-#if DEBUG_PRINT
-  printf(
-      "record            frame %d, symbol %d, cell %d, ant %d "
-      "samples: %d "
-      "%d %d %d %d %d %d %d ....\n",
-      pkt->frame_id, pkt->slot_id, pkt->cell_id, pkt->ant_id, pkt->data[1],
-      pkt->data[2], pkt->data[3], pkt->data[4], pkt->data[5], pkt->data[6],
-      pkt->data[7], pkt->data[8]);
-#endif
+  if (kDebugPrint) {
+    printf(
+        "record            frame %d, symbol %d, cell %d, ant %d "
+        "samples: %d "
+        "%d %d %d %d %d %d %d ....\n",
+        pkt->frame_id, pkt->slot_id, pkt->cell_id, pkt->ant_id, pkt->data[1],
+        pkt->data[2], pkt->data[3], pkt->data[4], pkt->data[5], pkt->data[6],
+        pkt->data[7], pkt->data[8]);
+  }
   hsize_t IQ = 2 * this->cfg_->samps_per_slot();
   if ((this->cfg_->max_frame()) != 0 &&
       (pkt->frame_id > this->cfg_->max_frame())) {
@@ -335,13 +330,17 @@ void RecorderWorker::record(int tid, Packet* pkt, NodeType node_type) {
     }
 
     uint32_t antenna_index = pkt->ant_id - this->antenna_offset_;
+    int radio_id = pkt->ant_id / num_channels;
+    int cell_id = pkt->cell_id;
+    int slot_id = pkt->slot_id;
     std::array<hsize_t, kDsDimsNum> hdfoffset = {pkt->frame_id, pkt->cell_id, 0,
                                                  antenna_index, 0};
     std::array<hsize_t, kDsDimsNum> count = {1, 1, 1, 1, IQ};
     if (this->cfg_->internal_measurement() == true) {
       if (node_type == kClient) {
         this->hdf5_->extendDataset(std::string("DownlinkData"), pkt->frame_id);
-        hdfoffset[kDsDimSymbol] = this->cfg_->getDlSlotIndex(0, pkt->slot_id);
+        hdfoffset[kDsDimSymbol] =
+            this->cfg_->getDlSlotIndex(radio_id, pkt->slot_id);
         this->hdf5_->writeDataset(std::string("DownlinkData"), hdfoffset, count,
                                   pkt->data);
       } else {
@@ -350,28 +349,26 @@ void RecorderWorker::record(int tid, Packet* pkt, NodeType node_type) {
         this->hdf5_->writeDataset(std::string("Pilot_Samples"), hdfoffset,
                                   count, pkt->data);
       }
-    } else if (this->cfg_->isPilot(pkt->frame_id, pkt->slot_id) == true) {
+    } else if (this->cfg_->isPilot(cell_id, radio_id, slot_id) == true) {
       this->hdf5_->extendDataset(std::string("Pilot_Samples"), pkt->frame_id);
-      hdfoffset[kDsDimSymbol] =
-          this->cfg_->getClientId(pkt->frame_id, pkt->slot_id);
+      hdfoffset[kDsDimSymbol] = this->cfg_->getClientId(radio_id, slot_id);
       this->hdf5_->writeDataset(std::string("Pilot_Samples"), hdfoffset, count,
                                 pkt->data);
-    } else if (this->cfg_->isUlData(pkt->frame_id, pkt->slot_id) == true) {
+    } else if (this->cfg_->isUlData(cell_id, radio_id, slot_id) == true) {
       this->hdf5_->extendDataset(std::string("UplinkData"), pkt->frame_id);
-      hdfoffset[kDsDimSymbol] =
-          this->cfg_->getUlSlotIndex(pkt->frame_id, pkt->slot_id);
+      hdfoffset[kDsDimSymbol] = this->cfg_->getUlSlotIndex(radio_id, slot_id);
       this->hdf5_->writeDataset(std::string("UplinkData"), hdfoffset, count,
                                 pkt->data);
 
-    } else if (this->cfg_->isDlData(0, pkt->slot_id) == true) {
+    } else if (this->cfg_->isDlData(radio_id, slot_id) == true) {
       this->hdf5_->extendDataset(std::string("DownlinkData"), pkt->frame_id);
-      hdfoffset[kDsDimSymbol] = this->cfg_->getDlSlotIndex(0, pkt->slot_id);
+      hdfoffset[kDsDimSymbol] = this->cfg_->getDlSlotIndex(radio_id, slot_id);
       this->hdf5_->writeDataset(std::string("DownlinkData"), hdfoffset, count,
                                 pkt->data);
-    } else if (this->cfg_->isNoise(pkt->frame_id, pkt->slot_id) == true) {
+    } else if (this->cfg_->isNoise(cell_id, radio_id, slot_id) == true) {
       this->hdf5_->extendDataset(std::string("Noise_Samples"), pkt->frame_id);
       hdfoffset[kDsDimSymbol] =
-          this->cfg_->getNoiseSlotIndex(pkt->frame_id, pkt->slot_id);
+          this->cfg_->getNoiseSlotIndex(radio_id, slot_id);
       this->hdf5_->writeDataset(std::string("Noise_Samples"), hdfoffset, count,
                                 pkt->data);
     }
