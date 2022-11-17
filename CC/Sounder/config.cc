@@ -72,6 +72,11 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
   auto serials_file = tddConf.value("serial_file", "./files/topology.json");
   loadTopology(serials_file, bs_only, client_only);
+  std::cout << "Topology: "
+            << "\n"
+            << " Number of cells: " << num_cells_ << "\n"
+            << " Number of BS sdrs in cell 0: " << n_bs_sdrs_.at(0) << "\n"
+            << " Client SDRs: " << num_cl_sdrs_ << std::endl;
 
   static const int kMaxTxGainBS = 81;
   // common (BaseStation config overrides these)
@@ -238,7 +243,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   slot_samp_size_ = symbol_per_slot_ * ofdm_symbol_size_;
   samps_per_slot_ = slot_samp_size_ + prefix_ + postfix_;
   assert((internal_measurement_ && num_cl_antennas_ == 0) || (dl_pilots_en_) ||
-         slot_per_frame_ == cl_frames_.at(0).size());
+         (num_cl_sdrs_ > 0 && slot_per_frame_ == cl_frames_.at(0).size()));
 
   ul_data_slot_present_ =
       (internal_measurement_ == false) &&
@@ -460,6 +465,8 @@ void Config::loadTopology(std::string serials_file, const bool bs_only,
       cl_sdr_ids_.assign(ue_serials.begin(), ue_serials.end());
       num_cl_sdrs_ = cl_sdr_ids_.size();
       num_cl_antennas_ = num_cl_sdrs_ * cl_sdr_ch_;
+    } else {
+      num_cl_sdrs_ = num_cl_antennas_ = 0;
     }
 
     client_present_ = !bs_only && client_serial_present_ && num_cl_sdrs_ > 0;
@@ -600,7 +607,6 @@ void Config::genClientSchedule(BsSchedType type) {
   size_t num_channels = bs_channel_.size();
   switch (type) {
     case CALIB_STAR_TOPO:
-    case CALIB_FULLY_CONN:
       // Two pilots (up/down) plus additional user pilots
       pilot_slot_per_frame_ = 2 + num_cl_antennas_;
       if (num_cl_antennas_ > 0) {
@@ -608,7 +614,7 @@ void Config::genClientSchedule(BsSchedType type) {
         std::string empty_frame = std::string(slot_per_frame_, 'G');
         for (size_t i = 0; i < num_cl_sdrs_; i++) {
           cl_frames_.at(i) = empty_frame;
-          for (size_t n = 0; n < n_bs_sdrs_.at(0); n++) {
+          for (size_t n = 0; n < n_bs_sdrs_.at(ref_cell_id); n++) {
             if (n != cal_ref_sdr_id_) {
               for (size_t ch = 0; ch < num_channels; ch++) {
                 size_t slot = 1 + n * num_channels + ch;
@@ -619,13 +625,20 @@ void Config::genClientSchedule(BsSchedType type) {
             }
           }
           for (size_t ch = 0; ch < cl_sdr_ch_; ch++) {
-            size_t slot = 1 + n_bs_antennas_[0] + cl_sdr_ch_ * i + ch;
+            size_t slot = 1 + n_bs_antennas_[ref_cell_id] + cl_sdr_ch_ * i + ch;
             cl_frames_.at(i).replace(slot, 1, "P");
           }
           std::cout << "Client " << i << " schedule: " << cl_frames_.at(i)
                     << std::endl;
         }
       }
+      break;
+    case CALIB_FULLY_CONN:
+      if (num_cl_antennas_ > 0) {
+        std::cout << "Client Schedule is not supported!" << std::endl;
+        exit(1);
+      }
+      pilot_slot_per_frame_ = n_bs_antennas_.at(ref_cell_id);
       break;
     case DL_SOUNDING: {
       cl_frames_.resize(num_cl_sdrs_);

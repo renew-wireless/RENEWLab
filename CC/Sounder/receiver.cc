@@ -575,7 +575,7 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
                    !config_->ref_node_enable()) {
           // Mapping (compress schedule to eliminate Gs)
           size_t adv = int(slot_id / (config_->guard_mult() * num_channels));
-          slot_id = slot_id - ((config_->guard_mult() - 1) * 2 * adv);
+          slot_id -= ((config_->guard_mult() - 1) * num_channels * adv);
         } else if (config_->getClientId(ant_id / num_channels, slot_id) ==
                    0) {  // first received pilot
           if (config_->dl_data_slot_present() == true) {
