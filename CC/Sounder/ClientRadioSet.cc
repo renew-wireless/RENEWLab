@@ -162,9 +162,11 @@ ClientRadioSet::ClientRadioSet(Config* cfg) : _cfg(cfg) {
 
       // hw_frame is only for Iris
       if (_cfg->hw_framer() == true) {
+        // hw corr block bitshifts the corr outout, hence the log2
+        int corr_scale = std::max(0, int(std::log2(_cfg->corr_scale(i))));
         std::string corrConfString =
             "{\"corr_enabled\":true,\"corr_threshold\":" + std::to_string(1) +
-            "}";
+            ",\"corr_scale\":" + std::to_string(corr_scale) + "}";
         dev->writeSetting("CORR_CONFIG", corrConfString);
         dev->writeRegisters("CORR_COE", 0, _cfg->coeffs());
 

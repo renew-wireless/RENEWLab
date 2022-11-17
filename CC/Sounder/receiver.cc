@@ -979,8 +979,11 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   const size_t resync_period = static_cast<size_t>(
       std::floor(1e9 / (max_cfo * config_->samps_per_frame())));
   size_t last_resync = frame_id;
-  MLPD_INFO("Start main client txrx loop... tid=%d with resync period of %zu\n",
-            tid, resync_period);
+  if (config_->running() == true) {
+    MLPD_INFO(
+        "Start main client txrx loop... tid=%d with resync period of %zu\n",
+        tid, resync_period);
+  }
   long long rx_beacon_time(0);
   //Always decreases the requested rx samples
   size_t beacon_adjust = 0;

@@ -95,7 +95,7 @@ class Config {
   }
   inline double rate(void) const { return this->rate_; }
   inline int tx_advance(size_t id) const { return this->tx_advance_.at(id); }
-  inline int corr_scale(size_t id) const { return this->corr_scale_.at(id); }
+  inline float corr_scale(size_t id) const { return this->corr_scale_.at(id); }
   inline size_t cl_sdr_ch(void) const { return this->cl_sdr_ch_; }
   inline size_t bs_sdr_ch(void) const { return this->bs_sdr_ch_; }
 

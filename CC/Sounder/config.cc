@@ -151,9 +151,17 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
       } else {
         auto jClFrames = tddConf.value("ue_frame_schedule", json::array());
         cl_frames_.assign(jClFrames.begin(), jClFrames.end());
+        assert(cl_frames_.size() == num_cl_sdrs_);
+        for (size_t i = 0; i < num_cl_sdrs_; i++) {
+          std::cout << "Client " << i << " schedule: " << cl_frames_.at(i)
+                    << std::endl;
+        }
       }
     }
   }
+  cl_pilot_slots_ = Utils::loadSlots(cl_frames_, 'P');
+  cl_ul_slots_ = Utils::loadSlots(cl_frames_, 'U');
+  cl_dl_slots_ = Utils::loadSlots(cl_frames_, 'D');
 
   std::cout << "Slots: " << slot_per_frame_ << "\n"
             << " Pilots: " << pilot_slot_per_frame_ << "\n"
@@ -181,7 +189,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   }
   auto corr_scale = tddConf.value("corr_scale", json::array());
   if (corr_scale.empty() == true) {
-    corr_scale_.resize(num_cl_sdrs_, 250);
+    corr_scale_.resize(num_cl_sdrs_, 1);
   } else {
     if (client_present_ && corr_scale.size() != num_cl_sdrs_) {
       MLPD_ERROR("tx_advance size must be same as the number of clients!\n");
@@ -682,9 +690,6 @@ void Config::genClientSchedule(BsSchedType type) {
                   << std::endl;
       }
   }
-  cl_pilot_slots_ = Utils::loadSlots(cl_frames_, 'P');
-  cl_ul_slots_ = Utils::loadSlots(cl_frames_, 'U');
-  cl_dl_slots_ = Utils::loadSlots(cl_frames_, 'D');
 }
 
 void Config::genPilots() {
