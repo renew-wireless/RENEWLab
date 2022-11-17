@@ -26,5 +26,6 @@
 	"ue_frame_schedule" : [
 		"GGPPDGGGGGGGGGGGGGGG"
 	],
+	"corr_scale" : [16],
 	"tx_advance" : [135]
 }

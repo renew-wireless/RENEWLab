@@ -179,6 +179,16 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     }
     tx_advance_.assign(tx_advance.begin(), tx_advance.end());
   }
+  auto corr_scale = tddConf.value("corr_scale", json::array());
+  if (corr_scale.empty() == true) {
+    corr_scale_.resize(num_cl_sdrs_, 250);
+  } else {
+    if (client_present_ && corr_scale.size() != num_cl_sdrs_) {
+      MLPD_ERROR("tx_advance size must be same as the number of clients!\n");
+      exit(1);
+    }
+    corr_scale_.assign(corr_scale.begin(), corr_scale.end());
+  }
   ul_data_frame_num_ = tddConf.value("ul_data_frame_num", 1);
   dl_data_frame_num_ = tddConf.value("dl_data_frame_num", 1);
 

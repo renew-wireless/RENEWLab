@@ -95,6 +95,7 @@ class Config {
   }
   inline double rate(void) const { return this->rate_; }
   inline int tx_advance(size_t id) const { return this->tx_advance_.at(id); }
+  inline int corr_scale(size_t id) const { return this->corr_scale_.at(id); }
   inline size_t cl_sdr_ch(void) const { return this->cl_sdr_ch_; }
   inline size_t bs_sdr_ch(void) const { return this->bs_sdr_ch_; }
 
@@ -384,6 +385,7 @@ class Config {
   bool cl_agc_en_;
   int cl_agc_gain_init_;
   std::vector<int> tx_advance_;
+  std::vector<float> corr_scale_;
   std::vector<size_t> data_ind_;
   std::vector<uint32_t> coeffs_;
   std::vector<std::complex<int16_t>> pilot_ci16_;

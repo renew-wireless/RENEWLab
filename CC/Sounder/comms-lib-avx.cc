@@ -36,7 +36,7 @@ static constexpr float kShortMaxFloat = SHRT_MAX;
 ssize_t CommsLib::find_beacon_avx(
     const std::complex<int16_t>* raw_samples,
     const std::vector<std::complex<float>>& match_samples,
-    size_t check_window) {
+    size_t check_window, float corr_scale) {
   //Sample window must be multiple of 64Bytes (for avx 512)
   static constexpr size_t kWindowAlignment = 64;
   const size_t padded_window =
@@ -52,12 +52,12 @@ ssize_t CommsLib::find_beacon_avx(
         static_cast<float>(raw_samples[i].real()) / kShortMaxFloat,
         static_cast<float>(raw_samples[i].imag()) / kShortMaxFloat));
   }
-  return CommsLib::find_beacon_avx(sync_compare, match_samples);
+  return CommsLib::find_beacon_avx(sync_compare, match_samples, corr_scale);
 }
 
 int CommsLib::find_beacon_avx(
     const std::vector<std::complex<float>>& raw_samples,
-    const std::vector<std::complex<float>>& match_samples) {
+    const std::vector<std::complex<float>>& match_samples, float corr_scale) {
   std::queue<int> valid_peaks;
 
   // Original LTS sequence
@@ -103,7 +103,7 @@ int CommsLib::find_beacon_avx(
   clock_gettime(CLOCK_MONOTONIC, &tv);
   assert(gold_corr_avx_2.size() == thresh_avx.size());
   for (size_t i = 0; i < gold_corr_avx_2.size(); i++) {
-    if (gold_corr_avx_2.at(i) > thresh_avx.at(i)) valid_peaks.push(i);
+    if (corr_scale * gold_corr_avx_2.at(i) > thresh_avx.at(i)) valid_peaks.push(i);
   }
   clock_gettime(CLOCK_MONOTONIC, &tv2);
 #ifdef TEST_BENCH

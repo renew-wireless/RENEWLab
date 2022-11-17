@@ -813,12 +813,12 @@ int Receiver::clientTxData(int tid, int frame_id, long long base_time) {
 }
 
 ssize_t Receiver::syncSearch(const std::complex<int16_t>* check_data,
-                             size_t search_window) {
+                             size_t search_window, float corr_scale) {
   ssize_t sync_index(-1);
   assert(search_window <= config_->samps_per_frame());
 #if defined(__x86_64__)
   sync_index = CommsLib::find_beacon_avx(check_data, config_->gold_cf32(),
-                                         search_window);
+                                         search_window, corr_scale);
 #else
   sync_index = CommsLib::find_beacon(check_data, search_window);
 #endif
@@ -1015,7 +1015,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
       ssize_t sync_index =
           this->syncSearch(reinterpret_cast<std::complex<int16_t>*>(
                                rxbuff.at(kSyncDetectChannel)),
-                           request_samples);
+                           request_samples, config_->corr_scale(tid));
       if (sync_index >= 0) {
         const int new_rx_offset =
             sync_index - (config_->beacon_size() + config_->prefix());
@@ -1162,7 +1162,7 @@ ssize_t Receiver::clientSyncBeacon(size_t radio_id, size_t sample_window) {
             new_samples, sample_window);
 
         sync_index = syncSearch(syncbuffmem.at(kSyncDetectChannel).data(),
-                                sample_window);
+                                sample_window, config_->corr_scale(radio_id));
       } else {
         MLPD_ERROR(
             "clientSyncBeacon [%zu]: BAD SYNC - Rx samples not requested size "
