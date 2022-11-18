@@ -224,6 +224,7 @@ class MIMODriver:
 
         tx_data_mat = tx_data_mat_re + 1j * tx_data_mat_im
 
+
         n_users = self.n_users
         n_bs_antenna = self.n_bs_antenna
         n_bs_nodes = self.n_bs_sdrs
@@ -639,11 +640,11 @@ def main():
     parser = OptionParser()
     parser.add_option("--hub", type="string", dest="hub", help="serial number of the hub device", default="FH4B000019")
     parser.add_option("--bs-serials", type="string", dest="bs_serials", help="serial numbers of the BS devices", default='RF3E000356') #default='RF3E000146,RF3E000356,RF3E000546')
-    parser.add_option("--ue-serials", type="string", dest="ue_serials", help="serial numbers of the UE devices", default='RF3E000089')
+    parser.add_option("--ue-serials", type="string", dest="ue_serials", help="serial numbers of the UE devices", default='RF3E000392')
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
     parser.add_option("--freq", type="float", dest="freq", help="Tx freq (Hz). POWDER users must set to 3.6e9", default=3.55e9)
     parser.add_option("--tx-gain", type="float", dest="tx_gain", help="Optional Tx gain (dB)", default=81.0)
-    parser.add_option("--tx-gain-ue", type="float", dest="tx_gain_ue", help="Optional Tx gain (dB)", default=[81.0, 75.0])
+    parser.add_option("--tx-gain-ue", type="float", dest="tx_gain_ue", help="Optional Tx gain (dB)", default=[81.0])
     parser.add_option("--rx-gain", type="float", dest="rx_gain", help="Optional Rx gain (dB)", default=65.0)
     (options, args) = parser.parse_args()
     mimo = MIMODriver(
@@ -681,9 +682,9 @@ def main():
         ul_rx_data, n_ul_good, numRxSyms = mimo.txrx_uplink(np.real(wb_pilot1), np.imag(wb_pilot1), 5, len(pad2), python_mode=True)
         print("Uplink Rx Num {}, ShapeRxData: {}, NumRsyms: {}".format(n_ul_good, ul_rx_data.shape, numRxSyms))
 
-    test_downlink = False
+    test_downlink = True
     if test_downlink:
-        dl_rx_data, n_dl_good, numRxSyms = mimo.txrx_downlink(np.real(wb_pilot1), np.imag(wb_pilot1), 1, len(pad2), python_mode=True)
+        dl_rx_data, n_dl_good, numRxSyms = mimo.txrx_downlink(np.transpose(np.real(wb_pilot1)), np.transpose(np.imag(wb_pilot1)), 1, len(pad2), python_mode=True)
         print("Downlink Rx Num {}".format(n_dl_good))
 
     test_sounding = False
@@ -691,7 +692,7 @@ def main():
         snd_rx_data, n_snd_good, numRxSyms = mimo.txrx_dl_sound(np.real(wb_pilot1), np.imag(wb_pilot1), 1, len(pad2), python_mode=True)
         print("Sounding (Downlink) Rx Num {}".format(n_snd_good))
 
-    test_hubSync = True
+    test_hubSync = False
     if test_hubSync:
         print("HubSync")
         snd_rx_data, n_snd_good, numRxSyms = mimo.txrx_refnode(np.real(wb_pilot1), np.imag(wb_pilot1), 1, "R", "P", len(pad1), python_mode=True)
