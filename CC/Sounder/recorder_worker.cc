@@ -303,7 +303,7 @@ void RecorderWorker::record(int tid, Packet* pkt, NodeType node_type) {
   //MLPD_TRACE( "Tid: %d -- frame_id %u, antenna: %u\n", tid, pkt->frame_id, pkt->ant_id);
 
   if (kDebugPrint) {
-    printf(
+    std::printf(
         "record            frame %d, symbol %d, cell %d, ant %d "
         "samples: %d "
         "%d %d %d %d %d %d %d ....\n",
@@ -330,22 +330,21 @@ void RecorderWorker::record(int tid, Packet* pkt, NodeType node_type) {
     }
 
     uint32_t antenna_index = pkt->ant_id - this->antenna_offset_;
-    int radio_id = pkt->ant_id / num_channels;
-    int cell_id = pkt->cell_id;
-    int slot_id = pkt->slot_id;
-    std::array<hsize_t, kDsDimsNum> hdfoffset = {pkt->frame_id, pkt->cell_id, 0,
+    const size_t radio_id = pkt->ant_id / num_channels;
+    const size_t cell_id = pkt->cell_id;
+    const size_t slot_id = pkt->slot_id;
+    std::array<hsize_t, kDsDimsNum> hdfoffset = {pkt->frame_id, cell_id, 0,
                                                  antenna_index, 0};
     std::array<hsize_t, kDsDimsNum> count = {1, 1, 1, 1, IQ};
     if (this->cfg_->internal_measurement() == true) {
       if (node_type == kClient) {
         this->hdf5_->extendDataset(std::string("DownlinkData"), pkt->frame_id);
-        hdfoffset[kDsDimSymbol] =
-            this->cfg_->getDlSlotIndex(radio_id, pkt->slot_id);
+        hdfoffset[kDsDimSymbol] = this->cfg_->getDlSlotIndex(radio_id, slot_id);
         this->hdf5_->writeDataset(std::string("DownlinkData"), hdfoffset, count,
                                   pkt->data);
       } else {
         this->hdf5_->extendDataset(std::string("Pilot_Samples"), pkt->frame_id);
-        hdfoffset[kDsDimSymbol] = pkt->slot_id;
+        hdfoffset[kDsDimSymbol] = slot_id;
         this->hdf5_->writeDataset(std::string("Pilot_Samples"), hdfoffset,
                                   count, pkt->data);
       }

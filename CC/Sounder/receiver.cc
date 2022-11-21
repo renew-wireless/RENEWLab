@@ -264,8 +264,6 @@ int Receiver::baseTxData(int radio_id, int cell, int frame_id,
         char* cur_ptr_buffer =
             bs_tx_buffer_[radio_id].buffer.data() + (cur_offset * packetLength);
         Packet* pkt = reinterpret_cast<Packet*>(cur_ptr_buffer);
-        //assert(pkt->slot_id == config_->dl_slots().at(cell).at(s));
-        //assert(pkt->slot_id == config_->dl_slots().at(radio_id).at(s)); // OBCH!!!!!!!!!!!!!!! check this....
         assert(pkt->ant_id == config_->bs_sdr_ch() * radio_id + ch);
         dl_txbuff.at(ch) = pkt->data;
         cur_offset = (cur_offset + 1) % tx_buffer_size;
@@ -277,12 +275,8 @@ int Receiver::baseTxData(int radio_id, int cell, int frame_id,
                  config_->dl_slots().at(radio_id).at(s) * num_samps -
                  config_->tx_advance(radio_id);
       } else {
-        //size_t frame_id = (size_t)(base_time >> 32);
-        //txTime = ((size_t)event.frame_id << 32) |
-        //         (config_->dl_slots().at(cell).at(s) << 16);            // OBCH!!!!!!!!!!!!!!! check this....
         txTime = ((size_t)event.frame_id << 32) |
-                 (config_->dl_slots().at(radio_id).at(s)
-                  << 16);  // OBCH!!!!!!!!!!!!!!! check this....
+                 (config_->dl_slots().at(radio_id).at(s) << 16);
       }
       if ((kUsePureUHD == true || kUseSoapyUHD == true) &&
           s < (config_->dl_slot_per_frame() - 1))

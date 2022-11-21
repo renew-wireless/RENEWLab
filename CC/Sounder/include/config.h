@@ -267,14 +267,14 @@ class Config {
   size_t getNumBsSdrs();
   size_t getTotNumAntennas();
   size_t getNumRecordedSdrs();
-  int getClientId(int, int);
-  int getNoiseSlotIndex(int, int);
-  int getUlSlotIndex(int, int);
-  int getDlSlotIndex(int, int);
-  bool isPilot(int, int, int);
-  bool isNoise(int, int, int);
-  bool isUlData(int, int, int);
-  bool isDlData(int, int);
+  int getClientId(size_t, size_t);
+  int getNoiseSlotIndex(size_t, size_t);
+  int getUlSlotIndex(size_t, size_t);
+  int getDlSlotIndex(size_t, size_t);
+  bool isPilot(size_t, size_t, size_t);
+  bool isNoise(size_t, size_t, size_t);
+  bool isUlData(size_t, size_t, size_t);
+  bool isDlData(size_t, size_t);
   unsigned getCoreCount();
 
   void genPilots();

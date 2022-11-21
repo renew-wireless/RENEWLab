@@ -279,11 +279,9 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
           } else {
             tddConf["frames"] = json::array();
 
-            size_t frame_size;
-            std::string fw_frame;
-
-            frame_size = _cfg->bs_array_frames().at(c).at(i).size();
-            fw_frame = _cfg->bs_array_frames().at(c).at(i);
+            const size_t frame_size =
+                _cfg->bs_array_frames().at(c).at(i).size();
+            std::string fw_frame = _cfg->bs_array_frames().at(c).at(i);
 
             for (size_t s = 0; s < frame_size; s++) {
               char sym_type = fw_frame.at(s);
@@ -567,13 +565,14 @@ int BaseRadioSet::radioRx(size_t radio_id, size_t cell_id, void* const* buffs,
     else
       frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate());
     if (kDebugRadio) {
-      if (ret != numSamps)
+      if (ret != numSamps) {
         std::cout << "recv returned " << ret << " from radio " << radio_id
                   << ", in cell " << cell_id << ". Expected: " << numSamps
                   << std::endl;
-      else
+      } else {
         std::cout << "radio " << radio_id << " in cell " << cell_id
                   << ". Received " << ret << " at " << frameTime << std::endl;
+      }
     }
   } else {
     MLPD_WARN("Invalid radio id: %zu in cell %zu\n", radio_id, cell_id);

@@ -201,9 +201,10 @@ int ClientRadioSetUHD::radioRx(size_t radio_id, void* const* buffs,
     frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate());
 
     if (kDebugRadio) {
-      if (frameTimeNs < 2e9)
+      if (frameTimeNs < 2e9) {
         std::cout << "client " << radio_id << " received " << ret << " at "
                   << frameTimeNs << std::endl;
+      }
     }
     return ret;
   }

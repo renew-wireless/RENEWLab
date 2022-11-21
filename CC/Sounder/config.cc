@@ -594,6 +594,7 @@ void Config::genBsSchedule(BsSchedType type) {
   }
   const size_t ref_cell_id = 0;
   // Assume all BS nodes will transmit the same number of downlink/uplink pilots, etc. Grab the first one
+  // TODO: Extend to multi-cell
   pilot_slots_ = Utils::loadSlots(bs_array_frames_.at(ref_cell_id), 'P');
   noise_slots_ = Utils::loadSlots(bs_array_frames_.at(ref_cell_id), 'N');
   ul_slots_ = Utils::loadSlots(bs_array_frames_.at(ref_cell_id), 'U');
@@ -983,48 +984,48 @@ size_t Config::getNumRecordedSdrs() {
 
 Config::~Config() {}
 
-int Config::getClientId(int radio_id, int slot_id) {
+int Config::getClientId(size_t radio_id, size_t slot_id) {
   // TODO: Consider cell_id
   std::vector<size_t>::iterator it;
-  size_t rid = radio_id;
-  it = find(pilot_slots_.at(rid).begin(), pilot_slots_.at(rid).end(), slot_id);
-  if (it != pilot_slots_.at(rid).end()) {
-    return (it - pilot_slots_.at(rid).begin());
+  it = find(pilot_slots_.at(radio_id).begin(), pilot_slots_.at(radio_id).end(),
+            slot_id);
+  if (it != pilot_slots_.at(radio_id).end()) {
+    return (int)(it - pilot_slots_.at(radio_id).begin());
   }
   return -1;
 }
 
-int Config::getNoiseSlotIndex(int radio_id, int slot_id) {
+int Config::getNoiseSlotIndex(size_t radio_id, size_t slot_id) {
   // TODO: Consider cell_id
-  size_t rid = radio_id;
   std::vector<size_t>::iterator it;
-  it = find(noise_slots_.at(rid).begin(), noise_slots_.at(rid).end(), slot_id);
-  if (it != noise_slots_.at(rid).end())
-    return (it - noise_slots_.at(rid).begin());
+  it = find(noise_slots_.at(radio_id).begin(), noise_slots_.at(radio_id).end(),
+            slot_id);
+  if (it != noise_slots_.at(radio_id).end())
+    return (int)(it - noise_slots_.at(radio_id).begin());
   return -1;
 }
 
-int Config::getUlSlotIndex(int radio_id, int slot_id) {
+int Config::getUlSlotIndex(size_t radio_id, size_t slot_id) {
   // TODO: Consider cell_id
-  size_t rid = radio_id;
   std::vector<size_t>::iterator it;
-  it = find(ul_slots_.at(rid).begin(), ul_slots_.at(rid).end(), slot_id);
-  if (it != ul_slots_.at(rid).end()) {
-    return (it - ul_slots_.at(rid).begin());
+  it = find(ul_slots_.at(radio_id).begin(), ul_slots_.at(radio_id).end(),
+            slot_id);
+  if (it != ul_slots_.at(radio_id).end()) {
+    return (int)(it - ul_slots_.at(radio_id).begin());
   }
   return -1;
 }
 
-int Config::getDlSlotIndex(int radio_id, int slot_id) {
-  size_t rid = radio_id;
+int Config::getDlSlotIndex(size_t radio_id, size_t slot_id) {
   std::vector<size_t>::iterator it;
-  it = find(cl_dl_slots_.at(rid).begin(), cl_dl_slots_.at(rid).end(), slot_id);
-  if (it != cl_dl_slots_.at(rid).end())
-    return (it - cl_dl_slots_.at(rid).begin());
+  it = find(cl_dl_slots_.at(radio_id).begin(), cl_dl_slots_.at(radio_id).end(),
+            slot_id);
+  if (it != cl_dl_slots_.at(radio_id).end())
+    return (int)(it - cl_dl_slots_.at(radio_id).begin());
   return -1;
 }
 
-bool Config::isPilot(int cell_id, int radio_id, int slot_id) {
+bool Config::isPilot(size_t cell_id, size_t radio_id, size_t slot_id) {
   try {
     return bs_array_frames_.at(cell_id).at(radio_id).at(slot_id) == 'P';
   } catch (const std::out_of_range&) {
@@ -1032,7 +1033,7 @@ bool Config::isPilot(int cell_id, int radio_id, int slot_id) {
   }
 }
 
-bool Config::isNoise(int cell_id, int radio_id, int slot_id) {
+bool Config::isNoise(size_t cell_id, size_t radio_id, size_t slot_id) {
   try {
     return bs_array_frames_.at(cell_id).at(radio_id).at(slot_id) == 'N';
   } catch (const std::out_of_range&) {
@@ -1040,7 +1041,7 @@ bool Config::isNoise(int cell_id, int radio_id, int slot_id) {
   }
 }
 
-bool Config::isUlData(int cell_id, int radio_id, int slot_id) {
+bool Config::isUlData(size_t cell_id, size_t radio_id, size_t slot_id) {
   try {
     return bs_array_frames_.at(cell_id).at(radio_id).at(slot_id) == 'U';
   } catch (const std::out_of_range&) {
@@ -1048,7 +1049,7 @@ bool Config::isUlData(int cell_id, int radio_id, int slot_id) {
   }
 }
 
-bool Config::isDlData(int radio_id, int slot_id) {
+bool Config::isDlData(size_t radio_id, size_t slot_id) {
   try {
     return cl_frames_.at(radio_id).at(slot_id) == 'D';
   } catch (const std::out_of_range&) {
