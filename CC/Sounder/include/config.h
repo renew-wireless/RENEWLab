@@ -58,6 +58,9 @@ class Config {
   inline bool single_gain(void) const { return this->single_gain_; }
   inline bool cl_agc_en(void) const { return this->cl_agc_en_; }
   inline int cl_agc_gain_init(void) const { return this->cl_agc_gain_init_; }
+  inline bool cl_power_ramp(void) const { return this->cl_power_ramp_; }
+  inline int cl_power_ramp_lo(void) const { return this->cl_power_ramp_lo_; }
+  inline int cl_power_ramp_hi(void) const { return this->cl_power_ramp_hi_; }
   inline bool imbalance_cal_en(void) const { return this->imbalance_cal_en_; }
   inline bool sample_cal_en(void) const { return this->sample_cal_en_; }
   inline size_t max_frame(void) const { return this->max_frame_; }
@@ -384,6 +387,9 @@ class Config {
   std::string cl_channel_;
   bool cl_agc_en_;
   int cl_agc_gain_init_;
+  bool cl_power_ramp_;
+  int cl_power_ramp_lo_;
+  int cl_power_ramp_hi_;
   std::vector<int> tx_advance_;
   std::vector<float> corr_scale_;
   std::vector<size_t> data_ind_;

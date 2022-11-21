@@ -180,6 +180,9 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 
   cl_agc_en_ = tddConf.value("agc_en", false);
   cl_agc_gain_init_ = tddConf.value("agc_gain_init", 70);  // 0 to 108
+  cl_power_ramp_ = tddConf.value("ue_power_ramp", false);
+  cl_power_ramp_lo_ = tddConf.value("ue_ramp_min_gain", 10);
+  cl_power_ramp_hi_ = tddConf.value("ue_ramp_max_gain", 42);
   frame_mode_ = tddConf.value("frame_mode", "continuous_resync");
   hw_framer_ = tddConf.value("ue_hw_framer", false);
   auto tx_advance = tddConf.value("tx_advance", json::array());

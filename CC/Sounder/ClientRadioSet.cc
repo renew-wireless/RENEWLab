@@ -170,6 +170,13 @@ ClientRadioSet::ClientRadioSet(Config* cfg) : _cfg(cfg) {
         dev->writeSetting("CORR_CONFIG", corrConfString);
         dev->writeRegisters("CORR_COE", 0, _cfg->coeffs());
 
+        std::string tpcStr = _cfg->cl_power_ramp() ? "true" : "false";
+        std::string tpcConfString =
+            "{\"tpc_enabled\":" + tpcStr +
+            ",\"min_gain\":" + std::to_string(_cfg->cl_power_ramp_lo()) +
+            ",\"max_gain\":" + std::to_string(_cfg->cl_power_ramp_hi()) + "}";
+        dev->writeSetting("TPC_CONFIG", tpcConfString);
+
         std::string tddSched = _cfg->cl_frames().at(i);
         for (size_t s = 0; s < _cfg->cl_frames().at(i).size(); s++) {
           char c = _cfg->cl_frames().at(i).at(s);
