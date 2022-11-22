@@ -16,6 +16,7 @@
 	"cp_size" : 16,
 	"ofdm_tx_zero_prefix" : 160,
 	"ofdm_tx_zero_postfix" : 160,
+	"enable_dl_pilots" : true,
 	"beamsweep" : true,
 	"ue_channel" : "A",
 	"ue_rx_gain_a" : [65],
@@ -25,5 +26,6 @@
 	"ue_frame_schedule" : [
 		"GGPPGGGGGGGGGGGGGGGG"
 	],
+	"corr_scale" : [16],
 	"tx_advance" : [135]
 }

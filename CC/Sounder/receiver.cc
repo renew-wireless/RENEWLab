@@ -264,7 +264,6 @@ int Receiver::baseTxData(int radio_id, int cell, int frame_id,
         char* cur_ptr_buffer =
             bs_tx_buffer_[radio_id].buffer.data() + (cur_offset * packetLength);
         Packet* pkt = reinterpret_cast<Packet*>(cur_ptr_buffer);
-        assert(pkt->slot_id == config_->dl_slots().at(cell).at(s));
         assert(pkt->ant_id == config_->bs_sdr_ch() * radio_id + ch);
         dl_txbuff.at(ch) = pkt->data;
         cur_offset = (cur_offset + 1) % tx_buffer_size;
@@ -276,9 +275,8 @@ int Receiver::baseTxData(int radio_id, int cell, int frame_id,
                  config_->dl_slots().at(radio_id).at(s) * num_samps -
                  config_->tx_advance(radio_id);
       } else {
-        //size_t frame_id = (size_t)(base_time >> 32);
         txTime = ((size_t)event.frame_id << 32) |
-                 (config_->dl_slots().at(cell).at(s) << 16);
+                 (config_->dl_slots().at(radio_id).at(s) << 16);
       }
       if ((kUsePureUHD == true || kUseSoapyUHD == true) &&
           s < (config_->dl_slot_per_frame() - 1))
@@ -502,8 +500,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
 
         // only write received pilot or data into samp
         // otherwise use samp_buffer as a dummy buffer
-        if (config_->isPilot(frame_id, slot_id) ||
-            config_->isUlData(frame_id, slot_id))
+        if (config_->isPilot(cell, radio_id, slot_id) ||
+            config_->isUlData(cell, radio_id, slot_id))
           r = this->base_radio_set_->radioRx(radio_id, cell, samp, rxTimeBs);
         else
           r = this->base_radio_set_->radioRx(radio_id, cell, samp_buffer.data(),
@@ -531,8 +529,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
                                rxTimeBs + txTimeDelta_);
           }  // end if config_->dul_data_slot_present()
         }
-        if (!config_->isPilot(frame_id, slot_id) &&
-            !config_->isUlData(frame_id, slot_id)) {
+        if (!config_->isPilot(cell, radio_id, slot_id) &&
+            !config_->isUlData(cell, radio_id, slot_id)) {
           for (size_t ch = 0; ch < num_packets; ++ch) {
             const int bit = 1 << (cursor + ch) % sizeof(std::atomic_int);
             const int offs = (cursor + ch) / sizeof(std::atomic_int);
@@ -571,8 +569,8 @@ void Receiver::loopRecv(int tid, int core_id, SampleBuffer* rx_buffer) {
                    !config_->ref_node_enable()) {
           // Mapping (compress schedule to eliminate Gs)
           size_t adv = int(slot_id / (config_->guard_mult() * num_channels));
-          slot_id = slot_id - ((config_->guard_mult() - 1) * 2 * adv);
-        } else if (config_->getClientId(frame_id, slot_id) ==
+          slot_id -= ((config_->guard_mult() - 1) * num_channels * adv);
+        } else if (config_->getClientId(ant_id / num_channels, slot_id) ==
                    0) {  // first received pilot
           if (config_->dl_data_slot_present() == true) {
             while (-1 != baseTxData(radio_id, cell, frame_id, frameTime))
@@ -809,12 +807,12 @@ int Receiver::clientTxData(int tid, int frame_id, long long base_time) {
 }
 
 ssize_t Receiver::syncSearch(const std::complex<int16_t>* check_data,
-                             size_t search_window) {
+                             size_t search_window, float corr_scale) {
   ssize_t sync_index(-1);
   assert(search_window <= config_->samps_per_frame());
 #if defined(__x86_64__)
   sync_index = CommsLib::find_beacon_avx(check_data, config_->gold_cf32(),
-                                         search_window);
+                                         search_window, corr_scale);
 #else
   sync_index = CommsLib::find_beacon(check_data, search_window);
 #endif
@@ -975,8 +973,11 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   const size_t resync_period = static_cast<size_t>(
       std::floor(1e9 / (max_cfo * config_->samps_per_frame())));
   size_t last_resync = frame_id;
-  MLPD_INFO("Start main client txrx loop... tid=%d with resync period of %zu\n",
-            tid, resync_period);
+  if (config_->running() == true) {
+    MLPD_INFO(
+        "Start main client txrx loop... tid=%d with resync period of %zu\n",
+        tid, resync_period);
+  }
   long long rx_beacon_time(0);
   //Always decreases the requested rx samples
   size_t beacon_adjust = 0;
@@ -1011,7 +1012,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
       ssize_t sync_index =
           this->syncSearch(reinterpret_cast<std::complex<int16_t>*>(
                                rxbuff.at(kSyncDetectChannel)),
-                           request_samples);
+                           request_samples, config_->corr_scale(tid));
       if (sync_index >= 0) {
         const int new_rx_offset =
             sync_index - (config_->beacon_size() + config_->prefix());
@@ -1026,7 +1027,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
             frame_id, new_rx_offset, resync_retry_cnt + 1, sync_index, tid);
 
         if (kEnableCfo && (sync_index >= 0)) {
-          const auto cfo_phase_est =
+          [[maybe_unused]] const auto cfo_phase_est =
               estimateCFO(samplemem.at(kSyncDetectChannel), sync_index);
           MLPD_INFO("Client %d Estimated CFO (Hz): %f\n", tid,
                     cfo_phase_est * config_->rate());
@@ -1063,7 +1064,9 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
         tx_return = this->clientTxData(tid, frame_id, rx_beacon_time);
       }
     } else {
-      this->clientTxPilots(tid, rx_beacon_time + txTimeDelta_);
+      if (config_->cl_pilot_slots().at(tid).size() > 0) {
+        this->clientTxPilots(tid, rx_beacon_time + txTimeDelta_);
+      }
     }  // end if config_->ul_data_slot_present()
 
     //Beacon + Tx Complete, process the rest of the slots
@@ -1156,7 +1159,7 @@ ssize_t Receiver::clientSyncBeacon(size_t radio_id, size_t sample_window) {
             new_samples, sample_window);
 
         sync_index = syncSearch(syncbuffmem.at(kSyncDetectChannel).data(),
-                                sample_window);
+                                sample_window, config_->corr_scale(radio_id));
       } else {
         MLPD_ERROR(
             "clientSyncBeacon [%zu]: BAD SYNC - Rx samples not requested size "

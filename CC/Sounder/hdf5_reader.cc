@@ -86,21 +86,22 @@ bool Hdf5Reader::DispatchWork(Event_data event) {
 }
 
 Event_data Hdf5Reader::ReadFrame(Event_data event, int* offset) {
+  size_t radio_id = event.ant_id;
+  size_t sched_id = (event.node_type == kBS)
+                        ? 0  // TODO: consider multicell for kBS
+                        : radio_id;
   size_t data_frame_num = (event.node_type == kBS)
                               ? config_->dl_data_frame_num()
                               : config_->ul_data_frame_num();
   size_t frame_offset = event.frame_id % data_frame_num;
-  size_t num_tx_slots = (event.node_type == kBS) ? config_->dl_slot_per_frame()
-                                                 : config_->ul_slot_per_frame();
+  size_t num_tx_slots = (event.node_type == kBS)
+                            ? config_->dl_slot_per_frame()
+                            : config_->cl_ul_slots().at(radio_id).size();
   std::vector<std::vector<size_t>> tx_slots = (event.node_type == kBS)
                                                   ? config_->cl_dl_slots()
                                                   : config_->cl_ul_slots();
   size_t num_ch =
       (event.node_type == kBS) ? config_->bs_sdr_ch() : config_->cl_sdr_ch();
-  size_t radio_id = event.ant_id;
-  size_t sched_id = (event.node_type == kBS)
-                        ? 0  // TODO: consider multicell for kBS
-                        : radio_id;
   size_t packet_length = sizeof(Packet) + this->packet_data_length_;
   size_t tx_buf_size = tx_buffer_[radio_id].buffer.size() / packet_length;
   int first_offset = offset[radio_id];

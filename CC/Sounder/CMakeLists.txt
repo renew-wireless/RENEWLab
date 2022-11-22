@@ -80,7 +80,7 @@ elseif(LOG_LEVEL STREQUAL "trace")
   add_definitions(-DMLPD_LOG_LEVEL=6)
 else()
   message(STATUS "No logging level specified. Using warning level.")
-  add_definitions(-DMLPD_LOG_LEVEL=2)
+  add_definitions(-DMLPD_LOG_LEVEL=3)
 endif()
 
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)

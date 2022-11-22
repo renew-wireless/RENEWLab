@@ -271,15 +271,18 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
               std::string tx_ram = "TX_RAM_";
               dev->writeRegisters(tx_ram + c, 0, _cfg->pilot());
             }
-            tddConf["frames"].push_back(_cfg->calib_frames().at(c).at(i));
+            tddConf["frames"].push_back(_cfg->bs_array_frames().at(c).at(i));
             std::cout << "Cell " << c << ", SDR " << i
                       << " calibration schedule : "
-                      << _cfg->calib_frames().at(c).at(i) << std::endl;
+                      << _cfg->bs_array_frames().at(c).at(i) << std::endl;
 
           } else {
             tddConf["frames"] = json::array();
-            size_t frame_size = _cfg->frames().at(c).size();
-            std::string fw_frame = _cfg->frames().at(c);
+
+            const size_t frame_size =
+                _cfg->bs_array_frames().at(c).at(i).size();
+            std::string fw_frame = _cfg->bs_array_frames().at(c).at(i);
+
             for (size_t s = 0; s < frame_size; s++) {
               char sym_type = fw_frame.at(s);
               if (sym_type == 'P')
@@ -291,10 +294,10 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
               else if (sym_type == 'D')
                 fw_frame.replace(s, 1, "T");  // downlink data
             }
+
             tddConf["frames"].push_back(fw_frame);
-            std::cout << "Cell " << c
-                      << " FPGA schedule: " << _cfg->frames().at(c)
-                      << std::endl;
+            std::cout << "Cell " << c << ", SDR " << i
+                      << " Schedule : " << fw_frame << std::endl;
           }
           if (_cfg->internal_measurement() == false ||
               _cfg->num_cl_antennas() > 0) {
@@ -526,15 +529,10 @@ int BaseRadioSet::radioTx(size_t radio_id, size_t cell_id,
     w = bsRadios.at(cell_id).at(radio_id)->xmit(buffs, _cfg->samps_per_slot(),
                                                 flags, frameTimeNs);
   }
-#if DEBUG_RADIO
-  size_t chanMask;
-  long timeoutUs(0);
-  auto* dev = bsRadios.at(cell_id).at(radio_id)->RawDev();
-  auto* txs = bsRadios.at(cell_id).at(radio_id)->txs;
-  int s = dev->readStreamStatus(txs, chanMask, flags, frameTime, timeoutUs);
-  std::cout << "cell " << cell_id << " radio " << radio_id << " tx returned "
-            << w << " and status " << s << std::endl;
-#endif
+  if (kDebugRadio) {
+    std::cout << "cell " << cell_id << " radio " << radio_id << " tx returned "
+              << w << std::endl;
+  }
   return w;
 }
 
@@ -566,15 +564,16 @@ int BaseRadioSet::radioRx(size_t radio_id, size_t cell_id, void* const* buffs,
       frameTime = frameTimeNs;
     else
       frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate());
-#if DEBUG_RADIO
-    if (ret != numSamps)
-      std::cout << "recv returned " << ret << " from radio " << radio_id
-                << ", in cell " << cell_id << ". Expected: " << numSamps
-                << std::endl;
-    else
-      std::cout << "radio " << radio_id << " in cell " << cell_id
-                << ". Received " << ret << " at " << frameTime << std::endl;
-#endif
+    if (kDebugRadio) {
+      if (ret != numSamps) {
+        std::cout << "recv returned " << ret << " from radio " << radio_id
+                  << ", in cell " << cell_id << ". Expected: " << numSamps
+                  << std::endl;
+      } else {
+        std::cout << "radio " << radio_id << " in cell " << cell_id
+                  << ". Received " << ret << " at " << frameTime << std::endl;
+      }
+    }
   } else {
     MLPD_WARN("Invalid radio id: %zu in cell %zu\n", radio_id, cell_id);
     ret = 0;
