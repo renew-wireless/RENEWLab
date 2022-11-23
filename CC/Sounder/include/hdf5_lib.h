@@ -14,6 +14,7 @@ Copyright (c) 2018-2022
 #include <array>
 #include <complex>
 #include <map>
+#include <memory>
 
 #include "H5Cpp.h"
 #include "macros.h"
@@ -58,13 +59,13 @@ class Hdf5Lib {
  private:
   H5std_string hdf5_name_;
   H5std_string group_name_;
-  H5::H5File* file_;
-  H5::Group group_;
+  std::unique_ptr<H5::H5File> file_;
+  std::unique_ptr<H5::Group> group_;
 
   std::vector<std::string> dataset_str_;
   std::vector<H5::DSetCreatPropList> prop_list_;
   std::vector<H5::DataSpace> dataspace_;
-  std::vector<H5::DataSet*> datasets_;
+  std::vector<std::unique_ptr<H5::DataSet>> datasets_;
   std::vector<std::array<hsize_t, kDsDimsNum>> dims_;
   hsize_t target_prim_dim_size;
   hsize_t max_prim_dim_size;

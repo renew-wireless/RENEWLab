@@ -162,11 +162,20 @@ ClientRadioSet::ClientRadioSet(Config* cfg) : _cfg(cfg) {
 
       // hw_frame is only for Iris
       if (_cfg->hw_framer() == true) {
+        // hw corr block bitshifts the corr outout, hence the log2
+        int corr_scale = std::max(0, int(std::log2(_cfg->corr_scale(i))));
         std::string corrConfString =
             "{\"corr_enabled\":true,\"corr_threshold\":" + std::to_string(1) +
-            "}";
+            ",\"corr_scale\":" + std::to_string(corr_scale) + "}";
         dev->writeSetting("CORR_CONFIG", corrConfString);
         dev->writeRegisters("CORR_COE", 0, _cfg->coeffs());
+
+        std::string tpcStr = _cfg->cl_power_ramp() ? "true" : "false";
+        std::string tpcConfString =
+            "{\"tpc_enabled\":" + tpcStr +
+            ",\"min_gain\":" + std::to_string(_cfg->cl_power_ramp_lo()) +
+            ",\"max_gain\":" + std::to_string(_cfg->cl_power_ramp_hi()) + "}";
+        dev->writeSetting("TPC_CONFIG", tpcConfString);
 
         std::string tddSched = _cfg->cl_frames().at(i);
         for (size_t s = 0; s < _cfg->cl_frames().at(i).size(); s++) {
@@ -345,11 +354,11 @@ int ClientRadioSet::radioRx(size_t radio_id, void* const* buffs, int numSamps,
       long long frameTimeNs(0);
       ret = radios.at(radio_id)->recv(buffs, numSamps, frameTimeNs);
       frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate());
-#if DEBUG_RADIO
-      if (frameTimeNs < 2e9)
-        std::cout << "client " << radio_id << " received " << ret << " at "
-                  << frameTimeNs << std::endl;
-#endif
+      if (kDebugRadio) {
+        if (frameTimeNs < 2e9)
+          std::cout << "client " << radio_id << " received " << ret << " at "
+                    << frameTimeNs << std::endl;
+      }
     }
     return ret;
   }

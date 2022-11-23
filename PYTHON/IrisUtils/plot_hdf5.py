@@ -53,10 +53,12 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     n_frm_end = hdf5.n_frm_end
     n_frm_st = hdf5.n_frm_st
     metadata = hdf5.metadata
+
     if 'SYMBOL_LEN' in metadata: # to support older datasets
         samps_per_slot = int(metadata['SYMBOL_LEN'])
     elif 'SLOT_SAMP_LEN' in metadata:
         samps_per_slot = int(metadata['SLOT_SAMP_LEN'])
+    dl_pilot_en = int(hdf5.metadata["DL_PILOTS_EN"])
     num_pilots = int(metadata['PILOT_NUM'])
     num_cl = int(metadata['CL_NUM'])
     prefix_len = int(metadata['PREFIX_LEN'])
@@ -146,7 +148,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             return
 
         # Find the frame number at which each UE starts sending pilots+data
-        for u in range(num_ues):
+        for u in range(num_cl):
             amps = np.mean(np.abs(samps[:, u, ant_i, :]), axis=1)
             for i in range(1, len(amps)):
                 if amps[i] > thresh and amps[i-1] < thresh:
@@ -344,8 +346,9 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
 
     # Plot DL data symbols
     if dl_data_avail > 0:
-        # DL Samps: #Frames, #Cell, #Downlink Symbol, #Antennas, #Samples
+        # DL Samps: #Frames, #Cell, #Downlink Symbol, #Users, #Samples
         downlink_samples = hdf5.downlink_samples[:, cell_i, :, :, :]
+        downlink_samples = np.transpose(downlink_samples, (0, 2, 1, 3))
         frm_plt = min(frame_i, downlink_samples.shape[0] + n_frm_st)
         # Verify frame_i does not exceed max number of collected frames
         ref_frame = min(frame_i - n_frm_st, downlink_samples.shape[0])
@@ -353,11 +356,42 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 downlink_samples, (downlink_samples.shape[0], downlink_samples.shape[1], downlink_samples.shape[2], samps_per_slot, 2))
         dl_samps = (samps_mat[:, :, :, :, 0] +
                 samps_mat[:, :, :, :, 1]*1j)*2**-15
+        num_users = dl_samps.shape[1]
+        num_dl_slots = dl_samps.shape[2]
+        print("Number of DL antennas in dataset %d"%num_dl_slots)
+        all_bs_nodes = set(range(num_dl_slots))
+        plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
+        dl_samps = dl_samps[:, :, plot_bs_nodes, :]
 
-        user_amps = np.mean(np.abs(dl_samps[:, :, ant_i, :]), axis=2)
-        plot_iq_samps(dl_samps, user_amps, n_frm_st, ref_frame, [user_i], [ant_i], data_str="Downlink Data")
+        user_amps = np.mean(np.abs(dl_samps[:, user_i, :, :]), axis=2)
+        plot_iq_samps(dl_samps, user_amps, n_frm_st, ref_frame, [user_i], [ant_i], data_str="Downlink Pilots")
 
+        if dl_pilot_en:
+            # Compute CSI from IQ samples
+            # Samps: #Frames, #USers, #DL Slots, #Samples
+            # CSI:   #Frames, #Users, #Pilot Rep, #DL Slots, #Subcarrier
+            # For correlation use a fft size of 64
+            dl_csi, _ = hdf5_lib.samps2csi_large(downlink_samples, num_users, chunk_size, samps_per_slot, fft_size=fft_size,
+                                            offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f, fft_shifted_dataset=fft_shifted_dataset)
 
+            if corr_thresh > 0.0:
+                bad_nodes = find_bad_nodes(dl_csi, corr_thresh=corr_thresh,
+                                           user=user_i)
+                if bad_nodes:
+                    print(">>> Warning! List of bad nodes (1-based): {bad_nodes}".
+                          format(bad_nodes=bad_nodes))
+                else:
+                    print(">>> All Iris nodes are good!")
+
+            if ofdm_sym_i >= symbol_per_slot:  # if out of range index, do average
+                userCSI = np.mean(csi, 2)
+            else:
+                userCSI = dl_csi[:, :, ofdm_sym_i, :, :]
+            corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2) ) )
+
+            if not fft_shifted_dataset:
+                csi_to_plot = np.fft.fftshift(userCSI, 3)
+            plot_csi(csi_to_plot, corr_total, plot_bs_nodes, pilot_frames, ref_frame, ant_i, subcarrier_i, offset, data_str="Downlink")
 
     plt.show()
 
