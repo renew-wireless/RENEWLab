@@ -265,9 +265,10 @@ def csi_from_pilots(pilots_dump, z_padding=150, fft_size=64, cp=16, frm_st_idx=0
     # WZC: add pilots_rx_t_btc
 
 class hdf5_lib:
-    def __init__(self, filename, n_frames_to_inspect=0, n_fr_insp_st = 0, sub_sample = 0):
+    def __init__(self, filename, tx_files, n_frames_to_inspect=0, n_fr_insp_st = 0, sub_sample = 0):
         self.h5file = None
         self.filename = filename
+        self.tx_files = tx_files
         self.dirpath = '/'.join(filename.split('/')[:-1])
         self.h5struct = []
         self.data = []
@@ -737,7 +738,7 @@ class hdf5_lib:
         k_max = np.sort(match_filt, axis = -1)[:,:,:, -k_lts:]
         k_amax =np.argsort(match_filt, axis = -1)[:,:,:, -k_lts:]
         # If the frame is good, the largerst peak is at the last place of k_amax
-        lst_pk_idx = np.expand_dims(k_amax[:,:,:,-1], axis = 4)
+        lst_pk_idx = np.expand_dims(k_amax[:,:,:,-1], axis = 3)
         lst_pk_idx = np.tile(lst_pk_idx, (1,1,1,base_arr.shape[0]))
         # create an array with indices n_lts apart from each other relative to lst_pk_idx
         pk_idx = lst_pk_idx - np.tile(base_arr[::-1], (n_frame, n_ue, n_ant,1))
@@ -891,7 +892,7 @@ class hdf5_lib:
         return cfo
 
     @staticmethod
-    def load_tx_data(metadata, dirpath):
+    def load_tx_data(metadata, dirpath, tx_files):
         if 'SYMBOL_LEN' in metadata: # to support older datasets
             samps_per_slot = int(metadata['SYMBOL_LEN'])
         elif 'SLOT_SAMP_LEN' in metadata:
@@ -917,6 +918,13 @@ class hdf5_lib:
         nonzero_sc_ind = np.setdiff1d(range(fft_size), zero_sc_ind)
         ul_data_frame_num = int(metadata['UL_DATA_FRAME_NUM'])
         tx_file_names = metadata['TX_FD_DATA_FILENAMES'].astype(str)
+        tx_file_names = tx_file_names.tolist()
+        tx_file_list = []
+        if tx_files != "":
+            tx_file_list = tx_files.split(",")
+        if len(tx_file_list) > 0:
+            tx_file_names = tx_file_names + tx_file_list
+            num_cl = num_cl + cl_ch_num * len(tx_file_list)
         txdata = np.empty((ul_data_frame_num, num_cl, ul_slot_num,
                      symbol_per_slot,  fft_size), dtype='complex64')
         read_size = 2 * ul_data_frame_num * ul_slot_num * cl_ch_num * symbol_per_slot * fft_size
@@ -994,6 +1002,7 @@ class hdf5_lib:
         if frac_fr > 0:
             frac = txdata[:frac_fr, :, :, :]
             tx_symbols = frac if rep == 0 else np.concatenate((tx_symbols, frac), axis=0)
+        print(tx_symbols.shape)
         tx_data_syms = np.reshape(tx_symbols[:, :, :, data_sc_ind], (tx_symbols.shape[0], n_users, symbol_per_slot * data_sc_len))
         useful_frame_num = tx_data_syms.shape[0]
         if txdata.shape[0] > 1:
