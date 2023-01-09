@@ -21,10 +21,12 @@ clear
 close all;
 
 
-[version, executable, isloaded] = pyversion;
-if ~isloaded
-    pyversion /usr/bin/python
-    py.print() % weird bug where py isn't loaded in an external script
+%[version, executable, isloaded] = pyversion;
+pe = pyenv;
+%disp(pe);
+if pe.Status == 'NotLoaded'
+    pyversion /usr/bin/python3
+    py.print() %weird bug where py isn't loaded in an external script
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -84,8 +86,7 @@ else
         chain5B = ["RF3E000708","RF3E000437","RF3E000090"];                    % Chain5B
         %bs_ids = [chain1B, chain1A, chain2B];
         %hub_id = ["FH4B000003"];
-        bs_ids = ["RF3E000208","RF3E000636","RF3E000632"];%,"RF3E000568", ...
-                  %"RF3E000558","RF3E000633","RF3E000566","RF3E000635"];
+        bs_ids = ["RF3E000208","RF3E000636","RF3E000632","RF3E000568","RF3E000558","RF3E000633","RF3E000566","RF3E000635"];
                   %,"RF3E000136","RF3E000213","RF3E000142", ...
                   %"RF3E000356","RF3E000546","RF3E000620","RF3E000609","RF3E000604","RF3E000612","RF3E000640","RF3E000551"];
         hub_id = ["FH4B000019"];
@@ -93,7 +94,7 @@ else
         bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         hub_id = [];
     end
-    ue_ids = ["RF3E000392"];
+    ue_ids = ["RF3E000089"];
     ref_ids= [];
 
     N_BS_NODE               = length(bs_ids);                   % Number of nodes at the BS
@@ -228,7 +229,7 @@ else
 
     mimo_handle = mimo_driver(sdr_params);
 
-    fprintf('=========================== \n ======== Sounding ========= \n =========================== \n');
+    fprintf(' =========================== \n ======== Sounding ========= \n =========================== \n');
     % Scale the Tx vector to +/- 1
     tx_vec_train = TX_SCALE .* tx_vec_train ./ max(abs(tx_vec_train));
     tx_mat_train = repmat(tx_vec_train.', N_BS_ANT,1);
@@ -273,7 +274,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % No need to send explicit feedback to base station, simply use the computed
 % weights
-fprintf('=========================== \n ======== Downlink BF ========= \n =========================== \n');
+fprintf(' =========================== \n ======== Downlink BF ========= \n =========================== \n');
 
 % Update TX gain
 is_bs = 1;   % Is base station node

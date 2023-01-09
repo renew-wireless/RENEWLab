@@ -30,10 +30,12 @@ clear
 close all;
 
 
-[version, executable, isloaded] = pyversion;
-if ~isloaded
-    pyversion /usr/bin/python
-    py.print() % weird bug where py isn't loaded in an external script
+%[version, executable, isloaded] = pyversion;
+pe = pyenv;
+%disp(pe);
+if pe.Status == 'NotLoaded'
+    pyversion /usr/bin/python3
+    py.print() %weird bug where py isn't loaded in an external script
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
