@@ -55,14 +55,14 @@ if SIM_MODE
 else 
     %Iris params:
     TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
-    ANT_BS                  = 'A';         % Options: {A, AB}
+    ANT_BS                  = 'AB';         % Options: {A, AB}
     ANT_UE                  = 'A';          % Currently, only support single antenna UE, i.e., A
     USE_HUB                 = 1;
     TX_FRQ                  = 3.5475e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = 81;
-    TX_GN_BF                = 81;           % BS gain during DL BF transmission
-    TX_GN_UE                = [81, 81];
+    TX_GN                   = 95;
+    TX_GN_BF                = 98;           % BS gain during DL BF transmission
+    TX_GN_UE                = [100, 100];
     RX_GN                   = 65;
     SMPL_RT                 = 5e6;
     N_FRM                   = 1;            % Not tested with N_FRM > 1
@@ -70,7 +70,7 @@ else
     bs_ids                  = string.empty();
     ue_ids                  = string.empty();
     ue_scheds               = string.empty();
-    TX_ADVANCE              = 235;          % !!!! IMPORTANT: DO NOT MODIFY - POWDER default is 400, RENEW(Rice) default is 235!!!!
+    TX_ADVANCE              = 400;          % !!!! IMPORTANT: DO NOT MODIFY - POWDER default is 400, RENEW(Rice) default is 235!!!!
 
     if USE_HUB
         % Using chains of different size requires some internal
@@ -84,17 +84,17 @@ else
         chain4A = ["RF3E000722","RF3E000494","RF3E000592","RF3E000333"];       % Chain4
         chain5A = ["RF3E000748","RF3E000492"];                                 % Chain5A
         chain5B = ["RF3E000708","RF3E000437","RF3E000090"];                    % Chain5B
-        %bs_ids = [chain1B, chain1A, chain2B];
+        bs_ids = [chain1B, chain1A, chain2B];
         %hub_id = ["FH4B000003"];
-        bs_ids = ["RF3E000208","RF3E000636","RF3E000632","RF3E000568","RF3E000558","RF3E000633","RF3E000566","RF3E000635"];
+        %bs_ids = ["RF3E000208","RF3E000636","RF3E000632","RF3E000568","RF3E000558","RF3E000633","RF3E000566","RF3E000635"];
                   %,"RF3E000136","RF3E000213","RF3E000142", ...
                   %"RF3E000356","RF3E000546","RF3E000620","RF3E000609","RF3E000604","RF3E000612","RF3E000640","RF3E000551"];
-        hub_id = ["FH4B000019"];
+        hub_id = ["FH4B000003"];
     else
         bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         hub_id = [];
     end
-    ue_ids = ["RF3E000089"];
+    ue_ids = ["RF3E000706"];
     ref_ids= [];
 
     N_BS_NODE               = length(bs_ids);                   % Number of nodes at the BS
