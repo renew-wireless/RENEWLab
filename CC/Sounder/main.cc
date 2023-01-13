@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
       "sounder Options: -bs_only -client_only -conf "
       "-gen_data_bits -storepath");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
-  auto config = std::make_unique<Config>(FLAGS_conf, FLAGS_storepath,
+  auto config = std::make_unique<Config>(FLAGS_conf_file, FLAGS_storepath,
                                          FLAGS_bs_only, FLAGS_client_only);
   int ret = EXIT_FAILURE;
   if (FLAGS_gen_data_bits) {
