@@ -22,7 +22,7 @@ DEFINE_bool(
     gen_data_bits, false,
     "Generate random bits for uplink/downlink transmissions, otherwise read "
     "from file!");
-DEFINE_string(conf, "files/conf.json", "JSON configuration file name");
+DEFINE_string(conf_file, "files/conf.json", "JSON configuration file name");
 DEFINE_string(storepath, "logs", "Dataset store path");
 DEFINE_bool(bs_only, false, "Run BS only");
 DEFINE_bool(client_only, false, "Run client only");

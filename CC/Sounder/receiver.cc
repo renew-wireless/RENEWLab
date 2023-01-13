@@ -1009,10 +1009,10 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
       MLPD_TRACE("Enable resyncing at frame %zu\n", frame_id);
     }
     if (resync == true) {
-      ssize_t sync_index =
-          this->syncSearch(reinterpret_cast<std::complex<int16_t>*>(
-                               rxbuff.at(kSyncDetectChannel)),
-                           request_samples, config_->corr_scale(tid));
+      ssize_t sync_index = this->syncSearch(
+          reinterpret_cast<std::complex<int16_t>*>(
+              rxbuff.at(kSyncDetectChannel)),
+          request_samples, config_->corr_scale(tid) + resync_retry_cnt);
       if (sync_index >= 0) {
         const int new_rx_offset =
             sync_index - (config_->beacon_size() + config_->prefix());
