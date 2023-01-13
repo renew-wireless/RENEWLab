@@ -16,15 +16,15 @@
 	"cp_size" : 16,
 	"ofdm_tx_zero_prefix" : 160,
 	"ofdm_tx_zero_postfix" : 160,
-	"beamsweep" : true,
+	"beamsweep" : false,
 	"ue_channel" : "AB",
 	"ue_rx_gain_a" : [65, 65],
 	"ue_tx_gain_a" : [81, 81],
 	"ue_rx_gain_b" : [65, 65],
 	"ue_tx_gain_b" : [81, 81],
 	"ue_frame_schedule" : [
-	    "GDGGGGPPGGUGGGGGGGGG",
-	    "GDGGGGGGPPUGGGGGGGGG"
+	    "GGGGGGPPGGUGGGGGGGGG",
+	    "GGGGGGGGPPUGGGGGGGGG"
 	],
 	"ue_modulation" : "16QAM",
 	"tx_advance" : [135, 135]
