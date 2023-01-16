@@ -63,8 +63,8 @@ else
     RX_FRQ                  = TX_FRQ;
     ANT_BS                  = 'AB';         % Options: {A, AB}. To use both antennas per board, set to 'AB'
     ANT_UE                  = 'A';          % Only tested with single-antenna UE (i.e., 'A')
-    TX_GN                   = 81;
-    TX_GN_UE                = [95, 95];
+    TX_GN                   = 100;
+    TX_GN_UE                = [100, 100];
     RX_GN                   = 65;
     SMPL_RT                 = 5e6;
     N_FRM                   = 5;
