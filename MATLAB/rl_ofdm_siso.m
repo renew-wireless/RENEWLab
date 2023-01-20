@@ -34,7 +34,6 @@
 clear all;
 close all;
 
-%[version, executable, isloaded] = pyversion;
 pe = pyenv;
 %disp(pe);
 if pe.Status == 'NotLoaded'
@@ -189,7 +188,7 @@ else
         'tx_gain_ue', TX_GN_UE, ...
         'rxgain', RX_GN, ...
         'sample_rate', SMPL_RT, ...
-	    'trig_offset', TX_ADVANCE);
+	'trig_offset', TX_ADVANCE);
 
     mimo_handle = mimo_driver(sdr_params);
 

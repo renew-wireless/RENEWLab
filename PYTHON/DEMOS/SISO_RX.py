@@ -76,7 +76,6 @@ from fft_power import *
 from macros import *
 from init_fncs import *
 from scipy.io import savemat
-#from MyFuncAnimation import *
 
 #########################################
 #            Global Parameters          #
@@ -270,8 +269,6 @@ def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
 
     # There's a bug in the FuncAnimation function, we replaced it with a fixed version
     anim = animation.FuncAnimation(fig, animate, init_func=init, fargs=(num_samps, recorder, agc_en, wait_trigger, info),frames=100, interval=100, blit=True)
-    #anim = MyFuncAnimation(fig, animate, init_func=init, fargs=(num_samps, recorder, agc_en, wait_trigger, info),
-    #                                frames=100, interval=100, blit=True)
     plt.show()
 
 
