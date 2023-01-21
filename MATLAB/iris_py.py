@@ -123,7 +123,7 @@ class Iris_py:
                         else:
                                 self.sdr.setBandwidth(SOAPY_SDR_TX, chan, 2.5*sample_rate)
                         if tx_gain is not None:
-                                self.sdr.setGain(SOAPY_SDR_TX, chan, tx_gain) #min(tx_gain, 81.0))
+                                self.sdr.setGain(SOAPY_SDR_TX, chan, tx_gain)
                         if tx_freq is not None:
                                 self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'RF', tx_freq - .75*sample_rate)
                                 self.sdr.setFrequency(SOAPY_SDR_TX, chan, 'BB', .75*sample_rate)
@@ -193,7 +193,7 @@ class Iris_py:
 
         def sdr_settxgain(self, tx_gain):
                 for chan in [0, 1]:
-                    self.sdr.setGain(SOAPY_SDR_TX, chan, min(tx_gain, 81.0))
+                    self.sdr.setGain(SOAPY_SDR_TX, chan, tx_gain)
 
         def sdr_setrxgain(self, rx_gain):
                 for chan in [0, 1]:

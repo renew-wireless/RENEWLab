@@ -66,7 +66,7 @@ import logging
 import pdb
 from SoapySDR import *              # SOAPY_SDR_ constants
 from optparse import OptionParser
-#from matplotlib import animation
+from matplotlib import animation
 from data_recorder import *
 from find_lts import *
 from digital_rssi import *
@@ -75,7 +75,7 @@ from file_rdwr import *
 from fft_power import *
 from macros import *
 from init_fncs import *
-from MyFuncAnimation import *
+from scipy.io import savemat
 
 #########################################
 #            Global Parameters          #
@@ -84,7 +84,7 @@ sdr = None
 rxStream = None
 recorder = None
 FIG_LEN = 16384   
-Rate = 5e6
+Rate = 18e6
 fft_size = 2**12  # 1024
 numBufferSamps = 1000
 rssiPwrBuffer = collections.deque(maxlen=numBufferSamps)
@@ -268,10 +268,7 @@ def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
     setUpDigitalRssiMode(sdr)
 
     # There's a bug in the FuncAnimation function, we replaced it with a fixed version
-    # anim = animation.FuncAnimation(fig, animate, init_func=init, fargs=(num_samps, recorder, agc_en, wait_trigger),
-    # frames=100, interval=100, blit=True)
-    anim = MyFuncAnimation(fig, animate, init_func=init, fargs=(num_samps, recorder, agc_en, wait_trigger, info),
-                                    frames=100, interval=100, blit=True)
+    anim = animation.FuncAnimation(fig, animate, init_func=init, fargs=(num_samps, recorder, agc_en, wait_trigger, info),frames=100, interval=100, blit=True)
     plt.show()
 
 
@@ -322,6 +319,9 @@ def animate(i, num_samps, recorder, agc_en, wait_trigger, info):
 
     # Store received samples in binary file (second method of storage)
     write_to_file('./data_out/rxsamps', sampsRx)
+    #mdic = {"rxdata": sampsRx[0]}
+    #savemat("data_rmode2.mat", mdic)
+    #np.save('./data_rmode2.npy',sampsRx[0])
 
     # Magnitude of IQ Samples (RX RF chain A)
     I = np.real(sampsRx[0])
