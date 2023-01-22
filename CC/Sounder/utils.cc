@@ -228,3 +228,36 @@ void Utils::printVector(std::vector<std::complex<int16_t>>& data) {
     std::cout << real(data.at(i)) << " " << imag(data.at(i)) << std::endl;
   }
 }
+
+void Utils::WriteVector(const std::string filename, const std::string desc,
+                        const std::vector<int> vec_data) {
+  std::stringstream so;
+  std::ofstream of;
+  of.open(filename);
+  if (desc.size() > 0) so << desc << std::endl;
+  for (size_t j = 0; j < vec_data.size(); j++) {
+    so << vec_data.at(j);
+    if (j < vec_data.size() - 1) so << std::endl;
+  }
+  of << so.str();
+  of.close();
+}
+
+std::vector<int> Utils::ReadVector(const std::string filename,
+                                   const bool skip_line) {
+  std::string line;
+  bool first_line = skip_line;
+  std::ifstream myfile(filename, std::ifstream::in);
+  std::vector<int> vec_data;
+  if (myfile.is_open()) {
+    while (std::getline(myfile, line)) {
+      if (first_line) {
+        first_line = false;
+      } else {
+        vec_data.push_back(std::stoi(line));
+      }
+    }
+    myfile.close();
+  }
+  return vec_data;
+}

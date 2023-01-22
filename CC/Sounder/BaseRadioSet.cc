@@ -22,7 +22,7 @@
 using json = nlohmann::json;
 static constexpr int kMaxTOSyncRetry = 10;
 
-BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
+BaseRadioSet::BaseRadioSet(Config* cfg, const bool calibrate_proc) : _cfg(cfg) {
   std::vector<size_t> num_bs_antenntas(_cfg->num_cells());
   bsRadios.resize(_cfg->num_cells());
   radioNotFound = false;
@@ -98,11 +98,13 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
     }
 
     // Perform DC Offset & IQ Imbalance Calibration
-    if (_cfg->imbalance_cal_en() == true) {
+    if (calibrate_proc && _cfg->imbalance_cal_en() == true) {
       if (_cfg->bs_channel().find('A') != std::string::npos)
         dciqCalibrationProc(0);
       if (_cfg->bs_channel().find('B') != std::string::npos)
         dciqCalibrationProc(1);
+      MLPD_INFO("%s done!\n", __func__);
+      return;
     }
 
     thread_count.store(num_radios);
@@ -209,48 +211,20 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
                  "discovered in the network!\033[0m"
               << std::endl;
   } else {
-    if (_cfg->sample_cal_en() == true) {
-      int cal_cnt = 0;
-      int offset_diff = 1;
-      // array radios delay adjust
-      while (offset_diff > 0) {
-        if (++cal_cnt > kMaxTOSyncRetry) {
-          std::cout << kMaxTOSyncRetry
-                    << " attemps of sample offset calibration, "
-                       "stopping..."
-                    << std::endl;
-          break;
-        }
-        offset_diff =
-            syncTimeOffset(false, true);  // run 1: find offsets and adjust
+    if (calibrate_proc && _cfg->sample_cal_en() == true) {
+      this->syncTimeOffset();
+      return;
+    } else if (_cfg->sample_cal_en() == true) {
+      const std::string filename = "files/iris_samp_offsets.dat";
+      trigger_offsets_ = Utils::ReadVector(filename, false);
+      size_t num_radios = _cfg->n_bs_sdrs()[0];
+      if (trigger_offsets_.size() == num_radios) {
+        this->adjustDelays();
+      } else {
+        std::printf(
+            "The number of sample offsets in file does not match the number of "
+            "radios.\n");
       }
-      usleep(100000);
-      offset_diff = syncTimeOffset(false, false);  // run 2: verify
-      if (offset_diff > 1)
-        std::cout << "Failed ";
-      else
-        std::cout << "Successful ";
-      std::cout << "sample offset calibration!" << std::endl;
-      // ref node delay adjust
-      /*cal_cnt = 0;
-      offset_diff = 1;
-      while (offset_diff > 0) {
-        if (++cal_cnt > kMaxTOSyncRetry) {
-          std::cout << kMaxTOSyncRetry
-                    << " attemps of sample offset calibration for ref node, "
-                       "stopping..."
-                    << std::endl;
-          break;
-        }
-        offset_diff =
-            syncTimeOffset(true, true);  // run 1: find offsets and adjust
-      }
-      offset_diff = syncTimeOffset(true, false);  // run 2: verify
-      if (offset_diff > 0)
-        std::cout << "Failed ";
-      else
-        std::cout << "Successful ";
-      std::cout << "ref node sample offset calibration!" << std::endl;*/
     }
 
     nlohmann::json tddConf;
@@ -462,6 +436,31 @@ void BaseRadioSet::radioTrigger(void) {
     auto* base = baseRadio(c);
     if (base != NULL) {
       base->writeSetting("TRIGGER_GEN", "");
+    }
+  }
+}
+
+void BaseRadioSet::adjustDelays() {
+  // adjust all trigger delay fwith respect to the max offset
+  const auto min_max_offset =
+      std::minmax_element(trigger_offsets_.begin(), trigger_offsets_.end());
+  const int min_offset = *min_max_offset.first;
+  const int ref_offset = *min_max_offset.second;
+  const size_t diff_offset = ref_offset - min_offset;
+  if (diff_offset >= _cfg->cp_size()) {
+    for (size_t i = 0; i < trigger_offsets_.size(); i++) {
+      auto* dev = bsRadios.at(0).at(i)->RawDev();
+      const int delta = ref_offset - trigger_offsets_.at(i);
+      std::printf("Sample adjusting delay of node %zu (offset %d) by %d\n", i,
+                  trigger_offsets_.at(i), delta);
+      const int iter = delta < 0 ? -delta : delta;
+      for (int j = 0; j < iter; j++) {
+        if (delta < 0) {
+          dev->writeSetting("ADJUST_DELAYS", "-1");
+        } else {
+          dev->writeSetting("ADJUST_DELAYS", "1");
+        }
+      }
     }
   }
 }

@@ -19,7 +19,8 @@
 
 class Config {
  public:
-  Config(const std::string&, const std::string&, const bool, const bool);
+  Config(const std::string&, const std::string&, const bool, const bool,
+         const bool);
   ~Config();
 
   //Accessors
@@ -289,7 +290,7 @@ class Config {
   };
   void genBsSchedule(BsSchedType type);
   void genClientSchedule(BsSchedType type);
-  void loadTopology(std::string, const bool, const bool);
+  void loadTopology(std::string, const bool, const bool, const bool);
 
  private:
   bool bs_present_;

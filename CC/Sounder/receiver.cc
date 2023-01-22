@@ -62,7 +62,7 @@ Receiver::Receiver(
     this->client_radio_set_ =
         config_->client_present() ? new ClientRadioSet(config_) : nullptr;
     this->base_radio_set_ =
-        config_->bs_present() ? new BaseRadioSet(config_) : nullptr;
+        config_->bs_present() ? new BaseRadioSet(config_, false) : nullptr;
 #endif
   } catch (std::exception& e) {
     throw ReceiverException(e.what());
