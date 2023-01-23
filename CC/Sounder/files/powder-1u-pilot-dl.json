@@ -1,5 +1,5 @@
 {
-	"serial_file" : "files/topology-meb.json",
+	"serial_file" : "files/topology-meb-1u.json",
 	"frequency" : 3.545e9,
 	"sample_rate" : 5e6,
 	"channel" : "AB",
