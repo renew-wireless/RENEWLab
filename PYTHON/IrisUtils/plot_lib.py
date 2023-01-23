@@ -27,7 +27,7 @@ def plot_iq_samps(samps, amps, frm_st, frame_i, users, ants, data_str="Pilots"):
             axes[2, 0].set_xlabel('frame')
             axes[2, 0].legend(frameon=False)
 
-def plot_csi(csi, corr, bs_nodes, good_frames, frame_i, ant_i, subcarrier_i, offset, data_str="Uplink"):
+def plot_csi(csi, corr, bs_nodes, good_frames, frame_i, ant_i, user_i, subcarrier_i, offset, data_str="Uplink"):
     fig, axes = plt.subplots(nrows=3, ncols=1, squeeze=False, figsize=(10, 8))
     axes[0, 0].set_title(data_str + " Pilot CSI Stats Across Frames- Antenna %d - Subcarrier %d" % (ant_i, subcarrier_i))
     axes[0, 0].set_ylabel('Magnitude')
@@ -52,13 +52,13 @@ def plot_csi(csi, corr, bs_nodes, good_frames, frame_i, ant_i, subcarrier_i, off
 
     fig, axes = plt.subplots(nrows=4, ncols=1, squeeze=False, figsize=(10, 8))
     axes[0, 0].set_title(data_str + " Pilot CSI Stats Across Subcarriers - Cell 0 - Frame %d - Ant %d" % (frame_i, ant_i))
-    axes[0, 0].set_ylabel('Magnitude user 0')
-    axes[0, 0].plot(np.abs(csi[frame_i, 0, ant_i, :]).flatten())
+    axes[0, 0].set_ylabel('Magnitude user %d' % user_i)
+    axes[0, 0].plot(np.abs(csi[frame_i, user_i, ant_i, :]).flatten())
     axes[0, 0].set_ylim(0, 1)
     axes[0, 0].set_xlabel('Subcarrier')
 
-    axes[1, 0].set_ylabel('Phase user 0')
-    axes[1, 0].plot(np.angle(csi[frame_i, 0, ant_i, :].flatten()))
+    axes[1, 0].set_ylabel('Phase user %d' % user_i)
+    axes[1, 0].plot(np.angle(csi[frame_i, user_i, ant_i, :].flatten()))
     axes[1, 0].set_ylim(-np.pi, np.pi)
     axes[1, 0].set_xlabel('Subcarrier')
 
@@ -75,6 +75,20 @@ def plot_csi(csi, corr, bs_nodes, good_frames, frame_i, ant_i, subcarrier_i, off
     axes[3, 0].set_xlabel('Subcarrier')
     axes[3, 0].set_ylim(-np.pi, np.pi)
     axes[3, 0].legend(loc='lower right', frameon=False)
+
+def plot_snr(snr, bs_nodes, data_str="Uplink"):
+    max_snr = np.max(snr[:, :, bs_nodes], axis=2)
+    min_snr = np.min(snr[:, :, bs_nodes], axis=2)
+    fig, axes = plt.subplots(nrows=1, ncols=1, squeeze=False, figsize=(10, 8))
+    axes[0, 0].set_title(data_str + " Max and Min Pilot SNR Across BS Antennas vs Frames - Cell 0")
+    axes[0, 0].set_ylabel('SNR (dB)')
+    axes[0, 0].set_xlabel('Frame')
+    for i in range(snr.shape[1]):
+        axes[0, 0].plot(np.abs(10*np.log10(max_snr[:, i])), label="user %d" % i, marker=matplotlib.markers.CARETUPBASE)
+    axes[0, 0].legend(loc='lower right', frameon=False)
+    fig.gca().set_prop_cycle(None)
+    for i in range(snr.shape[1]):
+        axes[0, 0].plot(np.abs(10*np.log10(min_snr[:, i])), marker=matplotlib.markers.CARETDOWNBASE)
 
 def plot_calib(calib_mat, bs_nodes, frame_i, ant_i, subcarrier_i, unwrap=True):
     if unwrap:
@@ -180,7 +194,7 @@ def show_plot(cmpx_pilots, lts_seq_orig, match_filt, ref_user, ref_ant, ref_fram
     ax1 = fig.add_subplot(3, 1, 1)
     ax1.grid(True)
     ax1.set_title(
-        'channel_analysis:csi_from_pilots(): Re of Rx pilot - ref frame {} and ref ant. {} (UE {})'.format(
+        'Re of Rx pilot - ref frame {} and ref ant. {} (UE {})'.format(
             frame_to_plot, ref_ant, ref_user))
 
     if debug:
@@ -214,13 +228,13 @@ def show_plot(cmpx_pilots, lts_seq_orig, match_filt, ref_user, ref_ant, ref_fram
     ax2 = fig.add_subplot(3, 1, 2)
     ax2.grid(True)
     ax2.set_title(
-        'channel_analysis:csi_from_pilots(): Local LTS sequence zero padded')
+        'Local LTS sequence zero padded')
     ax2.plot(loc_sec)
 
     ax3 = fig.add_subplot(3, 1, 3)
     ax3.grid(True)
     ax3.set_title(
-        'channel_analysis:csi_from_pilots(): MF (uncleared peaks) - ref frame {} and ref ant. {} (UE {})'.format(
+        'MF (uncleared peaks) - ref frame {} and ref ant. {} (UE {})'.format(
             frame_to_plot, ref_ant, ref_user))
     ax3.stem(match_filt[frame_to_plot, ref_user, ref_ant, :])
     ax3.set_xlabel('Samples')
