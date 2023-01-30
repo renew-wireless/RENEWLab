@@ -35,11 +35,19 @@ clear all;
 close all;
 
 pe = pyenv;
-%disp(pe);
+disp(pe);
 if pe.Status == 'NotLoaded'
-    pyversion /usr/bin/python3
+    pyversion /usr/bin/python3.7
     py.print() %weird bug where py isn't loaded in an external script
 end
+
+%pyversion /usr/bin/python3.7
+%[version, executable, isloaded] = pyversion;
+%if ~isloaded
+%    pyversion /usr/bin/python3.7
+%    %py.print() %weird bug where py isn't loaded in an external script
+%end
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Parameters
@@ -49,6 +57,7 @@ WRITE_PNG_FILES         = 0;            % Enable writing plots to PNG
 PLOT                    = 0;
 FIND_OPTIMAL_GAINS      = 0;            % Evaluates different TX/RX gain combinations and returns the combination that yields the largest number of detected beacons
 SIM_MODE                = 0;            % Enable for AWGN sim, disable to run hardware
+APPLY_CFO_CORRECTION    = 0;
 
 %Iris params:
 N_BS_NODE               = 1;
@@ -169,9 +178,9 @@ else
 
     % Create two Iris node objects:
     tx_direction = 'uplink';      % Options: {'uplink', 'downlink', 'ul-refnode-as-ue'}
-    bs_ids = ["RF3E000722"];
-    ue_ids = ["RF3E000665"];
-    hub_id = ["FH4B000003"];
+    bs_ids = ["RF3E000356"];%["RF3E000722"];
+    ue_ids = ["RF3E000241"];%["RF3E000665"];
+    hub_id = ["FH4B000019"];%["FH4B000003"];
     ref_ids= [];      % Must have the REF node serial if tx_direction mode is 'ul-refnode-as-ue'
 
     % Iris nodes' parameters
@@ -260,6 +269,28 @@ for frm_idx = 1:numGoodFrames
     if lts_ind < 1
         lts_ind = 1;
     end
+
+
+    return;
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% FIXME START
+    if(APPLY_CFO_CORRECTION)
+        %Extract LTS (not yet CFO corrected)
+        rx_lts = rx_vec_iris(lts_ind : lts_ind+159);
+        rx_lts1 = rx_lts(-64+-FFT_OFFSET + [97:160]);
+        rx_lts2 = rx_lts(-FFT_OFFSET + [97:160]);
+        %Calculate coarse CFO est
+        rx_cfo_est_lts = mean(unwrap(angle(rx_lts2 .* conj(rx_lts1))));
+        rx_cfo_est_lts = rx_cfo_est_lts/(2*pi*64);
+    else
+        rx_cfo_est_lts = 0;
+    end
+    % Apply CFO correction to raw Rx waveform
+    rx_cfo_corr_t = exp(-1i*2*pi*rx_cfo_est_lts*[0:length(rx_vec_iris)-1]);
+    rx_dec_cfo_corr = rx_vec_iris .* rx_cfo_corr_t;
+    rx_vec_iris = rx_dec_cfo_corr;
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% FIXME END
+
 
     % Re-extract LTS for channel estimate
     rx_lts = rx_vec_iris(lts_ind : lts_ind+159);
