@@ -35,19 +35,11 @@ clear all;
 close all;
 
 pe = pyenv;
-disp(pe);
+%disp(pe);
 if pe.Status == 'NotLoaded'
     pyversion /usr/bin/python3
     py.print() %weird bug where py isn't loaded in an external script
 end
-
-%pyversion /usr/bin/python3.7
-%[version, executable, isloaded] = pyversion;
-%if ~isloaded
-%    pyversion /usr/bin/python3.7
-%    %py.print() %weird bug where py isn't loaded in an external script
-%end
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Parameters
@@ -66,8 +58,8 @@ TX_FRQ                  = 3.5475e9;
 RX_FRQ                  = TX_FRQ;
 ANT_BS                  = 'A';          % SISO: only one antenna supported
 ANT_UE                  = 'A';          % SISO: only one antenna supported
-TX_GN                   = 81;
-TX_GN_UE                = 81;
+TX_GN                   = 100;
+TX_GN_UE                = 100;
 RX_GN                   = 65;
 SMPL_RT                 = 5e6;
 TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
@@ -178,9 +170,9 @@ else
 
     % Create two Iris node objects:
     tx_direction = 'uplink';      % Options: {'uplink', 'downlink', 'ul-refnode-as-ue'}
-    bs_ids = ["RF3E000346"];%["RF3E000722"];
-    ue_ids = ["RF3E000392"];%["RF3E000665"];
-    hub_id = ["FH4B000019"];%["FH4B000003"];
+    bs_ids = ["RF3E000722"];
+    ue_ids = ["RF3E000665"];
+    hub_id = ["FH4B000003"];
     ref_ids= [];      % Must have the REF node serial if tx_direction mode is 'ul-refnode-as-ue'
 
     % Iris nodes' parameters
