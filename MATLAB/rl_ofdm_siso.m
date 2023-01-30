@@ -37,7 +37,7 @@ close all;
 pe = pyenv;
 disp(pe);
 if pe.Status == 'NotLoaded'
-    pyversion /usr/bin/python3.7
+    pyversion /usr/bin/python3
     py.print() %weird bug where py isn't loaded in an external script
 end
 
@@ -66,8 +66,8 @@ TX_FRQ                  = 3.5475e9;
 RX_FRQ                  = TX_FRQ;
 ANT_BS                  = 'A';          % SISO: only one antenna supported
 ANT_UE                  = 'A';          % SISO: only one antenna supported
-TX_GN                   = 100;
-TX_GN_UE                = 100;
+TX_GN                   = 81;
+TX_GN_UE                = 81;
 RX_GN                   = 65;
 SMPL_RT                 = 5e6;
 TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
@@ -178,8 +178,8 @@ else
 
     % Create two Iris node objects:
     tx_direction = 'uplink';      % Options: {'uplink', 'downlink', 'ul-refnode-as-ue'}
-    bs_ids = ["RF3E000356"];%["RF3E000722"];
-    ue_ids = ["RF3E000241"];%["RF3E000665"];
+    bs_ids = ["RF3E000346"];%["RF3E000722"];
+    ue_ids = ["RF3E000392"];%["RF3E000665"];
     hub_id = ["FH4B000019"];%["FH4B000003"];
     ref_ids= [];      % Must have the REF node serial if tx_direction mode is 'ul-refnode-as-ue'
 
@@ -270,10 +270,6 @@ for frm_idx = 1:numGoodFrames
         lts_ind = 1;
     end
 
-
-    return;
-
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% FIXME START
     if(APPLY_CFO_CORRECTION)
         %Extract LTS (not yet CFO corrected)
         rx_lts = rx_vec_iris(lts_ind : lts_ind+159);
@@ -287,10 +283,7 @@ for frm_idx = 1:numGoodFrames
     end
     % Apply CFO correction to raw Rx waveform
     rx_cfo_corr_t = exp(-1i*2*pi*rx_cfo_est_lts*[0:length(rx_vec_iris)-1]);
-    rx_dec_cfo_corr = rx_vec_iris .* rx_cfo_corr_t;
-    rx_vec_iris = rx_dec_cfo_corr;
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% FIXME END
-
+    rx_dec_cfo_corr = rx_vec_iris .* rx_cfo_corr_t.';
 
     % Re-extract LTS for channel estimate
     rx_lts = rx_vec_iris(lts_ind : lts_ind+159);
