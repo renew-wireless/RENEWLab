@@ -33,9 +33,12 @@ end
 % Params
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 global DEBUG;
+global APPLY_CFO_CORRECTION;
+
 DEBUG                   = 0;
 WRITE_PNG_FILES         = 0;                % Enable writing plots to PNG
 SIM_MODE                = 0;
+APPLY_CFO_CORRECTION    = 1;
 
 PILOT_PLOT              = 0;
 CONST_PLOT              = 0;
@@ -55,14 +58,14 @@ if SIM_MODE
 else 
     %Iris params:
     TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
-    ANT_BS                  = 'AB';         % Options: {A, AB}
+    ANT_BS                  = 'A';         % Options: {A, AB}
     ANT_UE                  = 'A';          % Currently, only support single antenna UE, i.e., A
     USE_HUB                 = 1;
     TX_FRQ                  = 3.5475e9;
     RX_FRQ                  = TX_FRQ;
-    TX_GN                   = 95;
-    TX_GN_BF                = 98;           % BS gain during DL BF transmission
-    TX_GN_UE                = [100, 100];
+    TX_GN                   = 81;
+    TX_GN_BF                = 81;           % BS gain during DL BF transmission
+    TX_GN_UE                = [81, 81];
     RX_GN                   = 65;
     SMPL_RT                 = 5e6;
     N_FRM                   = 1;            % Not tested with N_FRM > 1
@@ -85,16 +88,15 @@ else
         chain5A = ["RF3E000748","RF3E000492"];                                 % Chain5A
         chain5B = ["RF3E000708","RF3E000437","RF3E000090"];                    % Chain5B
         bs_ids = [chain1B, chain1A, chain2B];
-        %hub_id = ["FH4B000003"];
-        %bs_ids = ["RF3E000208","RF3E000636","RF3E000632","RF3E000568","RF3E000558","RF3E000633","RF3E000566","RF3E000635"];
-                  %,"RF3E000136","RF3E000213","RF3E000142", ...
-                  %"RF3E000356","RF3E000546","RF3E000620","RF3E000609","RF3E000604","RF3E000612","RF3E000640","RF3E000551"];
-        hub_id = ["FH4B000003"];
+        bs_ids = ["RF3E000356","RF3E000546","RF3E000620","RF3E000609"];%,"RF3E000604","RF3E000612","RF3E000640","RF3E000551"];
+                    %"RF3E000208","RF3E000636","RF3E000632","RF3E000568","RF3E000558","RF3E000633","RF3E000566","RF3E000635"];
+                    %,"RF3E000136","RF3E000213","RF3E000142", ...
+        hub_id = ["FH4B000019"];%["FH4B000003"];
     else
         bs_ids = ["RF3E000654","RF3E000458","RF3E000463","RF3E000424"];
         hub_id = [];
     end
-    ue_ids = ["RF3E000706"];
+    ue_ids = ["RF3E000392"];%["RF3E000706"];
     ref_ids= [];
 
     N_BS_NODE               = length(bs_ids);                   % Number of nodes at the BS
@@ -247,7 +249,8 @@ fprintf('=============================== \n');
 fprintf('Channel Estimation and Beamweight Calculation \n');
 % Channel estimation
 clear peaks;
-[H, H_tmp, peaks, err_flag] = channel_estimation_fun(rx_vec_iris_sound, N_BS_ANT, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'sounding', frm_idx);
+cfo_est_mat = nan(N_BS_ANT, N_UE);
+[H, H_tmp, peaks, cfo_est_mat, err_flag] = channel_estimation_fun(rx_vec_iris_sound, N_BS_ANT, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'sounding', frm_idx, cfo_est_mat);
 if err_flag
     mimo_handle.mimo_close();
     error();
@@ -341,7 +344,8 @@ end
 %%%%% Find Preambles (downlink beamforming mode: 'dl-bf')
 % Replace number of BS with number of streams for channel estimation in DL BF transmission
 N_STREAMS = 1;
-[H, ~, preamble_pk, err_flag] = channel_estimation_fun(rx_vec_iris_tmp, N_STREAMS, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'dl-bf', frm_idx);
+cfo_est_vec = mean(cfo_est_mat,1); % Average across base station antennas, use one single CFO est. value per UE.
+[H, ~, preamble_pk, ~, err_flag] = channel_estimation_fun(rx_vec_iris_tmp, N_STREAMS, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, 'dl-bf', frm_idx, cfo_est_vec);
 if err_flag
     mimo_handle.mimo_close();
     error();
@@ -526,7 +530,7 @@ for iue = 1:N_UE
 end
 
 
-function [H, rx_H_est, preamble_pk, err_flag] = channel_estimation_fun(data_vec, N_BS_ANT, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, mode, frm_idx)
+function [H, rx_H_est, preamble_pk, cfo_est_mat, err_flag] = channel_estimation_fun(data_vec, N_BS_ANT, N_UE, N_SC, lts_t, lts_f, preamble_common, FFT_OFFSET, mode, frm_idx, cfo_est_mat)
     global DEBUG;
     H = [];
     rx_H_est = [];
@@ -541,13 +545,16 @@ function [H, rx_H_est, preamble_pk, err_flag] = channel_estimation_fun(data_vec,
             if strcmp(mode, 'sounding')
                 % Data shape: (# good frames, # UEs, numRxSyms==N_BS_ANT, n_samps)
                 curr_vec = squeeze(data_vec(frm_idx, iue, ibs, :));
+                cfo_est_apply = nan;  % dummy
             elseif strcmp(mode, 'calibration')
                 assert(N_UE == 1);
                 % Data shape: (# good frames, n_bs_antenna, numRxSyms==1, n_samps)
                 curr_vec = squeeze(data_vec(frm_idx, ibs, 1, :));
+                cfo_est_apply = nan;  % dummy
             elseif strcmp(mode, 'dl-bf')
                 % Data shape: (# good frames, # UEs, numRxSyms==1, numSamps)
                 curr_vec = squeeze(data_vec(frm_idx, iue, 1, :));
+                cfo_est_apply = cfo_est_mat(iue); % This is actually a vector during dl-bf
                 %curr_vec = curr_vec.';
             end
 
@@ -556,7 +563,7 @@ function [H, rx_H_est, preamble_pk, err_flag] = channel_estimation_fun(data_vec,
             [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
             [lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
 
-            if 1 %DEBUG
+            if 1
                 figure; subplot(2,1,1); plot(abs(curr_vec)); subplot(2,1,2); plot(lts_corr); title(sprintf('%s UE %d, BS %d',mode,iue,ibs));
             end
 
@@ -583,6 +590,10 @@ function [H, rx_H_est, preamble_pk, err_flag] = channel_estimation_fun(data_vec,
                 else
                     fprintf('LTS Index: %d \n', lts_ind);
                 end
+
+                % Measure CFO and apply correction
+                [curr_vec, cfo_est] = meas_and_apply_cfo_corr(curr_vec, lts_ind, FFT_OFFSET, mode, cfo_est_apply);
+                cfo_est_mat(ibs, iue) = cfo_est;
 
                 % Re-extract LTS for channel estimate
                 rx_lts = curr_vec(lts_ind : lts_ind+159);
@@ -644,4 +655,35 @@ function [cal_data_vec] = time_offset_cal(corr_peaks, data, N_BS_ANT, lts_t)
     end
 
     cal_data_vec = rx_mat_calibrated_tmp;
+end
+
+
+function [rx_dec_cfo_corr, rx_cfo_est_lts] = meas_and_apply_cfo_corr(rx_vec_iris, lts_ind, FFT_OFFSET, mode, cfo_est_mat)   
+
+    % Estimate during downlink sound, and apply during downlink BF
+    global APPLY_CFO_CORRECTION;
+
+    %Extract LTS (not yet CFO corrected)
+    rx_lts = rx_vec_iris(lts_ind : lts_ind+159);
+    rx_lts1 = rx_lts(-64+-FFT_OFFSET + [97:160]);
+    rx_lts2 = rx_lts(-FFT_OFFSET + [97:160]);
+    %Calculate coarse CFO est
+    rx_cfo_est_lts = mean(unwrap(angle(rx_lts2 .* conj(rx_lts1))));
+
+    if(APPLY_CFO_CORRECTION)
+        if strcmp(mode, 'dl-bf')
+            % Apply the average CFO estimate we computed during the sounding process
+            disp("APPLY CFO CORRECTION...");
+            rx_cfo_est_lts = cfo_est_mat;
+        else
+            % Apply the CFO estimate we just computed
+            rx_cfo_est_lts = rx_cfo_est_lts/(2*pi*64);
+        end
+    else
+        rx_cfo_est_lts = 0;
+    end
+
+    % Apply CFO correction to raw Rx waveform
+    rx_cfo_corr_t = exp(-1i*2*pi*rx_cfo_est_lts*[0:length(rx_vec_iris)-1]);
+    rx_dec_cfo_corr = rx_vec_iris .* rx_cfo_corr_t.';
 end

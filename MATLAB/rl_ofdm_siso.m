@@ -270,6 +270,7 @@ for frm_idx = 1:numGoodFrames
         %Calculate coarse CFO est
         rx_cfo_est_lts = mean(unwrap(angle(rx_lts2 .* conj(rx_lts1))));
         rx_cfo_est_lts = rx_cfo_est_lts/(2*pi*64);
+
     else
         rx_cfo_est_lts = 0;
     end
@@ -278,7 +279,7 @@ for frm_idx = 1:numGoodFrames
     rx_dec_cfo_corr = rx_vec_iris .* rx_cfo_corr_t.';
 
     % Re-extract LTS for channel estimate
-    rx_lts = rx_vec_iris(lts_ind : lts_ind+159);
+    rx_lts = rx_dec_cfo_corr(lts_ind : lts_ind+159);
     rx_lts1 = rx_lts(-64+-FFT_OFFSET + [97:160]);
     rx_lts2 = rx_lts(-FFT_OFFSET + [97:160]);
 
