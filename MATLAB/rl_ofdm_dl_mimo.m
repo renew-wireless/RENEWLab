@@ -563,7 +563,7 @@ function [H, rx_H_est, preamble_pk, cfo_est_mat, err_flag] = channel_estimation_
             [LTS1, LTS2] = meshgrid(lts_peaks,lts_peaks);
             [lts_second_peak_index,y] = find(LTS2-LTS1 == length(lts_t));
 
-            if 1
+            if DEBUG
                 figure; subplot(2,1,1); plot(abs(curr_vec)); subplot(2,1,2); plot(lts_corr); title(sprintf('%s UE %d, BS %d',mode,iue,ibs));
             end
 
