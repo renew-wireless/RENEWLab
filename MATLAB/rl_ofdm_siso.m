@@ -49,6 +49,7 @@ WRITE_PNG_FILES         = 0;            % Enable writing plots to PNG
 PLOT                    = 0;
 FIND_OPTIMAL_GAINS      = 0;            % Evaluates different TX/RX gain combinations and returns the combination that yields the largest number of detected beacons
 SIM_MODE                = 0;            % Enable for AWGN sim, disable to run hardware
+APPLY_CFO_CORRECTION    = 0;
 
 %Iris params:
 N_BS_NODE               = 1;
@@ -261,8 +262,24 @@ for frm_idx = 1:numGoodFrames
         lts_ind = 1;
     end
 
+    if(APPLY_CFO_CORRECTION)
+        %Extract LTS (not yet CFO corrected)
+        rx_lts = rx_vec_iris(lts_ind : lts_ind+159);
+        rx_lts1 = rx_lts(-64+-FFT_OFFSET + [97:160]);
+        rx_lts2 = rx_lts(-FFT_OFFSET + [97:160]);
+        %Calculate coarse CFO est
+        rx_cfo_est_lts = mean(unwrap(angle(rx_lts2 .* conj(rx_lts1))));
+        rx_cfo_est_lts = rx_cfo_est_lts/(2*pi*64);
+
+    else
+        rx_cfo_est_lts = 0;
+    end
+    % Apply CFO correction to raw Rx waveform
+    rx_cfo_corr_t = exp(-1i*2*pi*rx_cfo_est_lts*[0:length(rx_vec_iris)-1]);
+    rx_dec_cfo_corr = rx_vec_iris .* rx_cfo_corr_t.';
+
     % Re-extract LTS for channel estimate
-    rx_lts = rx_vec_iris(lts_ind : lts_ind+159);
+    rx_lts = rx_dec_cfo_corr(lts_ind : lts_ind+159);
     rx_lts1 = rx_lts(-64+-FFT_OFFSET + [97:160]);
     rx_lts2 = rx_lts(-FFT_OFFSET + [97:160]);
 
