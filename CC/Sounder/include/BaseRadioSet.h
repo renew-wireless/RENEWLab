@@ -15,7 +15,7 @@
 
 class BaseRadioSet {
  public:
-  BaseRadioSet(Config* cfg);
+  BaseRadioSet(Config* cfg, const bool calibrate_proc);
   ~BaseRadioSet(void);
   void radioTx(const void* const* buffs);
   void radioRx(void* const* buffs);
@@ -28,6 +28,7 @@ class BaseRadioSet {
   void radioStart(void);
   void radioStop(void);
   bool getRadioNotFound() { return radioNotFound; }
+  void adjustDelays(void);
 
  private:
   // use for create pthread
@@ -46,13 +47,14 @@ class BaseRadioSet {
   void radioTrigger(void);
   void sync_delays(size_t cellIdx);
   SoapySDR::Device* baseRadio(size_t cellId);
-  int syncTimeOffset(bool, bool);
+  int syncTimeOffset();
   void dciqCalibrationProc(size_t);
   void readSensors(void);
 
   Config* _cfg;
   std::vector<SoapySDR::Device*> hubs;
   std::vector<std::vector<Radio*>> bsRadios;  // [cell, iris]
+  std::vector<int> trigger_offsets_;
   bool radioNotFound;
 };
 

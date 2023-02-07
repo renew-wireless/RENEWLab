@@ -23,7 +23,7 @@ static size_t kMinSupportedFFTSize = 64;
 static size_t kMaxSupportedCPSize = 128;
 
 Config::Config(const std::string& jsonfile, const std::string& directory,
-               const bool bs_only, const bool client_only)
+               const bool bs_only, const bool client_only, const bool calibrate)
     : directory_(directory) {
   std::string conf_str;
   Utils::loadTDDConfig(jsonfile, conf_str);
@@ -71,7 +71,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   cl_sdr_ch_ = (cl_channel_ == "AB") ? 2 : 1;
 
   auto serials_file = tddConf.value("serial_file", "./files/topology.json");
-  loadTopology(serials_file, bs_only, client_only);
+  loadTopology(serials_file, bs_only, client_only, calibrate);
   std::cout << "Topology: "
             << "\n"
             << " Number of cells: " << num_cells_ << "\n"
@@ -262,6 +262,9 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   tx_scale_ = tddConf.value("tx_scale", 0);
   this->genPilots();
 
+  this->loadULData();
+  this->loadDLData();
+
   bool recording =
       pilot_slot_per_frame_ + ul_slot_per_frame_ + dl_slot_per_frame_ > 0;
   if (recording == true) {
@@ -374,7 +377,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
 }
 
 void Config::loadTopology(std::string serials_file, const bool bs_only,
-                          const bool client_only) {
+                          const bool client_only, const bool calibrate) {
   // Load serials file (loads hub, sdr, and rrh serials)
   std::string serials_str;
   Utils::loadTDDConfig(serials_file, serials_str);
@@ -409,7 +412,7 @@ void Config::loadTopology(std::string serials_file, const bool bs_only,
 
         // Append calibration node
         if ((internal_measurement_ == true && ref_node_enable_ == true) ||
-            sample_cal_en_ == true) {
+            (calibrate && sample_cal_en_ == true)) {
           calib_ids_.at(i) = serials_conf.value("reference", "");
           if (calib_ids_.at(i).empty()) {
             MLPD_ERROR("No calibration node ID found in topology file!\n");
@@ -846,7 +849,7 @@ void Config::genPilots() {
 
 void Config::loadULData() {
   // compose data slot
-  if (client_present_ && ul_data_slot_present_) {
+  if (ul_data_slot_present_) {
     txdata_time_dom_.resize(num_cl_antennas_);
     txdata_freq_dom_.resize(num_cl_antennas_);
     // For now, we're reading one frame worth of data
@@ -861,19 +864,9 @@ void Config::loadULData() {
 
       std::string filename_ul_data_f =
           directory_ + "/ul_data_f_" + filename_tag;
-      std::printf("Loading UL frequency-domain data for radio %zu to %s\n", i,
-                  filename_ul_data_f.c_str());
       ul_tx_fd_data_files_.push_back("ul_data_f_" + filename_tag);
-      FILE* fp_tx_f = std::fopen(filename_ul_data_f.c_str(), "rb");
-      if (!fp_tx_f) {
-        throw std::runtime_error(filename_ul_data_f +
-                                 std::string(" not found!"));
-      }
-
       std::string filename_ul_data_t =
           directory_ + "/ul_data_t_" + filename_tag;
-      std::printf("Loading UL time-domain data for radio %zu to %s\n", i,
-                  filename_ul_data_t.c_str());
       ul_tx_td_data_files_.push_back(filename_ul_data_t);
     }
   }
@@ -881,7 +874,7 @@ void Config::loadULData() {
 
 void Config::loadDLData() {
   // compose data slot
-  if (bs_present_ && dl_data_slot_present_) {
+  if (dl_data_slot_present_) {
     dl_txdata_time_dom_.resize(num_bs_antennas_all_);
     dl_txdata_freq_dom_.resize(num_bs_antennas_all_);
     // For now, we're reading one frame worth of data
@@ -895,19 +888,10 @@ void Config::loadDLData() {
 
       std::string filename_dl_data_f =
           directory_ + "/dl_data_f_" + filename_tag;
-      std::printf("Loading DL frequency-domain data to %s\n",
-                  filename_dl_data_f.c_str());
       dl_tx_fd_data_files_.push_back("dl_data_f_" + filename_tag);
-      FILE* fp_tx_f = std::fopen(filename_dl_data_f.c_str(), "rb");
-      if (!fp_tx_f) {
-        throw std::runtime_error(filename_dl_data_f +
-                                 std::string(" not found!"));
-      }
 
       std::string filename_dl_data_t =
           directory_ + "/dl_data_t_" + filename_tag;
-      std::printf("Loading DL time-domain data to %s\n",
-                  filename_dl_data_t.c_str());
       dl_tx_td_data_files_.push_back(filename_dl_data_t);
     }
   }
@@ -1069,8 +1053,10 @@ extern "C" {
 __attribute__((visibility("default"))) Config* Config_new(char* filename,
                                                           char* storepath,
                                                           bool bs_only,
-                                                          bool client_only) {
-  Config* cfg = new Config(filename, storepath, bs_only, client_only);
+                                                          bool client_only,
+                                                          bool calibrate) {
+  Config* cfg =
+      new Config(filename, storepath, bs_only, client_only, calibrate);
   return cfg;
 }
 }

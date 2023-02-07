@@ -181,7 +181,7 @@ def generate_training_seq(preamble_type='lts', seq_length=0, cp=32, upsample=1, 
 
                 up_zeros = np.zeros(len(zadoff_freq) // 2 * (upsample - 1))
                 zadoff_freq_up = np.concatenate((up_zeros, zadoff_freq, up_zeros))
-                signal = np.fft.ifft(zadoff_freq_up)
+                signal = np.fft.ifft(np.fft.ifftshift(zadoff_freq_up))
                 # signal = signal / np.absolute(signal).max()  # normalize - move... do it later
 
                 # Now affix the cyclic prefix

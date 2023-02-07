@@ -167,7 +167,8 @@ set(SOUNDER_SOURCES ${PURE_UHD_SOURCES}
     hdf5_reader.cc
     recorder_thread.cc
     BaseRadioSet.cc
-    BaseRadioSet-calibrate.cc
+    BaseRadioSet-calibrate-digital.cc
+    BaseRadioSet-calibrate-analog.cc
     comms-lib.cc
     comms-lib-avx.cc
     utils.cc
