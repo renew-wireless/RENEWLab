@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 #Allow project version
 cmake_policy(SET CMP0048 NEW)
-project(Sounder VERSION 1.2.0)
+project(Sounder VERSION 1.2.1)
 
 if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 7.0)
   set(GCC_COVERAGE_COMPILE_FLAGS "-faligned-new")
