@@ -349,6 +349,24 @@ def plot_snr_map(snr, n_frm_st, n_frm_end, n_ant, sub_sample=1):
     cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, np.max(snr), 10),
                         orientation='horizontal')
 
+def plot_mag_map(samps):
+    n_tx = samps.shape[0]
+    n_rx = samps.shape[1]
+    fig, axes = plt.subplots(1, 1, squeeze=False)
+    fig.suptitle('Signal Magnitude Map')
+    c = []
+    c.append(axes[0,0].imshow(samps.T, vmin=np.min(samps), vmax=np.max(samps), cmap='viridis',
+                                interpolation='nearest',
+                                aspect="auto"))
+    axes[0,0].set_title('MxM BS Grid')
+    axes[0,0].set_ylabel('Antenna #')
+    axes[0,0].set_xlabel('Antenna #')
+    axes[0,0].set_xticks(np.arange(0, n_rx), minor=True)
+    axes[0,0].set_yticks(np.arange(0, n_tx), minor=True)
+    axes[0,0].grid(which='minor', color='0.95', linestyle='-', linewidth=0.2)
+    cbar = plt.colorbar(c[-1], ax=axes.ravel().tolist(), ticks=np.linspace(0, np.max(samps), 10),
+                        orientation='horizontal')
+
 def plot_match_filter(match_filt, ref_frame, n_frm_st, ant_i):
     n_ue = match_filt.shape[1]
 
