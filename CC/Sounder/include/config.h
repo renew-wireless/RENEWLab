@@ -19,7 +19,8 @@
 
 class Config {
  public:
-  Config(const std::string&, const std::string&, const bool, const bool);
+  Config(const std::string&, const std::string&, const bool, const bool,
+         const bool);
   ~Config();
 
   //Accessors
@@ -58,6 +59,9 @@ class Config {
   inline bool single_gain(void) const { return this->single_gain_; }
   inline bool cl_agc_en(void) const { return this->cl_agc_en_; }
   inline int cl_agc_gain_init(void) const { return this->cl_agc_gain_init_; }
+  inline bool cl_power_ramp(void) const { return this->cl_power_ramp_; }
+  inline int cl_power_ramp_lo(void) const { return this->cl_power_ramp_lo_; }
+  inline int cl_power_ramp_hi(void) const { return this->cl_power_ramp_hi_; }
   inline bool imbalance_cal_en(void) const { return this->imbalance_cal_en_; }
   inline bool sample_cal_en(void) const { return this->sample_cal_en_; }
   inline size_t max_frame(void) const { return this->max_frame_; }
@@ -74,6 +78,7 @@ class Config {
   inline size_t num_cl_antennas(void) const { return this->num_cl_antennas_; }
   inline size_t fft_size(void) const { return this->fft_size_; }
   inline size_t cp_size(void) const { return this->cp_size_; }
+  inline bool dl_pilots_en(void) const { return this->dl_pilots_en_; }
   inline size_t symbol_data_subcarrier_num(void) const {
     return this->symbol_data_subcarrier_num_;
   }
@@ -94,6 +99,7 @@ class Config {
   }
   inline double rate(void) const { return this->rate_; }
   inline int tx_advance(size_t id) const { return this->tx_advance_.at(id); }
+  inline float corr_scale(size_t id) const { return this->corr_scale_.at(id); }
   inline size_t cl_sdr_ch(void) const { return this->cl_sdr_ch_; }
   inline size_t bs_sdr_ch(void) const { return this->bs_sdr_ch_; }
 
@@ -119,8 +125,9 @@ class Config {
   }
   inline bool ref_node_enable(void) const { return this->ref_node_enable_; }
   inline size_t cal_ref_sdr_id(void) const { return this->cal_ref_sdr_id_; }
-  inline const std::vector<std::vector<std::string>>& calib_frames(void) const {
-    return this->calib_frames_;
+  inline const std::vector<std::vector<std::string>>& bs_array_frames(
+      void) const {
+    return this->bs_array_frames_;
   }
 
   //TODO split the following (4) in accessor and setter
@@ -196,10 +203,6 @@ class Config {
     return this->pilot_sc_ind_;
   };
 
-  inline const std::vector<std::string>& frames(void) const {
-    return this->frames_;
-  }
-
   inline const std::vector<std::vector<std::string>>& bs_sdr_ids(void) const {
     return this->bs_sdr_ids_;
   }
@@ -265,22 +268,34 @@ class Config {
   size_t getNumBsSdrs();
   size_t getTotNumAntennas();
   size_t getNumRecordedSdrs();
-  int getClientId(int, int);
-  int getNoiseSlotIndex(int, int);
-  int getUlSlotIndex(int, int);
-  int getDlSlotIndex(int, int);
-  bool isPilot(int, int);
-  bool isNoise(int, int);
-  bool isUlData(int, int);
-  bool isDlData(int, int);
+  int getClientId(size_t, size_t);
+  int getNoiseSlotIndex(size_t, size_t);
+  int getUlSlotIndex(size_t, size_t);
+  int getDlSlotIndex(size_t, size_t);
+  bool isPilot(size_t, size_t, size_t);
+  bool isNoise(size_t, size_t, size_t);
+  bool isUlData(size_t, size_t, size_t);
+  bool isDlData(size_t, size_t);
   unsigned getCoreCount();
 
+  void genPilots();
   void loadULData();
   void loadDLData();
+
+  enum BsSchedType {
+    CALIB_STAR_TOPO,
+    CALIB_FULLY_CONN,
+    DL_SOUNDING,
+    USER_INPUT
+  };
+  void genBsSchedule(BsSchedType type);
+  void genClientSchedule(BsSchedType type);
+  void loadTopology(std::string, const bool, const bool, const bool);
 
  private:
   bool bs_present_;
   bool client_present_;
+  bool client_serial_present_;  // no accessor
   std::string directory_;
 
   // common features
@@ -292,6 +307,7 @@ class Config {
   double bw_filter_;
   size_t fft_size_;
   size_t cp_size_;
+  bool dl_pilots_en_;
   size_t ofdm_symbol_size_;
   size_t symbol_data_subcarrier_num_;
   size_t symbol_per_slot_;
@@ -338,7 +354,6 @@ class Config {
   size_t num_bs_sdrs_all_;
   size_t num_bs_antennas_all_;
   std::string bs_channel_;
-  std::vector<std::string> frames_;
   std::string frame_mode_;
   bool bs_hw_framer_;
   bool hw_framer_;
@@ -358,7 +373,7 @@ class Config {
   bool sample_cal_en_;
   bool imbalance_cal_en_;
   std::string trace_file_;
-  std::vector<std::vector<std::string>> calib_frames_;
+  std::vector<std::vector<std::string>> bs_array_frames_;
   bool internal_measurement_;
   bool ref_node_enable_;
   size_t cal_ref_sdr_id_;
@@ -373,7 +388,11 @@ class Config {
   std::string cl_channel_;
   bool cl_agc_en_;
   int cl_agc_gain_init_;
+  bool cl_power_ramp_;
+  int cl_power_ramp_lo_;
+  int cl_power_ramp_hi_;
   std::vector<int> tx_advance_;
+  std::vector<float> corr_scale_;
   std::vector<size_t> data_ind_;
   std::vector<uint32_t> coeffs_;
   std::vector<std::complex<int16_t>> pilot_ci16_;

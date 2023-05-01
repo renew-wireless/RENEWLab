@@ -22,7 +22,7 @@
 using json = nlohmann::json;
 static constexpr int kMaxTOSyncRetry = 10;
 
-BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
+BaseRadioSet::BaseRadioSet(Config* cfg, const bool calibrate_proc) : _cfg(cfg) {
   std::vector<size_t> num_bs_antenntas(_cfg->num_cells());
   bsRadios.resize(_cfg->num_cells());
   radioNotFound = false;
@@ -98,11 +98,13 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
     }
 
     // Perform DC Offset & IQ Imbalance Calibration
-    if (_cfg->imbalance_cal_en() == true) {
+    if (calibrate_proc && _cfg->imbalance_cal_en() == true) {
       if (_cfg->bs_channel().find('A') != std::string::npos)
         dciqCalibrationProc(0);
       if (_cfg->bs_channel().find('B') != std::string::npos)
         dciqCalibrationProc(1);
+      MLPD_INFO("%s done!\n", __func__);
+      return;
     }
 
     thread_count.store(num_radios);
@@ -209,48 +211,20 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
                  "discovered in the network!\033[0m"
               << std::endl;
   } else {
-    if (_cfg->sample_cal_en() == true) {
-      int cal_cnt = 0;
-      int offset_diff = 1;
-      // array radios delay adjust
-      while (offset_diff > 0) {
-        if (++cal_cnt > kMaxTOSyncRetry) {
-          std::cout << kMaxTOSyncRetry
-                    << " attemps of sample offset calibration, "
-                       "stopping..."
-                    << std::endl;
-          break;
-        }
-        offset_diff =
-            syncTimeOffset(false, true);  // run 1: find offsets and adjust
+    if (calibrate_proc && _cfg->sample_cal_en() == true) {
+      this->syncTimeOffset();
+      return;
+    } else if (_cfg->sample_cal_en() == true) {
+      const std::string filename = "files/iris_samp_offsets.dat";
+      trigger_offsets_ = Utils::ReadVector(filename, false);
+      size_t num_radios = _cfg->n_bs_sdrs()[0];
+      if (trigger_offsets_.size() == num_radios) {
+        this->adjustDelays();
+      } else {
+        std::printf(
+            "The number of sample offsets in file does not match the number of "
+            "radios.\n");
       }
-      usleep(100000);
-      offset_diff = syncTimeOffset(false, false);  // run 2: verify
-      if (offset_diff > 1)
-        std::cout << "Failed ";
-      else
-        std::cout << "Successful ";
-      std::cout << "sample offset calibration!" << std::endl;
-      // ref node delay adjust
-      /*cal_cnt = 0;
-      offset_diff = 1;
-      while (offset_diff > 0) {
-        if (++cal_cnt > kMaxTOSyncRetry) {
-          std::cout << kMaxTOSyncRetry
-                    << " attemps of sample offset calibration for ref node, "
-                       "stopping..."
-                    << std::endl;
-          break;
-        }
-        offset_diff =
-            syncTimeOffset(true, true);  // run 1: find offsets and adjust
-      }
-      offset_diff = syncTimeOffset(true, false);  // run 2: verify
-      if (offset_diff > 0)
-        std::cout << "Failed ";
-      else
-        std::cout << "Successful ";
-      std::cout << "ref node sample offset calibration!" << std::endl;*/
     }
 
     nlohmann::json tddConf;
@@ -271,15 +245,18 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
               std::string tx_ram = "TX_RAM_";
               dev->writeRegisters(tx_ram + c, 0, _cfg->pilot());
             }
-            tddConf["frames"].push_back(_cfg->calib_frames().at(c).at(i));
+            tddConf["frames"].push_back(_cfg->bs_array_frames().at(c).at(i));
             std::cout << "Cell " << c << ", SDR " << i
                       << " calibration schedule : "
-                      << _cfg->calib_frames().at(c).at(i) << std::endl;
+                      << _cfg->bs_array_frames().at(c).at(i) << std::endl;
 
           } else {
             tddConf["frames"] = json::array();
-            size_t frame_size = _cfg->frames().at(c).size();
-            std::string fw_frame = _cfg->frames().at(c);
+
+            const size_t frame_size =
+                _cfg->bs_array_frames().at(c).at(i).size();
+            std::string fw_frame = _cfg->bs_array_frames().at(c).at(i);
+
             for (size_t s = 0; s < frame_size; s++) {
               char sym_type = fw_frame.at(s);
               if (sym_type == 'P')
@@ -291,10 +268,10 @@ BaseRadioSet::BaseRadioSet(Config* cfg) : _cfg(cfg) {
               else if (sym_type == 'D')
                 fw_frame.replace(s, 1, "T");  // downlink data
             }
+
             tddConf["frames"].push_back(fw_frame);
-            std::cout << "Cell " << c
-                      << " FPGA schedule: " << _cfg->frames().at(c)
-                      << std::endl;
+            std::cout << "Cell " << c << ", SDR " << i
+                      << " Schedule : " << fw_frame << std::endl;
           }
           if (_cfg->internal_measurement() == false ||
               _cfg->num_cl_antennas() > 0) {
@@ -463,6 +440,31 @@ void BaseRadioSet::radioTrigger(void) {
   }
 }
 
+void BaseRadioSet::adjustDelays() {
+  // adjust all trigger delay fwith respect to the max offset
+  const auto min_max_offset =
+      std::minmax_element(trigger_offsets_.begin(), trigger_offsets_.end());
+  const int min_offset = *min_max_offset.first;
+  const int ref_offset = *min_max_offset.second;
+  const size_t diff_offset = ref_offset - min_offset;
+  if (diff_offset >= _cfg->cp_size()) {
+    for (size_t i = 0; i < trigger_offsets_.size(); i++) {
+      auto* dev = bsRadios.at(0).at(i)->RawDev();
+      const int delta = ref_offset - trigger_offsets_.at(i);
+      std::printf("Sample adjusting delay of node %zu (offset %d) by %d\n", i,
+                  trigger_offsets_.at(i), delta);
+      const int iter = delta < 0 ? -delta : delta;
+      for (int j = 0; j < iter; j++) {
+        if (delta < 0) {
+          dev->writeSetting("ADJUST_DELAYS", "-1");
+        } else {
+          dev->writeSetting("ADJUST_DELAYS", "1");
+        }
+      }
+    }
+  }
+}
+
 void BaseRadioSet::radioStart() {
   if (!kUseSoapyUHD) {
     radioTrigger();
@@ -526,15 +528,10 @@ int BaseRadioSet::radioTx(size_t radio_id, size_t cell_id,
     w = bsRadios.at(cell_id).at(radio_id)->xmit(buffs, _cfg->samps_per_slot(),
                                                 flags, frameTimeNs);
   }
-#if DEBUG_RADIO
-  size_t chanMask;
-  long timeoutUs(0);
-  auto* dev = bsRadios.at(cell_id).at(radio_id)->RawDev();
-  auto* txs = bsRadios.at(cell_id).at(radio_id)->txs;
-  int s = dev->readStreamStatus(txs, chanMask, flags, frameTime, timeoutUs);
-  std::cout << "cell " << cell_id << " radio " << radio_id << " tx returned "
-            << w << " and status " << s << std::endl;
-#endif
+  if (kDebugRadio) {
+    std::cout << "cell " << cell_id << " radio " << radio_id << " tx returned "
+              << w << std::endl;
+  }
   return w;
 }
 
@@ -566,15 +563,16 @@ int BaseRadioSet::radioRx(size_t radio_id, size_t cell_id, void* const* buffs,
       frameTime = frameTimeNs;
     else
       frameTime = SoapySDR::timeNsToTicks(frameTimeNs, _cfg->rate());
-#if DEBUG_RADIO
-    if (ret != numSamps)
-      std::cout << "recv returned " << ret << " from radio " << radio_id
-                << ", in cell " << cell_id << ". Expected: " << numSamps
-                << std::endl;
-    else
-      std::cout << "radio " << radio_id << " in cell " << cell_id
-                << ". Received " << ret << " at " << frameTime << std::endl;
-#endif
+    if (kDebugRadio) {
+      if (ret != numSamps) {
+        std::cout << "recv returned " << ret << " from radio " << radio_id
+                  << ", in cell " << cell_id << ". Expected: " << numSamps
+                  << std::endl;
+      } else {
+        std::cout << "radio " << radio_id << " in cell " << cell_id
+                  << ". Received " << ret << " at " << frameTime << std::endl;
+      }
+    }
   } else {
     MLPD_WARN("Invalid radio id: %zu in cell %zu\n", radio_id, cell_id);
     ret = 0;

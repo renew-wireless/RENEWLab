@@ -53,10 +53,12 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
     n_frm_end = hdf5.n_frm_end
     n_frm_st = hdf5.n_frm_st
     metadata = hdf5.metadata
+
     if 'SYMBOL_LEN' in metadata: # to support older datasets
         samps_per_slot = int(metadata['SYMBOL_LEN'])
     elif 'SLOT_SAMP_LEN' in metadata:
         samps_per_slot = int(metadata['SLOT_SAMP_LEN'])
+    dl_pilot_en = int(hdf5.metadata["DL_PILOTS_EN"])
     num_pilots = int(metadata['PILOT_NUM'])
     num_cl = int(metadata['CL_NUM'])
     prefix_len = int(metadata['PREFIX_LEN'])
@@ -146,7 +148,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             return
 
         # Find the frame number at which each UE starts sending pilots+data
-        for u in range(num_ues):
+        for u in range(num_cl):
             amps = np.mean(np.abs(samps[:, u, ant_i, :]), axis=1)
             for i in range(1, len(amps)):
                 if amps[i] > thresh and amps[i-1] < thresh:
@@ -203,7 +205,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             # CSI:   #Frames, #Users, #Pilot Rep, #Antennas, #Subcarrier
             # For correlation use a fft size of 64
             print("*verify_hdf5(): Calling samps2csi with fft_size = {}, offset = {}, bound = {}, cp = {} *".format(fft_size, offset, z_padding, cp))
-            csi, _ = hdf5_lib.samps2csi_large(pilot_samples, num_pilots, chunk_size, samps_per_slot, fft_size=fft_size,
+            csi, SNR = hdf5_lib.samps2csi_large(pilot_samples, num_pilots, chunk_size, samps_per_slot, fft_size=fft_size,
                                             offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f, fft_shifted_dataset=fft_shifted_dataset)
 
             if corr_thresh > 0.0:
@@ -227,7 +229,8 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             csi_to_plot = userCSI
             if not fft_shifted_dataset:
                 csi_to_plot = np.fft.fftshift(userCSI, 3)
-            plot_csi(csi_to_plot, corr_total, plot_bs_nodes, pilot_frames, ref_frame, ant_i, subcarrier_i, offset)
+            plot_csi(csi_to_plot, corr_total, plot_bs_nodes, pilot_frames, ref_frame, ant_i, user_i, subcarrier_i, offset)
+            #plot_snr(SNR, plot_bs_nodes)
             if analyze:
                 if noise_avail:
                     noise_samples = hdf5.noise_samples[:, cell_i, :, :, :]
@@ -279,7 +282,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                                                 offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f, fft_shifted_dataset=fft_shifted_dataset)
                 uplink_csi = csi[:, :, ofdm_sym_i, :, :]
                 corr_total, sig_sc = calCorr(uplink_csi, np.transpose(np.conj(uplink_csi[ref_frame, :, :, :]), (1, 0, 2) ) )
-                plot_csi(uplink_csi, corr_total, calib_plot_bs_nodes, pilot_frames, ref_frame, ant_i, subcarrier_i, offset)
+                plot_csi(uplink_csi, corr_total, calib_plot_bs_nodes, pilot_frames, ref_frame, ant_i, user_i, subcarrier_i, offset)
 
                 ## Compare implicit downlink csi with explicit csi
                 ## imp: Frames, #Antennas, #Users, Subcarrier
@@ -338,14 +341,15 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 noise_f = noise[:, ul_slot_i, :, :, :]
             else:
                 noise_f = None
-            tx_data = hdf5_lib.load_tx_data(metadata, hdf5.dirpath)
+            tx_data = hdf5_lib.load_tx_data(metadata, hdf5.dirpath, hdf5.tx_files)
             equalized_symbols, demod_symbols, tx_symbols, slot_evm, slot_evm_snr, slot_ser = hdf5_lib.demodulate(ul_samps[:, ul_slot_i, :, :], userCSI, tx_data[:, :, ul_slot_i, :, :], metadata, ue_frame_offset, offset, ul_slot_i, noise_f, demod, fft_shifted_dataset)
             plot_constellation_stats(slot_evm, slot_evm_snr, slot_ser, equalized_symbols, tx_symbols, ref_frame, ul_slot_i)
 
     # Plot DL data symbols
     if dl_data_avail > 0:
-        # DL Samps: #Frames, #Cell, #Downlink Symbol, #Antennas, #Samples
+        # DL Samps: #Frames, #Cell, #Downlink Symbol, #Users, #Samples
         downlink_samples = hdf5.downlink_samples[:, cell_i, :, :, :]
+        downlink_samples = np.transpose(downlink_samples, (0, 2, 1, 3))
         frm_plt = min(frame_i, downlink_samples.shape[0] + n_frm_st)
         # Verify frame_i does not exceed max number of collected frames
         ref_frame = min(frame_i - n_frm_st, downlink_samples.shape[0])
@@ -353,17 +357,48 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 downlink_samples, (downlink_samples.shape[0], downlink_samples.shape[1], downlink_samples.shape[2], samps_per_slot, 2))
         dl_samps = (samps_mat[:, :, :, :, 0] +
                 samps_mat[:, :, :, :, 1]*1j)*2**-15
+        num_users = dl_samps.shape[1]
+        num_dl_slots = dl_samps.shape[2]
+        print("Number of DL antennas in dataset %d"%num_dl_slots)
+        all_bs_nodes = set(range(num_dl_slots))
+        plot_bs_nodes = list(all_bs_nodes - set(exclude_bs_nodes))
+        dl_samps = dl_samps[:, :, plot_bs_nodes, :]
 
-        user_amps = np.mean(np.abs(dl_samps[:, :, ant_i, :]), axis=2)
-        plot_iq_samps(dl_samps, user_amps, n_frm_st, ref_frame, [user_i], [ant_i], data_str="Downlink Data")
+        user_amps = np.mean(np.abs(dl_samps[:, user_i, :, :]), axis=2)
+        plot_iq_samps(dl_samps, user_amps, n_frm_st, ref_frame, [user_i], [ant_i], data_str="Downlink Pilots")
 
+        if dl_pilot_en:
+            # Compute CSI from IQ samples
+            # Samps: #Frames, #USers, #DL Slots, #Samples
+            # CSI:   #Frames, #Users, #Pilot Rep, #DL Slots, #Subcarrier
+            # For correlation use a fft size of 64
+            dl_csi, _ = hdf5_lib.samps2csi_large(downlink_samples, num_users, chunk_size, samps_per_slot, fft_size=fft_size,
+                                            offset=offset, bound=z_padding, cp=cp, pilot_f=ofdm_pilot_f, fft_shifted_dataset=fft_shifted_dataset)
 
+            if corr_thresh > 0.0:
+                bad_nodes = find_bad_nodes(dl_csi, corr_thresh=corr_thresh,
+                                           user=user_i)
+                if bad_nodes:
+                    print(">>> Warning! List of bad nodes (1-based): {bad_nodes}".
+                          format(bad_nodes=bad_nodes))
+                else:
+                    print(">>> All Iris nodes are good!")
+
+            if ofdm_sym_i >= symbol_per_slot:  # if out of range index, do average
+                userCSI = np.mean(csi, 2)
+            else:
+                userCSI = dl_csi[:, :, ofdm_sym_i, :, :]
+            corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2) ) )
+
+            if not fft_shifted_dataset:
+                csi_to_plot = np.fft.fftshift(userCSI, 3)
+            plot_csi(csi_to_plot, corr_total, plot_bs_nodes, pilot_frames, ref_frame, ant_i, subcarrier_i, offset, data_str="Downlink")
 
     plt.show()
 
 def analyze_hdf5(csi, noise, metadata, frame_i=10, subcarrier_i=7, offset=-1):
     '''
-    Calculates and plots achievable rates from hdf5 traces
+        Calculates and plots achievable rates from hdf5 traces
 
     '''
 
@@ -558,6 +593,7 @@ def main():
     parser.add_option("--sub-sample", type="int", dest="sub_sample", help="Sub sample rate", default=1)
     parser.add_option("--thresh", type="float", dest="thresh", help="Ampiltude Threshold for valid frames", default=0.001)
     parser.add_option("--frame-start", type="int", dest="fr_strt", help="Starting frame. Must have set n_frames first and make sure fr_strt is within boundaries ", default=0)
+    parser.add_option("--tx-files", type="string", dest="tx_files", help="Additional TX files in the case of an isolated UE", default="")
     parser.add_option("--verify-trace", action="store_true", dest="verify", help="Run script without analysis", default=True)
     parser.add_option("--analyze-trace", action="store_true", dest="analyze", help="Run script without analysis", default=False)
     parser.add_option("--corr-thresh", type="float", dest="corr_thresh",
@@ -589,6 +625,7 @@ def main():
     corr_thresh = options.corr_thresh
     bs_nodes_str = options.bs_nodes
     exclude_bs_nodes_str = options.exclude_bs_nodes
+    tx_files = options.tx_files
 
     filename = sys.argv[1]
     scrpt_strt = time.time()
@@ -611,7 +648,7 @@ def main():
         hdf5 = h5py.File(str(filename), 'r')
         compute_legacy(hdf5)
     else:
-        hdf5 = hdf5_lib(filename, n_frames, fr_strt, sub_sample)
+        hdf5 = hdf5_lib(filename, tx_files, n_frames, fr_strt, sub_sample)
         pilot_samples = hdf5.pilot_samples
         uplink_samples = hdf5.uplink_samples
         noise_samples = hdf5.noise_samples

@@ -72,7 +72,7 @@ class Receiver {
   void clientTxRx(int tid);
   void clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer);
   ssize_t syncSearch(const std::complex<int16_t>* check_data,
-                     size_t search_window);
+                     size_t search_window, float corr_scale);
 
   float estimateCFO(const std::vector<std::complex<int16_t>>& sync_buff,
                     int sync_index);

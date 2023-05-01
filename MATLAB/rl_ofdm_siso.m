@@ -16,7 +16,7 @@
 % Within the OTA mode we further define three transmission modes:
 %  a) uplink
 %  b) downlink 
-%  c) dl_ref_node_as_ue: both base station board and UE are triggered from the hub instead
+%  c) ul-refnode-as-ue: both base station board and UE are triggered from the hub instead
 %     of using over-the-air beacons
 %
 % In both cases the client transmits an OFDM signal that resembles a
@@ -34,9 +34,10 @@
 clear all;
 close all;
 
-[version, executable, isloaded] = pyversion;
-if ~isloaded
-    pyversion /usr/bin/python
+pe = pyenv;
+%disp(pe);
+if pe.Status == 'NotLoaded'
+    pyversion /usr/bin/python3
     py.print() %weird bug where py isn't loaded in an external script
 end
 
@@ -48,6 +49,7 @@ WRITE_PNG_FILES         = 0;            % Enable writing plots to PNG
 PLOT                    = 0;
 FIND_OPTIMAL_GAINS      = 0;            % Evaluates different TX/RX gain combinations and returns the combination that yields the largest number of detected beacons
 SIM_MODE                = 0;            % Enable for AWGN sim, disable to run hardware
+APPLY_CFO_CORRECTION    = 0;
 
 %Iris params:
 N_BS_NODE               = 1;
@@ -56,8 +58,8 @@ TX_FRQ                  = 3.5475e9;
 RX_FRQ                  = TX_FRQ;
 ANT_BS                  = 'A';          % SISO: only one antenna supported
 ANT_UE                  = 'A';          % SISO: only one antenna supported
-TX_GN                   = 81;
-TX_GN_UE                = 91;
+TX_GN                   = 100;
+TX_GN_UE                = 100;
 RX_GN                   = 65;
 SMPL_RT                 = 5e6;
 TX_SCALE                = 1;            % Scale for Tx waveform ([0:1])
@@ -167,15 +169,17 @@ else
     disp("Running: HARDWARE MODE");
 
     % Create two Iris node objects:
-    tx_direction = 'uplink';      % Options: {'uplink', 'downlink', 'dl_ref_node_as_ue'}
+    tx_direction = 'uplink';      % Options: {'uplink', 'downlink', 'ul-refnode-as-ue'}
     bs_ids = ["RF3E000722"];
     ue_ids = ["RF3E000665"];
     hub_id = ["FH4B000003"];
+    ref_ids= [];      % Must have the REF node serial if tx_direction mode is 'ul-refnode-as-ue'
 
     % Iris nodes' parameters
     sdr_params = struct(...
         'bs_id', bs_ids, ...
         'ue_id', ue_ids,...
+        'ref_id', ref_ids, ...
         'hub_id', hub_id,...
         'bs_ant', ANT_BS, ...
         'ue_ant', ANT_UE, ...
@@ -200,23 +204,21 @@ else
         mimo_handle.mimo_update_sdr_param('rxgain', rxg_opt);
     end
 
-    if strcmp(tx_direction, 'uplink')
-        [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_uplink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
-
-    elseif strcmp(tx_direction, 'downlink')
-        [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_downlink(tx_vec_iris, N_FRM, N_ZPAD_PRE);
-
-    elseif strcmp(tx_direction, 'dl_ref_node_as_ue')
+    if strcmp(tx_direction, 'ul-refnode-as-ue')
         if isempty(hub_id)
-            error('Hub ID must be specified in dl_ref_node_as_ue transmission mode. Exit Now!');
+            error('Hub ID must be specified in ul-refnode-as-ue transmission mode. Exit Now!');
         end
-        bs_sched = ["GGGGGRG"];
-        ue_sched = ["GGGGGPG"];
-        [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx_refnode(tx_vec_iris, N_FRM, bs_sched, ue_sched, N_ZPAD_PRE);
+        if isempty(ref_ids)
+            error('Reference Node ID must be specified in ul-refnode-as-ue transmission mode. Exit Now!');
+        end
+        bs_sched = ["R"];
+        ue_sched = ["P"];
     else
-        error('TX Method Not Supported. Exit Now!');
+        bs_sched = [""];    % Dummy... set up inside driver
+        ue_sched = [""];    % Dummy... set up inside driver
     end
 
+    [rx_vec_iris_tmp, numGoodFrames, ~] = mimo_handle.mimo_txrx(tx_vec_iris, N_FRM, N_ZPAD_PRE, tx_direction, bs_sched, ue_sched);
     mimo_handle.mimo_close();
 
 end
@@ -260,8 +262,24 @@ for frm_idx = 1:numGoodFrames
         lts_ind = 1;
     end
 
+    if(APPLY_CFO_CORRECTION)
+        %Extract LTS (not yet CFO corrected)
+        rx_lts = rx_vec_iris(lts_ind : lts_ind+159);
+        rx_lts1 = rx_lts(-64+-FFT_OFFSET + [97:160]);
+        rx_lts2 = rx_lts(-FFT_OFFSET + [97:160]);
+        %Calculate coarse CFO est
+        rx_cfo_est_lts = mean(unwrap(angle(rx_lts2 .* conj(rx_lts1))));
+        rx_cfo_est_lts = rx_cfo_est_lts/(2*pi*64);
+
+    else
+        rx_cfo_est_lts = 0;
+    end
+    % Apply CFO correction to raw Rx waveform
+    rx_cfo_corr_t = exp(-1i*2*pi*rx_cfo_est_lts*[0:length(rx_vec_iris)-1]);
+    rx_dec_cfo_corr = rx_vec_iris .* rx_cfo_corr_t.';
+
     % Re-extract LTS for channel estimate
-    rx_lts = rx_vec_iris(lts_ind : lts_ind+159);
+    rx_lts = rx_dec_cfo_corr(lts_ind : lts_ind+159);
     rx_lts1 = rx_lts(-64+-FFT_OFFSET + [97:160]);
     rx_lts2 = rx_lts(-FFT_OFFSET + [97:160]);
 

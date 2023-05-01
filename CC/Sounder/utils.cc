@@ -117,18 +117,22 @@ std::vector<uint32_t> Utils::cint16_to_uint32(
 
 std::vector<std::vector<size_t>> Utils::loadSlots(
     const std::vector<std::string>& frames, char s) {
-  std::vector<std::vector<size_t>> slotId;
-  size_t frameSize = frames.size();
-  slotId.resize(frameSize);
-  for (size_t f = 0; f < frameSize; f++) {
-    std::string fr = frames[f];
-    for (size_t g = 0; g < fr.size(); g++) {
-      if (fr[g] == s) {
-        slotId[f].push_back(g);
+  const size_t num_radios = frames.size();
+  std::vector<std::vector<size_t>> slot_id(num_radios);
+
+  for (size_t radio_id = 0; radio_id < num_radios; radio_id++) {
+    const auto& input_frame = frames.at(radio_id);
+    auto& output_frame = slot_id.at(radio_id);
+
+    size_t slot_idx = 0;
+    for (const char& id : input_frame) {
+      if (id == s) {
+        output_frame.emplace_back(slot_idx);
       }
+      slot_idx++;
     }
   }
-  return slotId;
+  return slot_id;
 }
 
 void Utils::loadDevices(const std::string& filename,
@@ -223,4 +227,37 @@ void Utils::printVector(std::vector<std::complex<int16_t>>& data) {
   for (size_t i = 0; i < data.size(); i++) {
     std::cout << real(data.at(i)) << " " << imag(data.at(i)) << std::endl;
   }
+}
+
+void Utils::WriteVector(const std::string filename, const std::string desc,
+                        const std::vector<int> vec_data) {
+  std::stringstream so;
+  std::ofstream of;
+  of.open(filename);
+  if (desc.size() > 0) so << desc << std::endl;
+  for (size_t j = 0; j < vec_data.size(); j++) {
+    so << vec_data.at(j);
+    if (j < vec_data.size() - 1) so << std::endl;
+  }
+  of << so.str();
+  of.close();
+}
+
+std::vector<int> Utils::ReadVector(const std::string filename,
+                                   const bool skip_line) {
+  std::string line;
+  bool first_line = skip_line;
+  std::ifstream myfile(filename, std::ifstream::in);
+  std::vector<int> vec_data;
+  if (myfile.is_open()) {
+    while (std::getline(myfile, line)) {
+      if (first_line) {
+        first_line = false;
+      } else {
+        vec_data.push_back(std::stoi(line));
+      }
+    }
+    myfile.close();
+  }
+  return vec_data;
 }

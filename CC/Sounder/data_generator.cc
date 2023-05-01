@@ -11,11 +11,15 @@
 #include "include/data_generator.h"
 
 #include "include/comms-lib.h"
+#include "include/constants.h"
 #include "include/utils.h"
 
 void DataGenerator::GenerateData(const std::string& directory) {
   srand(time(NULL));
 
+  const size_t lts_seq_len = Consts::kFftSize_80211;
+  std::vector<std::complex<float>> lts_freq(Consts::lts_seq,
+                                            Consts::lts_seq + lts_seq_len);
   std::vector<std::complex<float>> prefix_zpad_t(cfg_->prefix(), 0);
   std::vector<std::complex<float>> postfix_zpad_t(cfg_->postfix(), 0);
   for (size_t i = 0; i < cfg_->num_cl_sdrs(); i++) {
@@ -171,12 +175,20 @@ void DataGenerator::GenerateData(const std::string& directory) {
                             tx_sym.end());  // add CP
               data_time_dom.insert(data_time_dom.end(), tx_sym.begin(),
                                    tx_sym.end());
-              data_freq_dom.insert(data_freq_dom.end(), ofdm_sym.begin(),
-                                   ofdm_sym.end());
+              if (cfg_->dl_pilots_en() == false) {
+                data_freq_dom.insert(data_freq_dom.end(), ofdm_sym.begin(),
+                                     ofdm_sym.end());
+              } else {
+                data_freq_dom.insert(data_freq_dom.end(), lts_freq.begin(),
+                                     lts_freq.end());
+              }
             }
             data_time_dom.insert(data_time_dom.end(), postfix_zpad_t.begin(),
                                  postfix_zpad_t.end());
-            auto data_time_dom_ci16 = Utils::cfloat_to_cint16(data_time_dom);
+            auto data_time_dom_ci16 =
+                cfg_->dl_pilots_en() ? cfg_->pilot_ci16()
+                                     : Utils::cfloat_to_cint16(data_time_dom);
+
             std::fwrite(data_freq_dom.data(),
                         cfg_->fft_size() * cfg_->symbol_per_slot(),
                         sizeof(float) * 2, fp_tx_f);

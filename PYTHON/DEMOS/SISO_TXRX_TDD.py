@@ -71,9 +71,13 @@ from macros import *
 #########################################
 #              Functions                #
 #########################################
-def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefix_pad, postfix_pad):
+def siso_tdd_burst(hub, serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefix_pad, postfix_pad):
     bsdr = SoapySDR.Device(dict(driver='iris', serial=serial1))
     msdr = SoapySDR.Device(dict(driver='iris', serial=serial2))
+    if hub != "":
+        trig_dev = SoapySDR.Device(dict(serial=hub, driver="remote"))
+    else:
+        trig_dev = bsdr
 
     # Some default sample rates
     for i, sdr in enumerate([bsdr, msdr]):
@@ -106,7 +110,7 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
                 sdr.setGain(SOAPY_SDR_RX, ch, "ATTN", 0 if freq > 3e9 else -18)
 
     # SYNC_DELAYS
-    bsdr.writeSetting("SYNC_DELAYS", "")
+    trig_dev.writeSetting("SYNC_DELAYS", "")
 
     # Packet size
     symSamp = numSamps + prefix_pad + postfix_pad
@@ -174,7 +178,7 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
     if r2 < 0:
         print("Problem activating stream #2")
 
-    bsdr.writeSetting("TRIGGER_GEN", "")
+    trig_dev.writeSetting("TRIGGER_GEN", "")
 
     r1 = msdr.readStream(rxStreamM, [waveRxA1, waveRxB1], symSamp)
     print("reading stream #1 ({})".format(r1))
@@ -224,6 +228,7 @@ def siso_tdd_burst(serial1, serial2, rate, freq, txgain, rxgain, numSamps, prefi
 #########################################
 def main():
     parser = OptionParser()
+    parser.add_option("--hub", type="string", dest="hub", help="serial number of the hub", default="")
     parser.add_option("--serial1", type="string", dest="serial1", help="serial number of the device 1", default="RF3E000143")
     parser.add_option("--serial2", type="string", dest="serial2", help="serial number of the device 2", default="RF3E000160")
     parser.add_option("--rate", type="float", dest="rate", help="Tx sample rate", default=5e6)
@@ -244,6 +249,7 @@ def main():
         exit(0)
 
     siso_tdd_burst(
+        hub=options.hub,
         serial1=options.serial1,
         serial2=options.serial2,
         rate=options.rate,

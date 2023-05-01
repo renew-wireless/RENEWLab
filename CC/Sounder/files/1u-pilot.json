@@ -8,7 +8,7 @@
 	"rx_gain_b" : 65,
 	"tx_gain_b" : 81,
 	"frame_schedule" : [
-	    "BGGGGGPPPPUGGGGGGGGG"
+		"BGPPGGGGGGGGGGGGGGGG"
 	],
 	"max_frame" : 4000,
 	"ofdm_symbol_per_slot" : 10,
@@ -17,15 +17,13 @@
 	"ofdm_tx_zero_prefix" : 160,
 	"ofdm_tx_zero_postfix" : 160,
 	"beamsweep" : true,
-	"ue_channel" : "AB",
-	"ue_rx_gain_a" : [65, 65],
-	"ue_tx_gain_a" : [81, 81],
-	"ue_rx_gain_b" : [65, 65],
-	"ue_tx_gain_b" : [81, 81],
+	"ue_channel" : "A",
+	"ue_rx_gain_a" : [65],
+	"ue_tx_gain_a" : [81],
+	"ue_rx_gain_b" : [65],
+	"ue_tx_gain_b" : [81],
 	"ue_frame_schedule" : [
-	    "GDGGGGPPGGUGGGGGGGGG",
-	    "GDGGGGGGPPUGGGGGGGGG"
+		"GGPPGGGGGGGGGGGGGGGG"
 	],
-	"ue_modulation" : "16QAM",
-	"tx_advance" : [135, 135]
+	"tx_advance" : [135]
 }

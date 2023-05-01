@@ -64,5 +64,9 @@ class Utils {
   static void loadTDDConfig(const std::string& filename, std::string& jconfig);
   static std::vector<std::string> split(const std::string& s, char delimiter);
   static void printVector(std::vector<std::complex<int16_t>>& data);
+  static void WriteVector(const std::string filename, const std::string desc,
+                          const std::vector<int> vec_data);
+  static std::vector<int> ReadVector(const std::string filename,
+                                     const bool skip_line);
 };
 #endif /* UTILS_HEADER */

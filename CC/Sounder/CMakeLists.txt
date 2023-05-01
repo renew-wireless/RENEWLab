@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 #Allow project version
 cmake_policy(SET CMP0048 NEW)
-project(Sounder VERSION 1.1.0)
+project(Sounder VERSION 1.2.1)
 
 if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 7.0)
   set(GCC_COVERAGE_COMPILE_FLAGS "-faligned-new")
@@ -80,8 +80,13 @@ elseif(LOG_LEVEL STREQUAL "trace")
   add_definitions(-DMLPD_LOG_LEVEL=6)
 else()
   message(STATUS "No logging level specified. Using warning level.")
-  add_definitions(-DMLPD_LOG_LEVEL=2)
+  add_definitions(-DMLPD_LOG_LEVEL=3)
 endif()
+
+#Gflags
+find_package(gflags REQUIRED)
+message(VERBOSE "  gflags: Includes ${GFLAGS_INCLUDE_DIR} Libraries: ${GFLAGS_LIBRARIES}")
+include_directories(${GFLAGS_INCLUDE_DIR})
 
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 #find_package(Threads REQUIRED)
@@ -136,11 +141,13 @@ if (NOT SoapySDR_FOUND)
     return()
 endif ()
 
-find_package(HDF5 1.10 REQUIRED)
+find_package(HDF5 1.10 REQUIRED COMPONENTS CXX)
 if (NOT HDF5_FOUND)
     message(FATAL_ERROR "HDF5 development files not found")
     return()
-endif ()
+endif()
+message(VERBOSE "  HDF5 Includes: ${HDF5_INCLUDE_DIRS} Libraries: ${HDF5_LIBRARIES}")
+
 
 set(directory "logs")
 file(MAKE_DIRECTORY ${directory})
@@ -165,7 +172,8 @@ set(SOUNDER_SOURCES ${PURE_UHD_SOURCES}
     hdf5_reader.cc
     recorder_thread.cc
     BaseRadioSet.cc
-    BaseRadioSet-calibrate.cc
+    BaseRadioSet-calibrate-digital.cc
+    BaseRadioSet-calibrate-analog.cc
     comms-lib.cc
     comms-lib-avx.cc
     utils.cc
@@ -186,7 +194,7 @@ else()
         ${CMAKE_SOURCE_DIR}/mufft/libmuFFT-avx.a)
 endif()
 
-target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe gflags ${UHD_LIBRARIES}
+target_link_libraries(sounder -lpthread --enable-threadsafe ${GFLAGS_LIBRARIES} ${UHD_LIBRARIES}
     ${SoapySDR_LIBRARIES}
     ${HDF5_LIBRARIES}
     ${MUFFT_LIBRARIES})
@@ -194,7 +202,7 @@ target_link_libraries(sounder -lpthread -lhdf5_cpp --enable-threadsafe gflags ${
 add_library(sounder_module MODULE 
     ${SOUNDER_SOURCES})
 
-target_link_libraries(sounder_module -lpthread -lhdf5_cpp --enable-threadsafe gflags ${UHD_LIBRARIES}
+target_link_libraries(sounder_module -lpthread --enable-threadsafe ${GFLAGS_LIBRARIES} ${UHD_LIBRARIES}
     -Wl,--whole-archive
     ${MUFFT_LIBRARIES}
     -Wl,--no-whole-archive
