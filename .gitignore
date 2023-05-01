@@ -4,8 +4,10 @@ build/*
 CMakeFiles/*
 Beamformer/build/*
 Beamformer/build/CMakeFiles/*
-Sounder/CMakeFiles/*
-Sounder/CMakeCache*
+CC/Sounder/CMakeFiles/*
+CC/Sounder/CMakeCache*
+CC/Sounder/mufft
+CC/Sounder/build
 
 sounder
 *.com

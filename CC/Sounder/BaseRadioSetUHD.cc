@@ -329,10 +329,10 @@ int BaseRadioSetUHD::radioTx(size_t radio_id, size_t cell_id,
   w = bsRadios->xmit(buffs, _cfg->samps_per_slot(), flags, frameTimeNs);
   //    }
   if (kDebugRadio) {
-    size_t chanMask;
-    long timeoutUs(0);
-    auto* dev = bsRadios->dev;
-    auto* txs = bsRadios->txs;
+    //size_t chanMask;
+    //long timeoutUs(0);
+    //auto* dev = bsRadios->dev;
+    //auto* txs = bsRadios->txs;
     //    int s = dev->readStreamStatus(txs, chanMask, flags, frameTime, timeoutUs);
     //    std::cout << "cell " << cell_id << " radio " << radio_id << " tx returned "
     //              << w << " and status " << s << std::endl;
