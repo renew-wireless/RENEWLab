@@ -38,7 +38,8 @@ void RadioUHD::dev_init_set_freq(Config* _cfg, unsigned int total_channels) {
   dev_->clear_command_time();
 }
 
-void RadioUHD::dev_init(Config* _cfg, int ch, double rxgain, double txgain) {
+void RadioUHD::dev_init([[maybe_unused]] Config* _cfg, int ch, double rxgain,
+                        double txgain) {
   // these params are sufficient to set before DC offset and IQ imbalance calibration
   MLPD_INFO("Init USRP channel: %d\n", ch);
   // update for UHD multi USRP

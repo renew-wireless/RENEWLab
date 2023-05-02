@@ -29,7 +29,7 @@ ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
     context->crs = this;
     context->thread_count = &thread_count;
     context->tid = i;
-#ifdef THREADED_INIT
+#if defined(THREADED_INIT)
     pthread_t init_thread_;
 
     if (pthread_create(&init_thread_, NULL, ClientRadioSetUHD::init_launch,
@@ -93,12 +93,23 @@ ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
                  "discovered in the network!"
               << std::endl;
   } else {
-    radio_->RawDev()->set_time_source("internal");
-    radio_->RawDev()->set_clock_source("internal");
+    const auto cl_clock_source = _cfg->getClClockType(0);
+    radio_->RawDev()->set_time_source(cl_clock_source);
+    radio_->RawDev()->set_clock_source(cl_clock_source);
     radio_->RawDev()->set_time_unknown_pps(uhd::time_spec_t(0.0));
+    MLPD_INFO(
+        "USRP UE Clock source requested %s, actual %s, Time Source requested "
+        "%s, actual  %s\n",
+        cl_clock_source.c_str(),
+        radio_->RawDev()
+            ->get_clock_source(uhd::usrp::multi_usrp::ALL_MBOARDS)
+            .c_str(),
+        cl_clock_source.c_str(),
+        radio_->RawDev()
+            ->get_time_source(uhd::usrp::multi_usrp::ALL_MBOARDS)
+            .c_str());
     radio_->activateRecv();
     radio_->activateXmit();
-
     MLPD_INFO("%s done!\n", __func__);
   }
 }
