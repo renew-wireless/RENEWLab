@@ -952,7 +952,7 @@ void Receiver::clientSyncTxRx(int tid, int core_id, SampleBuffer* rx_buffer) {
   // const size_t beacon_detect_window =
   //    static_cast<size_t>(static_cast<float>(config_->samps_per_slot()) *
   //                        kBeaconDetectWindowScaler);
-  const size_t beacon_detect_window = config_->samps_per_frame()/100;
+  const size_t beacon_detect_window = config_->samps_per_frame() / 100;
   size_t sync_count = 0;
   constexpr size_t kTargetSyncCount = 1;
   assert(config_->samps_per_frame() >= beacon_detect_window);

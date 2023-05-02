@@ -38,7 +38,8 @@ class RadioUHD {
   void deactivateXmit(void);
   int getTriggers(void) const;
 
-  void dev_init(Config* _cfg, int ch, double rxgain, double txgain);
+  void dev_init([[maybe_unused]] Config* _cfg, int ch, double rxgain,
+                double txgain);
   void reset_DATA_clk_domain(void);
   void dev_init_set_freq(Config* _cfg, unsigned int total_channels);
 };

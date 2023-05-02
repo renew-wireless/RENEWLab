@@ -80,9 +80,21 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
     }
 
     // write TDD schedule and beacons to FPFA buffers only for Iris
-    bsRadios->RawDev()->set_time_source("external");
-    bsRadios->RawDev()->set_clock_source("external");
+    const auto clock_source = _cfg->getBsClockType();
+    bsRadios->RawDev()->set_time_source(clock_source);
+    bsRadios->RawDev()->set_clock_source(clock_source);
     bsRadios->RawDev()->set_time_unknown_pps(uhd::time_spec_t(0.0));
+    MLPD_INFO(
+        "USRP BS Clock source requested %s, actual %s, Time Source requested "
+        "%s, actual %s\n",
+        clock_source.c_str(),
+        bsRadios->RawDev()
+            ->get_clock_source(uhd::usrp::multi_usrp::ALL_MBOARDS)
+            .c_str(),
+        clock_source.c_str(),
+        bsRadios->RawDev()
+            ->get_time_source(uhd::usrp::multi_usrp::ALL_MBOARDS)
+            .c_str());
 
     // Wait for pps sync pulse
     std::this_thread::sleep_for(std::chrono::seconds(1));
