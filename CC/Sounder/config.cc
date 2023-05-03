@@ -22,8 +22,10 @@ static constexpr size_t kMaxSupportedFFTSize = 2048;
 static constexpr size_t kMinSupportedFFTSize = 64;
 static constexpr size_t kMaxSupportedCPSize = 128;
 
-static const std::string kDefaultBsClockType = "external";
-static const std::string kDefaultUeClockType = "internal";
+static const std::string kDefaultBsClockSrc = "internal";
+static const std::string kDefaultUeClockSrc = "internal";
+static const std::string kDefaultBsTimingSrc = "internal";
+static const std::string kDefaultUeTimingSrc = "internal";
 
 Config::Config(const std::string& jsonfile, const std::string& directory,
                const bool bs_only, const bool client_only, const bool calibrate)
@@ -127,7 +129,8 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   beacon_ch_ = beacon_ant_ % bs_sdr_ch_;
   max_frame_ = tddConf.value("max_frame", 0);
   bs_hw_framer_ = tddConf.value("bs_hw_framer", true);
-  bs_clock_type_ = tddConf.value("bs_clock_type", kDefaultBsClockType);
+  bs_clock_src_ = tddConf.value("bs_clock_src", kDefaultBsClockSrc);
+  bs_timing_src_ = tddConf.value("bs_timing_src", kDefaultBsTimingSrc);
 
   // Load/Build BS and Client SDRs' Schedules
   bs_array_frames_.resize(num_cells_);
@@ -211,15 +214,18 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
     corr_scale_.assign(corr_scale.begin(), corr_scale.end());
   }
 
-  auto cl_clock_type = tddConf.value("cl_clock_type", json::array());
+  auto cl_clock_src = tddConf.value("cl_clock_src", json::array());
+  auto cl_timing_src = tddConf.value("cl_timing_src", json::array());
   if (tx_advance.empty() == true) {
-    cl_clock_type_.resize(num_cl_sdrs_, kDefaultUeClockType);
+    cl_clock_src_.resize(num_cl_sdrs_, kDefaultUeClockSrc);
+    cl_timing_src_.resize(num_cl_sdrs_, kDefaultUeTimingSrc);
   } else {
     if (client_present_ && tx_advance.size() != num_cl_sdrs_) {
       MLPD_ERROR("cl_clock_type size must be same as the number of clients!\n");
       std::exit(1);
     }
-    cl_clock_type_.assign(cl_clock_type.begin(), cl_clock_type.end());
+    cl_clock_src_.assign(cl_clock_src.begin(), cl_clock_src.end());
+    cl_timing_src_.assign(cl_timing_src.begin(), cl_timing_src.end());
   }
 
   ul_data_frame_num_ = tddConf.value("ul_data_frame_num", 1);

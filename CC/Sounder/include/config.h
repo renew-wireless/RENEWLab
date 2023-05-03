@@ -263,9 +263,13 @@ class Config {
   }
   inline size_t getTxFrameDelta() const { return tx_frame_delta_; }
 
-  inline const std::string getBsClockType() const { return bs_clock_type_; }
-  inline const std::string getClClockType(size_t ue_idx) const {
-    return cl_clock_type_.at(ue_idx);
+  inline const std::string getBsClockSrc() const { return bs_clock_src_; }
+  inline const std::string getClClockSrc(size_t ue_idx) const {
+    return cl_clock_src_.at(ue_idx);
+  }
+  inline const std::string getBsTimingSrc() const { return bs_timing_src_; }
+  inline const std::string getClTimingSrc(size_t ue_idx) const {
+    return cl_timing_src_.at(ue_idx);
   }
 
   size_t getNumAntennas();
@@ -384,7 +388,8 @@ class Config {
   bool ref_node_enable_;
   size_t cal_ref_sdr_id_;
   size_t tx_frame_delta_;
-  std::string bs_clock_type_;
+  std::string bs_clock_src_;
+  std::string bs_timing_src_;
 
   // Clients features
   std::vector<std::string> cl_sdr_ids_;
@@ -398,7 +403,8 @@ class Config {
   bool cl_power_ramp_;
   int cl_power_ramp_lo_;
   int cl_power_ramp_hi_;
-  std::vector<std::string> cl_clock_type_;
+  std::vector<std::string> cl_clock_src_;
+  std::vector<std::string> cl_timing_src_;
 
   std::vector<int> tx_advance_;
   std::vector<float> corr_scale_;

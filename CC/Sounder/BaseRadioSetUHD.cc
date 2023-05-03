@@ -80,11 +80,12 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
     }
 
     // write TDD schedule and beacons to FPFA buffers only for Iris
-    const auto clock_source = _cfg->getBsClockType();
-    bsRadios->RawDev()->set_time_source(clock_source);
+    const auto timing_source = _cfg->getBsTimingSrc();
+    const auto clock_source = _cfg->getBsClockSrc();
+    bsRadios->RawDev()->set_time_source(timing_source);
     bsRadios->RawDev()->set_clock_source(clock_source);
     bsRadios->RawDev()->set_time_unknown_pps(uhd::time_spec_t(0.0));
-    MLPD_INFO(
+    /*MLPD_INFO(
         "USRP BS Clock source requested %s, actual %s, Time Source requested "
         "%s, actual %s\n",
         clock_source.c_str(),
@@ -95,7 +96,7 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
         bsRadios->RawDev()
             ->get_time_source(uhd::usrp::multi_usrp::ALL_MBOARDS)
             .c_str());
-
+    */
     // Wait for pps sync pulse
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -212,7 +213,6 @@ void BaseRadioSetUHD::init(BaseRadioContext* context) {
   int c = context->cell;
   std::atomic_ulong* thread_count = context->thread_count;
   delete context;
-
   MLPD_TRACE("Deleting context for tid: %d\n", i);
 
   std::map<std::string, std::string> args;
@@ -222,7 +222,8 @@ void BaseRadioSetUHD::init(BaseRadioContext* context) {
   std::vector<std::string> address_list;
   for (size_t i = 0; i < num_radios; i++) {
     std::ostringstream oss;
-    oss << "addr" << i;
+    //oss << "addr" << i;
+    oss << "serial";
     address_list.push_back(oss.str());
     args[address_list.at(i)] = _cfg->bs_sdr_ids().at(c).at(i);
   }
