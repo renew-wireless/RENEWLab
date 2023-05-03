@@ -93,11 +93,12 @@ ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
                  "discovered in the network!"
               << std::endl;
   } else {
-    const auto cl_clock_source = _cfg->getClClockType(0);
-    radio_->RawDev()->set_time_source(cl_clock_source);
+    const auto cl_timing_source = _cfg->getClTimingSrc(0);
+    const auto cl_clock_source = _cfg->getClClockSrc(0);
+    radio_->RawDev()->set_time_source(cl_timing_source);
     radio_->RawDev()->set_clock_source(cl_clock_source);
     radio_->RawDev()->set_time_unknown_pps(uhd::time_spec_t(0.0));
-    MLPD_INFO(
+    /*MLPD_INFO(
         "USRP UE Clock source requested %s, actual %s, Time Source requested "
         "%s, actual  %s\n",
         cl_clock_source.c_str(),
@@ -108,6 +109,7 @@ ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
         radio_->RawDev()
             ->get_time_source(uhd::usrp::multi_usrp::ALL_MBOARDS)
             .c_str());
+    */
     radio_->activateRecv();
     radio_->activateXmit();
     MLPD_INFO("%s done!\n", __func__);
@@ -137,7 +139,7 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
   std::map<std::string, std::string> args;
   args["timeout"] = "1000000";
   args["driver"] = "uhd";
-  args["addr"] = _cfg->cl_sdr_ids().at(i);
+  args["serial"] = _cfg->cl_sdr_ids().at(i);
 
   try {
     radio_ = nullptr;
