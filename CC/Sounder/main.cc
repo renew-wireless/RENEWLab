@@ -42,7 +42,13 @@ int main(int argc, char* argv[]) {
     auto dg = std::make_unique<DataGenerator>(config.get());
     dg->GenerateData(FLAGS_storepath);
   } else if (FLAGS_calibrate) {
+#if defined(USE_UHD)
+    std::cout << "Radio calibrate function is not compatible with the radio "
+                 "calibratate flag!"
+              << std::endl;
+#else
     auto base_radio_set_ = std::make_unique<BaseRadioSet>(config.get(), true);
+#endif
   } else {
     int cnt = 0;
     int maxTry = 2;

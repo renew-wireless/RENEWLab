@@ -21,21 +21,30 @@
 #include "uhd/utils/log_add.hpp"
 #endif
 
-void RadioUHD::dev_init(Config* _cfg, int ch, double rxgain, double txgain) {
+void RadioUHD::dev_init_set_freq(Config* _cfg, unsigned int total_channels) {
+  MLPD_INFO("setting frequency \n");
+  dev_->clear_command_time();
+  dev_->set_command_time(dev_->get_time_now() + uhd::time_spec_t(0.1));
+  uhd::tune_request_t tune_request(_cfg->radio_rf_freq());
+  // update for UHD multi USRP
+  for (unsigned int ch = 0; ch < total_channels; ch++) {
+    dev_->set_rx_freq(tune_request, ch);
+    dev_->set_tx_freq(tune_request, ch);
+  }
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(
+      550));  //sleep 110ms (~10ms after retune occurs) to allow LO to lock
+
+  dev_->clear_command_time();
+}
+
+void RadioUHD::dev_init([[maybe_unused]] Config* _cfg, int ch, double rxgain,
+                        double txgain) {
   // these params are sufficient to set before DC offset and IQ imbalance calibration
-  std::cout << "radioUHD.cc being called" << std::endl;
   MLPD_INFO("Init USRP channel: %d\n", ch);
   // update for UHD multi USRP
   dev_->set_tx_antenna("TX/RX", ch);
   dev_->set_rx_antenna("TX/RX", ch);
-  uhd::tune_request_t tune_request(0);
-  dev_->set_rx_freq(tune_request, ch);
-  dev_->set_tx_freq(tune_request, ch);
-
-  // update for UHD multi USRP
-  tune_request = _cfg->radio_rf_freq();
-  dev_->set_rx_freq(tune_request, ch);
-  dev_->set_tx_freq(tune_request, ch);
 
   // update for UHD multi USRP
   dev_->set_rx_gain(std::min(31.5, rxgain), "PGA0", ch);
@@ -77,10 +86,10 @@ RadioUHD::RadioUHD(const std::map<std::string, std::string>& args,
                    Config* _cfg) {
   dev_ = uhd::usrp::multi_usrp::make(args);
   if (dev_ == NULL) throw std::invalid_argument("error making UHD:Device\n");
-  for (auto ch : channels) {
-    dev_->set_rx_rate(_cfg->rate(), ch);
-    dev_->set_tx_rate(_cfg->rate(), ch);
-  }
+
+  dev_->set_rx_rate(_cfg->rate());
+  dev_->set_tx_rate(_cfg->rate());
+
   const std::string& format = uhdFmt;
   std::string hostFormat;
   for (const char ch : format) {
@@ -97,6 +106,7 @@ RadioUHD::RadioUHD(const std::map<std::string, std::string>& args,
   }
 
   uhd::stream_args_t stream_args(hostFormat);
+  MLPD_TRACE("channel size is: %zu\n", channels.size());
   stream_args.channels = channels;
   stream_args.args = args;
   if (args.count("WIRE") != 0) stream_args.otw_format = args.at("WIRE");
@@ -106,10 +116,8 @@ RadioUHD::RadioUHD(const std::map<std::string, std::string>& args,
   stream_args1.args = args;
   if (args.count("WIRE") != 0) stream_args1.otw_format = args.at("WIRE");
 
-  std::cout << "format is " << hostFormat << std::endl;
-
-  rxs_ = dev_->get_rx_stream(stream_args);
   txs_ = dev_->get_tx_stream(stream_args1);
+  rxs_ = dev_->get_rx_stream(stream_args);
 }
 
 int RadioUHD::activateRecv(const long long rxTime, const size_t numSamps,
@@ -141,8 +149,6 @@ int RadioUHD::activateRecv(const long long rxTime, const size_t numSamps,
 void RadioUHD::activateXmit(void) {
   std::cout << "activate xmit" << std::endl;
   // for USRP device start tx stream UHD_INIT_TIME_SEC sec in the future
-  std::cout << "no input yet, from example, seems no issue command is needed"
-            << std::endl;
 }
 
 void RadioUHD::deactivateRecv(void) {
@@ -155,10 +161,7 @@ void RadioUHD::deactivateRecv(void) {
   rxs_->issue_stream_cmd(stream_cmd_1);
 }
 
-void RadioUHD::deactivateXmit(void) {
-  std::cout << "no input yet, from example, seems no issue command is needed"
-            << std::endl;
-}
+void RadioUHD::deactivateXmit(void) {}
 
 RadioUHD::~RadioUHD(void) {
   deactivateRecv();

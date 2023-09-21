@@ -263,6 +263,11 @@ class Config {
   }
   inline size_t getTxFrameDelta() const { return tx_frame_delta_; }
 
+  inline const std::string getBsClockType() const { return bs_clock_type_; }
+  inline const std::string getClClockType(size_t ue_idx) const {
+    return cl_clock_type_.at(ue_idx);
+  }
+
   size_t getNumAntennas();
   size_t getMaxNumAntennas();
   size_t getNumBsSdrs();
@@ -300,10 +305,11 @@ class Config {
 
   // common features
   double freq_;
-  double nco_;  // baseband frequency controlled by NCO
+  // baseband frequency controlled by NCO
+  double nco_;
   double rate_;
-  double
-      radio_rf_freq_;  // RF frequency set frame_modeon the radio after NCO adjustments
+  // RF frequency set frame_modeon the radio after NCO adjustments
+  double radio_rf_freq_;
   double bw_filter_;
   size_t fft_size_;
   size_t cp_size_;
@@ -378,6 +384,7 @@ class Config {
   bool ref_node_enable_;
   size_t cal_ref_sdr_id_;
   size_t tx_frame_delta_;
+  std::string bs_clock_type_;
 
   // Clients features
   std::vector<std::string> cl_sdr_ids_;
@@ -391,6 +398,8 @@ class Config {
   bool cl_power_ramp_;
   int cl_power_ramp_lo_;
   int cl_power_ramp_hi_;
+  std::vector<std::string> cl_clock_type_;
+
   std::vector<int> tx_advance_;
   std::vector<float> corr_scale_;
   std::vector<size_t> data_ind_;

@@ -20,7 +20,6 @@
 ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
   size_t num_radios = _cfg->num_cl_sdrs();
   //load channels
-  std::cout << "channel is: " << _cfg->cl_channel() << std::endl;
   auto channels = Utils::strToChannels(_cfg->cl_channel());
   // Update for UHD multi USRP
   radioNotFound = false;
@@ -30,7 +29,7 @@ ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
     context->crs = this;
     context->thread_count = &thread_count;
     context->tid = i;
-#ifdef THREADED_INIT
+#if defined(THREADED_INIT)
     pthread_t init_thread_;
 
     if (pthread_create(&init_thread_, NULL, ClientRadioSetUHD::init_launch,
@@ -87,8 +86,6 @@ ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
              (radio_->RawDev()->get_tx_antenna(ch).c_str()));
     }
   }
-  std::cout << "ClientRadioSetUHD Init Check" << std::endl;
-  std::cout << std::endl;
 
   // Update for UHD multi USRP
   if (radioNotFound == true) {
@@ -96,15 +93,23 @@ ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
                  "discovered in the network!"
               << std::endl;
   } else {
-    std::cout << "checking tx advance " << _cfg->tx_advance(0) << std::endl;
-    radio_->RawDev()->set_time_source("internal");
-    radio_->RawDev()->set_clock_source("internal");
+    const auto cl_clock_source = _cfg->getClClockType(0);
+    radio_->RawDev()->set_time_source(cl_clock_source);
+    radio_->RawDev()->set_clock_source(cl_clock_source);
     radio_->RawDev()->set_time_unknown_pps(uhd::time_spec_t(0.0));
+    MLPD_INFO(
+        "USRP UE Clock source requested %s, actual %s, Time Source requested "
+        "%s, actual  %s\n",
+        cl_clock_source.c_str(),
+        radio_->RawDev()
+            ->get_clock_source(uhd::usrp::multi_usrp::ALL_MBOARDS)
+            .c_str(),
+        cl_clock_source.c_str(),
+        radio_->RawDev()
+            ->get_time_source(uhd::usrp::multi_usrp::ALL_MBOARDS)
+            .c_str());
     radio_->activateRecv();
     radio_->activateXmit();
-
-    std::cout << "sync check" << std::endl;
-    std::cout << std::endl;
     MLPD_INFO("%s done!\n", __func__);
   }
 }
@@ -133,7 +138,6 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
   args["timeout"] = "1000000";
   args["driver"] = "uhd";
   args["addr"] = _cfg->cl_sdr_ids().at(i);
-  std::cout << "address i is " << i << std::endl;
 
   try {
     radio_ = nullptr;
@@ -155,12 +159,14 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
   }
   if (has_runtime_error == false) {
     for (auto ch : channels) {
-      std::cout << "check ch: " << ch << std::endl;
       auto new_ch = _cfg->cl_channel();
       double rxgain = _cfg->cl_rxgain_vec().at(ch).at(
           i);  // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
       double txgain = _cfg->cl_txgain_vec().at(ch).at(
           i);  // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:105]
+
+      auto total_rx_channel = 2;
+      radio_->dev_init_set_freq(_cfg, total_rx_channel);
       radio_->dev_init(_cfg, ch, rxgain, txgain);
     }
   }

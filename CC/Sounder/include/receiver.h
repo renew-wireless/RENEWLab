@@ -84,6 +84,10 @@ class Receiver {
 
  private:
   Config* config_;
+  size_t num_channels_buff_;
+  size_t num_channels_;
+  size_t num_radios_;
+  size_t radio_id_;
 
 #if defined(USE_UHD)
   ClientRadioSetUHD* client_radio_set_;

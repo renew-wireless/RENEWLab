@@ -17,10 +17,13 @@
 #include "nlohmann/json.hpp"
 using json = nlohmann::json;
 
-static size_t kFpgaTxRamSize = 4096;
-static size_t kMaxSupportedFFTSize = 2048;
-static size_t kMinSupportedFFTSize = 64;
-static size_t kMaxSupportedCPSize = 128;
+static constexpr size_t kFpgaTxRamSize = 4096;
+static constexpr size_t kMaxSupportedFFTSize = 2048;
+static constexpr size_t kMinSupportedFFTSize = 64;
+static constexpr size_t kMaxSupportedCPSize = 128;
+
+static const std::string kDefaultBsClockType = "external";
+static const std::string kDefaultUeClockType = "internal";
 
 Config::Config(const std::string& jsonfile, const std::string& directory,
                const bool bs_only, const bool client_only, const bool calibrate)
@@ -124,6 +127,7 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   beacon_ch_ = beacon_ant_ % bs_sdr_ch_;
   max_frame_ = tddConf.value("max_frame", 0);
   bs_hw_framer_ = tddConf.value("bs_hw_framer", true);
+  bs_clock_type_ = tddConf.value("bs_clock_type", kDefaultBsClockType);
 
   // Load/Build BS and Client SDRs' Schedules
   bs_array_frames_.resize(num_cells_);
@@ -191,20 +195,33 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   } else {
     if (client_present_ && tx_advance.size() != num_cl_sdrs_) {
       MLPD_ERROR("tx_advance size must be same as the number of clients!\n");
-      exit(1);
+      std::exit(1);
     }
     tx_advance_.assign(tx_advance.begin(), tx_advance.end());
   }
+
   auto corr_scale = tddConf.value("corr_scale", json::array());
   if (corr_scale.empty() == true) {
     corr_scale_.resize(num_cl_sdrs_, 1);
   } else {
     if (client_present_ && corr_scale.size() != num_cl_sdrs_) {
-      MLPD_ERROR("tx_advance size must be same as the number of clients!\n");
-      exit(1);
+      MLPD_ERROR("corr_scale size must be same as the number of clients!\n");
+      std::exit(1);
     }
     corr_scale_.assign(corr_scale.begin(), corr_scale.end());
   }
+
+  auto cl_clock_type = tddConf.value("cl_clock_type", json::array());
+  if (tx_advance.empty() == true) {
+    cl_clock_type_.resize(num_cl_sdrs_, kDefaultUeClockType);
+  } else {
+    if (client_present_ && tx_advance.size() != num_cl_sdrs_) {
+      MLPD_ERROR("cl_clock_type size must be same as the number of clients!\n");
+      std::exit(1);
+    }
+    cl_clock_type_.assign(cl_clock_type.begin(), cl_clock_type.end());
+  }
+
   ul_data_frame_num_ = tddConf.value("ul_data_frame_num", 1);
   dl_data_frame_num_ = tddConf.value("dl_data_frame_num", 1);
 
@@ -322,10 +339,15 @@ Config::Config(const std::string& jsonfile, const std::string& directory,
   MLPD_INFO("Cores found %u ... \n", num_cores);
   if (bs_present_ == true &&
       pilot_slot_per_frame_ + ul_slot_per_frame_ + dl_slot_per_frame_ > 0) {
+#if defined(USE_UHD)
+    bs_rx_thread_num_ = 1;
+#else
     bs_rx_thread_num_ =
         (num_cores >= (2 * RX_THREAD_NUM))
             ? std::min(RX_THREAD_NUM, static_cast<int>(num_bs_sdrs_all_))
             : 1;
+#endif
+
     if (internal_measurement_ == true && ref_node_enable_ == true) {
       bs_rx_thread_num_ = 2;
     }

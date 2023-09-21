@@ -9,6 +9,12 @@
   */
 #include "include/BaseRadioSetUHD.h"
 
+#include <boost/algorithm/string.hpp>
+#include <boost/format.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/program_options.hpp>
+#include <boost/thread.hpp>
+
 #include "SoapySDR/Formats.h"
 #include "SoapySDR/Time.hpp"
 #include "include/RadioUHD.h"
@@ -26,34 +32,36 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
   radioNotFound = false;
   std::vector<std::string> radio_serial_not_found;
 
+  std::cout << "error found !!!" << std::endl;
+
   // need to be further modified
+  MLPD_TRACE("num of cells are: %zu\n", _cfg->num_cells());
   for (size_t c = 0; c < _cfg->num_cells(); c++) {
     size_t num_radios = _cfg->n_bs_sdrs()[c];
     num_bs_antenntas[c] = num_radios * _cfg->bs_channel().length();
+    MLPD_TRACE("num of bs antennas are: %zu\n", num_bs_antenntas[c]);
     MLPD_TRACE("Setting up radio: %zu, cells: %zu\n", num_radios,
                _cfg->num_cells());
 
-    std::atomic_ulong thread_count = ATOMIC_VAR_INIT(num_radios);
+    std::atomic_ulong thread_count = ATOMIC_VAR_INIT(1);
 
     MLPD_TRACE("Init base radios: %zu\n", num_radios);
-    for (size_t i = 0; i < num_radios; i++) {
-      BaseRadioContext* context = new BaseRadioContext;
-      context->brs = this;
-      context->thread_count = &thread_count;
-      context->tid = i;
-      context->cell = c;
+    size_t i = 0;
+    BaseRadioContext* context = new BaseRadioContext;
+    context->brs = this;
+    context->thread_count = &thread_count;
+    context->tid = i;
+    context->cell = c;
 #ifdef THREADED_INIT
-      pthread_t init_thread_;
-
-      if (pthread_create(&init_thread_, NULL, BaseRadioSetUHD::init_launch,
-                         context) != 0) {
-        delete context;
-        throw std::runtime_error("BaseRadioSet - init thread create failed");
-      }
-#else
-      init(context);
-#endif
+    pthread_t init_thread_;
+    if (pthread_create(&init_thread_, NULL, BaseRadioSetUHD::init_launch,
+                       context) != 0) {
+      delete context;
+      throw std::runtime_error("BaseRadioSet - init thread create failed");
     }
+#else
+    init(context);
+#endif
 
     // Wait for init
     while (thread_count.load() > 0) {
@@ -71,65 +79,83 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
         dciqCalibrationProcUHD(1);
     }
 
-    thread_count.store(num_radios);
-    for (size_t i = 0; i < num_radios; i++) {
-      BaseRadioContext* context = new BaseRadioContext;
-      context->brs = this;
-      context->thread_count = &thread_count;
-      context->tid = i;
-      context->cell = c;
+    // write TDD schedule and beacons to FPFA buffers only for Iris
+    const auto clock_source = _cfg->getBsClockType();
+    bsRadios->RawDev()->set_time_source(clock_source);
+    bsRadios->RawDev()->set_clock_source(clock_source);
+    bsRadios->RawDev()->set_time_unknown_pps(uhd::time_spec_t(0.0));
+    MLPD_INFO(
+        "USRP BS Clock source requested %s, actual %s, Time Source requested "
+        "%s, actual %s\n",
+        clock_source.c_str(),
+        bsRadios->RawDev()
+            ->get_clock_source(uhd::usrp::multi_usrp::ALL_MBOARDS)
+            .c_str(),
+        clock_source.c_str(),
+        bsRadios->RawDev()
+            ->get_time_source(uhd::usrp::multi_usrp::ALL_MBOARDS)
+            .c_str());
+
+    // Wait for pps sync pulse
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    thread_count.store(1);
+    size_t ii = 0;
+    BaseRadioContext* context_config = new BaseRadioContext;
+    context_config->brs = this;
+    context_config->thread_count = &thread_count;
+    context_config->tid = ii;
+    context_config->cell = c;
 #ifdef THREADED_INIT
-      pthread_t configure_thread_;
-      if (pthread_create(&configure_thread_, NULL,
-                         BaseRadioSetUHD::configure_launch, context) != 0) {
-        delete context;
-        throw std::runtime_error(
-            "BaseRadioSet - configure thread create failed");
-      }
-#else
-      configure(context);
-#endif
+    pthread_t configure_thread_;
+    if (pthread_create(&configure_thread_, NULL,
+                       BaseRadioSetUHD::configure_launch,
+                       context_config) != 0) {
+      delete context_config;
+      throw std::runtime_error("BaseRadioSet - configure thread create failed");
     }
+#else
+    configure(context_config);
+#endif
 
     while (thread_count.load() > 0) {
     }
 
-    auto channels = Utils::strToChannels(_cfg->bs_channel());
-
-    for (size_t i = 0; i < bsRadios->RawDev()->get_num_mboards(); i++) {
-      auto dev = bsRadios->RawDev();
-      std::cout << _cfg->bs_sdr_ids().at(c).at(i) << ": Front end "
+    auto dev = bsRadios->RawDev();
+    for (size_t index = 0; index < bsRadios->RawDev()->get_num_mboards();
+         index++) {
+      std::cout << _cfg->bs_sdr_ids().at(c).at(index) << ": Front end "
                 << dev->get_usrp_rx_info()["frontend"] << std::endl;
-      for (auto ch : channels) {
-        if (ch < dev->get_rx_num_channels()) {
-          printf("RX Channel %zu\n", ch);
-          printf("Actual RX sample rate: %fMSps...\n",
-                 (dev->get_rx_rate(ch) / 1e6));
-          printf("Actual RX frequency: %fGHz...\n",
-                 (dev->get_rx_freq(ch) / 1e9));
-          printf("Actual RX gain: %f...\n", (dev->get_rx_gain(ch)));
-          printf("Actual RX bandwidth: %fM...\n",
-                 (dev->get_rx_bandwidth(ch) / 1e6));
-          printf("Actual RX antenna: %s...\n",
-                 (dev->get_rx_antenna(ch).c_str()));
-        }
+    }
+    size_t total_rx_channel = _cfg->num_bs_sdrs_all() * 2;
+    for (size_t ch = 0; ch < total_rx_channel; ch++) {
+      if (ch < dev->get_rx_num_channels()) {
+        std::cout << "RX Channel " << ch << std::endl;
+        std::cout << "Actual RX sample rate: " << (dev->get_rx_rate(ch) / 1e6)
+                  << "MSps" << std::endl;
+        std::cout << "Actual RX frequency: " << (dev->get_rx_freq(ch) / 1e9)
+                  << "GHz" << std::endl;
+        std::cout << "Actual RX gain: " << (dev->get_rx_gain(ch)) << std::endl;
+        std::cout << "Actual RX bandwidth: "
+                  << (dev->get_rx_bandwidth(ch) / 1e6) << "M" << std::endl;
+        std::cout << "Actual RX antenna: " << dev->get_rx_antenna(ch).c_str()
+                  << std::endl;
       }
+    }
 
-      for (auto ch : channels) {
-        if (ch < dev->get_tx_num_channels()) {
-          printf("TX Channel %zu\n", ch);
-          printf("Actual TX sample rate: %fMSps...\n",
-                 (dev->get_tx_rate(ch) / 1e6));
-          printf("Actual TX frequency: %fGHz...\n",
-                 (dev->get_tx_freq(ch) / 1e9));
-          printf("Actual TX gain: %f...\n", (dev->get_tx_gain(ch)));
-          printf("Actual TX bandwidth: %fM...\n",
-                 (dev->get_tx_bandwidth(ch) / 1e6));
-          printf("Actual TX antenna: %s...\n",
-                 (dev->get_tx_antenna(ch).c_str()));
-        }
+    for (size_t ch = 0; ch < total_rx_channel; ch++) {
+      if (ch < dev->get_tx_num_channels()) {
+        std::cout << "TX Channel " << ch << std::endl;
+        std::cout << "Actual TX sample rate: " << (dev->get_tx_rate(ch) / 1e6)
+                  << "MSps" << std::endl;
+        std::cout << "Actual TX frequency: " << (dev->get_tx_freq(ch) / 1e9)
+                  << "GHz" << std::endl;
+        std::cout << "Actual TX gain: " << (dev->get_tx_gain(ch)) << std::endl;
+        std::cout << "Actual TX bandwidth: "
+                  << (dev->get_tx_bandwidth(ch) / 1e6) << "M" << std::endl;
+        std::cout << "Actual TX antenna: " << (dev->get_tx_antenna(ch).c_str())
+                  << std::endl;
       }
-      std::cout << std::endl;
     }
   }
 
@@ -166,13 +192,6 @@ BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
 
     // write TDD schedule and beacons to FPFA buffers only for Iris
     for (size_t c = 0; c < _cfg->num_cells(); c++) {
-      bsRadios->RawDev()->set_time_source("external", 0);
-      bsRadios->RawDev()->set_clock_source("external", 0);
-      uhd::time_spec_t time = uhd::time_spec_t::from_ticks(0, 1e9);
-      bsRadios->RawDev()->set_time_next_pps(time);
-
-      // Wait for pps sync pulse
-      std::this_thread::sleep_for(std::chrono::seconds(2));
       // Activate Rx and Tx streamers
       bsRadios->activateRecv();
       bsRadios->activateXmit();
@@ -190,28 +209,52 @@ void* BaseRadioSetUHD::init_launch(void* in_context) {
 }
 
 void BaseRadioSetUHD::init(BaseRadioContext* context) {
-  int i = context->tid;
   int c = context->cell;
   std::atomic_ulong* thread_count = context->thread_count;
   delete context;
 
   MLPD_TRACE("Deleting context for tid: %d\n", i);
 
-  auto channels = Utils::strToChannels(_cfg->bs_channel());
   std::map<std::string, std::string> args;
 
   args["driver"] = "uhd";
-  args["addr"] = _cfg->bs_sdr_ids().at(c).at(i);
-  std::cout << "Init bsRadios: " << args["addr"] << std::endl;
-  //    }
+  size_t num_radios = _cfg->n_bs_sdrs()[c];
+  std::vector<std::string> address_list;
+  for (size_t i = 0; i < num_radios; i++) {
+    std::ostringstream oss;
+    oss << "addr" << i;
+    address_list.push_back(oss.str());
+    args[address_list.at(i)] = _cfg->bs_sdr_ids().at(c).at(i);
+  }
+
   args["timeout"] = "1000000";
   try {
-    bsRadios = nullptr;
-    bsRadios = new RadioUHD(args, SOAPY_SDR_CS16, channels, _cfg);
+    size_t total_rx_channel;
+
+    if (_cfg->bs_channel() == "AB") {
+      total_rx_channel = _cfg->num_bs_sdrs_all() * 2;
+    } else {
+      total_rx_channel = _cfg->num_bs_sdrs_all();
+    }
+    std::vector<size_t> new_channels(total_rx_channel);
+    if (_cfg->bs_channel() == "AB") {
+      for (size_t ii = 0; ii < total_rx_channel; ii++) {
+        new_channels[ii] = ii;
+      }
+    } else if (_cfg->bs_channel() == "A") {
+      for (size_t ii = 0; ii < total_rx_channel; ii++) {
+        new_channels[ii] = ii * 2;
+      }
+    } else {
+      for (size_t ii = 0; ii < total_rx_channel; ii++) {
+        new_channels[ii] = ii * 2 + 1;
+      }
+    }
+
+    bsRadios = new RadioUHD(args, SOAPY_SDR_CS16, new_channels, _cfg);
   } catch (std::runtime_error& err) {
-    std::cerr << "Ignoring uhd device " << _cfg->bs_sdr_ids().at(c).at(i)
-              << std::endl;
-    //        }
+    std::cerr << "Ignoring uhd device ";
+    //            }
     if (bsRadios != nullptr) {
       MLPD_TRACE("Deleting radio ptr due to exception\n");
       delete bsRadios;
@@ -234,14 +277,22 @@ void BaseRadioSetUHD::configure(BaseRadioContext* context) {
   delete context;
 
   //load channels
-  auto channels = Utils::strToChannels(_cfg->bs_channel());
+  std::cout << "num channels in BSradio are: " << _cfg->bs_channel()
+            << std::endl;
   RadioUHD* bsRadio = bsRadios;
   uhd::usrp::multi_usrp::sptr dev = bsRadio->RawDev();
-  for (auto ch : channels) {
-    double rxgain = _cfg->rx_gain().at(ch);
-    double txgain = _cfg->tx_gain().at(ch);
-    bsRadios->dev_init(_cfg, ch, rxgain, txgain);
+
+  auto total_rx_channel = _cfg->num_bs_sdrs_all() * 2;
+
+  for (unsigned int ch = 0; ch < total_rx_channel; ch++) {
+    double rxgain = _cfg->rx_gain().at(0);
+    double txgain = _cfg->tx_gain().at(0);
+
+    bsRadios->dev_init(_cfg, (ch), rxgain, txgain);
   }
+
+  bsRadios->dev_init_set_freq(_cfg, total_rx_channel);
+
   assert(thread_count->load() != 0);
   thread_count->store(thread_count->load() - 1);
 }
@@ -277,7 +328,6 @@ void BaseRadioSetUHD::radioStop(void) {
 
 void BaseRadioSetUHD::radioTx(const void* const* buffs) {
   long long frameTime(0);
-  std::cout << "running tx 1" << std::endl;
   bsRadios->xmit(buffs, _cfg->samps_per_slot(), 0, frameTime);
 }
 
@@ -291,10 +341,10 @@ int BaseRadioSetUHD::radioTx(size_t radio_id, size_t cell_id,
   w = bsRadios->xmit(buffs, _cfg->samps_per_slot(), flags, frameTimeNs);
   //    }
   if (kDebugRadio) {
-    size_t chanMask;
-    long timeoutUs(0);
-    auto* dev = bsRadios->dev;
-    auto* txs = bsRadios->txs;
+    //size_t chanMask;
+    //long timeoutUs(0);
+    //auto* dev = bsRadios->dev;
+    //auto* txs = bsRadios->txs;
     //    int s = dev->readStreamStatus(txs, chanMask, flags, frameTime, timeoutUs);
     //    std::cout << "cell " << cell_id << " radio " << radio_id << " tx returned "
     //              << w << " and status " << s << std::endl;
@@ -347,7 +397,6 @@ int BaseRadioSetUHD::radioRx(size_t radio_id, size_t cell_id,
 
 int BaseRadioSetUHD::syncTimeOffsetUHD(bool measure_ref_radio,
                                        bool adjust_trigger) {
-  std::cout << "sync time being called" << std::endl;
   int num_radios = _cfg->n_bs_sdrs().at(0) - 1;
   if (num_radios < 1) {
     std::cout << "No need to sample calibrate with one Iris! skipping ..."

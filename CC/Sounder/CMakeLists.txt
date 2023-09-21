@@ -24,6 +24,10 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
       STRING "Choose the type of build." FORCE)
 endif()
 
+message(STATUS "Debug Flags: ${CMAKE_CXX_FLAGS_DEBUG}")
+message(STATUS "Release Flags: ${CMAKE_CXX_FLAGS_RELEASE}")
+message(STATUS "Compiling with CXX Flags: ${CMAKE_CXX_FLAGS}")
+
 if(CMAKE_BUILD_TYPE MATCHES Debug)
   message(STATUS "Verbose Makefile")
   set( CMAKE_VERBOSE_MAKEFILE on )
@@ -51,10 +55,15 @@ else()
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
-message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "Compiling with CXX Flags: ${CMAKE_CXX_FLAGS}")
-message(STATUS "Debug Flags: ${CMAKE_CXX_FLAGS_DEBUG}")
-message(STATUS "Release Flags: ${CMAKE_CXX_FLAGS_RELEASE}")
+#Settable values
+message(STATUS "\n-- ----- Configuration values -----")
+message(STATUS "Build Type:       ${CMAKE_BUILD_TYPE}")
+set(RADIO_TYPE SIMULATION CACHE STRING "RADIO_TYPE defaulting to 'SIMULATION', valid types are SIMULATION / SOAPY_IRIS / SOAPY_UHD / PURE_UHD")
+message(STATUS "RADIO_TYPE:       ${RADIO_TYPE}")
+set(LOG_LEVEL "info" CACHE STRING "Console logging level (none/error/warn/info/frame/subframe/trace)") 
+message(STATUS "LOG_LEVEL:        ${LOG_LEVEL}")
+message(STATUS "--------------------------------\n--")
+
 
 # Console logging level
 if(LOG_LEVEL STREQUAL "none")
@@ -92,8 +101,6 @@ set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 #find_package(Threads REQUIRED)
 message(STATUS "Using Pthread Library: ${CMAKE_THREAD_LIBS_INIT}: ${CMAKE_USE_PTHREADS_INIT}")
 
-set(RADIO_TYPE SOAPY_IRIS CACHE STRING "RADIO_TYPE defaulting to 'SOAPY_IRIS', valid types are SOAPY_IRIS / SOAPY_UHD / PURE_UHD")
-message(STATUS "RADIO_TYPE: ${RADIO_TYPE}")
 if(RADIO_TYPE STREQUAL PURE_UHD)
   message(STATUS "Enabled PURE_UHD radio")
   add_definitions(-DUSE_UHD)
@@ -147,7 +154,6 @@ if (NOT HDF5_FOUND)
     return()
 endif()
 message(VERBOSE "  HDF5 Includes: ${HDF5_INCLUDE_DIRS} Libraries: ${HDF5_LIBRARIES}")
-
 
 set(directory "logs")
 file(MAKE_DIRECTORY ${directory})
@@ -208,3 +214,4 @@ target_link_libraries(sounder_module -lpthread --enable-threadsafe ${GFLAGS_LIBR
     -Wl,--no-whole-archive
     ${HDF5_LIBRARIES}
     ${SoapySDR_LIBRARIES})
+
