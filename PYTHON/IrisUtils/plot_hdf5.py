@@ -94,7 +94,9 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         ul_slot_num = int(metadata['UL_SLOTS'])
     slot_num = int(metadata['BS_FRAME_LEN'])
     timestep = samps_per_slot*slot_num/rate
+    full_matrix_meas = bool(hdf5.metadata["FULL_MATRIX_MEAS"])
     print("samps_per_slot = {}, offset = {}, cp = {}, prefix_len = {}, postfix_len = {}, z_padding = {}, pilot_rep = {}, timestep = {}".format(samps_per_slot, offset, cp, prefix_len, postfix_len, z_padding, symbol_per_slot, timestep))
+
 
     pilot_data_avail = len(hdf5.pilot_samples) > 0
     ul_data_avail = len(hdf5.uplink_samples) > 0
@@ -113,7 +115,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
         pilot_samples = pilot_samples[:, :, plot_bs_nodes, :]
 
         # Verify frame_i does not exceed max number of collected frames
-        ref_frame = min(frame_i, pilot_samples.shape[0])
+        ref_frame = min(frame_i, pilot_samples.shape[0]-1)
 
         # pilot_samples dimensions:
         # ( #frames, #cells, #pilot subframes or cl ant sending pilots, #bs nodes or # bs ant, #samps per frame * 2 for IQ )
@@ -143,7 +145,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 good_ants = good_ants + [i]
             else:
                 print("no valid frames where found in antenna %d. Decision threshold (average pilot amplitude) was %f" % (i, thresh))
-        if len(good_ants) == 0:
+        if len(good_ants) == 0 and not full_matrix_meas:
             print("no valid frames found in data belonging to user %d. Exitting ..." % user_i)
             return
 
@@ -221,6 +223,7 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
                 userCSI = np.mean(csi, 2)
             else:
                 userCSI = csi[:, :, ofdm_sym_i, :, :]
+
             corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[ref_frame, :, :, :]), (1, 0, 2) ) )
 
             for i in insp_ants:
@@ -393,6 +396,28 @@ def verify_hdf5(hdf5, frame_i=100, cell_i=0, ofdm_sym_i=0, ant_i =0,
             if not fft_shifted_dataset:
                 csi_to_plot = np.fft.fftshift(userCSI, 3)
             plot_csi(csi_to_plot, corr_total, plot_bs_nodes, pilot_frames, ref_frame, ant_i, subcarrier_i, offset, data_str="Downlink")
+
+    # Plot Full Matrix (BS antennas, one antenna transmits at the time and the rest listen)
+    if full_matrix_meas:
+        print("FULL MATRIX DATA - INTERNAL MEASUREMENTS")
+
+        # Shape: frame, cell, pilot subframes or ue_nodes, bs_nodes or bs_ant, samples per frame
+        pilot_samples = hdf5.pilot_samples[:, cell_i, :, :, :]
+        num_bs_ants = pilot_samples.shape[2]
+        all_bs_nodes = set(range(num_bs_ants))
+
+        # Verify frame_i does not exceed max number of collected frames
+        ref_frame = min(frame_i, pilot_samples.shape[0]-1)
+        num_frames = pilot_samples.shape[0]
+        num_ues = pilot_samples.shape[1]
+        num_ants = pilot_samples.shape[2]
+        print("num_frames %d, num_ues %d, num_ants %d"%(num_frames, num_ues, num_ants))
+        samps_mat = np.reshape(pilot_samples, (num_frames, num_ues, num_ants, samps_per_slot, 2))
+        samps = (samps_mat[ref_frame, :, :, :, 0] + samps_mat[ref_frame, :, :, :, 1]*1j)*2**-15
+        samps = np.abs(samps)**2
+        samps = np.mean(samps, axis=2)
+        print(samps.shape)
+        plot_mag_map(samps)
 
     plt.show()
 
