@@ -17,7 +17,14 @@ if(FORCE_BUILD_PATH)
   #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/build)
 endif()
 
-set(default_build_type "Release")
+option(DEBUG "Enable debugging" OFF)
+if(NOT DEBUG)
+  set(default_build_type "Release")
+else()
+  set(default_build_type "Debug")
+  set(CMAKE_BUILD_TYPE Debug)
+endif()
+
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   message(STATUS "Setting build type to '${default_build_type}'.")
   set(CMAKE_BUILD_TYPE "${default_build_type}" CACHE
@@ -56,6 +63,16 @@ message(STATUS "Compiling with CXX Flags: ${CMAKE_CXX_FLAGS}")
 message(STATUS "Debug Flags: ${CMAKE_CXX_FLAGS_DEBUG}")
 message(STATUS "Release Flags: ${CMAKE_CXX_FLAGS_RELEASE}")
 
+#Settable values
+message(STATUS "\n-- ----- Configuration values -----")
+message(STATUS "Build type:       ${CMAKE_BUILD_TYPE}")
+message(STATUS "DEBUG:            ${DEBUG}")
+set(RADIO_TYPE SOAPY_IRIS CACHE STRING "RADIO_TYPE defaulting to 'SOAPY_IRIS', valid types are SOAPY_IRIS / SOAPY_UHD / PURE_UHD")
+message(STATUS "RADIO_TYPE:       ${RADIO_TYPE}")
+set(LOG_LEVEL "info" CACHE STRING "Console logging level (none/error/warn/info/frame/subframe/trace)") 
+message(STATUS "LOG_LEVEL:        ${LOG_LEVEL}")
+message(STATUS "--------------------------------\n--")
+
 # Console logging level
 if(LOG_LEVEL STREQUAL "none")
   message(STATUS "Logging level = none.")
@@ -92,8 +109,6 @@ set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 #find_package(Threads REQUIRED)
 message(STATUS "Using Pthread Library: ${CMAKE_THREAD_LIBS_INIT}: ${CMAKE_USE_PTHREADS_INIT}")
 
-set(RADIO_TYPE SOAPY_IRIS CACHE STRING "RADIO_TYPE defaulting to 'SOAPY_IRIS', valid types are SOAPY_IRIS / SOAPY_UHD / PURE_UHD")
-message(STATUS "RADIO_TYPE: ${RADIO_TYPE}")
 if(RADIO_TYPE STREQUAL PURE_UHD)
   message(STATUS "Enabled PURE_UHD radio")
   add_definitions(-DUSE_UHD)

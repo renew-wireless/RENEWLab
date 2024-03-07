@@ -58,3 +58,5 @@ venv
 
 # Database
 renew.db
+
+CC/Sounder/build/*

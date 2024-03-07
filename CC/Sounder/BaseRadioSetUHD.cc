@@ -21,7 +21,7 @@
 using json = nlohmann::json;
 static constexpr int kMaxOffsetDiff = 6;
 
-BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg) : _cfg(cfg) {
+BaseRadioSetUHD::BaseRadioSetUHD(Config* cfg, bool ignored) : _cfg(cfg) {
   std::vector<size_t> num_bs_antenntas(_cfg->num_cells());
   radioNotFound = false;
   std::vector<std::string> radio_serial_not_found;
@@ -289,16 +289,6 @@ int BaseRadioSetUHD::radioTx(size_t radio_id, size_t cell_id,
   int w;
   long long frameTimeNs = SoapySDR::ticksToTimeNs(frameTime, _cfg->rate());
   w = bsRadios->xmit(buffs, _cfg->samps_per_slot(), flags, frameTimeNs);
-  //    }
-  if (kDebugRadio) {
-    size_t chanMask;
-    long timeoutUs(0);
-    auto* dev = bsRadios->dev;
-    auto* txs = bsRadios->txs;
-    //    int s = dev->readStreamStatus(txs, chanMask, flags, frameTime, timeoutUs);
-    //    std::cout << "cell " << cell_id << " radio " << radio_id << " tx returned "
-    //              << w << " and status " << s << std::endl;
-  }
   return w;
 }
 

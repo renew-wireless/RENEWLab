@@ -16,11 +16,10 @@
 
 class Radio {
  public:
-  inline SoapySDR::Device* RawDev() const { return dev_; };
-
   Radio(const SoapySDR::Kwargs& args, const char soapyFmt[],
         const std::vector<size_t>& channels);
   ~Radio(void);
+
   int recv(void* const* buffs, int samples, long long& frameTime);
   int activateRecv(const long long rxTime = 0, const size_t numSamps = 0,
                    int flags = 0);
@@ -34,6 +33,8 @@ class Radio {
 
   void reset_DATA_clk_domain(void);
   void dev_init(Config* _cfg, int ch, double rxgain, double txgain);
+
+  inline SoapySDR::Device* RawDev() const { return dev_; };
 
  private:
   SoapySDR::Device* dev_;

@@ -32,9 +32,9 @@ class ClientRadioSetUHD {
   void init(ClientRadioContext* context);
   static void* init_launch(void* in_context);
 
-  Config* _cfg;
-  RadioUHD* radio_;
-  bool radioNotFound;
+  Config* _cfg = nullptr;
+  RadioUHD* radio_ = nullptr;
+  bool radioNotFound = true;
 };
 
 #endif /* CLIENT_RADIO_SET_UHD_H_ */

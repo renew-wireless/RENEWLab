@@ -68,15 +68,26 @@ void RadioUHD::drain_buffers(std::vector<void*> buffs, int symSamp) {
     }
     i++;
   }
-
   MLPD_TRACE("Number of reads needed to drain: %d\n", i);
 }
 
 RadioUHD::RadioUHD(const std::map<std::string, std::string>& args,
                    const char uhdFmt[], const std::vector<size_t>& channels,
                    Config* _cfg) {
-  dev_ = uhd::usrp::multi_usrp::make(args);
-  if (dev_ == NULL) throw std::invalid_argument("error making UHD:Device\n");
+  MLPD_INFO("RadioUHD constructing\n");
+  try {
+    dev_ = uhd::usrp::multi_usrp::make(args);
+  } catch (const std::exception& e) {
+    MLPD_WARN("%s", e.what());
+  } catch (...) {
+    dev_.reset();
+    MLPD_ERROR("RadioUHD failed to make device\n");
+  }
+  if (dev_ == nullptr) {
+    MLPD_WARN("Error making UHD:Device\n");
+    throw std::invalid_argument("Error making UHD:Device\n");
+  }
+  MLPD_INFO("RadioUHD setting rates\n");
   for (auto ch : channels) {
     dev_->set_rx_rate(_cfg->rate(), ch);
     dev_->set_tx_rate(_cfg->rate(), ch);

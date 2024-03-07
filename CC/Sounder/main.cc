@@ -42,7 +42,8 @@ int main(int argc, char* argv[]) {
     auto dg = std::make_unique<DataGenerator>(config.get());
     dg->GenerateData(FLAGS_storepath);
   } else if (FLAGS_calibrate) {
-    auto base_radio_set_ = std::make_unique<BaseRadioSet>(config.get(), true);
+    auto base_radio_set_ =
+        std::make_unique<BaseRadioSetUHD>(config.get(), true);
   } else {
     int cnt = 0;
     int maxTry = 2;

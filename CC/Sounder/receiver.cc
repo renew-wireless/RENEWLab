@@ -57,7 +57,7 @@ Receiver::Receiver(
     this->client_radio_set_ =
         config_->client_present() ? new ClientRadioSetUHD(config_) : nullptr;
     this->base_radio_set_ =
-        config_->bs_present() ? new BaseRadioSetUHD(config_) : nullptr;
+        config_->bs_present() ? new BaseRadioSetUHD(config_, false) : nullptr;
 #else
     this->client_radio_set_ =
         config_->client_present() ? new ClientRadioSet(config_) : nullptr;

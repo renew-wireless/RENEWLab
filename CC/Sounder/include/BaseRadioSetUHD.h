@@ -16,7 +16,7 @@
 
 class BaseRadioSetUHD {
  public:
-  BaseRadioSetUHD(Config* cfg);
+  BaseRadioSetUHD(Config* cfg, bool ignored);
   ~BaseRadioSetUHD(void);
   void radioTx(const void* const* buffs);
   void radioRx(void* const* buffs);

@@ -46,6 +46,7 @@ ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
   while (thread_count.load() > 0) {
   }
 
+  MLPD_INFO("Checking the radios %zu\n", num_radios);
   if (num_radios != radio_->RawDev()->get_num_mboards()) {
     radioNotFound = true;
   }
@@ -59,32 +60,32 @@ ClientRadioSetUHD::ClientRadioSetUHD(Config* cfg) : _cfg(cfg) {
 
   for (auto ch : channels) {
     if (ch < radio_->RawDev()->get_rx_num_channels()) {
-      printf("RX Channel %zu\n", ch);
-      printf("Actual RX sample rate: %fMSps...\n",
-             (radio_->RawDev()->get_rx_rate(ch) / 1e6));
-      printf("Actual RX frequency: %fGHz...\n",
-             (radio_->RawDev()->get_rx_freq(ch) / 1e9));
-      printf("Actual RX gain: %f...\n", (radio_->RawDev()->get_rx_gain(ch)));
+      MLPD_INFO("RX Channel %zu\n", ch);
+      MLPD_INFO("Actual RX sample rate: %fMSps...\n",
+                (radio_->RawDev()->get_rx_rate(ch) / 1e6));
+      MLPD_INFO("Actual RX frequency: %fGHz...\n",
+                (radio_->RawDev()->get_rx_freq(ch) / 1e9));
+      MLPD_INFO("Actual RX gain: %f...\n", (radio_->RawDev()->get_rx_gain(ch)));
 
-      printf("Actual RX bandwidth: %fM...\n",
-             (radio_->RawDev()->get_rx_bandwidth(ch) / 1e6));
-      printf("Actual RX antenna: %s...\n",
-             (radio_->RawDev()->get_rx_antenna(ch).c_str()));
+      MLPD_INFO("Actual RX bandwidth: %fM...\n",
+                (radio_->RawDev()->get_rx_bandwidth(ch) / 1e6));
+      MLPD_INFO("Actual RX antenna: %s...\n",
+                (radio_->RawDev()->get_rx_antenna(ch).c_str()));
     }
   }
 
   for (auto ch : channels) {
     if (ch < radio_->RawDev()->get_tx_num_channels()) {
-      printf("TX Channel %zu\n", ch);
-      printf("Actual TX sample rate: %fMSps...\n",
-             (radio_->RawDev()->get_tx_rate(ch) / 1e6));
-      printf("Actual TX frequency: %fGHz...\n",
-             (radio_->RawDev()->get_tx_freq(ch) / 1e9));
-      printf("Actual TX gain: %f...\n", (radio_->RawDev()->get_tx_gain(ch)));
-      printf("Actual TX bandwidth: %fM...\n",
-             (radio_->RawDev()->get_tx_bandwidth(ch) / 1e6));
-      printf("Actual TX antenna: %s...\n",
-             (radio_->RawDev()->get_tx_antenna(ch).c_str()));
+      MLPD_INFO("TX Channel %zu\n", ch);
+      MLPD_INFO("Actual TX sample rate: %fMSps...\n",
+                (radio_->RawDev()->get_tx_rate(ch) / 1e6));
+      MLPD_INFO("Actual TX frequency: %fGHz...\n",
+                (radio_->RawDev()->get_tx_freq(ch) / 1e9));
+      MLPD_INFO("Actual TX gain: %f...\n", (radio_->RawDev()->get_tx_gain(ch)));
+      MLPD_INFO("Actual TX bandwidth: %fM...\n",
+                (radio_->RawDev()->get_tx_bandwidth(ch) / 1e6));
+      MLPD_INFO("Actual TX antenna: %s...\n",
+                (radio_->RawDev()->get_tx_antenna(ch).c_str()));
     }
   }
   std::cout << "ClientRadioSetUHD Init Check" << std::endl;
@@ -120,29 +121,32 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
   int i = context->tid;
   std::atomic_ulong* thread_count = context->thread_count;
   delete context;
-
   MLPD_TRACE("Deleting context for tid: %d\n", i);
 
   bool has_runtime_error(false);
   auto channels = Utils::strToChannels(_cfg->cl_channel());
-  MLPD_TRACE("ClientRadioSet setting up radio: %zu : %zu\n", (i + 1),
-             _cfg->num_cl_sdrs());
+  MLPD_INFO("ClientRadioSet setting up radio: %d : %zu\n", (i + 1),
+            _cfg->num_cl_sdrs());
 
   // update for UHD multi USRP
   std::map<std::string, std::string> args;
   args["timeout"] = "1000000";
-  args["driver"] = "uhd";
+  //args["driver"] = "uhd";
+  //Not sure about this one...
   args["addr"] = _cfg->cl_sdr_ids().at(i);
-  std::cout << "address i is " << i << std::endl;
+  MLPD_INFO("Address for thread %d: %s\n", i, _cfg->cl_sdr_ids().at(i).c_str());
 
   try {
-    radio_ = nullptr;
+    if (radio_ != nullptr) {
+      MLPD_WARN("Radio is no null during INIT\n");
+      delete radio_;
+    }
     radio_ = new RadioUHD(args, SOAPY_SDR_CS16, channels, _cfg);
+    MLPD_INFO("Radio constructed\n");
   } catch (std::runtime_error& err) {
     has_runtime_error = true;
-
     if (radio_ != nullptr) {
-      MLPD_TRACE("Radio not used due to exception\n");
+      MLPD_WARN("Radio not used due to exception\n");
       radio_ = nullptr;
     }
   } catch (...) {
@@ -155,7 +159,7 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
   }
   if (has_runtime_error == false) {
     for (auto ch : channels) {
-      std::cout << "check ch: " << ch << std::endl;
+      MLPD_INFO("ClientRadioSet:check ch %ld:\n", ch);
       auto new_ch = _cfg->cl_channel();
       double rxgain = _cfg->cl_rxgain_vec().at(ch).at(
           i);  // w/CBRS 3.6GHz [0:105], 2.5GHZ [0:108]
@@ -164,13 +168,13 @@ void ClientRadioSetUHD::init(ClientRadioContext* context) {
       radio_->dev_init(_cfg, ch, rxgain, txgain);
     }
   }
-  MLPD_TRACE("ClientRadioSet: Init complete\n");
+  MLPD_INFO("ClientRadioSet: Init complete\n");
   assert(thread_count->load() != 0);
   thread_count->store(thread_count->load() - 1);
-  std::cout << "Client Init success" << std::endl;
 }
 
 ClientRadioSetUHD::~ClientRadioSetUHD(void) {
+  MLPD_INFO("ClientRadioSet: destructing\n");
   if (radio_ != nullptr) {
     delete radio_;
     radio_ = nullptr;
