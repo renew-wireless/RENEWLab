@@ -482,11 +482,14 @@ def compute_legacy(hdf5):
 
     print("starting legacy function")
     starttime = time.time()
-    show_plots = True
+    show_plots = False
     zoom = 0  # samples to zoom in around frame (to look at local behavior), 0 to disable
     pl = 0
 
     frame = 10  # frame to compute beamweights from
+    ant_i = 0
+    user_i = 0
+    subcarrier_i = 0
     conjdata = []
     zfdata = []
     # print("main checkpoint1 time expended %f" % (starttime - time.time()))
@@ -505,6 +508,7 @@ def compute_legacy(hdf5):
             frame = zoom  # recenter the plots (otherwise it errors)
         noise = csi[:, -1, :, :, :]  # noise is last set of data.
         userCSI = np.mean(csi[:, :num_users, :, :, :], 2)  # don't include noise, average over both LTSs
+        corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[frame, :, :, :]), (1, 0, 2) ) )
 
         # example lts find:
         user = 0
@@ -512,25 +516,25 @@ def compute_legacy(hdf5):
         lts_iq = h5log['Pilot_Samples'][frame, 0, user * samps_per_user:(user + 1) * samps_per_user, 0] * 1. + \
                  h5log['Pilot_Samples'][frame, 0, user * samps_per_user:(user + 1) * samps_per_user, 1] * 1j
         lts_iq /= 2 ** 15
-        offset = lts.findLTS(
-            lts_iq)  # Andrew wrote this, but I don't really like the way he did the convolve method...  works well enough for high SNRs.
+        offset = find_lts(lts_iq) 
         offset = offset[0] + 32
         print("LTS offset for user %d, frame %d: %d" % (user, frame, offset))
+        plot_csi(userCSI, corr_total, range(csi.shape[1]), range(csi.shape[0]), frame, ant_i, user_i, subcarrier_i, offset)
 
-        # compute beamweights based on the specified frame.
-        conjbws = np.transpose(np.conj(userCSI[frame, :, :, :]), (1, 0, 2))
-        zfbws = np.empty((userCSI.shape[2], userCSI.shape[1], userCSI.shape[3]), dtype='complex64')
-        for sc in range(userCSI.shape[3]):
-            zfbws[:, :, sc] = np.linalg.pinv(userCSI[frame, :, :, sc])
+        ## compute beamweights based on the specified frame.
+        #conjbws = np.transpose(np.conj(userCSI[frame, :, :, :]), (1, 0, 2))
+        #zfbws = np.empty((userCSI.shape[2], userCSI.shape[1], userCSI.shape[3]), dtype='complex64')
+        #for sc in range(userCSI.shape[3]):
+        #    zfbws[:, :, sc] = np.linalg.pinv(userCSI[frame, :, :, sc])
 
-        downlink = True
-        # calculate capacity based on these weights
-        # these return total capacity, per-user capacity, per-user/per-subcarrier capacity, SINR, single-user capacity(no inter-user interference), and SNR
-        conj = calCapacity(userCSI, noise, conjbws,
-                           downlink=downlink)  # conjcap_total,conjcap_u,conjcap_sc,conjSINR,conjcap_su_sc,conjcap_su_u,conjSNR
-        zf = calCapacity(userCSI, noise, zfbws,
-                         downlink=downlink)  # zfcap_total,zfcap_u,zfcap_sc,zfSINR,zfcap_su_sc,zfcap_su_u,zfSNR
-        # print("main checkpoint2 time expended %f" % (starttime - time.time()))
+        #downlink = True
+        ## calculate capacity based on these weights
+        ## these return total capacity, per-user capacity, per-user/per-subcarrier capacity, SINR, single-user capacity(no inter-user interference), and SNR
+        #conj = calCapacity(userCSI, noise, conjbws,
+        #                   downlink=downlink)  # conjcap_total,conjcap_u,conjcap_sc,conjSINR,conjcap_su_sc,conjcap_su_u,conjSNR
+        #zf = calCapacity(userCSI, noise, zfbws,
+        #                 downlink=downlink)  # zfcap_total,zfcap_u,zfcap_sc,zfSINR,zfcap_su_sc,zfcap_su_u,zfSNR
+        ## print("main checkpoint2 time expended %f" % (starttime - time.time()))
 
         # plot stuff
         if show_plots:
@@ -556,14 +560,15 @@ def compute_legacy(hdf5):
             plt.ylabel('SUBF Capacity Conj (bps/Hz)')
             plt.show(block=False)
             pl += 1
-        # print("main checkpoint3 time expended %f" % (starttime - time.time()))
-        # save for exporting to matlab (prettier plots)
-        conjdata.append(conj)
-        zfdata.append(zf)
-        # print("main checkpoint4 time expended %f" % (starttime - time.time()))
+        ## print("main checkpoint3 time expended %f" % (starttime - time.time()))
+        ## save for exporting to matlab (prettier plots)
+        #conjdata.append(conj)
+        #zfdata.append(zf)
+        ## print("main checkpoint4 time expended %f" % (starttime - time.time()))
 
-        del csi, iq  # free the memory
+        del csi  # free the memory
 
+    plt.show()
     endtime = time.time()
     print("Total time: %f" % (endtime - starttime))
 

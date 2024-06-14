@@ -340,7 +340,8 @@ class hdf5_lib:
             # pre_csi = np.fft.fftshift(np.fft.fft(iq, fft_size, 4),4)
 
             iq_fft = np.fft.fftshift(np.fft.fft(iq, fft_size, 4), 4)
-            csi = iq_fft * lts.lts_freq
+            _, lts_freq = generate_training_seq()
+            csi = iq_fft * lts_freq
 
             zero_sc = [0, 1, 2, 3, 4, 5, 32, 59, 60, 61, 62, 63]
             nonzero_sc = np.setdiff1d(range(64), zero_sc)
