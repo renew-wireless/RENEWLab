@@ -475,21 +475,18 @@ def analyze_hdf5(csi, noise, metadata, frame_i=10, subcarrier_i=7, offset=-1):
     del csi  # free the memory
     del noise
 
-def compute_legacy(hdf5):
+def compute_legacy(hdf5, n_frames=0, frame_start=0, sub_sample=1,
+                frame_i=100, ant_i =0, user_i=0, subcarrier_i=10,
+                exclude_bs_nodes=[], analyze=False):
     '''
     Parse and plot data from legacy files
     '''
 
     print("starting legacy function")
     starttime = time.time()
-    show_plots = False
     zoom = 0  # samples to zoom in around frame (to look at local behavior), 0 to disable
     pl = 0
 
-    frame = 10  # frame to compute beamweights from
-    ant_i = 0
-    user_i = 0
-    subcarrier_i = 0
     conjdata = []
     zfdata = []
     # print("main checkpoint1 time expended %f" % (starttime - time.time()))
@@ -499,45 +496,61 @@ def compute_legacy(hdf5):
         num_users = h5log.attrs['num_mob_ant']
         timestep = h5log.attrs['frame_length'] / 20e6
         noise_meas_en = h5log.attrs.get('measured_noise', 1)
+        samps = h5log['Pilot_Samples']
+        frame_end = h5log['Pilot_Samples'].shape[0] - 1
+        if n_frames == 0 or n_frames > samps.shape[0]:
+            n_frames = samps.shape[0] / sub_sample
+        frame_end = frame_start + n_frames * sub_sample
+        iq = (h5log['Pilot_Samples'][frame_start:frame_end:sub_sample, :, :, 0] + \
+              h5log['Pilot_Samples'][frame_start:frame_end:sub_sample, :, :, 1] * 1j) * 2 ** -15
 
         # compute CSI for each user and get a nice numpy array
-        csi, SNR = hdf5_lib.samps2csi(h5log['Pilot_Samples'], num_users + noise_meas_en, samps_per_user,
-                                     legacy=True)  # Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier  #also, iq samples nicely chunked out, same dims, but subcarrier is sample.
+        # Returns csi with Frame, User, LTS (there are 2), BS ant, Subcarrier  #also, iq samples nicely chunked out, same dims, but subcarrier is sample.
+        csi, SNR = hdf5_lib.samps2csi(h5log['Pilot_Samples'][frame_start:frame_end:sub_sample], num_users + noise_meas_en, samps_per_user,
+                                     legacy=True)
         if zoom > 0:  # zoom in too look at behavior around peak (and reduce processing time)
-            csi = csi[frame - zoom:frame + zoom, :, :, :, :]
-            frame = zoom  # recenter the plots (otherwise it errors)
-        noise = csi[:, -1, :, :, :]  # noise is last set of data.
+            csi = csi[frame_i - zoom:frame_i + zoom, :, :, :, :]
+            frame_i = zoom  # recenter the plots (otherwise it errors)
         userCSI = np.mean(csi[:, :num_users, :, :, :], 2)  # don't include noise, average over both LTSs
-        corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[frame, :, :, :]), (1, 0, 2) ) )
+        corr_total, sig_sc = calCorr(userCSI, np.transpose(np.conj(userCSI[frame_i, :, :, :]), (1, 0, 2) ) )
 
         # example lts find:
-        user = 0
-        # so, this is pretty ugly, but we want all the samples (not just those chunked from samps2csi), so we not only convert ints to the complex floats, but also have to figure out where to chunk the user from.
-        lts_iq = h5log['Pilot_Samples'][frame, 0, user * samps_per_user:(user + 1) * samps_per_user, 0] * 1. + \
-                 h5log['Pilot_Samples'][frame, 0, user * samps_per_user:(user + 1) * samps_per_user, 1] * 1j
-        lts_iq /= 2 ** 15
-        offset = find_lts(lts_iq) 
+        lts_iq = iq[frame_i, ant_i,user_i * samps_per_user:(user_i + 1) * samps_per_user]
+        offset = find_lts(lts_iq)
         offset = offset[0] + 32
-        print("LTS offset for user %d, frame %d: %d" % (user, frame, offset))
-        plot_csi(userCSI, corr_total, range(csi.shape[1]), range(csi.shape[0]), frame, ant_i, user_i, subcarrier_i, offset)
+        print("LTS offset for user %d, frame %d: %d" % (user_i, frame_i, offset))
 
-        ## compute beamweights based on the specified frame.
-        #conjbws = np.transpose(np.conj(userCSI[frame, :, :, :]), (1, 0, 2))
-        #zfbws = np.empty((userCSI.shape[2], userCSI.shape[1], userCSI.shape[3]), dtype='complex64')
-        #for sc in range(userCSI.shape[3]):
-        #    zfbws[:, :, sc] = np.linalg.pinv(userCSI[frame, :, :, sc])
+        # plot iq
+        fig, axes = plt.subplots(nrows=2, ncols=1, squeeze=False, figsize=(10, 8))
+        axes[0, 0].set_title(" IQ - Antenna %d"%ant_i)
+        axes[0, 0].set_ylabel('Frame %d (IQ)' %( (frame_i)) )
+        axes[0, 0].plot(np.real(iq[frame_i, ant_i, :]))
+        axes[0, 0].plot(np.imag(iq[frame_i, ant_i, :]))
 
-        #downlink = True
-        ## calculate capacity based on these weights
-        ## these return total capacity, per-user capacity, per-user/per-subcarrier capacity, SINR, single-user capacity(no inter-user interference), and SNR
-        #conj = calCapacity(userCSI, noise, conjbws,
-        #                   downlink=downlink)  # conjcap_total,conjcap_u,conjcap_sc,conjSINR,conjcap_su_sc,conjcap_su_u,conjSNR
-        #zf = calCapacity(userCSI, noise, zfbws,
-        #                 downlink=downlink)  # zfcap_total,zfcap_u,zfcap_sc,zfSINR,zfcap_su_sc,zfcap_su_u,zfSNR
-        ## print("main checkpoint2 time expended %f" % (starttime - time.time()))
+        axes[1, 0].set_ylabel('All Frames (IQ)')
+        axes[1, 0].plot(np.real(iq[:, ant_i, :]).flatten())
+        axes[1, 0].plot(np.imag(iq[:, ant_i, :]).flatten())
 
-        # plot stuff
-        if show_plots:
+        # plot csi
+        plot_csi(userCSI, corr_total, range(csi.shape[1]), range(csi.shape[0]), frame_i, ant_i, user_i, subcarrier_i, offset)
+
+        if analyze:
+            # compute beamweights based on the specified frame.
+            conjbws = np.transpose(np.conj(userCSI[frame_i, :, :, :]), (1, 0, 2))
+            zfbws = np.empty((userCSI.shape[2], userCSI.shape[1], userCSI.shape[3]), dtype='complex64')
+            for sc in range(userCSI.shape[3]):
+                zfbws[:, :, sc] = np.linalg.pinv(userCSI[frame_i, :, :, sc])
+
+            downlink = True
+            # calculate capacity based on these weights
+            # these return total capacity, per-user capacity, per-user/per-subcarrier capacity, SINR, single-user capacity(no inter-user interference), and SNR
+            noise = csi[:, -1, :, :, :]  # noise is last set of data.
+            conj = calCapacity(userCSI, noise, conjbws,
+                               downlink=downlink)  # conjcap_total,conjcap_u,conjcap_sc,conjSINR,conjcap_su_sc,conjcap_su_u,conjSNR
+            zf = calCapacity(userCSI, noise, zfbws,
+                             downlink=downlink)  # zfcap_total,zfcap_u,zfcap_sc,zfSINR,zfcap_su_sc,zfcap_su_u,zfSNR
+            # print("main checkpoint2 time expended %f" % (starttime - time.time()))
+
             # Multiuser Conjugate
             plt.figure(1000 * pl, figsize=(50, 10))
             plt.plot(np.arange(0, csi.shape[0] * timestep, timestep)[:csi.shape[0]], conj[1])
@@ -560,13 +573,13 @@ def compute_legacy(hdf5):
             plt.ylabel('SUBF Capacity Conj (bps/Hz)')
             plt.show(block=False)
             pl += 1
-        ## print("main checkpoint3 time expended %f" % (starttime - time.time()))
-        ## save for exporting to matlab (prettier plots)
-        #conjdata.append(conj)
-        #zfdata.append(zf)
-        ## print("main checkpoint4 time expended %f" % (starttime - time.time()))
+            # print("main checkpoint3 time expended %f" % (starttime - time.time()))
+            # save for exporting to matlab (prettier plots)
+            conjdata.append(conj)
+            zfdata.append(zf)
+            # print("main checkpoint4 time expended %f" % (starttime - time.time()))
 
-        del csi  # free the memory
+        del iq, csi  # free the memory
 
     plt.show()
     endtime = time.time()
@@ -651,7 +664,10 @@ def main():
         # TODO: Needs to be thoroughly tested!
         # filename = 'ArgosCSI-96x8-2016-11-03-03-03-45_5GHz_static.hdf5'
         hdf5 = h5py.File(str(filename), 'r')
-        compute_legacy(hdf5)
+        exclude_bs_nodes = []
+        compute_legacy(hdf5, n_frames, fr_strt, sub_sample,
+                       ref_frame, ref_ant, ref_user, ref_subcarrier,
+                       exclude_bs_nodes, analyze)
     else:
         hdf5 = hdf5_lib(filename, tx_files, n_frames, fr_strt, sub_sample)
         pilot_samples = hdf5.pilot_samples
