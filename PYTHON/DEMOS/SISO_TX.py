@@ -80,6 +80,7 @@ def siggen_app(args, rate, ampl, ant, gain, freq, bbfreq, waveFreq, numSamps, se
     # Device information
     sdr = SoapySDR.Device(dict(serial=serial))
     info = sdr.getHardwareInfo()
+    sdr.writeSetting("RESET_DATA_LOGIC", "")
     amplFixed = int(ampl*(1 << 13))
     if ant == 'A':
         txChannel = [0]
@@ -199,6 +200,7 @@ def signal_handler(signal, frame):
     if txStream is not None:
         sdr.deactivateStream(txStream)
         sdr.closeStream(txStream)
+    sdr.writeSetting("RESET_DATA_LOGIC", "")
 
 
 #########################################

@@ -83,7 +83,7 @@ from scipy.io import savemat
 sdr = None
 rxStream = None
 recorder = None
-FIG_LEN = 16384   
+FIG_LEN = 1024
 Rate = 18e6
 fft_size = 2**12  # 1024
 numBufferSamps = 1000
@@ -120,38 +120,36 @@ pwr_circ_buff = np.zeros(num_samps_circ_buff)
 #             Create Plots              #
 #########################################
 matplotlib.rcParams.update({'font.size': 10})
-fig = plt.figure(figsize=(20, 8), dpi=120)
+fig = plt.figure(figsize=(10, 7), dpi=120)
 fig.subplots_adjust(hspace=.5, top=.85)
 
 ax1 = fig.add_subplot(6, 1, 1)
 ax1.grid(True)
 ax1.set_title('Waveform capture')
 title = ax1.text(0.5, 1, '|', ha="center")
-ax1.set_ylabel('Signal')
+ax1.set_ylabel('Channel A')
 ax1.set_xlabel('Sample index')
-line1, = ax1.plot([], [], label='ChA I', animated=True)
-line2, = ax1.plot([], [], label='ChB I', animated=True)
+line1, = ax1.plot([], [], label='I', animated=True)
 ax1.set_ylim(-1, 1)
 ax1.set_xlim(0, FIG_LEN)
-ax1.legend(fontsize=10)
+ax1.legend(fontsize=8)
 
 ax2 = fig.add_subplot(6, 1, 2)
 ax2.grid(True)
+ax2.set_ylabel('Channel B')
 ax2.set_xlabel('Sample index')
-ax2.set_ylabel('Amplitude')
-line3, = ax2.plot([], [], label='ChA', animated=True)
-line4, = ax2.plot([], [], label='ChB', animated=True)
-ax2.set_ylim(-2, 2)
+line2, = ax2.plot([], [], label='I', animated=True)
+ax2.set_ylim(-1, 1)
 ax2.set_xlim(0, FIG_LEN)
-ax2.legend(fontsize=10)
+ax2.legend(fontsize=8)
 
 ax3 = fig.add_subplot(6, 1, 3)
 ax3.grid(True)
 ax3.set_xlabel('Sample index')
 ax3.set_ylabel('Phase')
-line5, = ax3.plot([], [], label='Phase ChA', animated=True)
-line6, = ax3.plot([], [], label='Phase ChB', animated=True)
-line7, = ax3.plot([], [], label='Delta A-B', animated=True)
+line3, = ax3.plot([], [], label='Phase ChA', animated=True)
+line4, = ax3.plot([], [], label='Phase ChB', animated=True)
+line5, = ax3.plot([], [], label='Delta A-B', animated=True)
 ax3.set_ylim(-3.2, 3.2)
 ax3.set_xlim(0, FIG_LEN)
 ax3.legend(fontsize=10)
@@ -160,7 +158,7 @@ ax4 = fig.add_subplot(6, 1, 4)
 ax4.grid(True)
 ax4.set_xlabel('Frequency (Hz)')
 ax4.set_ylabel('Power (dB)')
-line8, = ax4.plot([], [], label='FFT ChA', animated=True)
+line6, = ax4.plot([], [], label='FFT ChA', animated=True)
 ax4.set_ylim(-110, 0)
 freqScale = np.arange(-Rate / 2, Rate / 2, Rate / fft_size)
 #freqScale = np.arange(-Rate / 2 / 1e6, Rate / 2 / 1e6, Rate / fft_size / 1e6)[:fft_size]
@@ -171,24 +169,14 @@ ax5 = fig.add_subplot(6, 1, 5)
 ax5.grid(True)
 ax5.set_xlabel('Real-Time Samples')
 ax5.set_ylabel('Power (dB)')
-line9, = ax5.plot([], [], label='Digital RSSI', animated=True)
-line10, = ax5.plot([], [], label='TimeDomain Sig Pwr', animated=True)
-line11, = ax5.plot([], [], label='FreqDomain Sig Pwr', animated=True, linestyle='dashed')
-line12, = ax5.plot([], [], label='Noise Floor', animated=True)
-line13, = ax5.plot([], [], label='RSSI_FPGA_Pwr', animated=True, linestyle='dashed')
+line7, = ax5.plot([], [], label='Digital RSSI', animated=True)
+line8, = ax5.plot([], [], label='TimeDomain Sig Pwr', animated=True)
+line9, = ax5.plot([], [], label='FreqDomain Sig Pwr', animated=True, linestyle='dashed')
+line10, = ax5.plot([], [], label='Noise Floor', animated=True)
+line11, = ax5.plot([], [], label='RSSI_FPGA_Pwr', animated=True, linestyle='dashed')
 ax5.set_ylim(-100, 10)
 ax5.set_xlim(0, numBufferSamps * 1.5)
 ax5.legend(fontsize=10)
-
-ax6 = fig.add_subplot(6, 1, 6)
-ax6.grid(True)
-ax6.set_xlabel('Sample index')
-ax6.set_ylabel('Correlation Peaks')
-line14, = ax6.plot([], [], label='Corr I ChA', animated=True)
-ax6.set_ylim(-10, 50)
-ax6.set_xlim(0, 2**12)
-ax6.legend(fontsize=10)
-
 
 #########################################
 #              Functions                #
@@ -206,11 +194,7 @@ def init():
     line9.set_data([], [])
     line10.set_data([], [])
     line11.set_data([], [])
-    line12.set_data([], [])
-    line13.set_data([], [])
-    line14.set_data([], [])
-    return line1, line2, line3, line4, line5, line6, line7, line8, line9, line10, line11, line12, line13, line14
-
+    return line1, line2, line3, line4, line5, line6, line7, line8, line9, line10, line11
 
 def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
     """
@@ -224,6 +208,7 @@ def rxsamples_app(srl, freq, gain, num_samps, recorder, agc_en, wait_trigger):
     sdr = SoapySDR.Device(dict(serial=srl))
     info = sdr.getHardwareInfo()
     print(info)
+    sdr.writeSetting("RESET_DATA_LOGIC", "")
 
     # Set gains to very high value if AGC enabled (AGC only supports CBRS RF frontend at the moment).
     if agc_en and "CBRS" in info["frontend"]:
@@ -305,11 +290,6 @@ def animate(i, num_samps, recorder, agc_en, wait_trigger, info):
     for i in [0, 1]:
         sampsRx[i] -= np.mean(sampsRx[i])
 
-    # Find LTS peaks (in case LTSs were sent)
-    lts_thresh = 0.8
-    a, b, peaks0 = find_lts(sampsRx[0], thresh=lts_thresh)
-    a, b, peaks1 = find_lts(sampsRx[1], thresh=lts_thresh)
-
     # If recording samples
     if recorder is not None: 
         frame = np.empty((2, buff0.size), dtype='complex64')
@@ -388,21 +368,18 @@ def animate(i, num_samps, recorder, agc_en, wait_trigger, info):
 
     # Fill out data structures with measured data
     line1.set_data(range(buff0.size), np.real(sampsRx[0]))
-    line2.set_data(range(buff0.size), np.imag(sampsRx[0]))
-    line3.set_data(range(buff0.size), np.abs(sampsRx[0]))
-    line4.set_data(range(buff0.size), np.abs(sampsRx[1]))
-    line5.set_data(range(buff0.size), np.angle(sampsRx[0]))
-    line6.set_data(range(buff0.size), np.angle(sampsRx[1]))
-    line7.set_data(range(buff0.size), np.angle(sampsRx[0] * np.conj(sampsRx[1])))
-    line8.set_data(f1, powerBins)
-    line9.set_data(range(len(rssiPwrBuffer)), rssiPwrBuffer)
-    line10.set_data(range(len(timePwrBuffer)), timePwrBuffer)
-    line11.set_data(range(len(freqPwrBuffer)), freqPwrBuffer)
-    line12.set_data(range(len(noisPwrBuffer)), noisPwrBuffer)
-    line13.set_data(range(len(rssiPwrBuffer_fpga)), rssiPwrBuffer_fpga)
-    line14.set_data(range(buff0.size), np.real(peaks0[:buff0.size]))
+    line2.set_data(range(buff0.size), np.real(sampsRx[1]))
+    line3.set_data(range(buff0.size), np.angle(sampsRx[0]))
+    line4.set_data(range(buff0.size), np.angle(sampsRx[1]))
+    line5.set_data(range(buff0.size), np.angle(sampsRx[0] * np.conj(sampsRx[1])))
+    line6.set_data(f1, powerBins)
+    line7.set_data(range(len(rssiPwrBuffer)), rssiPwrBuffer)
+    line8.set_data(range(len(timePwrBuffer)), timePwrBuffer)
+    line9.set_data(range(len(freqPwrBuffer)), freqPwrBuffer)
+    line10.set_data(range(len(noisPwrBuffer)), noisPwrBuffer)
+    line11.set_data(range(len(rssiPwrBuffer_fpga)), rssiPwrBuffer_fpga)
 
-    return line1, line2, line3, line4, line5, line6, line7, line8, line9, line10, line11, line12, line13, line14
+    return line1, line2, line3, line4, line5, line6, line7, line8, line9, line10, line11
 
 
 def replay(name, leng):
@@ -500,6 +477,13 @@ def main():
             wait_trigger=options.wait_trigger
         )
 
+    print("Exiting")
+    if sdr is not None:
+        if rxStream is not None:
+            sdr.deactivateStream(rxStream)
+            sdr.closeStream(rxStream)
+        sdr.writeSetting("RESET_DATA_LOGIC", "")
+    print("Done")
 
 if __name__ == '__main__': 
     main()
