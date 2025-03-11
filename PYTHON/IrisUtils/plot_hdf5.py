@@ -665,9 +665,12 @@ def main():
         # filename = 'ArgosCSI-96x8-2016-11-03-03-03-45_5GHz_static.hdf5'
         hdf5 = h5py.File(str(filename), 'r')
         exclude_bs_nodes = []
-        compute_legacy(hdf5, n_frames, fr_strt, sub_sample,
-                       ref_frame, ref_ant, ref_user, ref_subcarrier,
-                       exclude_bs_nodes, analyze)
+        if show_metadata:
+            print(hdf5.attrs)
+        else:
+            compute_legacy(hdf5, n_frames, fr_strt, sub_sample,
+                           ref_frame, ref_ant, ref_user, ref_subcarrier,
+                           exclude_bs_nodes, analyze)
     else:
         hdf5 = hdf5_lib(filename, tx_files, n_frames, fr_strt, sub_sample)
         pilot_samples = hdf5.pilot_samples
